@@ -323,12 +323,26 @@ npm ci
 
 PG 和 Redis 必须在 Codex 启动之前可连接，否则服务报错退出。
 
-### 方案 A：本机已有 postgres/redis-server
+### 方案 A：本机已安装 PostgreSQL / Redis（如 Homebrew）
+
+装好并启动服务（`brew services start postgresql@16 redis`）只解决了"有数据库"，服务还需要知道连哪个库。为本项目单独建角色和库，不要用超级用户：
 
 ```bash
-# 新建临时集群，不读 .env，不连真实数据库
-npm run test:data
+pg_isready && redis-cli ping            # 确认两个服务都在运行
+createuser --login --pwprompt agent     # 设置 agent 的密码
+createdb -O agent agent
 ```
+
+编辑 `.env`，补充两行（密码含特殊字符时要 percent-encoding，如 `@` → `%40`；Redis 已被其他项目占用 db0 时可以换一个库号）：
+
+```dotenv
+DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:5432/agent
+REDIS_URL=redis://127.0.0.1:6379/1
+```
+
+然后执行下文的 `npm run data:migrate` 与 `npm run data:check`。
+
+只想跑数据层集成测试时不需要这些配置：`npm run test:data` 会用本机的 `initdb` / `pg_ctl` / `redis-server` 新建临时集群，不读 `.env`，测试结束即删除。
 
 ### 方案 B：Docker Compose（开发用）
 
@@ -368,7 +382,7 @@ npm start              # 在另一个终端执行：CLI 客户端
 
 ## 数据迁移
 
-本次对现有 `project` 做了只读预检：23 条旧任务中，17 条缺少会话／Agent 版本绑定，严格导入因此拒绝继续；没有修改或导入这些旧数据。当前环境也尚未配置 `DATABASE_URL` / `REDIS_URL`。正式切换前，需要先决定无绑定历史的保留策略并配置存储服务；下方命令不是“存量迁移已经成功”的记录。
+2026-10-31 本机切换记录：使用本机 Homebrew PostgreSQL 16 与 Redis，按方案 A 建立 `agent` 角色和库并完成迁移。旧 JSON 中的 23 条任务全部已完成，7 个会话里只有 1 个有 Agent 绑定，严格导入拒绝继续；按下文"无法导入时"的做法归档到 `.data/legacy-json-2026-10-31/`，没有导入、没有删除。
 
 ### 从旧 JSON 迁移
 
@@ -392,6 +406,7 @@ npm run data:import -- --apply
 - `running` 任务转为 `unconfirmed`（受理结果不明确），明确 failed/interrupted 不转 unconfirmed
 - 旧 descriptor 与新代码 hash 可能不兼容，导入不等于旧 Thread 可继续；推荐 `/new` 新建会话，旧原生历史仍保留
 - 服务检测到旧 JSON 存在但无 `imports` 标记时，会阻止启动，防止静默遗漏历史
+- **无法导入时**：预检报"缺少可验证的会话/Agent 绑定"说明有旧任务无法确定归属，导入整体拒绝，不会部分导入。先确认旧任务里没有尚未执行的（`queued` / `running`）；若都已结束，可停服后把 `messages.json`、`thread-agents.json`、`session-index.json` 移到 `.data/legacy-json-<日期>/` 归档，服务即可启动。对话正文在 Codex 原生存储（`.data/codex/`）里，不受影响；原文件保留，可随时移回
 
 ### 文件重命名（relocate）
 
