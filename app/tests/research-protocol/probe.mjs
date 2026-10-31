@@ -13,6 +13,7 @@ import { prepareCodexConfig } from "../../server/modules/codex/config.mjs";
 import { CodexConnection } from "../../server/modules/codex/connection.mjs";
 import { PermissionGate } from "../../server/modules/permissions/index.mjs";
 import { sendResponse, answer, toolSpecs } from "../responses-fixture.mjs";
+import { redactLocalPaths } from "./redact.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -91,7 +92,7 @@ if (!only || only.includes("s1")) {
   const turn = await done;
   const body = requests[before].body;
   const list = names(body);
-  fs.writeFileSync(path.join(outputDir, `tools-${codexVersion}.json`), JSON.stringify(list, null, 2));
+  fs.writeFileSync(path.join(outputDir, `tools-${codexVersion}.json`), redactLocalPaths(JSON.stringify(list, null, 2)));
   record("s1_s5_registered_tools", { turnStatus: turn.status, toolCount: list.length, tools: list,
     dynamicToolsVisible: DYN.every(d => list.some(n => n.endsWith(d.name))),
     nativeExecOrPatch: list.filter(n => /shell|exec|apply_patch|view_image|web_search|spawn|agent/i.test(n)) });
@@ -221,7 +222,7 @@ if (!only || only.includes("s4")) {
 await conn.rpc.close();
 server.close(); server.closeAllConnections();
 const out = path.join(outputDir, `results-${codexVersion}.json`);
-fs.writeFileSync(out, JSON.stringify(results, null, 2));
+fs.writeFileSync(out, redactLocalPaths(JSON.stringify(results, null, 2)));
 // Runner retains only the structured probe results, not raw protocol bodies.
 console.log("\n结果已写入", out);
 fs.rmSync(root, { recursive: true, force: true });

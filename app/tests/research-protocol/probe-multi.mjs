@@ -14,6 +14,7 @@ import { prepareRun } from "../../server/modules/codex/runtime.mjs";
 import { prepareCodexConfig } from "../../server/modules/codex/config.mjs";
 import { CodexConnection } from "../../server/modules/codex/connection.mjs";
 import { sendResponse, answer, toolSpecs } from "../responses-fixture.mjs";
+import { redactLocalPaths } from "./redact.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -193,6 +194,6 @@ if (!only || only.includes("s8")) {
 
 http.close(); http.closeAllConnections();
 const outFile = path.join(outputDir, `results-multi-${codexVersion}.json`);
-fs.writeFileSync(outFile, JSON.stringify(results, null, 2));
+fs.writeFileSync(outFile, redactLocalPaths(JSON.stringify(results, null, 2)));
 console.log("\n结果已写入", outFile);
 process.exit(0);

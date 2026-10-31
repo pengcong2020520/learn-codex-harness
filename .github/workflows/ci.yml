@@ -48,7 +48,7 @@ jobs:
           npm run course:check
 
   docs:
-    name: 阶段文档与结构
+    name: 文档、结构与隐私
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -56,3 +56,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: node stages/verify.mjs --docs-only
+      - name: 隐私检查（本机路径、个人邮箱、公网 IP、密钥）
+        run: |
+          node --test scripts/privacy-check.test.mjs
+          node scripts/privacy-check.mjs

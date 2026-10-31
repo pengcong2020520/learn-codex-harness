@@ -39,7 +39,7 @@
 ## 提交前检查
 
 ```bash
-npm test   # 仓库根目录：全部离线测试、工作台测试、课程一致性与阶段文档检查
+npm test   # 仓库根目录：全部离线测试、工作台测试、课程一致性、阶段文档与隐私检查
 ```
 
 改动涉及 PostgreSQL / Redis、真实 Codex 或 RAG 时，另外运行对应的集成验证（见 `stages/README.md` 与 `app/README.md`），并在 PR 中写明运行了什么、结果如何。
@@ -49,6 +49,15 @@ npm test   # 仓库根目录：全部离线测试、工作台测试、课程一�
 - 不提交 `.env`、`.data/`、`.runs/`、各项目根目录下的 `workspace/`；`.gitignore` 已覆盖。
 - 新增配置项时同步更新对应目录的 `.env.example`，只写占位值。
 - 测试里需要密钥形态的数据时，使用明显的假值（如 `sk-test-...`、`example.invalid`）。
+
+## 隐私
+
+仓库公开发布，提交内容和提交信息都不能带个人信息：
+
+- 提交邮箱用 GitHub 的 noreply 地址：`git config user.email <ID>+<用户名>@users.noreply.github.com`（在 GitHub 的 Settings → Emails 查看），并建议打开 “Block command line pushes that expose my email”。
+- 文档、命令示例和生成的验证记录里不写本机绝对路径（`/Users/…`、`/home/…`、`/var/folders/…`），用相对路径、`<仓库根目录>` 或 `$TMPDIR`。研究协议的结果文件写出前会自动替换（`app/tests/research-protocol/redact.mjs`）。
+- 不写真实服务器地址、个人邮箱和账号；部署示例用 `root@<服务器地址>`。
+- `npm run privacy`（也包含在 `npm test` 和 CI 中）扫描所有已跟踪文件。确属示例的行，在行内加 `privacy-check: allow`。
 
 ## 标签与版本
 

@@ -23,6 +23,8 @@ const plans = {
     ["app", "npm", ["run", "test:web"]],
     ["app", "npm", ["run", "course:check"]],
     ["stages", process.execPath, ["verify.mjs", "--docs-only"]],
+    [".", process.execPath, ["--test", "scripts/privacy-check.test.mjs"]],
+    [".", process.execPath, ["scripts/privacy-check.mjs"]],
   ],
 };
 
