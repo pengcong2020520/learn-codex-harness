@@ -1,0 +1,1928 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 工程 · 五次进化 · 章节长文</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="handbook.css">
+<script type="module" src="handbook.js"></script>
+</head>
+<body>
+<!-- handbook.html 由 npm run course:build 生成：导航圆点按 modules/*.html 的章节生成，正文是各章原文。不要直接改 handbook.html。 -->
+<nav class="nav" aria-label="章节导航">
+  <div class="progress-bar" role="progressbar" aria-label="阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+  <div class="nav-inner">
+    <a class="nav-title" href="#module-1">Agent 工程 · 五次进化</a>
+    <div class="nav-dots">
+      <button class="nav-dot" data-target="module-1" data-tooltip="单轮：打通执行引擎" aria-label="单轮：打通执行引擎"></button>
+      <button class="nav-dot" data-target="module-2" data-tooltip="多轮：让会话延续" aria-label="多轮：让会话延续"></button>
+      <button class="nav-dot" data-target="module-3" data-tooltip="配置：装配一个 Agent" aria-label="配置：装配一个 Agent"></button>
+      <button class="nav-dot" data-target="module-4" data-tooltip="数据：状态有据可查" aria-label="数据：状态有据可查"></button>
+      <button class="nav-dot" data-target="module-5" data-tooltip="知识：可用且有边界" aria-label="知识：可用且有边界"></button>
+    </div>
+    <a class="workbench-link" href="/course/">机制课程</a>
+    <a class="workbench-link" href="/">进入工作台 ↗</a>
+  </div>
+</nav>
+<main id="main">
+<section class="module" id="module-1">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">01</span>
+  <h2 class="module-title">单轮：打通执行引擎</h2>
+  <p class="module-subtitle">控制台发问后，谁真正调用了模型？从 stdio 到 turn/completed，逐层拆解一次请求的完整生命周期。</p>
+</header>
+<nav class="course-path" aria-label="课程目录"><a href="#module-1">01 单轮</a><a href="#module-2">02 多轮</a><a href="#module-3">03 Agent 装配</a><a href="#module-4">04 数据层</a><a href="#module-5">05 知识层</a></nav>
+<div class="module-body">
+
+<!-- Screen 1: 总架构图 -->
+<section class="screen animate-in" id="m1-screen-1">
+  <h2 class="screen-heading">全景：一次问答背后的五层结构</h2>
+  <p>打出命令到模型返回结果，中间经过五个清晰可辨的层次。先看整体，再逐层钻入。</p>
+
+  <div class="arch-diagram">
+    <div class="arch-zone">
+      <button class="arch-component" data-desc="你在终端执行 npm start，这里是唯一的调用入口。main.mjs 只解析参数，把控制权交给下一层，不直接触碰模型。">① 用户终端 / main.mjs</button>
+      <button class="arch-component" data-desc="05-app-server.mjs 是编排核心：读取配置、准备目录，通过 child_process.spawn 拉起本机 Codex 子进程，并全程维护 JSON-RPC 通信状态。">② Node 主进程（编排层）</button>
+      <button class="arch-component" data-desc="标准输入输出管道。Node 把请求序列化为 JSON-RPC 消息写入 stdin；Codex 把事件通知和响应写回 stdout。两端完全解耦，无需 HTTP 端口。">③ stdio 通道（JSON-RPC 2.0）</button>
+      <button class="arch-component" data-desc="本机 Codex App Server 子进程。它负责：维护 Thread/Turn 状态、调用 Responses API、向上游推送 turn/completed 通知。本阶段由它负责调用模型，Node 负责调度。">④ 本机 Codex 子进程</button>
+      <button class="arch-component" data-desc="远端大语言模型服务，通过 Responses API 接口访问。Codex 内部封装了这层调用，Node 主进程感知不到具体的 HTTP 细节。">⑤ 远端模型服务（Responses API）</button>
+    </div>
+    <div class="arch-description">点击上方组件查看职责说明</div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📌</span>
+    <div class="callout-content">
+      <p class="callout-title">关键认知</p>
+      <p><span class="term" data-definition="运行 JavaScript 程序的环境；这里负责启动并协调 Codex 子进程。">Node.js</span> 不直接调用模型 <span class="term" data-definition="应用通过网络发送请求、接收响应的一种协议。">HTTP</span> 接口。它是编排客户端，<span class="term" data-definition="这里指本机 App Server 进程，接受外部调度并执行模型任务。">Codex</span> 才是真正与远端模型通信的执行引擎。两者通过 <span class="term" data-definition="标准输入/输出管道，一种直接连接进程的通信方式，无需网络端口">stdio</span> 连接。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 2: 邮局比喻 + 协议握手 -->
+<section class="screen animate-in" id="m1-screen-2">
+  <h2 class="screen-heading">邮局比喻：<span class="term" data-definition="客户端向执行引擎发起的初始化请求，必须先等待其响应。">initialize</span> → <span class="term" data-definition="客户端在初始化响应成功后发出的单向通知，不是用户任务。">initialized</span></h2>
+  <p>把这套通信想象成一个邮局系统：Node 是寄件人，Codex 是邮局，模型服务是收件目的地。寄信前必须先"在柜台登记开户"——这就是协议握手。</p>
+
+  <div class="step-cards">
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong><span class="term" data-definition="由当前程序启动另一个独立运行的程序，像请一位专职同事接手执行。">spawn 启动子进程</span></strong><br>
+        Node 调用 <code>child_process.spawn</code>，把 Codex App Server 作为子进程拉起。此刻"邮局开门"，但还没有任何账户。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>发送 initialize 请求</strong><br>
+        Node 通过 <span class="term" data-definition="一种基于 JSON 的远程过程调用协议，用唯一 id 匹配请求与响应，支持单向通知">JSON-RPC 2.0</span> 发送 <code>initialize</code> 方法。Codex 返回初始化响应，客户端等待这一步成功。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>发送 initialized 通知</strong><br>
+        Node 再发一条单向通知 <code>initialized</code>（无需回复），告知 Codex"我已收到你的初始化响应，正式开始"。握手完成。
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">为什么要两步握手？</div>
+      <div class="pattern-desc">initialize 返回初始化结果；initialized 是客户端的确认回执。两步保证双方同步进入"就绪"状态，避免客户端在服务端还未准备好时就发业务请求。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">为什么本地不需要 HTTP 端口</div>
+      <div class="pattern-desc">Node 与本机 Codex 通过进程管道通信；握手完成后，thread/turn 请求沿用同一连接。远端模型调用仍然需要网络。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 3: Thread/Turn 生命周期 + 事件缓存 -->
+<section class="screen animate-in" id="m1-screen-3">
+  <h2 class="screen-heading">Thread 与 Turn：往来档案与一次寄送</h2>
+  <p><span class="term" data-definition="持续会话的容器，代表一段有上下文关联的对话历史">Thread</span> 是一个往来档案，<span class="term" data-definition="单次用户任务的执行单元，包含模型推理与可能的多次工具调用">Turn</span> 是其中一次寄送。单轮 Demo 只新建一个档案、完成一次寄送，但架构已经为多轮做好了准备。</p>
+
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="flow-step-num">A</div>
+      <span><code>thread/start</code> → 拿到 threadId，注入基础指令</span>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step">
+      <div class="flow-step-num">B</div>
+      <span>先注册事件监听（暂存本 Thread 的通知），再发 <code>turn/start</code></span>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step">
+      <div class="flow-step-num">C</div>
+      <span>RPC 返回 turnId，把缓存里匹配该 turnId 的通知重放</span>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step">
+      <div class="flow-step-num">D</div>
+      <span>等待 <code>turn/completed</code>，提取回答文本</span>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step">
+      <div class="flow-step-num">E</div>
+      <span><span class="term" data-definition="无论前面的任务成功还是失败，都会进入的清理步骤。">finally</span> 块负责释放连接与子进程，失败也要清理</span>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-content">
+      <p class="callout-title">事件先到缓存——关键时序细节</p>
+      <p>turn/start 触发的事件通知可能在 RPC 响应（含 turnId）返回之前就到达 stdio。代码先建立监听缓冲区，收到 turnId 后再回放已缓存的匹配事件，防止漏掉早到的通知。</p>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">turnId 不是递增数字</div>
+      <div class="pattern-desc">Turn 标识符由 Codex 服务端生成，是唯一字符串而非 1、2、3 这样的计数器。匹配时必须用完整 ID 对比，不能用序号推算。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">finally 的责任</div>
+      <div class="pattern-desc">无论成功还是异常，finally 块都必须关闭子进程。否则 Codex 进程会在后台残留，占用资源并可能干扰下次启动。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 4: 真实源码 -->
+<section class="screen animate-in" id="m1-screen-4">
+  <h2 class="screen-heading">真实代码：runTurn 的核心逻辑</h2>
+  <p>以下是 s01 源码中 runTurn 函数的实际片段，展示先分配本轮状态、再发送请求的顺序。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · 05-app-server.mjs · 第 155–164 行</span>
+      <pre><code>    <span class="code-keyword">if</span> (!threadId) <span class="code-keyword">await</span> startThread();
+    <span class="code-keyword">const</span> turn = { threadId, id: null, answers: <span class="code-keyword">new</span> Map(), buffer: [], completed: Promise.withResolvers() };
+    turn.completed.promise.catch(() =&gt; {});
+    activeTurn = turn;
+    <span class="code-keyword">const</span> timer = setTimeout(() =&gt; fail(<span class="code-keyword">new</span> Error(<span class="code-string">"App Server 本轮调用超时；已停止连接，实际执行状态需检查日志，不自动重发。"</span>)), launch.timeoutMs);
+    console.log(<span class="code-string">"正在等待模型回复……"</span>);
+    <span class="code-keyword">try</span> {
+      <span class="code-keyword">const</span> result = <span class="code-keyword">await</span> request(<span class="code-string">"turn/start"</span>, {
+        threadId, input: [{ type: <span class="code-string">"text"</span>, text: prompt, text_elements: [] }]
+      });</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">逐行解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="把相关状态装在一起的数据容器；这里记录当前轮次的回答、通知和完成信号。">turn 对象</span></strong>：在内存中为本轮预分配状态槽——answers 存模型回答，buffer 缓存早到的通知，completed 是一个手动控制的 <span class="term" data-definition="表示未来才会完成的结果，让程序可以等待成功或失败后继续。">Promise</span>。</p>
+        <p class="tl"><strong>activeTurn = turn</strong>：把当前轮次注册为"活跃轮次"，后续收到的通知事件都会先检查是否属于这里。</p>
+        <p class="tl"><strong>setTimeout + fail</strong>：超时保护。如果模型长时间不回复，主动断开并报错，不无限等待。</p>
+        <p class="tl"><strong>request("turn/start", ...)</strong>：通过 JSON-RPC 发起本轮任务，prompt 是用户输入文本。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📂</span>
+    <div class="callout-content">
+      <p class="callout-title">路径说明</p>
+      <p>完整文件：<code>stages/s01-single-turn/05-app-server.mjs</code>，第 145–173 行。runtime.mjs 负责准备 .runs 运行目录，05-app-server.mjs 管理通信生命周期。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 5: 群聊教学动画 -->
+<section class="screen animate-in" id="m1-screen-5">
+  <h2 class="screen-heading">组件群聊：一次请求的接力棒</h2>
+  <p>以下对话模拟各组件之间的协作过程，属于<strong>教学动画，非真实系统通信</strong>。</p>
+
+  <div class="chat-window" id="m1-chat">
+    <div class="chat-messages">
+
+      <div class="chat-message" data-sender="用户终端" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-1)">U</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">用户终端</div>
+          <p>执行了 <code>npm start -- "请介绍你自己"</code>，等待结果。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="main.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-2)">M</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">main.mjs</div>
+          <p>我只做参数解析，提取到问题文本后立即把控制权交给 05-app-server.mjs。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="05-app-server.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-3)">S</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">05-app-server.mjs（编排层）</div>
+          <p>收到，我先请 runtime.mjs 准备 .runs 目录和 models.json，然后用 child_process.spawn 拉起 Codex。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="runtime.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-4)">R</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">runtime.mjs</div>
+          <p>我已准备 .runs 和 models.json；.data/codex 的状态隔离由 05-app-server.mjs 设置，避免混用个人状态。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="Codex子进程" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-5)">C</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">Codex 子进程</div>
+          <p>stdio 通道已就绪。等待 initialize 请求。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="05-app-server.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-3)">S</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">05-app-server.mjs</div>
+          <p>发送 JSON-RPC <code>initialize</code>……收到初始化响应。发送 <code>initialized</code> 通知，握手完成。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="05-app-server.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-3)">S</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">05-app-server.mjs</div>
+          <p>发送 <code>thread/start</code>，拿到 threadId。<strong>注意</strong>：我先建好事件缓冲区，才发 <code>turn/start</code>，防止早到的通知被丢弃。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="Codex子进程" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-5)">C</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">Codex 子进程</div>
+          <p><code>turn/start</code> 已受理，turnId 已分配。正在通过 Responses API 调用远端模型……</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="Codex子进程" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-5)">C</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">Codex 子进程</div>
+          <p>模型已返回，推送 <code>turn/completed</code> 通知到 stdout。</p>
+        </div>
+      </div>
+
+      <div class="chat-message" data-sender="05-app-server.mjs" style="display:none">
+        <div class="chat-avatar" style="background:var(--color-actor-3)">S</div>
+        <div class="chat-bubble">
+          <div class="chat-sender">05-app-server.mjs</div>
+          <p>匹配到本轮 turnId，提取 answers，输出完整回答。<code>finally</code> 块负责释放连接与子进程，失败也要清理。✅</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="chat-typing" style="display:none">
+      <div class="chat-avatar" id="m1-chat-typing-avatar" style="background:var(--color-actor-5)">C</div>
+      <div class="chat-typing-dots">
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+      </div>
+    </div>
+
+    <div class="chat-controls">
+      <button class="btn chat-next-btn">下一条</button>
+      <button class="btn chat-all-btn">全部显示</button>
+      <button class="btn chat-reset-btn">重置</button>
+      <span class="chat-progress">0 / 10</span>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 6: 版本说明 + 实践命令 + 测验 -->
+<section class="screen animate-in" id="m1-screen-6">
+  <h2 class="screen-heading">版本边界、实践命令与知识测验</h2>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">🔖 版本变化说明</div>
+      <div class="pattern-desc">
+        s01 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
+        <strong>s01 → s02</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
+        <strong>s03+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
+        本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<span class="term" data-definition="模型服务提供的请求与响应接口约定；这里需要 Responses API 兼容能力。">Responses API</span> 是执行引擎对远端服务的要求。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">⌨️ 实践命令（s01 <span class="term" data-definition="命令行界面，在终端输入命令来运行程序；npm 是本项目启动与检查脚本的入口。">CLI</span>）</div>
+      <div class="pattern-desc">
+        <code>cd stages/s01-single-turn &amp;&amp; npm ci</code><br>
+        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model）<br>
+        <code>npm run check</code>（仅校验本地配置，不发网络请求）<br>
+        <code>npm start</code>（默认提示词）<br>
+        <code>npm start -- "你的问题"</code>（自定义输入）<br>
+        <code>npm test</code>（离线模拟测试）<br>
+        <a href="../../?stage=s01">→ 打开 s01 命令与教学模拟</a>
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">🚧 边界说明</div>
+      <div class="pattern-desc">
+        s01/s02 无独立 HTTP 服务，不提供网页连接入口，实践即 CLI 命令。<br>
+        回答采用整段聚合输出，不支持逐 <span class="term" data-definition="模型处理文本时使用的小片段，可以是一个字、词的一部分或标点。">token</span> 流式打印。<br>
+        <code>features.memories=false</code>：关闭跨会话记忆，但本次会话日志仍可持久化。<br>
+        工作目录仅做应用层路径过滤，非操作系统级<span class="term" data-definition="用来限制程序可访问资源的隔离机制；应用层路径检查不能等同于强隔离。">沙箱</span>。
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" id="m1-quiz">
+
+    <div class="quiz-question-block" data-correct="b"
+         data-explanation-right="正确。turn/start 触发的通知事件可能早于 RPC 响应（含 turnId）到达 stdio，因此必须先建立缓冲监听，取得 turnId 后再回放匹配事件。"
+         data-explanation-wrong="A选项错误：超时计时器是在 try 块之前设置的，目的是防止模型无响应，与事件顺序问题无关。C选项错误：finally 是清理机制，负责关闭子进程，而非解决早到事件的问题。">
+      <h3 class="quiz-question">你删除了请求前的缓冲逻辑，偶尔明明有完成通知却一直等待。哪项解释能定位问题？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>为了同时启动超时计时器，两者必须一起初始化</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>事件通知可能比 RPC 响应更早到达，若先发请求再建监听会漏掉早到的通知</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>finally 块需要缓冲区才能正确关闭子进程</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="c"
+         data-explanation-right="正确。Node 作为编排客户端，通过 stdio JSON-RPC 与本机 Codex 子进程通信；Codex 再向上游的远端模型服务发起 Responses API 调用。"
+         data-explanation-wrong="A选项错误：Node 不直接调用模型 HTTP 接口，它只与本机 Codex 子进程通信，Codex 才是真正发起远端调用的一方。B选项错误：两者并非同一进程。Codex 是被 spawn 拉起的独立子进程，与 Node 主进程通过 stdio 分隔，职责完全不同。">
+      <h3 class="quiz-question">配置校验通过，但远端模型连接失败。沿着实际调用链，你应检查哪一层发出的请求？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>Node 主进程（05-app-server.mjs）直接发起 HTTP 请求</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>Node 主进程与 Codex 是同一进程，共同处理 HTTP 请求</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>本机 Codex 子进程通过 Responses API 调用远端模型，Node 仅做协议编排</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="a"
+         data-explanation-right="正确。initialize 方法让服务端返回初始化响应；initialized 是客户端的单向确认通知，不需要回复，告知服务端双方正式进入就绪状态。"
+         data-explanation-wrong="B选项错误：initialized 是单向通知，不需要等待服务端响应，也不携带任何用户输入；它只是客户端的&quot;确认收讫&quot;信号。C选项错误：thread/start 是握手完成之后才发送的，用于创建会话 Thread；initialize/initialized 是连接层握手，发生在任何业务请求之前。">
+      <h3 class="quiz-question">你重写了连接启动流程，想在发出首条用户任务前确认通信已就绪。应采用哪种顺序？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>initialize 是客户端的请求（等待服务端初始化响应），initialized 是客户端的单向确认通知</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>initialize 开启连接，initialized 携带用户首条输入并等待服务端回复</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>initialize 和 thread/start 是同一步骤的两种写法，initialized 可省略</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+  </div>
+  <button class="quiz-check-btn" data-quiz="m1-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m1-quiz" style="margin-left:8px">重置</button>
+
+</section>
+
+</div>
+</div>
+</section>
+
+<section class="module" id="module-2">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">02</span>
+  <h2 class="module-title">多轮：让会话延续</h2>
+  <p class="module-subtitle">同一本笔记本写下多页——理解 Thread 与 Turn 的层级、FIFO 缓冲的真实含义，以及 /resume 与长期记忆的本质区别。</p>
+</header>
+<div class="module-body">
+
+<!-- Screen 1: 总架构对比图 -->
+<section class="screen animate-in" id="m2-screen-1">
+  <h2 class="screen-heading">全景：从单轮到多轮的三个关键变化</h2>
+  <p>s02 在 s01 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">变化 1：<span class="term" data-definition="持续保存一段对话上下文的会话容器，如一本笔记本。">Thread</span> 跨 <span class="term" data-definition="同一会话里的一次用户任务，如笔记本的一页；有独立的唯一标识。">Turn</span> 复用</div>
+      <div class="pattern-desc">s01：一次执行一个 Thread，结束即关闭。s02：同一 Thread 可以持续接收新 Turn，直到用户退出或执行 /resume 切换。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">变化 2：<span class="term" data-definition="先进先出：早输入的消息先执行，上一轮结束后再处理下一条。">FIFO 输入缓冲</span></div>
+      <div class="pattern-desc">用户可以快速连续输入多条消息，但系统只在上一 Turn 执行完毕后才取下一条。这是输入节奏控制，不是重写模型的推理循环。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">变化 3：<span class="term" data-definition="选择并重新打开以前的会话，后续消息继续使用该会话的历史上下文。">/resume</span> 会话恢复</div>
+      <div class="pattern-desc">通过关键词检索历史 Thread 元数据（名称、开场预览），选定后调用 thread/resume 恢复上下文。恢复的是会话状态，不是"长期记忆注入"。</div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📌</span>
+    <div class="callout-content">
+      <p class="callout-title">谁保存历史？</p>
+      <p>多轮上下文由本机 <span class="term" data-definition="本地运行的 Codex App Server 进程，负责持久化会话历史、调用远端模型">Codex App Server</span> 原生持久化。<span class="term" data-definition="运行客户端 JavaScript 的环境，这里负责终端交互和协议编排。">Node</span> 端不维护历史消息数组，也不向模型重发历史，这些工作完全由 Codex 内部管理。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 2: 数据流动画 -->
+<section class="screen animate-in" id="m2-screen-2">
+  <h2 class="screen-heading">数据流：用户输入到模型回答的 7 步旅程</h2>
+  <p>以下动画模拟多轮模式下一条用户输入的完整流转路径，属于<strong>教学模拟，非真实推理过程</strong>。</p>
+
+  <div class="flow-animation" id="m2-flow" data-steps='[
+    {"highlight":"flow-m2-user","label":"① 用户在终端输入一条消息，input.question 内部的 FIFO 队列先接收它","packet":true,"from":"m2-user","to":"m2-queue"},
+    {"highlight":"flow-m2-queue","label":"② FIFO 队列检查：当前有正在执行的 Turn 吗？有则暂存，等待当前 Turn 完成后再取出","packet":false,"from":"m2-queue","to":"m2-queue"},
+    {"highlight":"flow-m2-queue","label":"③ 上一 Turn 已完成，队列取出这条输入，判断是否已有 threadId","packet":true,"from":"m2-queue","to":"m2-codex"},
+    {"highlight":"flow-m2-codex","label":"④ 若无 threadId：发 thread/start 建立新 Thread；若已有：直接发 turn/start 复用同一 Thread","packet":false,"from":"m2-codex","to":"m2-codex"},
+    {"highlight":"flow-m2-codex","label":"⑤ Codex 内部维护完整历史，调用远端模型推理，推送 turn/completed 通知","packet":false,"from":"m2-codex","to":"m2-codex"},
+    {"highlight":"flow-m2-output","label":"⑥ Node 匹配到 turnId，提取回答文本，一次性输出完整回复","packet":true,"from":"m2-codex","to":"m2-output"},
+    {"highlight":"flow-m2-queue","label":"⑦ 若队列中还有下一条输入，重复步骤③；否则等待用户再次输入","packet":false,"from":"m2-output","to":"m2-queue"}
+  ]'>
+    <div class="flow-actors">
+      <div class="flow-actor" id="flow-m2-user">
+        <div class="flow-actor-icon">👤</div>
+        <strong>用户终端</strong>
+      </div>
+      <div class="flow-actor" id="flow-m2-queue">
+        <div class="flow-actor-icon">📋</div>
+        <strong>FIFO 队列</strong>
+      </div>
+      <div class="flow-actor" id="flow-m2-codex">
+        <div class="flow-actor-icon">⚙️</div>
+        <strong>Codex 子进程</strong>
+      </div>
+      <div class="flow-actor" id="flow-m2-output">
+        <div class="flow-actor-icon">💬</div>
+        <strong>回答输出</strong>
+      </div>
+    </div>
+    <div class="flow-packet" style="display:none"></div>
+    <div class="flow-step-label">点击"下一步"开始模拟</div>
+    <div class="flow-controls">
+      <button class="btn flow-next-btn">下一步</button>
+      <button class="btn flow-reset-btn">重置</button>
+      <span class="flow-progress">0 / 7</span>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 3: FIFO ≠ ReAct -->
+<section class="screen animate-in" id="m2-screen-3">
+  <h2 class="screen-heading">FIFO 是排队，不是推理</h2>
+  <p><span class="term" data-definition="先进先出队列，保证消息按输入顺序依次处理，前一条未完成前后一条不启动">FIFO 输入缓冲</span>是用户侧的节奏控制机制，不负责模型内部的推理循环。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">容易混淆的两个概念</span>
+      <div class="step-cards"><div class="step-card"><div class="step-num">外</div><div class="step-body"><strong>FIFO 缓冲 · Node 侧</strong><p>用户消息入队、出队；决定何时发出下一个 turn/start，不决定模型如何推理。</p></div></div><div class="step-card"><div class="step-num">内</div><div class="step-body"><strong>ReAct / 内部 Loop · Codex 侧</strong><p>处理一个 Turn 内的模型推理与工具调用往返；不管理下一条用户输入的排队。</p></div></div></div>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">关键区分</span>
+      <div class="translation-lines">
+        <p class="tl">FIFO 决定的是"你的第三条消息要等第二条处理完才能发出"，而不是模型"思考"的步骤数。</p>
+        <p class="tl">从执行机制看，一个 Turn 可包含多次推理与工具往返，由 Codex 的内部循环控制。本阶段的工具能力受限，不能把这种机制理解为已开放外部工具。</p>
+        <p class="tl">结论：FIFO 是外部排队，<span class="term" data-definition="模型推理-行动-观察的循环，由执行引擎内部控制，与用户消息队列无关">ReAct</span> 是内部循环，两者分工不同。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">为什么需要 FIFO？</div>
+      <div class="pattern-desc">如果同时推进多个用户输入，客户端必须处理更复杂的会话状态。本阶段按顺序等待每个 Turn 完成，使输入与结果的对应关系清晰。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">超时后恢复原会话</div>
+      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s03 的服务能力。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 4: resume vs 记忆 + 真实源码 -->
+<section class="screen animate-in" id="m2-screen-4">
+  <h2 class="screen-heading">resume 恢复会话 vs 记忆注入：两件不同的事</h2>
+  <p>这是最容易被混淆的概念对。用笔记本比喻：resume 是"重新翻开一本旧笔记本继续写"，记忆是"把多本笔记的精华摘录写到新本子的扉页"。</p>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">/resume 做了什么</div>
+      <div class="pattern-desc">
+        1. 按关键词检索本地会话元数据（名称 / 开场预览）<br>
+        2. 显示编号列表，用户输入数字选择<br>
+        3. 发送 <code>thread/resume</code> <span class="term" data-definition="远程过程调用：通过消息请求另一个进程执行指定操作。">RPC</span>，Codex 恢复该 Thread 的原生历史<br>
+        4. 后续 Turn 在此 Thread 上继续，上下文连贯
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">记忆（Memory）是什么</div>
+      <div class="pattern-desc">
+        长期记忆可将有用信息跨会话保留并在后续会话召回；它与重新打开某一个历史会话是不同机制。<br>
+        s02 <strong>不开启</strong>跨会话记忆（<code>features.memories=false</code>），/resume 恢复的是历史上下文，不是记忆注入。
+      </div>
+    </div>
+  </div>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s02-multi-turn/05-app-server.mjs · 第 239–248 行</span>
+      <pre><code>      <span class="code-keyword">const</span> selected = /^\d+$/.test(value) ? threads[Number(value) - <span class="code-number">1</span>] : undefined;
+      <span class="code-keyword">if</span> (!selected) { console.log(<span class="code-string">"请输入列表中有效的会话编号。"</span>); continue; }
+      <span class="code-keyword">if</span> (selected.id === threadId) { console.log(<span class="code-string">"这就是当前会话，可以继续聊天。"</span>); <span class="code-keyword">return</span> <span class="code-keyword">false</span>; }
+      <span class="code-keyword">await</span> ensureThreadDirectory(root, selected.cwd);
+      <span class="code-keyword">const</span> result = <span class="code-keyword">await</span> request(<span class="code-string">"thread/resume"</span>, {
+        ...threadOptions, threadId: selected.id, cwd: selected.cwd, excludeTurns: <span class="code-keyword">true</span>
+      });
+      selectThread(result);
+      console.log(<span class="code-string">"已恢复会话："</span>, safeTitle(selected.name || selected.preview));
+      console.log(<span class="code-string">"后续消息沿用原会话历史，使用上面显示的当前配置模型。"</span>);</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">逐行解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="在使用输入之前检查它是否符合要求，避免错误选择。">数字校验</span></strong>：用<span class="term" data-definition="按文本规则匹配内容的方式；这里检查输入是否只包含数字。">正则</span>确认用户输入是纯数字，再从 threads 数组取对应项，防止无效输入。</p>
+        <p class="tl"><strong>相同会话检测</strong>：如果选择的就是当前 Thread，直接提示继续，不重复 resume。</p>
+        <p class="tl"><strong>thread/resume + excludeTurns</strong>：通知 Codex 恢复该 Thread，<code>excludeTurns: true</code> 表示不在响应中回传完整历史 Turn 列表，减少传输量。</p>
+        <p class="tl"><strong>模型说明</strong>：恢复后使用的是"当前配置的模型"，不保证与历史 Turn 使用的模型版本完全一致。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📂</span>
+    <div class="callout-content">
+      <p class="callout-title">路径说明</p>
+      <p>完整文件：<code>stages/s02-multi-turn/05-app-server.mjs</code>，第 239–252 行。会话元数据索引由本地存储维护，Codex 原生历史由 Codex 自身持久化，两者分工明确。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 5: runTurn 源码 -->
+<section class="screen animate-in" id="m2-screen-5">
+  <h2 class="screen-heading">源码对照：s02 的 runTurn 与 s01 的相似与差异</h2>
+  <p>s02 的 runTurn 结构与 s01 高度相似，关键在于 Thread 复用逻辑和超时错误提示的变化。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s02-multi-turn/05-app-server.mjs · 第 192–201 行</span>
+      <pre><code>  <span class="code-keyword">async</span> <span class="code-keyword">function</span> runTurn(prompt) {
+    <span class="code-keyword">if</span> (!threadId) <span class="code-keyword">await</span> startThread();
+    <span class="code-keyword">const</span> turn = { threadId, id: null, answers: <span class="code-keyword">new</span> Map(), buffer: [], completed: Promise.withResolvers() };
+    turn.completed.promise.catch(() =&gt; {});
+    activeTurn = turn;
+    <span class="code-keyword">const</span> timer = setTimeout(() =&gt; fail(<span class="code-keyword">new</span> Error(<span class="code-string">"App Server 本轮调用超时；已停止连接，可重启后 /resume。"</span>)), launch.timeoutMs);
+    console.log(<span class="code-string">"正在等待模型回复……"</span>);
+    <span class="code-keyword">try</span> {
+      <span class="code-keyword">const</span> result = <span class="code-keyword">await</span> request(<span class="code-string">"turn/start"</span>, {
+        threadId, input: [{ type: <span class="code-string">"text"</span>, text: prompt, text_elements: [] }]</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">与 s01 的关键差异</span>
+      <div class="translation-lines">
+        <p class="tl"><strong>threadId 复用</strong>：<code>if (!threadId) await startThread()</code>——若已有 Thread 则跳过创建，直接在同一 Thread 内发起新 Turn，这是多轮连续对话的核心。</p>
+        <p class="tl"><strong>超时提示变化</strong>：s02 的超时错误信息增加了"可重启后 /resume"——提示用户会话可恢复，不必从头开始。</p>
+        <p class="tl"><strong>buffer 机制相同</strong>：早到事件的缓冲与回放逻辑与 s01 完全一致，两版复用了同一解决方案。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">原生历史归 Codex，不归 Node</div>
+      <div class="pattern-desc">Node 端通过 threadId 引用原生会话，完整对话历史由 Codex 内部的 <span class="term" data-definition="SQLite 是本地数据库文件，JSONL 是逐行保存结构化记录的文本格式。这里由 Codex 管理，不需要应用重建。">SQLite/JSONL</span> 维护。即使 Node 进程重启，原生历史与对应目录仍存在时，可通过 /resume 恢复。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">检索范围限制</div>
+      <div class="pattern-desc">/resume 仅基于会话名称、开场预览和 ID 做基础匹配，不支持历史全文检索。无法通过消息内容关键词精确定位某条对话。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 6: 版本说明 + 实践 + 测验 -->
+<section class="screen animate-in" id="m2-screen-6">
+  <h2 class="screen-heading">版本边界、实践命令与知识测验</h2>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">🔖 版本变化说明</div>
+      <div class="pattern-desc">
+        <strong>s01 → s02</strong>：新增 FIFO 输入缓冲、Thread 跨 Turn 复用、/resume 会话恢复、会话元数据本地索引。<br>
+        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层、配置驱动 Agent、MCP 工具协议、沿用 FIFO，并增加持久化任务状态与重启暂停。<br>
+        s02 <strong>仍无独立 HTTP 服务</strong>，不提供网页连接入口。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">⌨️ 实践命令（s02 <span class="term" data-definition="命令行界面：本章通过终端输入消息和命令，不提供独立网页服务。">CLI</span>）</div>
+      <div class="pattern-desc">
+        <code>cd stages/s02-multi-turn &amp;&amp; npm ci</code><br>
+        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model）<br>
+        <code>npm run check</code>（本地校验，不连网）<br>
+        <code>npm start</code>（进入交互模式）<br>
+        验证多轮：输入“记住代号是蓝鲸”→回答后再问“代号是什么”；核对同一 Thread ID、不同 Turn ID，检查回答而非预设成功<br>
+        验证恢复：/exit 退出后重启，输入 /resume<br>
+        <code>npm test</code>（离线模拟测试）<br>
+        <a href="../../?stage=s02">→ 打开 s02 命令与教学模拟</a>
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">🚧 边界说明</div>
+      <div class="pattern-desc">
+        无跨会话原生记忆沉淀，/resume 恢复的是会话上下文而非长期记忆。<br>
+        回答仍为整段聚合输出，不支持流式打印。<br>
+        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s03 起引入）。<br>
+        单机单 owner 单 Agent，不支持多账户或多 Agent 编排。
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" id="m2-quiz">
+
+    <div class="quiz-question-block" data-correct="b"
+         data-explanation-right="正确。多轮上下文由本机 Codex App Server 原生持久化，Node 端不维护历史消息数组，也不向模型重发历史，只持有 threadId 作为会话引用。"
+         data-explanation-wrong="A选项错误：Node 端不维护历史消息数组，也不负责向模型重发历史——这些全由 Codex 内部管理，Node 只持有 threadId 引用。C选项错误：虽然本地有会话元数据索引（名称、预览等），但完整的对话历史是由 Codex 原生持久化（SQLite/JSONL），而非存储在 Node 的本地索引中。">
+      <h3 class="quiz-question">你准备给会话增加“继续上次聊天”，却在 Node 的元数据里找不到正文。该去哪里恢复？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>Node 主进程维护历史消息数组，每轮都把完整历史重新发给模型</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>本机 Codex App Server 原生持久化，Node 端只保存 threadId 引用</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>Node 端的本地会话元数据索引保存了完整对话历史</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="c"
+         data-explanation-right="正确。FIFO 是用户消息的入队排序机制，保证上一 Turn 执行完才取下一条输入，不控制模型内部的推理步骤（ReAct loop）。"
+         data-explanation-wrong="A选项错误：FIFO 控制的是用户消息的发出顺序，与模型内部一个 Turn 内调用几次工具无关——那是 Codex 内部的 ReAct loop，FIFO 无法干预。B选项错误：FIFO 不是 Codex 内部的重试机制，也不决定工具调用是否重试；s02 超时会断开并提示重启后 /resume，输入队列本身不负责自动重试。">
+      <h3 class="quiz-question">用户连续输入三条问题，第二条等了很久；他希望调整 FIFO 来减少单轮工具调用。哪种判断正确？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>控制模型在一个 Turn 内调用工具的次数上限</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>控制 Codex 内部工具调用失败时的重试顺序</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>控制用户消息的发出节奏：上一 Turn 完成后才取下一条输入</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="a"
+         data-explanation-right="正确。/resume 恢复的是某个 Thread 的原生会话历史，让对话可以从断点继续。而跨会话记忆是从多个历史会话中提炼关键信息注入新会话，s02 明确关闭了此功能。"
+         data-explanation-wrong="B选项错误：/resume 不能检索消息内容全文，只能基于会话名称、开场预览和 ID 做基础匹配，无法通过任意关键词找到特定消息。C选项错误：/resume 恢复的是历史 Thread 的上下文，不会把跨会话记忆注入到新 Thread——这是两个独立机制，s02 中记忆功能处于关闭状态。">
+      <h3 class="quiz-question">用户 /resume 后接着聊旧话题成功，却发现新会话不记得旧代号。该如何解释？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>/resume 恢复的是某个 Thread 的历史上下文；跨会话记忆是从多个会话中提炼知识并注入新会话（s02 关闭）</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>/resume 支持通过任意关键词全文检索历史消息内容</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>/resume 会把旧会话的记忆提炼后注入当前新 Thread</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+  </div>
+  <button class="quiz-check-btn" data-quiz="m2-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m2-quiz" style="margin-left:8px">重置</button>
+
+</section>
+
+</div>
+</div>
+</section>
+
+<section class="module" id="module-3">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">03</span>
+  <h2 class="module-title">配置：装配一个 Agent</h2>
+  <p class="module-subtitle">如何让同一套服务代码支持不同角色、工具和权限——答案是配置驱动。从 JSON 装配文件到工具白名单，逐层拆解 Agent 的组装逻辑。</p>
+</header>
+<div class="module-body">
+
+<!-- Screen 1: 总架构 -->
+<section class="screen animate-in" id="m3-screen-1">
+  <h2 class="screen-heading">全景：装配工作台的六个插槽</h2>
+  <p>想象一张装配工作台：服务代码是台架，配置文件是装配清单，六个插槽决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
+
+  <div class="arch-diagram">
+    <div class="arch-zone">
+      <button class="arch-component" data-desc="agent.instructions：指向角色正文文件路径（如 roles/writing-assistant.md）。角色内容与服务代码解耦，换角色只改路径，不改代码。">① 角色指令（instructions）</button>
+      <button class="arch-component" data-desc="agent.skills：声明原生 Skill 列表。Skill 提供方法指导，但不授予工具权限——工具权限必须通过 tools.allow 单独授权。">② 原生 Skills</button>
+      <button class="arch-component" data-desc="agent.tools.allow：工具白名单数组，如 ['list_files','read_file','write_file']。list 与 call 均执行此白名单，模型无法调用未列出的工具。">③ 工具白名单（tools.allow）</button>
+      <button class="arch-component" data-desc="agent.dataBindings：资料源与目录映射。每条绑定声明 sourceRef、actions（read/create）和 methods。inputs 只读，research/drafts 可读可创建，outputs 按产物规则写入。">④ 资料绑定（dataBindings）</button>
+      <button class="arch-component" data-desc="agent.outputs：产物规则，声明允许的输出目录、格式（md/txt）和写入模式（create-only，不覆盖）。文件落盘后检查存在性与扩展名。">⑤ 产物规则（outputs）</button>
+      <button class="arch-component" data-desc="agent.memory：记忆开关。use 控制是否召回原生记忆，contribute 控制是否向记忆库贡献。s03 两者均为 false。Skill 不等于记忆权限。">⑥ 记忆开关（memory）</button>
+    </div>
+    <div class="arch-description">点击插槽查看各字段职责</div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📌</span>
+    <div class="callout-content">
+      <p class="callout-title">唯一装配入口</p>
+      <p><span class="term" data-definition="用字段名和值表达结构化数据的文本格式，这里用作装配清单。">JSON</span> 文件 <code>agents/writing-agent.json</code> 是配置的唯一可编辑入口，遵循 <span class="term" data-definition="配置文件格式版本声明，用于校验字段完整性、拒绝未知字段、供加载器选择对应的校验规则">schemaVersion: "1.0"</span>。未知字段直接拒绝，缺少必填字段也会报错，保证运行状态与配置严格一致。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 2: Schema / Registry / MCP / Skills 概念定义 -->
+<section class="screen animate-in" id="m3-screen-2">
+  <h2 class="screen-heading">四个核心概念：装配台的底层语言</h2>
+  <p>读懂配置文件前，先理解这四个词各自指的是什么，以及它们之间的边界。</p>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="配置的结构定义与校验规则，规定哪些字段必填、哪些值合法，超出范围即拒绝">Schema（模式）</span></div>
+      <div class="pattern-desc">
+        writing-agent.json 的 <code>schemaVersion: "1.0"</code> 声明了当前配置遵循的 Schema 版本。加载器按 Schema 校验所有字段：多余字段拒绝，缺失必填字段报错。Schema 是配置的"格式合同"。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="工具的注册表，记录所有可用工具的名称、描述和执行逻辑，白名单在 Registry 基础上做过滤">Registry（注册表）</span></div>
+      <div class="pattern-desc">
+        ToolManager 的 <code>build()</code> 方法生成一个带版本号的 registry，其中包含当前版本的工具规格。list 和 call 都受工具白名单约束，Registry 是工具的"电话簿"。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="Model Context Protocol，一种标准化协议，允许模型通过统一接口发现和调用外部工具，不是一工具一服务">MCP（模型上下文协议）</span></div>
+      <div class="pattern-desc">
+        s03 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="封装了特定能力的指令集，告诉模型如何完成某类任务，但不直接授予工具权限">Skills（原生技能）</span></div>
+      <div class="pattern-desc">
+        Skills 是方法指导文本，指导模型"如何做"某类任务（如写作流程）。工具权限由 <code>tools.allow</code> 单独控制——Skill 里提到某工具，不代表该工具自动被授权。两者必须分开配置。
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">🔑</span>
+    <div class="callout-content">
+      <p class="callout-title">方法 vs 授权：最重要的边界</p>
+      <p>Skills 告诉模型<strong>怎么做</strong>，tools.allow 决定模型<strong>能做什么</strong>。即使 Skill 里描述了"调用 write_file 保存结果"，如果 allow 列表里没有 write_file，模型调用时仍会被拒绝。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 3: 真实 JSON 配置解读 -->
+<section class="screen animate-in" id="m3-screen-3">
+  <h2 class="screen-heading">解剖真实配置文件</h2>
+  <p>以下是 writing-agent.json 的实际片段，展示装配工作台中的角色、工具、资料与执行配置。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 1–18 行</span>
+      <pre><code>{
+  <span class="code-string">"schemaVersion"</span>: <span class="code-string">"1.0"</span>,
+  <span class="code-string">"agent"</span>: {
+    <span class="code-string">"id"</span>: <span class="code-string">"writing-assistant"</span>,
+    <span class="code-string">"version"</span>: <span class="code-string">"1.0.0"</span>,
+    <span class="code-string">"instructions"</span>: <span class="code-string">"roles/writing-assistant.md"</span>,
+    <span class="code-string">"skills"</span>: [],
+    <span class="code-string">"tools"</span>: { <span class="code-string">"allow"</span>: [<span class="code-string">"list_files"</span>, <span class="code-string">"read_file"</span>, <span class="code-string">"write_file"</span>, <span class="code-string">"search_web"</span>, <span class="code-string">"read_webpage"</span>] },
+    <span class="code-string">"dataBindings"</span>: [</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"originals"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"research"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>, <span class="code-string">"create"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"drafts"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>, <span class="code-string">"create"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"articles"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> }
+    ],
+    <span class="code-string">"executionRef"</span>: <span class="code-string">"restricted-local"</span>,
+    <span class="code-string">"memory"</span>: { <span class="code-string">"use"</span>: <span class="code-keyword">false</span>, <span class="code-string">"contribute"</span>: <span class="code-keyword">false</span> },
+    <span class="code-string">"outputs"</span>: { <span class="code-string">"directory"</span>: <span class="code-string">"outputs"</span>, <span class="code-string">"formats"</span>: [<span class="code-string">"md"</span>, <span class="code-string">"txt"</span>], <span class="code-string">"writeMode"</span>: <span class="code-string">"create-only"</span>, <span class="code-string">"requiredChecks"</span>: [<span class="code-string">"file-exists"</span>, <span class="code-string">"format"</span>] }
+  },</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">字段解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong>schemaVersion</strong>：版本声明，加载器据此选择校验规则，未知版本直接拒绝。</p>
+        <p class="tl"><strong>instructions</strong>：角色正文文件路径，不是内联文本——角色内容与配置结构分离，易于独立维护。</p>
+        <p class="tl"><strong>tools.allow</strong>：5 个工具名组成白名单，list 和 call 都受此约束，模型不可自行扩权。</p>
+        <p class="tl"><strong>dataBindings</strong>：四个资料源，originals 和 articles 仅 read，research 和 drafts 可 read+create。articles 指向 outputs 目录，是来源绑定别名，不是新目录。</p>
+        <p class="tl"><strong>executionRef</strong>：引用 bindings.executions 中的策略条目，当前为 restricted-local（只读沙箱，禁止原生 shell 和文件写）。</p>
+        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，s03 不读取也不贡献跨会话记忆。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 4: ToolManager 源码 + MCP 机制 -->
+<section class="screen animate-in" id="m3-screen-4">
+  <h2 class="screen-heading">工具注册与 MCP 服务：ToolManager 的工作方式</h2>
+  <p><span class="term" data-definition="统一管理工具注册、版本控制、MCP 服务暴露和边界锁的模块">ToolManager</span> 是工具层的核心，负责把配置里的 allow 列表变成 Codex 可调用的 MCP 接口。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/server/modules/tools/index.mjs · 第 15–31 行</span>
+      <pre><code>export class ToolManager {
+  constructor({ config, runtime, log, redact, files, agent, boundary = <span class="code-keyword">new</span> ExecutionBoundary() }) {
+    Object.assign(this, { config, runtime, log, redact, files, agent, boundary });
+    this.configFile = codexPaths(config.root).configFile;
+    this.token = randomBytes(<span class="code-number">32</span>).toString(<span class="code-string">"hex"</span>);
+    this.status = <span class="code-string">"loading"</span>; this.error = null;
+    Object.assign(boundary, { pending: () =&gt; Boolean(this.pending), unavailable: () =&gt; this.closed || this.broken,
+      refresh: <span class="code-keyword">async</span> () =&gt; { <span class="code-keyword">try</span> { this.scan(); } catch (error) { this.pending = null; this.report(error); } }, apply: () =&gt; this.apply() });
+  }</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>  <span class="code-keyword">async</span> open() {
+    this.registry = <span class="code-keyword">await</span> this.build(readToolSources(this.config.root));
+    this.server = <span class="code-keyword">await</span> createMcpToolServer({ token: this.token, redact: this.redact });
+    this.server.registries.set(this.registry.version, this.registry);
+    this.config.launch.env = { ...this.config.launch.env, PROJECT_MCP_TOKEN: this.token };
+    this.status = <span class="code-string">"ready"</span>;
+    <span class="code-keyword">return</span> this;
+  }</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">关键设计解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="这里是证明调用方获得授权的一段随机凭据，由程序生成和传递，无需复制到教学页面。">随机 token</span></strong>：每次启动生成 32 字节随机 token，作为 MCP <span class="term" data-definition="调用请求携带的授权凭据，用来核验访问本地工具服务的身份。">Bearer 令牌</span>写入 Codex 环境变量，防止未授权调用。</p>
+        <p class="tl"><strong>build() → registry</strong>：扫描工具源，构建带版本号的 Registry 快照，存入 <code>server.registries</code> Map。</p>
+        <p class="tl"><strong>createMcpToolServer</strong>：启动本地 HTTP MCP 服务端，<strong>一个服务承载本项目的工具</strong>，不是一工具一服务。</p>
+        <p class="tl"><strong><span class="term" data-definition="协调执行与更新的边界锁，避免活跃任务执行到一半时切换工具状态。">ExecutionBoundary</span></strong>：边界锁模块注入 ToolManager，保证工具刷新不在任务中途发生，维护状态一致性。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">工具刷新的限制</div>
+      <div class="pattern-desc">工具刷新受边界锁协调，不能在任务中途切换。Agent 配置、角色或 Skill 文件变更后，会拒绝后续请求并要求重启；新增工具还需实现、加入 allow 并受控重启。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">list 与 call 双重过滤</div>
+      <div class="pattern-desc">模型请求 list_tools 时，只返回 allow 列表内的工具；call_tool 时再次校验 allowlist，两道过滤缺一不可。模型看不到、也调不到白名单外的工具。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 5: 描述符版本机制 + workspace 边界 -->
+<section class="screen animate-in" id="m3-screen-5">
+  <h2 class="screen-heading">描述符版本机制与 Workspace 边界</h2>
+  <p>配置变更如何被检测？文件操作的边界在哪里？这两个问题是排障时最常碰到的。</p>
+
+  <div class="step-cards">
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>启动时生成描述符</strong><br>
+        每次服务启动，系统生成 <span class="term" data-definition="记录当次启动时角色哈希、Skill 版本、工具版本和资源策略的快照文件">Agent 描述符</span>，写入 <code>.data/agent-descriptors/</code>，包含角色<span class="term" data-definition="根据文件内容计算的指纹，用来发现变化，不是文件内容本身。">哈希</span>、Skill 版本、工具版本。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Thread 绑定描述符版本</strong><br>
+        新建 Thread 时，其描述符版本写入 <code>.data/thread-agents.json</code>。恢复旧 Thread 时，先比对当前描述符哈希与记录值是否一致。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>不匹配则提示 /new</strong><br>
+        配置、角色或 Skill 文件变更后先重启服务；如果新描述符与旧会话绑定不同，系统拒绝恢复并提示用户执行 <code>/new</code> 新建会话，<strong>不自动迁移</strong>旧 Thread。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>文件权限边界</strong><br>
+        <span class="term" data-definition="限制文件访问范围的服务模块，控制路径、扩展名、大小和操作类型，由文件服务自身执行而非沙箱 cwd">文件服务（files.mjs）</span>自身执行权限边界，不依赖 Codex cwd 约束。工具快照工厂注入文件服务，无跨快照引用，防止历史快照影响当前操作。
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-content">
+      <p class="callout-title">业务状态存 JSON，不存数据库（s03 专属）</p>
+      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s04 引入。</p>
+    </div>
+  </div>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 19–29 行</span>
+      <pre><code>  <span class="code-string">"bindings"</span>: {
+    <span class="code-string">"workspaceDir"</span>: <span class="code-string">"../workspace"</span>,
+    <span class="code-string">"skills"</span>: {},
+    <span class="code-string">"sources"</span>: {
+      <span class="code-string">"originals"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"inputs"</span> },
+      <span class="code-string">"research"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"research"</span> },</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>      <span class="code-string">"drafts"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"drafts"</span> },
+      <span class="code-string">"articles"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"outputs"</span> }
+    },
+    <span class="code-string">"executions"</span>: { <span class="code-string">"restricted-local"</span>: { <span class="code-string">"sandbox"</span>: <span class="code-string">"read-only"</span>, <span class="code-string">"approvalPolicy"</span>: <span class="code-string">"never"</span>, <span class="code-string">"nativeShell"</span>: <span class="code-keyword">false</span>, <span class="code-string">"nativeFileWrite"</span>: <span class="code-keyword">false</span> } }
+  }</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">关键说明</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="Agent 的工作目录入口。cwd 指当前工作目录，但文件访问许可还由文件服务独立检查。">workspaceDir</span></strong>：Agent 的工作根目录，Thread 的 cwd 设为此路径，跨重启保留。</p>
+        <p class="tl"><strong>articles → outputs</strong>：articles 是 outputs 目录的来源绑定别名，不是独立目录。list_files 只返回已授权路径的文件，无法通过 articles 访问 outputs 以外内容。</p>
+        <p class="tl"><strong>restricted-local</strong>：沙箱策略条目，禁止原生 shell 和文件写，approvalPolicy: never 表示不通过弹出审批来申请额外执行权限；工具仍受白名单与文件服务边界约束。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 6: 版本说明 + 实践 + 测验 -->
+<section class="screen animate-in" id="m3-screen-6">
+  <h2 class="screen-heading">版本边界、实践命令与知识测验</h2>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">🔖 版本变化说明</div>
+      <div class="pattern-desc">
+        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s04。<br>
+        <strong>s03 → s04</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        s03 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">⌨️ 实践命令（s03 HTTP 服务）</div>
+      <div class="pattern-desc">
+        <code>cd stages/s03-agent-core &amp;&amp; npm ci</code><br>
+        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4313）<br>
+        <code>npm run check</code>（本地配置校验）<br>
+        <code>npm run server</code>（启动服务，s03 无需数据库迁移）<br>
+        另开终端：<code>npm run chat</code><br>
+        验证工具：在 chat 中输入 <code>/tools</code><br>
+        <code>npm test &amp;&amp; npm run test:codex-tools</code><br>
+        <a href="../../?stage=s03">→ 进入 s03 练习</a>
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">🚧 边界说明</div>
+      <div class="pattern-desc">
+        单机单用户，每实例一个 Agent 多 <span class="term" data-definition="一个持续会话，可包含多轮任务；多个会话仍共用本实例的同一套Agent配置。">Thread</span>，不支持多账户或多 Agent 编排。<br>
+        Skill 仅验证原生文本指令型；带脚本/附件的工作流不保证运行。<br>
+        记忆链路读/提炼限制已测；合并摘要当前 <span class="term" data-definition="该处理路径目前受限制而无法完成，不能视作完整记忆链路已经验收。">blocked</span>，完整链路未最终验收。<br>
+        新增工具需同时配置 allow 并受控重启，不支持热增不重启。<br>
+        文件服务限制路径、扩展名、大小和操作：默认 .md/.txt、256 KiB，只创建不覆盖，不跟随软链接或硬链接；不能仅凭 cwd 判断访问权限。
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" id="m3-quiz">
+
+    <div class="quiz-question-block" data-correct="c"
+         data-explanation-right="正确。tools.allow 是工具白名单，list 和 call 操作都会执行此过滤。Skill 只是方法指导文本，不授予工具权限——两者必须分开配置。"
+         data-explanation-wrong="A选项错误：Skills 里描述了某工具的使用方法，并不意味着该工具被自动授权。工具权限必须在 tools.allow 中单独声明，两者完全独立。B选项错误：memory.use 控制的是是否召回跨会话原生记忆，与工具权限无关。工具白名单是必要授权，实际执行还受参数校验和资源范围限制；记忆开关不授予工具权限。">
+      <h3 class="quiz-question">你给 Skill 新增“用 write_file 保存文章”，模型却仍被拒绝。首先应检查哪一项授权？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 Skill 文件中是否描述了该工具的使用方法</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 memory.use 是否为 true</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 agent.tools.allow 白名单，list 和 call 都执行此过滤</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="a"
+         data-explanation-right="正确。旧 Thread 恢复时，系统比对当前描述符哈希与 thread-agents.json 中的记录值，不匹配则提示执行 /new，不自动迁移旧 Thread。"
+         data-explanation-wrong="B选项错误：描述符不匹配时系统不会自动迁移旧 Thread 的数据到新配置下继续运行——这样做可能导致上下文与新配置不一致，因此必须由用户主动执行 /new。C选项错误：服务不会在检测到版本差异时自动回滚到旧配置——回滚意味着用手动干预将配置文件还原，系统只做检测和拒绝，不做自动回滚。">
+      <h3 class="quiz-question">你修改 Agent 角色并重启了服务。现在 /resume 旧 Thread，描述符版本不同，应如何处理？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>系统比对描述符哈希，不匹配则拒绝恢复并提示执行 /new，不自动迁移</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>系统自动将旧 Thread 的数据迁移到新配置下继续运行</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>服务检测到版本差异后自动回滚到旧配置</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="b"
+         data-explanation-right="正确。s03 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
+         data-explanation-wrong="A选项错误：s03 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
+      <h3 class="quiz-question">你新增第六个已授权工具，担心还要开第六个端口。按本项目结构，应该怎样接入？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a">
+          <div class="quiz-option-radio"></div>
+          <span>以函数形式直接注入 Codex 进程内部，无需网络调用</span>
+        </button>
+        <button class="quiz-option" data-value="b">
+          <div class="quiz-option-radio"></div>
+          <span>通过一个本地 HTTP MCP 服务端统一暴露，Codex 以 MCP 协议发现并调用已授权工具</span>
+        </button>
+        <button class="quiz-option" data-value="c">
+          <div class="quiz-option-radio"></div>
+          <span>每个工具单独启动一个 HTTP 服务，Codex 分别连接</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+  </div>
+  <button class="quiz-check-btn" data-quiz="m3-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m3-quiz" style="margin-left:8px">重置</button>
+
+</section>
+
+</div>
+</div>
+</section>
+
+<section class="module" id="module-4">
+  <div class="module-content">
+
+    <header class="module-header">
+      <span class="module-number">04</span>
+      <h2 class="module-title">数据：状态有据可查</h2>
+      <p class="module-subtitle">
+        从单文件 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span> 到关系型<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>——理解 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 账本、<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 提醒铃、不可变 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 与原生历史各司其职，读完能向 AI 程序员准确定位状态与权限问题。
+      </p>
+    </header>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 1：架构总图 — 四层职责一览
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-overview">
+      <h2 class="screen-heading">四层架构：谁存什么、谁唤醒谁</h2>
+
+      <p>
+        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s04 在此基础上新增关系事务与内容版本追踪。
+        s04 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
+      </p>
+
+      <img src="assets/s04-architecture.svg" width="100%" alt="s04 系统架构总图：四层存储职责划分" />
+
+      <div class="callout">
+        <div class="callout-text">
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；右侧 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；红色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+        </div>
+      </div>
+
+      <div class="flow-steps" aria-label="s04 分层职责">
+        <div class="flow-step"><strong>01 交互入口</strong><p><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> / <span class="term" tabindex="0" data-definition="命令行客户端；在终端输入命令来调用本地服务。">CLI</span> 收消息，校验本地凭据；返回任务 ID 与事件。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>02 装配与调度</strong><p>读取 Agent 配置，写 tasks + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span>；领取任务并驱动 Codex。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s04 使用它，s05 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>04 数据与文件</strong><p>PG 管业务事实，Redis 管唤醒，blob 管正文；原生历史另由 Codex 管理。</p></div>
+      </div>
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">🗄️</div>
+          <div class="pattern-title"><span class="term" tabindex="0" data-definition="关系数据库；把会话、任务、资源版本等记录存成可查询的数据表。">PostgreSQL</span> 账本</div>
+          <div class="pattern-desc">所有业务状态（任务、会话、资源版本）的权威来源。写操作在 PG 事务内完成，保证<span class="term" tabindex="0" data-definition="一组操作作为整体成功或失败；必须说明它覆盖的是 PG 内部，还是跨多个存储。">原子性</span>。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">🔔</div>
+          <div class="pattern-title">Redis 提醒铃</div>
+          <div class="pattern-desc">只存 <span class="term" tabindex="0" data-definition="Codex 原生会话；一个 Thread 可以连续接收多条任务并保留自己的历史。">Thread</span> ID <span class="term" data-definition="Set（集合）是一种数据结构，每个元素唯一，无顺序。这里用 Redis Set 存 Thread ID，同一个 Thread 重复推入也只保留一条，去重尚未弹出的唤醒信号。">Set</span>，用于低延迟唤醒调度器。它不存任务数据，失联时 outbox 兜底，不丢任务。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">📦</div>
+          <div class="pattern-title"><span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">Blob</span> 文件柜</div>
+          <div class="pattern-desc">以 <span class="term" data-definition="SHA-256 是一种哈希算法，把任意长度的内容压缩成 64 个字符的指纹。内容变化通常产生不同指纹，碰撞概率极低，因此可用来命名内容文件。">sha256</span> 命名的不可变文件，存在 <code>.data/files/objects/</code>。内容写入后不覆盖，版本变了就是新文件。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:3">
+          <div class="pattern-icon">🧠</div>
+          <div class="pattern-title">Codex 原生历史</div>
+          <div class="pattern-desc">完整模型回复与工具调用历史，由 Codex 自身管理（<span class="term" tabindex="0" data-definition="嵌入式关系数据库；Codex 原生存储使用的格式之一。">SQLite</span>/<span class="term" tabindex="0" data-definition="每行一条 JSON 的文本格式；适合连续记录事件与历史。">JSONL</span>），主进程不读写，PG 不重复存储。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 2：PG 账本 — tasks + outbox 同事务
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-pg">
+      <h2 class="screen-heading">PG 账本：任务与调度出口同事务写入</h2>
+
+      <p>
+        想象银行转账：从 A 账户扣钱和向 B 账户加钱必须同时成功或同时失败，不能只做一半。
+        s04 把「写任务」和「写调度出口」绑进同一个 <span class="term" data-definition="事务（Transaction）是数据库的承诺：事务里的所有操作要么全部生效，要么全部撤销，中间崩溃不会留下半成品状态。">PG 事务</span>——服务崩溃时，账本要么两条都有，要么两条都没有，不会出现任务存在但调度出口丢失的情况。
+      </p>
+
+      <p class="pattern-desc">源码：<code>stages/s04-data-layer/server/modules/data/jobs.mjs:75–81</code></p>
+<div class="translation-block" id="m4-m4jobs-code"><div class="translation-code"><span class="translation-label">真实源码 · 7 行</span><pre><code>      <span class="code-keyword">await</span> this.wake(job.threadId, client);
+      <span class="code-keyword">await</span> this.query(
+        `UPDATE agent_data.conversations SET name=CASE WHEN name='' THEN $4 ELSE name END,updated_at=now()
+        WHERE instance_id=$1 AND owner_id=$2 AND id=$3`,
+        [job.threadId, job.text.slice(0, 100)],
+        client,
+      );</code></pre></div><div class="translation-english"><span class="translation-label">中文对照</span><div class="translation-lines"><p class="tl">第 1 行：wake 用同一事务 client 写 outbox；前面的任务写入也共享这个事务。</p><p class="tl">第 2–4 行：更新当前 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span> 的指定会话；已有名称保留，空名称才采用任务原文。</p><p class="tl">第 5–7 行：只取原文前 100 字符作为候选会话名，并把同一事务连接传给 query。</p></div></div></div>
+
+      <div class="callout">
+        <div class="callout-text">
+          ⚡ <strong>关键约束：</strong><code>tasks.text</code> 只存用户任务原文（最多前 100 字符同步到会话名）。完整模型回复与工具历史不在 PG，由 Codex 原生存储管理。向 AI 程序员描述问题时，说"任务原文在 PG tasks 表，模型历史在 Codex 原生存储"是准确的表达。
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
+        <thead>
+          <tr>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">表</th>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">存什么</th>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">不存什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>tasks</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">任务原文、状态、模式、Thread 归属</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">完整模型回复、工具调用历史</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>outbox</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">以 Thread 为键的调度出口、generation 号</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">任务 ID 列表（不是队列）</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>resource_versions</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">sha256、文件路径、版本元数据</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">文件正文（正文在 blob）</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>conversations</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">会话、绑定的 agent 版本</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">Codex 原生对话消息</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 3：Redis 提醒铃 — Set 而非队列
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-redis">
+      <h2 class="screen-heading">Redis 提醒铃：Set 唤醒，不是任务队列</h2>
+
+      <p>
+        Redis 在这里扮演的是"门铃"，而不是"信箱"。有人按铃（<code>sAdd</code>），调度器就去 PG 账本里按顺序领取；铃声本身不携带任务详情，也不保证顺序。
+        任务的权威顺序和状态，永远在 PG。
+      </p>
+
+      <p class="pattern-desc">源码：<code>stages/s04-data-layer/server/modules/data/queue.mjs:58–66</code></p>
+<div class="translation-block" id="m4-m4queue-code"><div class="translation-code"><span class="translation-label">真实源码 · 9 行</span><pre><code>    <span class="code-keyword">const</span> rows = <span class="code-keyword">await</span> this.jobs.deliveries(); // Database failure stops execution, Redis failure only delays dispatch.
+    <span class="code-keyword">for</span> (<span class="code-keyword">const</span> row of rows) {
+      <span class="code-keyword">try</span> {
+        <span class="code-keyword">await</span> this.commands.sAdd(this.key, row.thread_id);
+      } <span class="code-keyword">catch</span> {
+        this.healthy = false;
+        <span class="code-keyword">return</span>;
+      }
+      <span class="code-keyword">await</span> this.jobs.delivered(row);</code></pre></div><div class="translation-english"><span class="translation-label">中文对照</span><div class="translation-lines"><p class="tl">第 1–2 行：从 PG 取待投递记录，并逐条处理；数据库失败会中断，Redis 失败只延迟派发。</p><p class="tl">第 3–4 行：sAdd 只放入 Thread ID；Set 去重仍留在集合中的 ID，不代表任务只执行一次。</p><p class="tl">第 5–8 行：Redis 失败就标记不健康并退出；尚未确认的 outbox 记录可在后续补投。</p><p class="tl">第 9 行：Redis 写入成功后，才确认本条调度出口已投递。</p></div></div></div>
+
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">✅</div>
+          <div class="pattern-title">Redis 负责</div>
+          <div class="pattern-desc">存 Thread ID Set；低延迟唤醒（200 ms 轮询）；<code>sAdd / sPop</code> 操作。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">🚫</div>
+          <div class="pattern-title">Redis 不负责</div>
+          <div class="pattern-desc">不存任务 ID 队列；不存任务详情；不保证顺序；不替代 PG 做业务状态存储；不存向量数据。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">🛡️</div>
+          <div class="pattern-title">Redis 失联时</div>
+          <div class="pattern-desc">outbox 记录留存在 PG，调度器健康标记置 false，下次恢复后可补投。任务不丢，只是延迟。</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-text">
+          🔑 <strong>常见误区：</strong>Redis Set 不是任务队列（<span class="term" data-definition="任务队列（Task Queue）是一个有序的待处理任务列表，消费者按顺序取走并执行。这里 Redis Set 不存任务，只存 Thread ID 作为唤醒信号；真正的任务顺序和状态在 PG。">任务队列</span>存的是任务详情、有顺序保证）。这里 Set 只是"有哪些 Thread 需要被调度器看一眼"的信号，PG 才是决定"领哪条任务"的权威。
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 4：群聊动画 — 追踪一次完整任务闭环
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-chat">
+      <h2 class="screen-heading">追踪一次完整任务闭环</h2>
+
+      <p>
+        以下用角色对话模拟一条任务从用户提交到完成的完整路径，帮你在脑海里建立各组件的协作顺序。
+        动画仅为教学模拟，不执行真实推理或数据库操作。
+      </p>
+
+      <div class="chat-window" id="m4-chat-window">
+        <div class="chat-header" style="padding:var(--space-4) var(--space-6);font-weight:700">
+          📋 任务闭环追踪 · 教学模拟，不执行真实推理或数据库操作
+        </div>
+        <div class="chat-messages" id="m4-chat-messages">
+
+          <!-- 消息 1 -->
+          <div class="chat-message" style="display:none" data-sender="User" data-index="0">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">👤</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">用户</div>
+              读取 inputs/report.md，将摘要保存到 outputs/report-summary.md，并声明来源版本。
+            </div>
+          </div>
+
+          <!-- 消息 2 -->
+          <div class="chat-message" style="display:none" data-sender="HTTP" data-index="1">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">🌐</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">01 层 · 交互入口</div>
+              收到请求，校验本地 <span class="term" tabindex="0" data-definition="本地 HTTP 请求携带的访问凭据；它不是多用户登录身份。">Bearer</span> 凭据通过（owner 来自 <code>.data/identity.json</code>；Bearer 是另一个本地服务凭据，无多用户登录）。将请求转交给任务调度器。
+            </div>
+          </div>
+
+          <!-- 消息 3 -->
+          <div class="chat-message" style="display:none" data-sender="PG" data-index="2">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">🗄️</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">02 层 · PG 账本</div>
+              开启事务：① 向 <code>agent_data.tasks</code> 写入状态 <code>queued</code> 的任务行；② 在同一事务内写 <code>outbox</code> 记录（以 Thread ID 为键）。事务提交——两条同时落地。
+            </div>
+          </div>
+
+          <!-- 消息 4 -->
+          <div class="chat-message" style="display:none" data-sender="Redis" data-index="3">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">🔔</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">02 层 · Redis 提醒铃</div>
+              事务提交后，把 Thread ID <code>sAdd</code> 进 Redis Set。调度器每 200 ms 轮询，并去 PG 校验状态、领取任务；这不是延迟上界。<code><span class="term" tabindex="0" data-definition="数据库协作锁；这里防止同实例同时启动多个执行器，不等于外部副作用只发生一次。">advisory 锁</span></code>防同实例启动多个执行器，任务领取另有状态校验。
+            </div>
+          </div>
+
+          <!-- 消息 5 -->
+          <div class="chat-message" style="display:none" data-sender="Blob" data-index="4">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">📦</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">03 层 · 工具与资源服务</div>
+              Codex 通过 MCP 调用 <code>read_file</code> 读取 <code>inputs/report.md</code>，再调 <code>write_file</code>：内容以 sha256 命名写入 <code>.data/files/objects/&lt;sha256&gt;.txt</code>（<span class="term" tabindex="0" data-definition="仅创建：目标路径已经存在就拒绝，不会覆盖原文件。">create-only</span>，不覆盖），同时 PG 写 <code>resource_versions</code>。来源声明记录到 <code>dependencies</code> 表。
+            </div>
+          </div>
+
+          <!-- 消息 6 -->
+          <div class="chat-message" style="display:none" data-sender="PG" data-index="5">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">🗄️</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">04 层 · 任务终态</div>
+              Codex 执行完毕，任务状态更新为 <code>completed</code>。若执行中服务重启，状态变为 <code>unconfirmed</code>——暂停，等待人工决策，不自动重发。
+            </div>
+          </div>
+
+          <!-- typing indicator -->
+          <div class="chat-typing" style="display:none" id="m4-chat-typing">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">⏳</div>
+            <div class="chat-bubble">
+              <span class="typing-dot">●</span>
+              <span class="typing-dot">●</span>
+              <span class="typing-dot">●</span>
+            </div>
+          </div>
+
+        </div>
+        <div class="chat-controls">
+          <button class="chat-next-btn">下一条 ▶</button>
+          <button class="chat-reset-btn">重置 ↺</button>
+          <span class="chat-progress" id="m4-chat-progress">0 / 6</span>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-text">
+          <strong>状态排查速查：</strong>任务卡住？先查 PG <code>tasks.status</code>——<code>queued</code> 说明还没被领取（同时检查会话是否暂停、是否有前序任务，以及 Redis 健康）；<code>unconfirmed</code> 说明执行中重启了，需人工决策；<code>completed</code> 说明正常完成，按任务的实际输出路径检查产物。
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 5：不可变 Blob 与来源追踪
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-blob">
+      <h2 class="screen-heading">不可变 Blob：内容寻址与来源追踪</h2>
+<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s04 使用数据库 agent_s04（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s05 使用 agent_s05（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
+
+      <p>
+        sha256 是内容指纹，正文按指纹命名保存。内容改动会生成新 blob，已登记版本不被覆盖；这不等于承诺永久保留。
+        这让系统能追踪“摘要声明引用的是 report.md 哪个版本”；读取或校验发现原文变化后，依赖链会传播失效。
+      </p>
+
+      <div class="pattern-cards stagger-children">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">🔒</div>
+          <div class="pattern-title">create-only，不覆盖</div>
+          <div class="pattern-desc"><code>write_file</code> 只创建新路径，已有路径会被拒绝，即使内容相同。底层 blob 可按内容指纹复用；这是不同层次的规则。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">📂</div>
+          <div class="pattern-title">路径格式</div>
+          <div class="pattern-desc"><code>.data/files/objects/&lt;sha256&gt;.txt</code>——无子目录，所有版本平铺在同一目录。<code>.data/codex/</code> 是 Codex 原生存储，由 Codex 管理，主进程不读写。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">🔗</div>
+          <div class="pattern-title">来源声明 vs 语义证明</div>
+          <div class="pattern-desc"><code>dependencies</code> 表记录版本依赖，<code>source_versions</code> 声明来源。这是声明，不证明模型语义引用完全——AI 可能引用了未声明的内容。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:3">
+          <div class="pattern-icon">⚠️</div>
+          <div class="pattern-title">跨存储非原子</div>
+          <div class="pattern-desc">blob 文件写入与 PG 写 <code>resource_versions</code> 之间没有跨存储事务保证。PG 内部操作是原子的；跨文件系统与数据库则不是。</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-text">
+          🛠️ <strong>命令实践入口：</strong>以下命令用于验证 PG/Redis 状态和查询任务记录。在 <code>stages/s04-data-layer</code> 中完成依赖安装、环境配置、PG/Redis 启动、<code>npm run data:migrate</code> 与 <code>npm run server</code> 后执行，练习场景入口见 <a href="../../?stage=s04">互动练习</a>。
+        </div>
+      </div>
+
+      <div class="translation-block">
+        <div class="translation-code">
+          <span class="translation-label">终端命令 · 状态验证</span>
+          <pre><code><span class="code-keyword">npm</span> run data:check
+
+<span class="code-keyword">docker</span> compose exec postgres psql \
+  -U agent -d agent_s04 \
+  -c <span class="code-string">"SELECT id, status, substring(text,1,60) \
+  FROM agent_data.tasks \
+  ORDER BY created_at DESC LIMIT 5;"</span></code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">命令说明</span>
+          <div class="translation-lines">
+            <p class="tl"><code>npm run data:check</code>：运行内置检查脚本，验证 PG 连接是否正常、schema 表结构是否完整、Redis 是否可达。</p>
+            <p class="tl"><code>docker compose exec postgres psql</code>：进入 <span class="term" tabindex="0" data-definition="用容器启动依赖服务的工具；这里用于准备 PG、Redis 和可选 Chroma。">Docker</span> 容器内的 PostgreSQL 命令行，以 <code>agent</code> 用户连接 <code>agent_s04</code> 数据库。</p>
+            <p class="tl"><code>SELECT id, status, substring(text,1,60) FROM agent_data.tasks</code>：查询最新 5 条任务记录，显示 ID、状态、任务原文前 60 字符。用于排查任务是否入队、是否卡住、是否变为 <code>unconfirmed</code>。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         SCREEN 6：应用场景测验
+    ═══════════════════════════════════════════════ -->
+    <div class="screen" id="m4-screen-quiz">
+      <h2 class="screen-heading">应用场景测验</h2>
+
+      <p>
+        以下三道题考察你能否在真实场景中定位问题、做出判断。每题只有一个最准确的答案。
+      </p>
+
+      <div class="quiz-container" id="m4-quiz">
+
+        <!-- 题 1 -->
+        <div class="quiz-question-block"
+             data-correct="b"
+             data-explanation-right="正确。Redis 失联时 outbox 记录留存在 PG，下次 Redis 恢复后调度器可补投，任务不丢。Redis 只是唤醒信号，任务权威状态在 PG。"
+             data-explanation-wrong="A：Redis 失联不会导致任务丢失，因为 outbox 在 PG 里有留存，可以补投；说&quot;立刻丢失&quot;不准确。C：Redis 失联不代表任务已完成，status 应该还是 queued（未被领取），不能断言为 completed。D：advisory 锁是防止同实例重复启动执行器的，与 Redis 失联问题无关，重启服务不能解决 Redis 连接问题。">
+          <h3 class="quiz-question">
+            场景一：一条新任务已提交 PG 事务，尚未领取，Redis 唤醒投递却失败了。你该如何判断这条任务是否丢失？
+          </h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>A：任务立刻丢失，因为 Redis 是任务队列，连不上就没法入队。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>B：任务仍在 PG 中保持 <code>queued</code>，Redis 恢复后 outbox 可补投；当前只是调度延迟，不丢任务，但需尽快修复 Redis。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>C：任务会自动变为 <code>completed</code>，系统绕过 Redis 直接执行。</span>
+            </button>
+            <button class="quiz-option" data-value="d">
+              <div class="quiz-option-radio"></div>
+              <span>D：advisory 锁会阻止所有写入，需立刻重启服务才能恢复。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <!-- 题 2 -->
+        <div class="quiz-question-block"
+             data-correct="c"
+             data-explanation-right="正确。status=unconfirmed 是系统在告诉你&quot;执行中服务意外重启了，我不知道任务完成没有，所以我暂停了，等你决定&quot;。s04 不自动重发，需人工判断是否重试。"
+             data-explanation-wrong="A：unconfirmed 不代表任务被拒绝或权限不足；选项中的 Bearer 凭据失败会在入口被拒绝，不能据此解释执行中的不确定状态。B：unconfirmed 不是排队中——排队中的状态是 queued。unconfirmed 明确表示执行过程中发生了不确定性事件（重启），不是正常等待。D：直接重试不是系统建议的操作；需要人工决策，因为任务可能已部分完成，盲目重试可能造成重复操作。">
+          <h3 class="quiz-question">
+            场景二：一位 AI 程序员告诉你某条任务的 <code>status</code> 是 <code>unconfirmed</code>，问你该怎么处理。你会如何解释这个状态，以及下一步该做什么？
+          </h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>A：任务被系统拒绝了，说明 Bearer 凭据校验失败，需要重新登录。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>B：任务还在排队中，说明 Redis 还没唤醒调度器，等一会儿会自动执行。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>C：任务执行中服务意外重启，系统已暂停且不会自动重发；需人工判断任务是否已部分完成，再决定是否重试。</span>
+            </button>
+            <button class="quiz-option" data-value="d">
+              <div class="quiz-option-radio"></div>
+              <span>D：直接重试任务即可，系统会自动检测重复并跳过已完成的部分。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <!-- 题 3 -->
+        <div class="quiz-question-block"
+             data-correct="a"
+             data-explanation-right="正确。tasks.text 只存用户任务原文；完整模型回复和工具调用历史由 Codex 原生存储（SQLite/JSONL）管理，PG 不重复存储。要排查&quot;模型回复了什么&quot;，要去 Codex 原生存储查，不是查 PG tasks。"
+             data-explanation-wrong="B：PG tasks 表不存完整模型回复，查 tasks 只能看到任务原文和状态，看不到 AI 说了什么。C：resource_versions 存的是文件 sha256 和版本元数据，不存对话内容，这里方向错了。D：Redis Set 只存 Thread ID 用于唤醒，完全不存任何对话内容或任务详情。">
+          <h3 class="quiz-question">
+            场景三：用户反映"AI 回复了一些内容，但我不知道它具体说了什么，PG 里查不到"。你如何向 AI 程序员解释这是正常行为，并指出正确的查询位置？
+          </h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>A：这是正常的。PG <code>tasks.text</code> 只存用户任务原文，完整模型回复由 Codex 原生存储（<code>.data/codex/</code>）管理，应去那里查。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>B：不正常，完整回复应该在 PG <code>tasks</code> 表里，可能是写入失败了，需要检查事务日志。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>C：完整回复存在 PG <code>resource_versions</code> 表，按任务 ID 关联查询即可。</span>
+            </button>
+            <button class="quiz-option" data-value="d">
+              <div class="quiz-option-radio"></div>
+              <span>D：模型回复存在 Redis Set 里，用 sPop 命令可以取出来查看。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-6);flex-wrap:wrap;">
+          <button class="quiz-check-btn" data-quiz="m4-quiz">提交答案</button>
+          <button class="quiz-reset-btn" data-quiz="m4-quiz">重新作答</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="module" id="module-5">
+  <div class="module-content">
+    <header class="module-header">
+      <span class="module-number">05</span>
+      <h2 class="module-title">知识：可用且有边界</h2>
+      <p class="module-subtitle">从散落文件到结构化 <span class="term" tabindex="0" data-definition="由原始资料整理出的知识页面；每个生效页面指向一个可追踪的正文版本。">Wiki</span>，从各自判断到统一门禁——Agent 如何安全地"知道"正确的事。</p>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 1 · 架构总图：五层 + 原生运行时
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-overview">
+      <h2 class="screen-heading">架构总图：s05 新增了什么</h2>
+
+      <p>s04 已经能可靠存储业务数据并调度任务。s05 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。图左五层承载整体逻辑，图右 Codex 原生运行时通过 <span class="term" data-definition="dynamicTools：Codex 原生 RPC 机制，用 item/tool/call 信封绑定任务上下文，让工具调用携带服务端签发的身份而非模型自称。">dynamicTools</span> 与 03 层通信，而非直接暴露 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s04 使用它，s05 主流程换为原生动态工具。">MCP</span>。</p>
+
+      <img src="assets/s05-architecture.svg" width="100%" alt="s05 系统架构总图——五层职责划分与 Codex 原生运行时，红色标注为新增/变化项" id="m5-arch-img" />
+
+      <div class="callout" id="m5-callout-arch">
+        <div class="callout-text">图为职责划分，不是每层起一个独立进程。红色标注为相比 s04 的新增/变化项。右侧 Codex 原生运行时是独立进程，通过 <span class="term" data-definition="stdio：标准输入/输出，进程间最简单的通信方式，不需要网络。">stdio</span> 与 02 层通信。</div>
+      </div>
+
+      <div class="pattern-cards" id="m5-layer-cards">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">01</div>
+          <div class="pattern-title">交互入口</div>
+          <div class="pattern-desc"><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> POST <code>/messages</code>；knowledge <span class="term" data-definition="CLI：命令行界面（Command Line Interface），在终端输入命令操作程序，相对于图形界面。">CLI</span> 命令；<span class="term" tabindex="0" data-definition="服务器持续向客户端推送事件的 HTTP 通道，用于展示任务进度与输出。">SSE</span> 流响应。新增 knowledge 子命令。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">02</div>
+          <div class="pattern-title">Agent 装配与调度</div>
+          <div class="pattern-desc">读取 <code>agents/*.json</code>；<code>schemaVersion: 1.1</code> 新增 <code>knowledge[]</code>，声明 kbId、mode、actions。路径绑定指定 sourceRoot 与 wikiRoot；写 task + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span> 同<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>；dynamicTools 回调将工具调用路由至 03 层门禁。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">03</div>
+          <div class="pattern-title">通用门禁 ★新增</div>
+          <div class="pattern-desc"><span class="term" data-definition="fail-closed：出现不确定情况时默认拒绝，而非放行，以保证安全。">fail-closed</span> 原则；统一校验工具白名单、资源所有权、<span class="term" tabindex="0" data-definition="Knowledge Base 的缩写，表示一个已挂载且有权限边界的知识库。">KB</span> 挂载权限与任务范围。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:3">
+          <div class="pattern-icon">04</div>
+          <div class="pattern-title">知识与资源服务 ★新增</div>
+          <div class="pattern-desc">Wiki <span class="term" data-definition="乐观锁：提交时检查版本号是否仍匹配，不匹配则拒绝，避免覆盖他人更新。">乐观锁</span>；可选 <span class="term" tabindex="0" data-definition="检索增强生成：先检索相关原始资料片段，再用于回答；这里需单独构建索引。">RAG</span> 索引构建；资源 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 版本管理。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:4">
+          <div class="pattern-icon">05</div>
+          <div class="pattern-title">数据与索引</div>
+          <div class="pattern-desc"><span class="term" tabindex="0" data-definition="关系数据库；把会话、任务、资源版本等记录存成可查询的数据表。">PostgreSQL</span> <span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v2（顺序迁移）；<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 两个独立唤醒路径；<span class="term" tabindex="0" data-definition="按关键词与词频相关性排名的文本检索算法。">BM25</span> 文件；可选 <span class="term" tabindex="0" data-definition="存放并检索文本向量的独立服务，是 RAG 的可选依赖。">Chroma</span>。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 2 · 03 层：通用门禁
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-gate">
+      <h2 class="screen-heading">03 层：通用门禁——谁能调哪个工具</h2>
+
+      <p>门禁是同进程模块，不是网络服务。Codex 每次工具调用都经由 <span class="term" data-definition="RPC envelope：远程过程调用信封，携带调用方身份与上下文，让被调用方能验证来源合法性。">RPC envelope</span> 进入此处，身份来自服务端签发的任务上下文，不依赖模型自称。权限判定按以下四关依次过滤，任意一关不过即返回 <code>FORBIDDEN</code>。</p>
+
+      <table id="m5-gate-table" style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
+        <thead>
+          <tr>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">关卡</th>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">检查内容</th>
+            <th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">来源</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">① 上下文有效</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">任务仍运行中、上下文未被 <code>abort</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">服务端 <code><span class="term" tabindex="0" data-definition="取消控制器；任务结束时撤销上下文，使旧工具调用不能继续使用权限。">AbortController</span></code></td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">② 工具白名单</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">工具名在 Agent 配置声明的允许列表中</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>agents/*.json</code> 声明</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">③ 资源所有权</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">目标资源属于当前任务的 <code>data.scope</code></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">服务端签发，非模型自称</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">④ KB 挂载 + <span class="term" tabindex="0" data-definition="当前操作类型；门禁要求它出现在知识库挂载授权中。">action</span></td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere"><code>knowledge[]</code> 中挂载且 <span class="term" tabindex="0" data-definition="挂载配置中的允许操作清单，例如 read、update、index。">actions</span> 包含当前操作；<code>maintain</code> 任务才能写 Wiki</td>
+            <td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">Agent 定义 + 任务上下文</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>来自 <code>server/modules/permissions/index.mjs</code> 的真实代码展示 <code>mount()</code> 如何检查挂载、操作授权与任务维护范围；上下文在任务开始时签发，结束后撤销。</p>
+
+      <p class="pattern-desc">源码：<code>stages/s05-knowledge-layer/server/modules/permissions/index.mjs:51–57</code></p>
+<div class="translation-block" id="m5-m5gate-code"><div class="translation-code"><span class="translation-label">真实源码 · 7 行</span><pre><code>  mount(kbId, action = 'read') {
+    <span class="code-keyword">const</span> context = this.current();
+    <span class="code-keyword">const</span> mount = (this.agent.definition.agent.knowledge || []).find(m =&gt; m.kbId === kbId);
+    <span class="code-keyword">if</span> (!mount || !mount.actions.includes(action)) denied();
+    <span class="code-keyword">if</span> (action !== 'read' &amp;&amp; context.kind === 'task' &amp;&amp; context.maintenanceKb !== kbId) denied();
+    <span class="code-keyword">return</span> mount;
+  }</code></pre></div><div class="translation-english"><span class="translation-label">中文对照</span><div class="translation-lines"><p class="tl">第 1–2 行：取得服务端签发且仍有效的当前上下文。</p><p class="tl">第 3–4 行：在 Agent 挂载配置中找这个 KB；缺挂载或缺 action 都拒绝。</p><p class="tl">第 5 行：task 的非 read 操作，还要 maintenanceKb 与目标库一致。普通对话没有维护范围。</p><p class="tl">第 6–7 行：校验通过才返回挂载配置；maintain 也仍需对应 action 授权。</p></div></div></div>
+
+      <div class="callout"><div class="callout-text">门禁模式禁用 shell、apply_patch、subagents；Agent 配置变化时按 <span class="term" tabindex="0" data-definition="条件不满足或无法确认时默认拒绝，避免不确定状态下放行。">fail-closed</span> 拒绝。MCP 仅保留兼容测试实现，主流程不启动 MCP listener；Skill 只指导操作方法，不授予权限。</div></div>
+<div class="callout" id="m5-callout-gate-rules">
+        <div class="callout-text">普通对话 task 的 <code>maintenanceKb</code> 为 <code>null</code>，因此 <code>kb_submit_revision</code>（写 Wiki）永远被拒绝。<code>research/&lt;kbId&gt;/wiki</code> 路径上的 <code>read_file/write_file</code> 同样被门禁拒绝，必须用 <code>kb_*</code> 工具经 04 层操作。</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 3 · 04 层：三类任务与 Wiki 生命周期
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-knowledge">
+      <h2 class="screen-heading">04 层：三类任务——Chat、Maintain、Index 各做什么</h2>
+
+      <p>理解这三类任务是排查知识问题的关键。普通 chat 与 maintain 任务通过 Codex 执行，任务记录存于 tasks 表；index 任务由 <span class="term" tabindex="0" data-definition="独立处理索引任务的服务模块；不负责让 Codex 自动编写 Wiki。">KnowledgeWorker</span> 执行，任务记录存于 knowledge_jobs 表，并通过独立的 Redis <span class="term" tabindex="0" data-definition="Redis 中区分数据集合的名称；普通任务与索引任务用不同 key 唤醒。">key</span> 唤醒。</p>
+
+      <div class="pattern-cards" id="m5-task-type-cards">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">💬</div>
+          <div class="pattern-title">普通对话 task</div>
+          <div class="pattern-desc">
+            <strong>输入：</strong>用户消息<br>
+            <strong>上下文：</strong><code>kind: 'task'</code>，<code>maintenanceKb: null</code><br>
+            <strong>可用 KB 工具：</strong><code>kb_list</code>、<code>kb_read</code>、<code>kb_search</code>（read action）<br>
+            <strong>禁止：</strong><code>kb_submit_revision</code>（写 Wiki）<br>
+            <strong>存储：</strong>写 <code>tasks</code> + <code>outbox</code> 同事务，Redis 唤醒
+          </div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">🔧</div>
+          <div class="pattern-title">maintain（仍为普通 task）</div>
+          <div class="pattern-desc">
+            <strong>输入：</strong><code>npm run knowledge -- maintain &lt;kbId&gt; &lt;提示&gt;</code><br>
+            <strong>上下文：</strong><code>kind: 'task'</code>，<code>maintenanceKb: &lt;kbId&gt;</code><br>
+            <strong>额外权限：</strong><code>kb_submit_revision</code>（需 update action）<br>
+            <strong>输出：</strong>写 <code>wiki_pages</code> / <code>wiki_versions</code>，<code>current_version</code> 原子切换<br>
+            <strong>注意：</strong>存于 <code>tasks</code> 表，<strong>不是</strong> <code>knowledge_jobs</code>
+          </div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">🗂️</div>
+          <div class="pattern-title">index（knowledge_jobs）</div>
+          <div class="pattern-desc">
+            <strong>输入：</strong><code>npm run knowledge -- index &lt;kbId&gt;</code><br>
+            <strong>执行者：</strong>KnowledgeWorker（不是 Codex）<br>
+            <strong>输出：</strong><span class="term" tabindex="0" data-definition="尚未生效的构建区；只有索引构建与来源校验通过后才切换生效指针。">staging</span> Chroma <span class="term" tabindex="0" data-definition="Chroma 中的一组向量记录；每个索引修订有对应构建结果。">collection</span> + BM25 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span>；两边就绪后 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 切 <code>index_revision</code><br>
+            <strong>存储：</strong><code>knowledge_jobs</code> 表，Redis 独立 key 唤醒<br>
+            <strong>注意：</strong>这是独立的 <span class="term" data-definition="knowledge_jobs：RAG 索引构建任务的专用表，由 KnowledgeWorker 执行，与 Codex 无关，存储与唤醒路径均独立于普通 tasks。">knowledge_jobs</span>，不在 tasks 表
+          </div>
+        </div>
+      </div>
+
+      <p>Wiki 页面提交流程来自 <code>server/modules/knowledge/index.mjs</code>：</p>
+
+      <p class="pattern-desc">源码：<code>stages/s05-knowledge-layer/server/modules/knowledge/index.mjs:153–160</code></p>
+<div class="translation-block" id="m5-m5submit-code"><div class="translation-code"><span class="translation-label">真实源码 · 8 行</span><pre><code>      <span class="code-keyword">await</span> this.sourceVersions(kb, source_versions, client);
+      <span class="code-keyword">await</span> this.query(`INSERT INTO agent_data.wiki_pages(instance_id,kb_id,slug) SELECT $1,$3,$4 WHERE $2::uuid IS NOT NULL ON CONFLICT DO NOTHING`, [kbId, slug], client);
+      <span class="code-keyword">const</span> page = (<span class="code-keyword">await</span> this.query('SELECT * FROM agent_data.wiki_pages WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL FOR UPDATE', [kbId, slug], client)).rows[0];
+      <span class="code-keyword">if</span> (page.current_version !== expectedVersion) fail('Wiki 已被其他更新修改，请读取最新版本。', 'VERSION_CONFLICT');
+      <span class="code-keyword">await</span> this.query(`INSERT INTO agent_data.wiki_versions(instance_id,id,kb_id,slug,revision,blob,sources)
+        SELECT $1,$3,$4,$5,$6,$7,$8 WHERE $2::uuid IS NOT NULL`, [id, kbId, slug, body.revision, body.blob, JSON.stringify(source_versions)], client);
+      this.gate.check('update', { kbId });
+      <span class="code-keyword">await</span> this.query('UPDATE agent_data.wiki_pages SET current_version=$5 WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL', [kbId, slug, id], client);</code></pre></div><div class="translation-english"><span class="translation-label">中文对照</span><div class="translation-lines"><p class="tl">第 1–3 行：校验来源、确保页面行存在，再锁定该行读取当前版本。已有页面不会被重复插入。</p><p class="tl">第 4 行：expectedVersion 必须匹配；冲突就拒绝，防止覆盖另一份更新。</p><p class="tl">第 5–6 行：登记新 Wiki 版本和来源，正文 blob 在进入这段 PG 事务前已写入。</p><p class="tl">第 7–8 行：再检查权限，然后切 current_version；这些 PG 操作一起提交。</p></div></div></div>
+
+      <div class="callout" id="m5-callout-no-autopublish">
+        <div class="callout-text">Wiki 无后台自动工作进程。<code>knowledge:init</code> 只建目录、部署 <span class="term" data-definition="SKILL.md：放在特定位置的指导文件，帮助 Codex 了解如何操作知识库，但不赋予权限——权限由门禁决定。">SKILL.md</span>，不生成任何 Wiki 内容。必须执行 <code>maintain</code> 命令发任务，Codex 读原文后主动调用 <code>kb_submit_revision</code> 才写入 Wiki。</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 4 · 群聊动画：PG 账本 / Outbox / Redis / 调度器
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-chat">
+      <h2 class="screen-heading">一次 maintain 调用如何流经 02 → 03 → 04 层</h2>
+
+      <p>以下动画追踪一次 <code>maintain general "整理产品手册"</code> 命令从发出到 Wiki 写入的完整路径。四个角色代表四个子系统，消息展示主要业务顺序，省略了轮询和异常分支；这是教学模拟。</p>
+
+      <div class="chat-window" id="m5-chat-maintain">
+        <div class="chat-header" style="padding:var(--space-4) var(--space-6);font-weight:700">
+          维护任务全链路追踪
+          <span style="font-size:var(--text-xs);font-weight:400;opacity:0.6;margin-left:var(--space-3)">教学模拟，不执行真实推理或数据库操作</span>
+        </div>
+        <div class="chat-messages" id="m5-chat-msgs">
+
+          <div class="chat-message" style="display:none" data-sender="CLI">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">01</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">01 交互入口（knowledge <span class="term" tabindex="0" data-definition="命令行客户端；在终端输入命令来调用本地服务。">CLI</span>）</div>
+              收到命令：<code>maintain general "整理产品手册"</code>。这是 knowledge CLI 子命令——解析 kbId = general，组装 task payload，HTTP POST 到 <code>:4315/messages</code>。
+            </div>
+          </div>
+
+          <div class="chat-message" style="display:none" data-sender="PG">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">PG</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">PostgreSQL 账本</div>
+              02 层在<strong>同一事务</strong>写入两行：① <code>tasks</code> 表新行（<code>knowledge.kbId = general</code>；执行时据此签发维护范围）；② <code>outbox</code> 待投递记录。事务提交后才继续——两行要么都在，要么都不在。
+            </div>
+          </div>
+
+          <div class="chat-message" style="display:none" data-sender="Redis">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">R</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">Redis 唤醒铃</div>
+              PG 事务提交后，02 层向本实例的 <span class="term" data-definition="Redis Set：Redis 的集合数据结构，这里存储待处理的 Thread ID，每个 ID 只出现一次，调度器读取后移除。">Redis Set</span> 推入 threadId。这是普通 tasks 的唤醒路径——与 knowledge_jobs 的独立 key 路径完全分开。
+            </div>
+          </div>
+
+          <div class="chat-message" style="display:none" data-sender="Gate">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">03</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">03 通用门禁</div>
+              调度器唤醒，02 层调用 <code>gate.start(job)</code>：签发上下文，<code>maintenanceKb = general</code>，<code>AbortController</code> 就绪。Codex 每次调用 <code>kb_submit_revision</code>，门禁验证各项条件：上下文有效 ✓ → 工具白名单 ✓ → KB 归属 ✓ → KB 挂载 + update action ✓ → <code>maintenanceKb === 'general'</code> ✓ → 放行至 04 层。
+            </div>
+          </div>
+
+          <div class="chat-message" style="display:none" data-sender="KB">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">04</div>
+            <div class="chat-bubble">
+              <div class="chat-sender">04 知识服务（KnowledgeService.submit）</div>
+              收到放行的调用：验证 <span class="term" tabindex="0" data-definition="Wiki 页面的稳定名称，用它读取具体页面，需从实际产物确认。">slug</span>、content、expectedVersion（新建传 <code>null</code>）、来源 1–50 条。事务内：插页面行 → 锁行验版本 → 写不可变 wiki_versions → 更新 <code>current_version</code> 指针。返回 <code>{ versionId, effective: true }</code>。任务结束，门禁自动 <code>abort()</code>，上下文撤销。
+            </div>
+          </div>
+
+          <div class="chat-typing" style="display:none" id="m5-chat-typing">
+            <div class="chat-avatar" style="background:var(--color-actor-2)">…</div>
+            <div>…</div>
+          </div>
+
+        </div>
+        <div class="chat-controls">
+          <button class="chat-next-btn">下一条</button>
+          <button class="chat-reset-btn">重置</button>
+          <span class="chat-progress" id="m5-chat-maintain-progress">0 / 5</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 5 · RAG 生命周期与命令实践入口
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-rag">
+      <h2 class="screen-heading">RAG 索引：从 Wiki 到向量检索的切换路径</h2>
+
+      <p><span class="term" data-definition="RAG：检索增强生成（Retrieval-Augmented Generation），在生成回答前先检索相关文档片段提供给模型，减少幻觉。">RAG</span> 是可选层，<span class="term" data-definition="Chroma：开源向量数据库，用于存储和检索文本的语义嵌入向量。">Chroma</span> 是可选依赖；未启用 RAG 时可使用 wiki 模式。切换到 RAG 必须走完以下路径——不能热切换，不能在运行时自动生效。</p>
+
+      <div class="pattern-cards" id="m5-rag-flow-cards">
+        <div class="pattern-card animate-in" style="--stagger-index:0">
+          <div class="pattern-icon">①</div>
+          <div class="pattern-title">配置并重启</div>
+          <div class="pattern-desc">在 <code>.env</code> 添加 <code>CHROMA_URL</code>、<code>EMBEDDING_*</code> 变量，<code>docker compose --profile rag up -d chroma</code>，重启服务。配置变化后必须重启，运行中不热读。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:1">
+          <div class="pattern-icon">②</div>
+          <div class="pattern-title">发 index 任务</div>
+          <div class="pattern-desc"><code>npm run knowledge -- index general</code> 写入 <code>knowledge_jobs</code> 表，Redis 独立 key 唤醒 KnowledgeWorker（不是 Codex）。Worker 构建 staging Chroma collection + <span class="term" data-definition="BM25：基于词频的传统文本检索算法，与向量检索互补，两者结果通过 RRF 融合。">BM25</span> JSON 文件。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:2">
+          <div class="pattern-icon">③</div>
+          <div class="pattern-title">两边就绪后切指针</div>
+          <div class="pattern-desc">Chroma staging collection 与 BM25 文件均核验来源后，PG 更新 <code>index_revision</code>。<span class="term" data-definition="RRF（Reciprocal Rank Fusion，常数 60）：把向量排名与 BM25 排名融合成一个分数，常数越大对高排名的奖励越平滑。">RRF 60</span> 融合双路结果，无 <span class="term" tabindex="0" data-definition="对初次检索结果再排序；当前实现没有这一步。">rerank</span>，无查询失败 <span class="term" tabindex="0" data-definition="某条路径失败时切到另一条路径；已生效 RAG 的查询失败不会自动改走 Wiki。">fallback</span>。</div>
+        </div>
+        <div class="pattern-card animate-in" style="--stagger-index:3">
+          <div class="pattern-icon">④</div>
+          <div class="pattern-title">Agent 配置改 rag + 重启</div>
+          <div class="pattern-desc">将 <code>agents/writing-agent.json</code> 的 <code>mode</code> 改为 <code>"rag"</code>，停止并重启服务，<strong>新建 <span class="term" tabindex="0" data-definition="Codex 原生会话；一个 Thread 可以连续接收多条任务并保留自己的历史。">Thread</span></strong> 才生效。旧 Thread 历史不可撤回，旧 Thread 中读到的知识无法移除。</div>
+        </div>
+      </div>
+
+      <div class="callout" id="m5-callout-rag-limits">
+        <div class="callout-text">已生效的 RAG 不兼容时（如 <span class="term" data-definition="embedding 维度：向量的维数，不同模型产生不同维数的向量，维数变化后旧索引与新模型不兼容。">embedding 维度</span>变化）服务拒绝启动，需重建索引。崩溃中的 <code>building/running</code> 状态重启后恢复为 <code>failed</code>，清理 staging collection 与 BM25 文件，失败时可能留孤儿，需运维核对；旧 ready 索引保留，不会无限自动重试。</div>
+      </div>
+
+      <div class="callout"><div class="callout-text">首次请求 rag 但索引未 ready 时，挂载显示 pending、effectiveMode=wiki。已生效 rag 遇到运行错误不会 fallback 到 wiki；RAG 索引读取原始资料，Wiki 模式搜索已生效的 Wiki 正文（最多 200 页），不是两种搜索混用。</div></div>
+<h3 id="m5-practice-heading" style="font-size:var(--text-xl);font-weight:600;margin:var(--space-8) 0 var(--space-4)">命令实践入口</h3>
+
+      <div class="translation-block" id="m5-trans-commands">
+        <div class="translation-code">
+          <span class="translation-label">bash · 服务终端 + 客户端终端</span>
+          <pre><code><span class="code-keyword">npm</span> run knowledge -- maintain general \
+  "阅读 inputs/general 下全部原始资料，整理为 Wiki"
+<span class="code-keyword">npm</span> run knowledge -- list
+<span class="code-keyword">npm</span> run knowledge -- read general 实际创建的slug
+<span class="code-keyword">npm</span> run knowledge -- search general 关键词
+<span class="code-keyword">npm</span> run knowledge -- index general
+<span class="code-keyword">npm</span> run knowledge -- job 返回的JOB_ID
+<span class="code-keyword">npm</span> test &amp;&amp; <span class="code-keyword">npm</span> run test:rag</code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">每行含义</span>
+          <div class="translation-lines" id="m5-trans-cmd-lines">
+            <p class="tl">发 maintain task：<code>maintenanceKb = general</code>，Codex 读原文后调 <code>kb_submit_revision</code> 写 Wiki。返回 taskId + threadId。</p>
+            <p class="tl">列已挂载 KB：返回模式（wiki/rag）、actions、索引版本。不列页面内容。</p>
+            <p class="tl">读取指定 Wiki 页面：返回正文 + versionId（乐观锁更新时需要）。slug 来自 maintain 任务产物，不能凭空猜测。</p>
+            <p class="tl">搜索 Wiki 正文（wiki 模式有界文本，≤200 页；rag 模式 Chroma+BM25 RRF60，limit 1–20）。</p>
+            <p class="tl">发 index 任务：写 knowledge_jobs 表，KnowledgeWorker 异步构建 RAG 索引，与 Codex 无关。</p>
+            <p class="tl">查询指定 knowledge_job 状态：<code>queued → running → completed</code> 或 <code>failed</code>。</p>
+            <p class="tl">运行验证套件；<code>test:rag</code> 需 Chroma 在 <span class="term" tabindex="0" data-definition="操作系统查找可执行命令的目录列表。">PATH</span> 中或已设 <code>CHROMA_TEST_BIN</code>。<span class="term" tabindex="0" data-definition="把文本映射成数值向量以进行相似度检索；模型和维度须与索引兼容。">embedding</span> 使用固定模拟向量，不证明语义质量。</p>
+          </div>
+        </div>
+      </div>
+
+      <p>以下练习在 <code>stages/s05-knowledge-layer</code> 目录进行。准备知识库时先设置 <code>AGENT_MEMORY_ENABLED=false</code>，执行 <code>npm run knowledge:init</code>，把原文放到 <code>workspace/inputs/general/</code>；维护结束后再读取实际页面。实际运行还需先完成 <code>npm ci</code>、本地环境配置、<code>docker compose up -d postgres redis</code>、<code>npm run data:migrate</code>、<code>npm run server</code>。完整步骤见 <a href="../../?stage=s05">s05 实践环境</a>。</p>
+
+      <div class="callout"><div class="callout-text">本轮新增 Web 外部客户端，s05 与当前项目接入受控上传，s01–s04 保留各自的能力边界。受控原文导入采用 <span class="term" tabindex="0" data-definition="由服务端签发给本地操作者请求的上下文，不来自模型参数。">operator</span> 身份，仅支持 md/txt、单文件 ≤256 KiB，且只创建、不覆盖。Wiki 页面列表通过 GET /knowledge/pages 获取，读取时仍校验来源；教学页默认不连接服务，也不运行模型。</div></div>
+<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s04 使用数据库 agent_s04（schema v1），s05 使用 agent_s05（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
+<table id="m5-limit-table" style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
+        <thead>
+          <tr><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">限制项</th><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">单机单 owner</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">无多账户、无共享 KB、无多主机</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">原生记忆</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">挂 KB 须 <code>AGENT_MEMORY_ENABLED=false</code>；原生记忆关闭后仍保留原生会话历史。收窄权限后需新建 Thread，旧历史不可撤回</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">RAG 不热切换</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">改配置须重启；embedding 维度变化时拒绝启动</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">wiki 不引用 wiki</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">来源只能是当前有效原文版本，1–50 条</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">跨存储非原子</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">blob 写文件 + PG 切指针非原子；PG 内操作原子</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">无 rerank</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">BM25 + Chroma RRF 融合（常数 60），无后处理重排</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         Screen 6 · 应用情景测验
+    ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="m5-screen-quiz">
+      <h2 class="screen-heading">应用情景测验</h2>
+      <p>三道场景题，测试你能否用所学定位真实问题、指导 AI 程序员。每道题都有针对各错误选项的解释。</p>
+
+      <div class="quiz-container" id="m5-quiz">
+
+        <!-- Q1 -->
+        <div class="quiz-question-block"
+             data-correct="b"
+             data-explanation-right="完全正确！普通对话 task 的 maintenanceKb 是 null，门禁的 mount() 维护范围校验因此永远失败，kb_submit_revision 被拒绝是设计行为，不是 bug。需要向 AI 说明：这需要发 maintain 任务，不能在普通对话中直接写 Wiki。"
+             data-explanation-wrong="A：只补 actions 不够——普通对话即使拥有 update action，也会因 maintenanceKb 不匹配被拒绝；仍需维护任务上下文。C：SKILL.md 只是给 Codex 的操作指南，不决定任何权限——门禁从不读 SKILL.md，改 SKILL.md 不会让普通对话能写 Wiki。">
+          <h3 class="quiz-question">场景一：你让 Agent 在普通对话中整理一篇 Wiki 页面，但服务端返回 FORBIDDEN，模型说"无权限"。你应该怎么告诉 AI 程序员这是为什么？</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>Agent 的 knowledge[] 配置里没有声明 update action，需要在 agents/*.json 里添加。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>普通对话 task 的 maintenanceKb 是 null，门禁的 mount() 会在维护范围校验拒绝写 Wiki，必须用 maintain 命令发专门任务才能写。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>SKILL.md 没有包含写 Wiki 的指导，需要更新 SKILL.md 并重新部署。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question-block"
+             data-correct="c"
+             data-explanation-right="正确！RAG 不热切换——在运行的服务中改 Agent 配置的 mode 字段不会生效。必须停止服务、修改配置文件、重启服务，并新建 Thread。旧 Thread 与旧 Agent 配置绑定，不能将其视为已完成新模式切换。"
+             data-explanation-wrong="A：knowledge -- search 命令只是触发 kb_search 工具，它读取当前 effectiveMode——如果服务没有重启使新配置生效，kb_search 仍然走 wiki 模式，再多运行几次也不会切换到 RAG。B：knowledge -- index 是发 RAG 索引构建任务，是切换 RAG 的必要前置步骤之一，但索引构建完成后还必须改 Agent 配置的 mode 并重启服务，缺少这步索引就绪后 effectiveMode 依然是 wiki。">
+          <h3 class="quiz-question">场景二：你已经成功运行了 npm run knowledge -- index general，job 状态显示 state: completed。你让当前 Thread 继续调用 kb_search，结果看起来还是 wiki 模式的文本匹配，没有向量排名。最可能的原因是什么？</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>knowledge -- search 命令需要多运行几次才能触发 RAG 模式切换。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>索引构建完成就已经自动切换了，当前结果就是 RAG 输出，只是排名方式看起来类似文本匹配。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>Agent 配置的 mode 字段还是 wiki，且/或服务还没有重启使新配置生效；RAG 不热切换，必须改配置、重启、新建 Thread 才生效。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question-block"
+             data-correct="a"
+             data-explanation-right="对！kb_submit_revision 要求 expectedVersion 与数据库中的 current_version 完全匹配。另一个并发 maintain 任务先提交了更新，指针已移动，当前提交的 expectedVersion 就过期了——这正是乐观锁要防止的覆盖问题。应对方法：重新调 kb_read 阅读并合并最新内容，用最新 versionId 再提交。"
+             data-explanation-wrong="B：VERSION_CONFLICT 不是权限错误，门禁在此之前已放行（任务上下文和 maintenanceKb 都验证通过）。重新发 maintain 任务会再走一次完整流程，但根本原因是版本冲突，正确做法是读最新版本后重试当前操作，不是重新发任务。C：来源失效时报的是 SOURCE_STALE，不是 VERSION_CONFLICT。两个错误码代表不同问题——VERSION_CONFLICT 说明页面本身在你提交之前被其他更新改过了。">
+          <h3 class="quiz-question">场景三：Codex 调用 kb_submit_revision 时返回 VERSION_CONFLICT。你应该向 AI 程序员解释，这个错误意味着什么，以及正确的处理方式是什么？</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="a">
+              <div class="quiz-option-radio"></div>
+              <span>提交时数据库中的 current_version 已被另一次更新移动，与传入的 expectedVersion 不匹配。应重新调 kb_read 获取最新内容和 versionId，合并变更后再提交。</span>
+            </button>
+            <button class="quiz-option" data-value="b">
+              <div class="quiz-option-radio"></div>
+              <span>这是门禁权限错误，说明当前 maintain 任务没有 update action 授权，需要重新发一次 maintain 任务并检查 agents/*.json 的 actions 配置。</span>
+            </button>
+            <button class="quiz-option" data-value="c">
+              <div class="quiz-option-radio"></div>
+              <span>来源原文版本已失效，需要重新扫描 inputs/ 目录并更新 source_versions 参数再提交。</span>
+            </button>
+          </div>
+          <div class="quiz-feedback" style="max-height:none"></div>
+        </div>
+
+        <button class="quiz-check-btn" data-quiz="m5-quiz">提交答案</button>
+        <button class="quiz-reset-btn" data-quiz="m5-quiz">重置</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+</main>
+</body>
+</html>

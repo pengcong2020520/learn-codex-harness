@@ -317,15 +317,15 @@
          data-explanation-wrong="A选项错误：超时计时器是在 try 块之前设置的，目的是防止模型无响应，与事件顺序问题无关。C选项错误：finally 是清理机制，负责关闭子进程，而非解决早到事件的问题。">
       <h3 class="quiz-question">你删除了请求前的缓冲逻辑，偶尔明明有完成通知却一直等待。哪项解释能定位问题？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>为了同时启动超时计时器，两者必须一起初始化</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>事件通知可能比 RPC 响应更早到达，若先发请求再建监听会漏掉早到的通知</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>finally 块需要缓冲区才能正确关闭子进程</span>
         </button>
@@ -338,15 +338,15 @@
          data-explanation-wrong="A选项错误：Node 不直接调用模型 HTTP 接口，它只与本机 Codex 子进程通信，Codex 才是真正发起远端调用的一方。B选项错误：两者并非同一进程。Codex 是被 spawn 拉起的独立子进程，与 Node 主进程通过 stdio 分隔，职责完全不同。">
       <h3 class="quiz-question">配置校验通过，但远端模型连接失败。沿着实际调用链，你应检查哪一层发出的请求？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>Node 主进程（05-app-server.mjs）直接发起 HTTP 请求</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>Node 主进程与 Codex 是同一进程，共同处理 HTTP 请求</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>本机 Codex 子进程通过 Responses API 调用远端模型，Node 仅做协议编排</span>
         </button>
@@ -359,15 +359,15 @@
          data-explanation-wrong="B选项错误：initialized 是单向通知，不需要等待服务端响应，也不携带任何用户输入；它只是客户端的&quot;确认收讫&quot;信号。C选项错误：thread/start 是握手完成之后才发送的，用于创建会话 Thread；initialize/initialized 是连接层握手，发生在任何业务请求之前。">
       <h3 class="quiz-question">你重写了连接启动流程，想在发出首条用户任务前确认通信已就绪。应采用哪种顺序？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>initialize 是客户端的请求（等待服务端初始化响应），initialized 是客户端的单向确认通知</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>initialize 开启连接，initialized 携带用户首条输入并等待服务端回复</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>initialize 和 thread/start 是同一步骤的两种写法，initialized 可省略</span>
         </button>
@@ -376,8 +376,8 @@
     </div>
 
   </div>
-  <button class="quiz-check-btn" onclick="checkQuiz('m1-quiz')">提交答案</button>
-  <button class="quiz-reset-btn" onclick="resetQuiz('m1-quiz')" style="margin-left:8px">重置</button>
+  <button class="quiz-check-btn" data-quiz="m1-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m1-quiz" style="margin-left:8px">重置</button>
 
 </section>
 

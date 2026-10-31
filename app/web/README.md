@@ -9,7 +9,7 @@
 
 机制课程源文件位于 `curriculum/s01-s03.json` 与 `curriculum/s04-s05.json`；执行 `npm run course:build` 提取真实源码并生成 `public/course/curriculum.json`，`npm run course:check` 检查内容及源码快照是否过期。构建时会校验源码锚点唯一性、课时与实验对应关系。
 
-原先的 30 个长文单元保留在 `/course/handbook.html`，源文件仍在 `public/course/modules/`。在 `public/course` 运行 `bash build.sh` 可同时重建长文、课堂首页及机制课程。
+原先的 30 个长文单元保留在 `/course/handbook.html`，源文件仍在 `public/course/modules/`。运行 `npm run course:build` 会同时重建课程首页、机制课程数据和长文（模板 `_handbook.html` + `modules/*.html`）；`npm run course:check` 检查三者是否最新。长文的交互（测验、对话与流程推演、架构图、术语释义）都在 `handbook.js`，章节里不写内联脚本。
 
 ## 版本对应
 
@@ -59,6 +59,6 @@
 
 ## 课程来源
 
-使用 GitHub [zarazhangrui/codebase-to-course](https://github.com/zarazhangrui/codebase-to-course)，快照 `ff8837ecf8e9f6ce9874ffa42e42633394a52a00`。长文阅读器的 `styles.css`、`main.js`、`_footer.html` 保留来源版本；`build.sh` 已调整为同时构建新版入口与长文。中文内容、课程模块、架构素材及 `course.css/js` 为本项目补充。快照未见 LICENSE；若对外再分发，需先确认来源授权。
+长文的五章最初用 [zarazhangrui/codebase-to-course](https://github.com/zarazhangrui/codebase-to-course) 这个 Skill 生成。该仓库没有开源协议，所以长文阅读器的样式、脚本与页面模板（`handbook.css`、`handbook.js`、`_handbook.html`）已由本项目重新编写，不含来源代码；章节正文与课程模块均为本项目内容。
 
 本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s17 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。17 节本地课程围绕现有五版机制重新划分，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。

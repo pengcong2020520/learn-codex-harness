@@ -344,19 +344,19 @@
             场景一：一条新任务已提交 PG 事务，尚未领取，Redis 唤醒投递却失败了。你该如何判断这条任务是否丢失？
           </h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>A：任务立刻丢失，因为 Redis 是任务队列，连不上就没法入队。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>B：任务仍在 PG 中保持 <code>queued</code>，Redis 恢复后 outbox 可补投；当前只是调度延迟，不丢任务，但需尽快修复 Redis。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>C：任务会自动变为 <code>completed</code>，系统绕过 Redis 直接执行。</span>
             </button>
-            <button class="quiz-option" data-value="d" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="d">
               <div class="quiz-option-radio"></div>
               <span>D：advisory 锁会阻止所有写入，需立刻重启服务才能恢复。</span>
             </button>
@@ -373,19 +373,19 @@
             场景二：一位 AI 程序员告诉你某条任务的 <code>status</code> 是 <code>unconfirmed</code>，问你该怎么处理。你会如何解释这个状态，以及下一步该做什么？
           </h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>A：任务被系统拒绝了，说明 Bearer 凭据校验失败，需要重新登录。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>B：任务还在排队中，说明 Redis 还没唤醒调度器，等一会儿会自动执行。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>C：任务执行中服务意外重启，系统已暂停且不会自动重发；需人工判断任务是否已部分完成，再决定是否重试。</span>
             </button>
-            <button class="quiz-option" data-value="d" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="d">
               <div class="quiz-option-radio"></div>
               <span>D：直接重试任务即可，系统会自动检测重复并跳过已完成的部分。</span>
             </button>
@@ -402,19 +402,19 @@
             场景三：用户反映"AI 回复了一些内容，但我不知道它具体说了什么，PG 里查不到"。你如何向 AI 程序员解释这是正常行为，并指出正确的查询位置？
           </h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>A：这是正常的。PG <code>tasks.text</code> 只存用户任务原文，完整模型回复由 Codex 原生存储（<code>.data/codex/</code>）管理，应去那里查。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>B：不正常，完整回复应该在 PG <code>tasks</code> 表里，可能是写入失败了，需要检查事务日志。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>C：完整回复存在 PG <code>resource_versions</code> 表，按任务 ID 关联查询即可。</span>
             </button>
-            <button class="quiz-option" data-value="d" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="d">
               <div class="quiz-option-radio"></div>
               <span>D：模型回复存在 Redis Set 里，用 sPop 命令可以取出来查看。</span>
             </button>
@@ -423,8 +423,8 @@
         </div>
 
         <div style="display:flex;gap:var(--space-3);margin-top:var(--space-6);flex-wrap:wrap;">
-          <button class="quiz-check-btn" onclick="checkQuiz('m4-quiz')">提交答案</button>
-          <button class="quiz-reset-btn" onclick="resetQuiz('m4-quiz')">重新作答</button>
+          <button class="quiz-check-btn" data-quiz="m4-quiz">提交答案</button>
+          <button class="quiz-reset-btn" data-quiz="m4-quiz">重新作答</button>
         </div>
 
       </div>

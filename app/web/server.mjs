@@ -87,8 +87,8 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
       if(!/^\/(app|course)\//.test(requested)||requested.includes('/briefs/')||requested.includes('/modules/')||requested.includes('/_')||!mime[path.extname(requested)])throw fail(404,'文件不存在。');
       const base=realpathSync(staticRoot),shared=sharedModules[requested],file=shared||realpathSync(path.resolve(base,'.'+requested));
       if(!shared&&(!file.startsWith(base+path.sep)||!statSync(file).isFile()))throw fail(404,'文件不存在。');
-      // Course uses trusted inline quiz handlers from the selected teaching Skill.
-      res.setHeader('content-security-policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+      // 页面没有内联脚本（课程交互都在同源脚本里）；课程正文带少量行内样式，所以只给样式放开 'unsafe-inline'。
+      res.setHeader('content-security-policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
       res.writeHead(200,{'content-type':mime[path.extname(requested)],'cache-control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(file));
     }catch(error){if(!res.headersSent)send(error.status||(error.code==='ENOENT'?404:500),{error:{message:error.status?error.message:'页面或服务暂不可用。'}});else res.end();}
   });

@@ -335,15 +335,15 @@
              data-explanation-wrong="A：只补 actions 不够——普通对话即使拥有 update action，也会因 maintenanceKb 不匹配被拒绝；仍需维护任务上下文。C：SKILL.md 只是给 Codex 的操作指南，不决定任何权限——门禁从不读 SKILL.md，改 SKILL.md 不会让普通对话能写 Wiki。">
           <h3 class="quiz-question">场景一：你让 Agent 在普通对话中整理一篇 Wiki 页面，但服务端返回 FORBIDDEN，模型说"无权限"。你应该怎么告诉 AI 程序员这是为什么？</h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>Agent 的 knowledge[] 配置里没有声明 update action，需要在 agents/*.json 里添加。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>普通对话 task 的 maintenanceKb 是 null，门禁的 mount() 会在维护范围校验拒绝写 Wiki，必须用 maintain 命令发专门任务才能写。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>SKILL.md 没有包含写 Wiki 的指导，需要更新 SKILL.md 并重新部署。</span>
             </button>
@@ -358,15 +358,15 @@
              data-explanation-wrong="A：knowledge -- search 命令只是触发 kb_search 工具，它读取当前 effectiveMode——如果服务没有重启使新配置生效，kb_search 仍然走 wiki 模式，再多运行几次也不会切换到 RAG。B：knowledge -- index 是发 RAG 索引构建任务，是切换 RAG 的必要前置步骤之一，但索引构建完成后还必须改 Agent 配置的 mode 并重启服务，缺少这步索引就绪后 effectiveMode 依然是 wiki。">
           <h3 class="quiz-question">场景二：你已经成功运行了 npm run knowledge -- index general，job 状态显示 state: completed。你让当前 Thread 继续调用 kb_search，结果看起来还是 wiki 模式的文本匹配，没有向量排名。最可能的原因是什么？</h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>knowledge -- search 命令需要多运行几次才能触发 RAG 模式切换。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>索引构建完成就已经自动切换了，当前结果就是 RAG 输出，只是排名方式看起来类似文本匹配。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>Agent 配置的 mode 字段还是 wiki，且/或服务还没有重启使新配置生效；RAG 不热切换，必须改配置、重启、新建 Thread 才生效。</span>
             </button>
@@ -381,15 +381,15 @@
              data-explanation-wrong="B：VERSION_CONFLICT 不是权限错误，门禁在此之前已放行（任务上下文和 maintenanceKb 都验证通过）。重新发 maintain 任务会再走一次完整流程，但根本原因是版本冲突，正确做法是读最新版本后重试当前操作，不是重新发任务。C：来源失效时报的是 SOURCE_STALE，不是 VERSION_CONFLICT。两个错误码代表不同问题——VERSION_CONFLICT 说明页面本身在你提交之前被其他更新改过了。">
           <h3 class="quiz-question">场景三：Codex 调用 kb_submit_revision 时返回 VERSION_CONFLICT。你应该向 AI 程序员解释，这个错误意味着什么，以及正确的处理方式是什么？</h3>
           <div class="quiz-options">
-            <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="a">
               <div class="quiz-option-radio"></div>
               <span>提交时数据库中的 current_version 已被另一次更新移动，与传入的 expectedVersion 不匹配。应重新调 kb_read 获取最新内容和 versionId，合并变更后再提交。</span>
             </button>
-            <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="b">
               <div class="quiz-option-radio"></div>
               <span>这是门禁权限错误，说明当前 maintain 任务没有 update action 授权，需要重新发一次 maintain 任务并检查 agents/*.json 的 actions 配置。</span>
             </button>
-            <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+            <button class="quiz-option" data-value="c">
               <div class="quiz-option-radio"></div>
               <span>来源原文版本已失效，需要重新扫描 inputs/ 目录并更新 source_versions 参数再提交。</span>
             </button>
@@ -397,8 +397,8 @@
           <div class="quiz-feedback" style="max-height:none"></div>
         </div>
 
-        <button class="quiz-check-btn" onclick="checkQuiz('m5-quiz')">提交答案</button>
-        <button class="quiz-reset-btn" onclick="resetQuiz('m5-quiz')">重置</button>
+        <button class="quiz-check-btn" data-quiz="m5-quiz">提交答案</button>
+        <button class="quiz-reset-btn" data-quiz="m5-quiz">重置</button>
       </div>
     </div>
 

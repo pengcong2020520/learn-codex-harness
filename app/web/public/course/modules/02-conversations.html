@@ -253,15 +253,15 @@
          data-explanation-wrong="A选项错误：Node 端不维护历史消息数组，也不负责向模型重发历史——这些全由 Codex 内部管理，Node 只持有 threadId 引用。C选项错误：虽然本地有会话元数据索引（名称、预览等），但完整的对话历史是由 Codex 原生持久化（SQLite/JSONL），而非存储在 Node 的本地索引中。">
       <h3 class="quiz-question">你准备给会话增加“继续上次聊天”，却在 Node 的元数据里找不到正文。该去哪里恢复？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>Node 主进程维护历史消息数组，每轮都把完整历史重新发给模型</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>本机 Codex App Server 原生持久化，Node 端只保存 threadId 引用</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>Node 端的本地会话元数据索引保存了完整对话历史</span>
         </button>
@@ -274,15 +274,15 @@
          data-explanation-wrong="A选项错误：FIFO 控制的是用户消息的发出顺序，与模型内部一个 Turn 内调用几次工具无关——那是 Codex 内部的 ReAct loop，FIFO 无法干预。B选项错误：FIFO 不是 Codex 内部的重试机制，也不决定工具调用是否重试；s02 超时会断开并提示重启后 /resume，输入队列本身不负责自动重试。">
       <h3 class="quiz-question">用户连续输入三条问题，第二条等了很久；他希望调整 FIFO 来减少单轮工具调用。哪种判断正确？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>控制模型在一个 Turn 内调用工具的次数上限</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>控制 Codex 内部工具调用失败时的重试顺序</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>控制用户消息的发出节奏：上一 Turn 完成后才取下一条输入</span>
         </button>
@@ -295,15 +295,15 @@
          data-explanation-wrong="B选项错误：/resume 不能检索消息内容全文，只能基于会话名称、开场预览和 ID 做基础匹配，无法通过任意关键词找到特定消息。C选项错误：/resume 恢复的是历史 Thread 的上下文，不会把跨会话记忆注入到新 Thread——这是两个独立机制，s02 中记忆功能处于关闭状态。">
       <h3 class="quiz-question">用户 /resume 后接着聊旧话题成功，却发现新会话不记得旧代号。该如何解释？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>/resume 恢复的是某个 Thread 的历史上下文；跨会话记忆是从多个会话中提炼知识并注入新会话（s02 关闭）</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>/resume 支持通过任意关键词全文检索历史消息内容</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>/resume 会把旧会话的记忆提炼后注入当前新 Thread</span>
         </button>
@@ -312,8 +312,8 @@
     </div>
 
   </div>
-  <button class="quiz-check-btn" onclick="checkQuiz('m2-quiz')">提交答案</button>
-  <button class="quiz-reset-btn" onclick="resetQuiz('m2-quiz')" style="margin-left:8px">重置</button>
+  <button class="quiz-check-btn" data-quiz="m2-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m2-quiz" style="margin-left:8px">重置</button>
 
 </section>
 

@@ -276,15 +276,15 @@
          data-explanation-wrong="A选项错误：Skills 里描述了某工具的使用方法，并不意味着该工具被自动授权。工具权限必须在 tools.allow 中单独声明，两者完全独立。B选项错误：memory.use 控制的是是否召回跨会话原生记忆，与工具权限无关。工具白名单是必要授权，实际执行还受参数校验和资源范围限制；记忆开关不授予工具权限。">
       <h3 class="quiz-question">你给 Skill 新增“用 write_file 保存文章”，模型却仍被拒绝。首先应检查哪一项授权？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>取决于 Skill 文件中是否描述了该工具的使用方法</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>取决于 memory.use 是否为 true</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>取决于 agent.tools.allow 白名单，list 和 call 都执行此过滤</span>
         </button>
@@ -297,15 +297,15 @@
          data-explanation-wrong="B选项错误：描述符不匹配时系统不会自动迁移旧 Thread 的数据到新配置下继续运行——这样做可能导致上下文与新配置不一致，因此必须由用户主动执行 /new。C选项错误：服务不会在检测到版本差异时自动回滚到旧配置——回滚意味着用手动干预将配置文件还原，系统只做检测和拒绝，不做自动回滚。">
       <h3 class="quiz-question">你修改 Agent 角色并重启了服务。现在 /resume 旧 Thread，描述符版本不同，应如何处理？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>系统比对描述符哈希，不匹配则拒绝恢复并提示执行 /new，不自动迁移</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>系统自动将旧 Thread 的数据迁移到新配置下继续运行</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>服务检测到版本差异后自动回滚到旧配置</span>
         </button>
@@ -318,15 +318,15 @@
          data-explanation-wrong="A选项错误：s03 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
       <h3 class="quiz-question">你新增第六个已授权工具，担心还要开第六个端口。按本项目结构，应该怎样接入？</h3>
       <div class="quiz-options">
-        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="a">
           <div class="quiz-option-radio"></div>
           <span>以函数形式直接注入 Codex 进程内部，无需网络调用</span>
         </button>
-        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="b">
           <div class="quiz-option-radio"></div>
           <span>通过一个本地 HTTP MCP 服务端统一暴露，Codex 以 MCP 协议发现并调用已授权工具</span>
         </button>
-        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+        <button class="quiz-option" data-value="c">
           <div class="quiz-option-radio"></div>
           <span>每个工具单独启动一个 HTTP 服务，Codex 分别连接</span>
         </button>
@@ -335,8 +335,8 @@
     </div>
 
   </div>
-  <button class="quiz-check-btn" onclick="checkQuiz('m3-quiz')">提交答案</button>
-  <button class="quiz-reset-btn" onclick="resetQuiz('m3-quiz')" style="margin-left:8px">重置</button>
+  <button class="quiz-check-btn" data-quiz="m3-quiz">提交答案</button>
+  <button class="quiz-reset-btn" data-quiz="m3-quiz" style="margin-left:8px">重置</button>
 
 </section>
 
