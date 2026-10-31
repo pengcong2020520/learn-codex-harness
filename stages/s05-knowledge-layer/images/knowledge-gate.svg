@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 560" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="720" height="560" fill="#fafbfc" rx="8"/>
+  <rect x="0" y="0" width="720" height="48" fill="url(#header)" rx="8"/>
+  <rect x="0" y="40" width="720" height="8" fill="url(#header)"/>
+  <text x="360" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s05 · 知识层与通用门禁 — 身份来自服务端签发的上下文</text>
+  <rect x="24" y="72" width="196" height="84" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="122" y="94" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">本机 Codex</text>
+  <text x="122" y="113" fill="#475569" font-size="11.5" text-anchor="middle">item/tool/call</text>
+  <text x="122" y="129" fill="#475569" font-size="11.5" text-anchor="middle">（dynamicTools 回调）</text>
+  <rect x="250" y="72" width="210" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="355" y="94" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">工具回调</text>
+  <text x="355" y="113" fill="#475569" font-size="11.5" text-anchor="middle">轮次必须 inProgress</text>
+  <text x="355" y="129" fill="#475569" font-size="11.5" text-anchor="middle">gate.forTurn(threadId, turnId)</text>
+  <text x="355" y="145" fill="#475569" font-size="11.5" text-anchor="middle">参数里的身份声明不参与判定</text>
+  <path d="M 220 114 L 250 114" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <rect x="490" y="72" width="206" height="150" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="502" y="94" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">PermissionGate</text>
+  <text x="502" y="113" fill="#475569" font-size="11.5" text-anchor="start">① 上下文必须由服务端签发</text>
+  <text x="502" y="129" fill="#475569" font-size="11.5" text-anchor="start">② 工具名在 Agent 白名单</text>
+  <text x="502" y="145" fill="#475569" font-size="11.5" text-anchor="start">③ 资源归属当前 owner</text>
+  <text x="502" y="161" fill="#475569" font-size="11.5" text-anchor="start">④ KB 已挂载且 actions 允许</text>
+  <text x="502" y="177" fill="#475569" font-size="11.5" text-anchor="start">⑤ 提交 Wiki 需 maintain 任务</text>
+  <text x="502" y="193" fill="#475569" font-size="11.5" text-anchor="start">任一不满足 → FORBIDDEN</text>
+  <path d="M 460 114 L 490 114" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="180" width="436" height="68" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="36" y="210" fill="#475569" font-size="11.5" text-anchor="start">turn/started 绑定轮次 · turn/completed 撤销上下文</text>
+  <text x="36" y="226" fill="#475569" font-size="11.5" text-anchor="start">上下文存于 AsyncLocalStorage，工具内用 gate.current() 读取</text>
+  <path d="M 593 222 L 593 300" fill="none" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+  <text x="600" y="262" fill="#16a34a" font-size="11" text-anchor="start">放行</text>
+  <rect x="24" y="300" width="210" height="100" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="129" y="322" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="middle">文件服务</text>
+  <text x="129" y="341" fill="#475569" font-size="11.5" text-anchor="middle">list / read / write_file</text>
+  <text x="129" y="357" fill="#475569" font-size="11.5" text-anchor="middle">Wiki 目录禁止普通读写</text>
+  <text x="129" y="373" fill="#475569" font-size="11.5" text-anchor="middle">必须走 kb_* 工具</text>
+  <rect x="255" y="300" width="210" height="100" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="360" y="322" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">知识服务</text>
+  <text x="360" y="341" fill="#475569" font-size="11.5" text-anchor="middle">kb_list / kb_read / kb_search</text>
+  <text x="360" y="357" fill="#475569" font-size="11.5" text-anchor="middle">kb_submit_revision</text>
+  <text x="360" y="373" fill="#475569" font-size="11.5" text-anchor="middle">Wiki 只引用原文版本</text>
+  <rect x="486" y="300" width="210" height="100" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="591" y="322" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">可选 RAG</text>
+  <text x="591" y="341" fill="#475569" font-size="11.5" text-anchor="middle">Chroma + BM25（RRF 60）</text>
+  <text x="591" y="357" fill="#475569" font-size="11.5" text-anchor="middle">新索引完整后才切指针</text>
+  <text x="591" y="373" fill="#475569" font-size="11.5" text-anchor="middle">失败保留旧索引</text>
+  <path d="M 593 300 L 593 290 L 129 290 L 129 300" fill="none" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+  <path d="M 360 290 L 360 300" fill="none" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+  <rect x="24" y="424" width="441" height="80" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="36" y="446" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">PostgreSQL（schema v2）</text>
+  <text x="36" y="465" fill="#475569" font-size="11.5" text-anchor="start">wiki_pages.current_version：FOR UPDATE + expectedVersion 乐观锁</text>
+  <text x="36" y="481" fill="#475569" font-size="11.5" text-anchor="start">wiki_versions 不可变；knowledge_indexes / index_revision</text>
+  <rect x="486" y="424" width="210" height="80" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="591" y="446" fill="#7a5b00" font-size="13" font-weight="700" text-anchor="middle">模式在启动时确定</text>
+  <text x="591" y="465" fill="#475569" font-size="11.5" text-anchor="middle">wiki ↔ rag 切换需要重启</text>
+  <text x="591" y="481" fill="#475569" font-size="11.5" text-anchor="middle">旧 Thread 绑定旧描述符</text>
+  <text x="591" y="497" fill="#475569" font-size="11.5" text-anchor="middle">需要新建会话</text>
+  <path d="M 360 400 L 360 424" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <rect x="24" y="530" width="14" height="14" rx="3" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="44" y="541" fill="#475569" font-size="11" font-weight="400" text-anchor="start">红色：本阶段新增或变化</text>
+  <rect x="214" y="530" width="14" height="14" rx="3" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="234" y="541" fill="#475569" font-size="11" font-weight="400" text-anchor="start">蓝色：沿用的结构</text>
+</svg>

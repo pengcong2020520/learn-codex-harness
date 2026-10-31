@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="720" height="540" fill="#fafbfc" rx="8"/>
+  <rect x="0" y="0" width="720" height="48" fill="url(#header)" rx="8"/>
+  <rect x="0" y="40" width="720" height="8" fill="url(#header)"/>
+  <text x="360" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s01 · 单轮协议闭环 — 按 id 配对回包，按 turn/completed 判定结束</text>
+  <rect x="140" y="64" width="160" height="40" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="220" y="86" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="middle">Node 主进程</text>
+  <rect x="500" y="64" width="180" height="40" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="590" y="86" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">Codex App Server</text>
+  <line x1="220" y1="104" x2="220" y2="470" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <line x1="590" y1="104" x2="590" y2="470" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <path d="M 220 132 L 590 132" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <text x="405" y="126" fill="#2563eb" font-size="11" text-anchor="middle">① initialize（id: 1）</text>
+  <path d="M 590 156 L 220 156" fill="none" stroke="#555" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+  <text x="405" y="150" fill="#555" font-size="11" text-anchor="middle">result（id: 1）</text>
+  <path d="M 220 182 L 590 182" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <text x="405" y="176" fill="#2563eb" font-size="11" text-anchor="middle">② initialized（通知，没有 id）</text>
+  <path d="M 220 214 L 590 214" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <text x="405" y="208" fill="#2563eb" font-size="11" text-anchor="middle">③ thread/start（id: 2）</text>
+  <path d="M 590 238 L 220 238" fill="none" stroke="#555" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+  <text x="405" y="232" fill="#555" font-size="11" text-anchor="middle">result：thread.id</text>
+  <path d="M 220 270 L 590 270" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <text x="405" y="264" fill="#2563eb" font-size="11" text-anchor="middle">④ turn/start（id: 3）</text>
+  <path d="M 590 296 L 220 296" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <text x="405" y="290" fill="#b63743" font-size="11" text-anchor="middle">item/agentMessage/delta（可能早于回包）</text>
+  <path d="M 590 322 L 220 322" fill="none" stroke="#555" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrow-gray)"/>
+  <text x="405" y="316" fill="#555" font-size="11" text-anchor="middle">result（id: 3）：turn.id — 只表示已受理</text>
+  <path d="M 590 348 L 220 348" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <text x="405" y="342" fill="#555" font-size="11" text-anchor="middle">item/agentMessage/delta …</text>
+  <path d="M 590 374 L 220 374" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <text x="405" y="368" fill="#555" font-size="11" text-anchor="middle">item/completed：整段消息</text>
+  <path d="M 590 406 L 220 406" fill="none" stroke="#16a34a" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+  <text x="405" y="400" fill="#16a34a" font-size="11" text-anchor="middle">⑤ turn/completed：status 决定成败</text>
+  <rect x="16" y="120" width="128" height="50" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="80" y="141" fill="#475569" font-size="11.5" text-anchor="middle">pending: Map</text>
+  <text x="80" y="157" fill="#475569" font-size="11.5" text-anchor="middle">id → 等待者</text>
+  <rect x="16" y="278" width="128" height="50" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="80" y="299" fill="#475569" font-size="11.5" text-anchor="middle">turn.id 未知</text>
+  <text x="80" y="315" fill="#475569" font-size="11.5" text-anchor="middle">先存入 buffer</text>
+  <rect x="16" y="336" width="128" height="50" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="80" y="357" fill="#475569" font-size="11.5" text-anchor="middle">拿到 turn.id 后</text>
+  <text x="80" y="373" fill="#475569" font-size="11.5" text-anchor="middle">重放并严格匹配</text>
+  <rect x="616" y="390" width="96" height="50" rx="8" fill="#effaf3" stroke="#16a34a" stroke-width="2"/>
+  <text x="664" y="411" fill="#475569" font-size="11.5" text-anchor="middle">completed</text>
+  <text x="664" y="427" fill="#475569" font-size="11.5" text-anchor="middle">→ 成功</text>
+  <rect x="24" y="482" width="672" height="40" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="360" y="506" fill="#475569" font-size="11.5" text-anchor="middle">finally：关闭 stdin → SIGTERM → 1.5 秒后 SIGKILL；每条收发记入 .runs/…/protocol.jsonl（已脱敏）</text>
+</svg>

@@ -1,105 +1,145 @@
-# s02：多轮会话问答
+# s02: 多轮会话 — 连续输入不丢、不抢跑
 
-[总览](../README.md)（开始前请先查阅总览完成环境安装与基础配置）
+[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → `s02` → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+> *"顺序交给队列，历史留给 Codex"* — Node 端只管按顺序发 Turn，不保存、不拼接、不重发历史。
+>
+> **Harness 层**: 会话 — 同一个 Thread 上的多次 Turn，以及退出后的恢复。
 
-## 设计原理
+---
 
-s02 的核心目标是从单次问答扩展到多轮持续对话。在交互模式下，系统需要处理长期会话与单次任务执行的层级关系，以及用户连续输入的节奏控制。
+## 问题
 
-在设计上，Node 端不维护也无需向模型重发历史消息数组。多轮上下文由本地 Codex AppServer 原生持久化并管理。架构将交互清晰划分为 Thread 与 Turn：Thread 代表一个持续的会话，Turn 代表该会话中的一轮任务执行（包含用户输入与模型可能的多次内部工具调用）。同一 Thread 内的不同 Turn 分配独立的唯一标识，而不是简单的递增编号。
+s01 每次运行只问一句。把它改成"读一行、问一轮"的循环聊天，三个问题马上冒出来：
 
-为了避免并发交互导致状态混淆，系统引入了先进先出（FIFO）输入缓冲队列，仅在当前 Turn 执行完毕后才提取下一条输入。该输入队列属于交互缓冲，并非重写底层 ReAct 机制。
+1. **输入丢失或抢跑**：模型还在回答时，用户又敲了两行，或者通过管道一次塞进多行。readline 的 `line` 事件不会等你，第二行要么被丢掉，要么在第一轮没结束时就发出去，两轮输出交织在一起。
+2. **上下文怎么带**：要不要像调用 Chat API 那样，每轮把历史 `messages` 全部再发一遍？
+3. **退出后怎么继续**：程序关掉再打开，怎么回到刚才那段对话？
 
-## 架构改进
+---
 
-相比于 s01 单次执行即退出的模式，s02 增加了以下架构设计：
+## 解决方案
 
-- 会话状态解耦：首条普通文本调用 `thread/start` 建立 Thread，后续输入调用 `turn/start` 复用已有会话；支持退出后通过 `thread/resume` 恢复交互。
-- 本地状态索引：由本地存储维护会话元数据（ID、标题、预览摘要）的索引，用于快速检索会话，但具体的会话正文持久化仍由 Codex 原生完成，Node 客户端不自行压缩上下文。
-- 异步通知隔离：为解决网络或进程事件早到的问题，通知缓存按 Thread 和 Turn ID 进行独立匹配，避免旧轮次的事件污染新轮次。
+![多轮会话](images/multi-turn.svg)
 
-数据流向如下：
+| 问题 | 机制 | 代码位置 |
+|------|------|---------|
+| 提前输入丢失、抢跑 | FIFO 输入缓冲：`line` 事件先入队，上一轮结束后才取下一条 | `createChatInput` |
+| 多轮上下文 | 首条消息 `thread/start`，之后同一个 `threadId` 只发 `turn/start`；历史由 Codex 原生保存 | `runTurn` |
+| 退出后继续 | `thread/list` 只列本项目运行目录下的会话 → 用户选择 → `thread/resume` | `resumeChat` / `listProjectThreads` |
+| 旧轮事件串入新轮 | 通知按 threadId + turnId 严格匹配（沿用 s01） | `handleTurnEvent` |
 
-用户输入 -> FIFO 队列 -> thread/start 或 turn/start -> Codex AppServer（原生持久化上下文） -> 返回整段回答 -> 提取下一条输入
+这里的输入队列只是交互缓冲，不是在 Node 里重写一个 agent loop。
 
-## 技术实现流程
+---
 
-1. 启动与建连：运行 [main.mjs](./main.mjs) 默认进入 `--chat` 交互模式，由 [05-app-server.mjs](./05-app-server.mjs) 启动本机 Codex 并通过 stdio 与它通信；[runtime.mjs](server/modules/codex/runtime.mjs) 准备运行目录与 catalog。
-2. 会话初始化：用户首次输入普通消息时，系统发起 `thread/start` 请求创建 Thread，随后发起 `turn/start` 启动该轮任务。
-3. 轮次等待与输出：客户端等待当前 Turn 结束并接收整段回答。此阶段不进行客户端流式打字拼接。
-4. 会话恢复机制：输入 `/resume [关键词]` 检索历史会话的名称或开场预览；界面以数字列表展示匹配结果（最多每页 10 项，支持 `n`/`p` 翻页或 `/cancel` 取消），选定数字后调用 `thread/resume` 继续该会话。
+## 工作原理
 
-## 核心代码
+代码在 [`05-app-server.mjs`](05-app-server.mjs) 和 [`server/modules/sessions/history.mjs`](server/modules/sessions/history.mjs)。
+
+**第 1 步**：输入先进队列。有人在等就直接交给他，没人等就排队。`question()` 优先从队列里取。
 
 ```javascript
-// 伪代码：input.question 内部保留提前输入的 FIFO 队列
-let threadId = null;
-try {
-  while (true) {
-    const text = await input.question("你 > ");
-    if (text === null || text === "/exit") break;
-    if (text.startsWith("/resume")) {
-      const selected = await 按关键词搜索并按数字选择();
-      if (selected) {
-        const { thread } = await rpc.request("thread/resume", {
-          threadId: selected.id, baseInstructions: 基础问答约束
-        });
-        threadId = thread.id;
-      }
-      continue;
-    }
-    if (!text.trim()) continue;
-    if (!threadId) threadId = (await 创建Thread()).id;
-    // 内部先缓存通知、绑定 turn id，再等待本轮 completed
-    await 提交一轮并输出回答(threadId, text);
-  } // 上轮结束后才取下一条；不自行拼接历史
-} finally {
-  await 关闭输入和Codex连接();
+terminal.on("line", line => {
+  if (waiting) { const resolve = waiting; waiting = null; resolve(line); }
+  else queue.push(line);
+});
+
+async question(prompt) {
+  output.write(prompt);
+  // 缓冲提前输入/管道输入，避免等待模型时丢失后续行。
+  if (queue.length) return queue.shift();
+  if (ended) return null;
+  return new Promise(resolve => { waiting = resolve; });
 }
 ```
 
-## 运行与验证
+**第 2 步**：聊天循环。`await runTurn(prompt)` 等到本轮的 `turn/completed` 才返回，所以下一次 `question()` 天然排在后面。
 
-进入目录并安装依赖：
+```javascript
+while (!fatalError) {
+  const input = await chatInput.question("你 > ");
+  if (input === null || input.trim() === "/exit") break;
+  const prompt = input.trim();
+  if (!prompt) continue;
+  if (/^\/resume(?:\s|$)/.test(prompt)) {
+    const keyword = prompt.slice("/resume".length).trim();
+    if (await resumeChat(keyword || undefined)) break;
+  } // …/help 与未知命令的提示
+  else await runTurn(prompt);
+}
+```
 
-```bash
+**第 3 步**：只有第一条消息需要建 Thread。之后每一轮都复用同一个 `threadId`，上下文由 Codex 自己从原生历史里取。
+
+```javascript
+async function runTurn(prompt) {
+  if (!threadId) await startThread();
+  const turn = { threadId, id: null, answers: new Map(), buffer: [], completed: Promise.withResolvers() };
+  // …后面与 s01 相同：turn/start → 重放早到通知 → 等 turn/completed
+}
+```
+
+**第 4 步**：恢复会话。先用 `thread/list` 按本项目的运行目录过滤，避免列出你在别处用 Codex 产生的会话。
+
+```javascript
+const page = await request("thread/list", {
+  limit: 100, sortKey: "updated_at", sortDirection: "desc",
+  // 0.154.0 的 stdio app-server 实际可能记录为 vscode；不能只筛 appServer。
+  sourceKinds: ["appServer", "vscode"], modelProviders: [], archived: false, cwd,
+  ...(cursor ? { cursor } : {})
+});
+```
+
+**第 5 步**：用户选中后调用 `thread/resume`。`excludeTurns: true` 表示不把历史轮次传回客户端，历史仍完整保存在 Codex 里，下一轮照样能用。
+
+```javascript
+const result = await request("thread/resume", {
+  ...threadOptions, threadId: selected.id, cwd: selected.cwd, excludeTurns: true
+});
+selectThread(result);
+```
+
+从单轮到多轮，Node 端新增的只是一个输入队列和一个 `threadId` 变量。真正的"记忆"一直在 Codex 那边，这正是不自造 loop 的好处：上下文压缩、历史持久化都不用我们操心。
+
+---
+
+## 试一下
+
+**准备**：
+
+```sh
 cd stages/s02-multi-turn
 npm ci
+cp .env.example .env    # 填入模型配置
 ```
 
-仅当 `.env` 文件不存在时从模板复制，并填入模型参数：
+**运行**：
 
-```bash
-cp .env.example .env
+```sh
+npm start               # 默认进入循环聊天
 ```
 
-在 `.env` 中配置 `CODEX_API_KEY`、`CODEX_BASE_URL` 与 `CODEX_MODEL`，并核实模型能力声明。随后执行静态检查：
+试试这些输入：
 
-```bash
-npm run check
+1. `我叫小明，请记住` → 回车，再问 `我叫什么？`
+2. 在模型回答第一句时，快速连敲两行 `第一行`、`第二行`
+3. `/exit` 退出，重新 `npm start`，输入 `/resume`，选择刚才的会话，再问 `我们刚才聊了什么？`
+
+观察重点：第 2 步的两行是按顺序、一轮一轮处理的吗？第 3 步恢复后，Node 有没有重发任何历史？
+
+**离线实验**：
+
+```sh
+npm run lesson -- s02-fifo     # 提前输入按顺序取出；旧轮 STALE 事件不会串入新答案
+npm run lesson -- s02-resume   # 选中会话后沿用其 ID；取消或失败时保留当前会话
 ```
 
-说明：`npm run check` 仅核验本地环境与配置项，不连接远端验证密钥有效性。
+设计取舍与当前边界见 [s02 设计说明](docs/design.md)。
 
-启动与上下文验证：
+---
 
-执行 `npm start` 进入命令行对话：
+## 接下来
 
-1. 输入：`记住本次会话的代号是蓝鲸`
-2. 收到完整回答后，继续输入：`刚才的代号是什么`
-3. 检查模型是否正确识别代号；这是实际模型的验收目标，不是预先保证的结果。此时日志显示两次交互对应同一个 Thread ID 与两个不同的 Turn ID。
+现在的 Agent 只会问答：角色写死在代码里，不能读写任何资料，也没有工具。想把它改成写作助手或客服助手，就得改代码。
 
-此测试验证的是同一会话内的上下文连贯性，并非跨会话长期记忆。测试完毕后输入 `/exit` 退出。随后可通过再次启动并输入 `/resume` 按数字选择恢复会话。亦可执行 `npm test` 运行本地测试（模拟测试用于检查基础逻辑，不代表远端模型真实生成质量）。
-
-## 当前边界
-
-- 无独立 HTTP 服务：仅提供本地终端命令行交互界面。
-- 无客户端流式拼接：回答在当前 Turn 完成后一次性输出完整文本。
-- 未接入 MCP 协议：不支持通过 Model Context Protocol 发现与调用外部工具。
-- 无特定业务角色：仅包含基础通用 role，未引入知识整理等业务角色配置。
-- 无跨会话原生记忆沉淀：会话之间彼此独立，不具备跨会话自动提取与注入长期记忆的能力。
-- 检索能力限制：`/resume` 仅基于名称、开场预览和 ID 进行基础匹配，不提供会话历史全文检索。
-
-## 机制课程与逐课实验
-
-本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-2)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](lessons/README.md)。页面推演与终端运行结果分开展示。
+s03 可配置 Agent → 用一份 JSON 装配 Agent：角色、Skills、工具、能读写哪些目录。模型能不能绕过配置，自己给自己加权限？

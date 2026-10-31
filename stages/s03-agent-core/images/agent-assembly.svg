@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="720" height="520" fill="#fafbfc" rx="8"/>
+  <rect x="0" y="0" width="720" height="48" fill="url(#header)" rx="8"/>
+  <rect x="0" y="40" width="720" height="8" fill="url(#header)"/>
+  <text x="360" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s03 · 配置驱动 Agent — 一份 JSON 装配角色、Skills、工具与资料边界</text>
+  <rect x="24" y="72" width="210" height="168" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="36" y="94" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">agents/writing-agent.json</text>
+  <text x="36" y="113" fill="#475569" font-size="11.5" text-anchor="start">instructions → roles/*.md</text>
+  <text x="36" y="129" fill="#475569" font-size="11.5" text-anchor="start">skills[]：启用哪些 Skill</text>
+  <text x="36" y="145" fill="#475569" font-size="11.5" text-anchor="start">tools.allow[]：工具白名单</text>
+  <text x="36" y="161" fill="#475569" font-size="11.5" text-anchor="start">dataBindings[]：read / create</text>
+  <text x="36" y="177" fill="#475569" font-size="11.5" text-anchor="start">outputs：产物目录，只新建</text>
+  <text x="36" y="193" fill="#475569" font-size="11.5" text-anchor="start">memory：use / contribute</text>
+  <text x="36" y="209" fill="#475569" font-size="11.5" text-anchor="start">bindings：工作区、执行策略</text>
+  <rect x="262" y="72" width="200" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="362" y="94" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">AgentDefinition</text>
+  <text x="362" y="113" fill="#475569" font-size="11.5" text-anchor="middle">Schema 校验，未知字段拒绝</text>
+  <text x="362" y="129" fill="#475569" font-size="11.5" text-anchor="middle">定义 + 角色 + Skill 计算哈希</text>
+  <text x="362" y="145" fill="#475569" font-size="11.5" text-anchor="middle">变化 → revoke，后续调用停止</text>
+  <rect x="262" y="184" width="200" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="362" y="206" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">工具注册表</text>
+  <text x="362" y="225" fill="#475569" font-size="11.5" text-anchor="middle">allowlist：list 与 call 都检查</text>
+  <text x="362" y="241" fill="#475569" font-size="11.5" text-anchor="middle">JSON Schema 参数合同</text>
+  <text x="362" y="257" fill="#475569" font-size="11.5" text-anchor="middle">错误统一包装为工具结果</text>
+  <rect x="262" y="296" width="200" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="362" y="318" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">文件服务</text>
+  <text x="362" y="337" fill="#475569" font-size="11.5" text-anchor="middle">按 dataBindings 逐目录授权</text>
+  <text x="362" y="353" fill="#475569" font-size="11.5" text-anchor="middle">在工作区里 ≠ 有权读写</text>
+  <text x="362" y="369" fill="#475569" font-size="11.5" text-anchor="middle">扩展名、大小、路径校验</text>
+  <rect x="490" y="72" width="206" height="92" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="593" y="94" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">本机 Codex</text>
+  <text x="593" y="113" fill="#475569" font-size="11.5" text-anchor="middle">原生执行循环（不自造 loop）</text>
+  <text x="593" y="129" fill="#475569" font-size="11.5" text-anchor="middle">角色指令作为 baseInstructions</text>
+  <rect x="490" y="184" width="206" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="593" y="206" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">MCP 工具入口</text>
+  <text x="593" y="225" fill="#475569" font-size="11.5" text-anchor="middle">Streamable HTTP，一个入口</text>
+  <text x="593" y="241" fill="#475569" font-size="11.5" text-anchor="middle">本地凭据 + 每次调用 30s 超时</text>
+  <text x="593" y="257" fill="#475569" font-size="11.5" text-anchor="middle">按注册表分发到实现</text>
+  <rect x="490" y="296" width="206" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="593" y="318" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">Skills</text>
+  <text x="593" y="337" fill="#475569" font-size="11.5" text-anchor="middle">按 skills[] 调 skills/config/write</text>
+  <text x="593" y="353" fill="#475569" font-size="11.5" text-anchor="middle">只启用配置声明的 Skill</text>
+  <text x="593" y="369" fill="#475569" font-size="11.5" text-anchor="middle">范围外仍启用 → 停止执行</text>
+  <path d="M 234 118 L 262 118" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <path d="M 362 164 L 362 184" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <path d="M 362 276 L 362 296" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <path d="M 593 164 L 593 184" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <text x="600" y="179" fill="#2563eb" font-size="11" text-anchor="start">工具调用</text>
+  <path d="M 490 230 L 462 230" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <rect x="24" y="296" width="210" height="92" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="129" y="318" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="middle">roles/*.md</text>
+  <text x="129" y="337" fill="#475569" font-size="11.5" text-anchor="middle">角色正文独立成文件</text>
+  <text x="129" y="353" fill="#475569" font-size="11.5" text-anchor="middle">路径由 instructions 声明</text>
+  <text x="129" y="369" fill="#475569" font-size="11.5" text-anchor="middle">内容计入来源哈希</text>
+  <path d="M 129 240 L 129 296" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="410" width="672" height="64" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="36" y="432" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="start">Node 服务 :4313（HTTP / SSE） ← CLI：/new /resume /append /queue /tools</text>
+  <text x="36" y="451" fill="#475569" font-size="11.5" text-anchor="start">业务状态：.data/messages.json、thread-agents.json（原子替换写入）；描述符快照：.data/agent-descriptors/</text>
+  <rect x="24" y="490" width="14" height="14" rx="3" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="44" y="501" fill="#475569" font-size="11" font-weight="400" text-anchor="start">红色：本阶段新增或变化</text>
+  <rect x="214" y="490" width="14" height="14" rx="3" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="234" y="501" fill="#475569" font-size="11" font-weight="400" text-anchor="start">蓝色：沿用的结构</text>
+</svg>

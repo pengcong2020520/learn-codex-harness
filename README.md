@@ -27,7 +27,7 @@ flowchart LR
 | [s05-knowledge-layer](stages/s05-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
 | [app](app/README.md) | 完整项目 | 在 s05 之上持续开发：配置选择、会话升级、Web 工作台、互动课程 | — |
 
-每个阶段的 README 都按「设计原理 → 架构改进 → 技术实现流程 → 核心代码」组织；演进原因与约束见 [stages/README.md](stages/README.md)。
+每章 README 都按「问题 → 解决方案 → 工作原理 → 试一下 → 接下来」组织，配一张机制图；工作原理里的代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
 ## 快速开始
 
@@ -79,6 +79,7 @@ s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 ```text
 learn-codex-harness/
 ├── stages/                     # 教学迭代：每个阶段一份独立、冻结的可运行快照
+│   │                           #   每章含 README（章节）、images/（机制图）、docs/design.md（设计说明）、lessons/（离线实验）
 │   ├── s00-sdk-quickstart/     #   SDK 入门（examples/01–05、fixture、doctor）
 │   ├── s01-single-turn/        #   s01：单轮问答
 │   ├── s02-multi-turn/         #   s02：多轮会话

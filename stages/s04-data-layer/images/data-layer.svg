@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="720" height="540" fill="#fafbfc" rx="8"/>
+  <rect x="0" y="0" width="720" height="48" fill="url(#header)" rx="8"/>
+  <rect x="0" y="40" width="720" height="8" fill="url(#header)"/>
+  <text x="360" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s04 · 数据层 — PostgreSQL 记事实，Redis 只负责叫醒</text>
+  <rect x="24" y="76" width="150" height="84" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="99" y="98" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">CLI / HTTP</text>
+  <text x="99" y="117" fill="#475569" font-size="11.5" text-anchor="middle">POST /messages</text>
+  <text x="99" y="133" fill="#475569" font-size="11.5" text-anchor="middle">本地服务凭据</text>
+  <rect x="204" y="76" width="264" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="336" y="98" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">PG 事务（同一个 COMMIT）</text>
+  <text x="336" y="117" fill="#475569" font-size="11.5" text-anchor="middle">INSERT tasks（status = queued）</text>
+  <text x="336" y="133" fill="#475569" font-size="11.5" text-anchor="middle">UPSERT outbox（thread_id，generation + 1）</text>
+  <rect x="498" y="76" width="198" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="597" y="98" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">Redis Set</text>
+  <text x="597" y="117" fill="#475569" font-size="11.5" text-anchor="middle">事务提交后 SADD thread_id</text>
+  <text x="597" y="133" fill="#475569" font-size="11.5" text-anchor="middle">只存「该叫醒谁」</text>
+  <path d="M 174 118 L 204 118" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 468 118 L 498 118" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="498" y="206" width="198" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="597" y="228" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">调度器（200ms）</text>
+  <text x="597" y="247" fill="#475569" font-size="11.5" text-anchor="middle">SPOP 最多 50 个</text>
+  <text x="597" y="263" fill="#475569" font-size="11.5" text-anchor="middle">Redis 失联 → 只是延迟</text>
+  <path d="M 597 160 L 597 206" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="204" y="206" width="264" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="336" y="228" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">PG 条件领取</text>
+  <text x="336" y="247" fill="#475569" font-size="11.5" text-anchor="middle">只领 queued 状态的任务</text>
+  <text x="336" y="263" fill="#475569" font-size="11.5" text-anchor="middle">advisory 锁：同实例只有一个执行器</text>
+  <path d="M 498 248 L 468 248" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="206" width="150" height="84" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="99" y="228" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">本机 Codex</text>
+  <text x="99" y="247" fill="#475569" font-size="11.5" text-anchor="middle">turn/start</text>
+  <path d="M 204 248 L 174 248" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 420 160 L 420 180 L 560 180 L 560 160" fill="none" stroke="#b63743" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrow-red)"/>
+  <text x="412" y="197" fill="#b63743" font-size="11" text-anchor="end">outbox 补投：仍有 queued → 再次 SADD</text>
+  <rect x="24" y="312" width="672" height="40" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="360" y="336" fill="#475569" font-size="11.5" text-anchor="middle">执行中服务重启 → 任务标为 unconfirmed 并暂停会话；结果不确定就不自动重发</text>
+  <rect x="24" y="376" width="196" height="92" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="122" y="398" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="middle">write_file</text>
+  <text x="122" y="417" fill="#475569" font-size="11.5" text-anchor="middle">create-only</text>
+  <text x="122" y="433" fill="#475569" font-size="11.5" text-anchor="middle">来源声明 source_versions</text>
+  <rect x="250" y="376" width="220" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="360" y="398" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">不可变正文</text>
+  <text x="360" y="417" fill="#475569" font-size="11.5" text-anchor="middle">.data/files/objects/</text>
+  <text x="360" y="433" fill="#475569" font-size="11.5" text-anchor="middle">&lt;sha256&gt;.txt</text>
+  <text x="360" y="449" fill="#475569" font-size="11.5" text-anchor="middle">内容即文件名</text>
+  <rect x="500" y="376" width="196" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="598" y="398" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">resource_versions</text>
+  <text x="598" y="417" fill="#475569" font-size="11.5" text-anchor="middle">每次写入一个新版本</text>
+  <text x="598" y="433" fill="#475569" font-size="11.5" text-anchor="middle">current_version 指向最新</text>
+  <text x="598" y="449" fill="#475569" font-size="11.5" text-anchor="middle">旧版本失效沿依赖传播</text>
+  <path d="M 220 422 L 250 422" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 470 422 L 500 422" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="494" width="14" height="14" rx="3" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="44" y="505" fill="#475569" font-size="11" font-weight="400" text-anchor="start">红色：本阶段新增或变化</text>
+  <rect x="214" y="494" width="14" height="14" rx="3" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="234" y="505" fill="#475569" font-size="11" font-weight="400" text-anchor="start">蓝色：沿用的结构</text>
+</svg>

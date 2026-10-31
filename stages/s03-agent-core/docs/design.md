@@ -1,0 +1,257 @@
+# s03 设计说明：配置驱动 Agent 核心
+
+> 本文是设计说明，供深入阅读。章节入门（问题 → 解决方案 → 工作原理 → 试一下）见 [README](../README.md)。
+
+本阶段是独立源码快照，用于教学和验证配置驱动 Agent 核心。不共享 `app/` 的运行状态，不随 `app/` 自动更新。服务监听 `127.0.0.1:4313`，本机开发，无多用户公网授权。
+
+工具机制详见 [工具机制详解](tools.md)。
+
+> **与旧版本的区别**：s03 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 s04，见 [数据层升级说明](../../s04-data-layer/docs/data-layer.md)。
+
+## 设计原理
+
+前两个 Demo 演示了单轮和多轮对话基础。s03 解决的问题是：**如何让同一套服务代码支持不同的角色、工具、资料权限和 Skill，而不修改代码本身？**
+
+答案是配置驱动：把"这个 Agent 是谁、能用什么工具、能访问哪些资料"全部写进一个 JSON 文件，服务启动时读取并装配。调整角色或授权范围只需改配置；新增能力仍需实现工具或适配器。
+
+**三个设计约束**：
+
+1. **单机单用户**：每服务实例只服务一个 Agent，支持多 Thread，不做多账户或多 Agent 编排。
+2. **模型不能自行扩权**：工具白名单由配置决定，`list` 与 `call` 同时执行 allowlist；模型不能加载任意代码。
+3. **变更可检测**：配置、角色、Skill 任一文件变更后服务检测到差异并拒绝后续请求，必须重启，保证运行状态与配置一致。
+
+## 架构改进
+
+与 s01/s02 相比，本阶段引入以下结构性改进：
+
+### 1. Agent 定义文件集中管理
+
+[`agents/writing-agent.json`](../agents/writing-agent.json) 是唯一装配入口，遵循 `schemaVersion: "1.0"`，包含六项核心字段：`agent.instructions`（角色文件路径）、`agent.skills`、`agent.tools.allow`（工具白名单）、`agent.dataBindings`（资料源与目录映射）、`agent.outputs`（产物规则）、`agent.memory`（记忆开关）；以及 `agent.executionRef`（执行环境引用，指向 `bindings.executions` 策略条目）和 `bindings`（工作区目录、资料源、执行策略表）。未知字段直接拒绝。
+
+### 2. 角色与服务解耦
+
+角色正文位于 [`agents/roles/writing-assistant.md`](../agents/roles/writing-assistant.md)，路径在 JSON 的 `agent.instructions` 字段中声明。加载器只读取文件，不读取环境变量中的角色路径指令。`AGENT_DEFINITION` 环境变量可改变定义入口文件。
+
+### 3. 描述符版本机制
+
+每次启动生成 Agent 描述符，记录角色哈希、Skill 版本、工具版本、有效资源策略，并写入本地 `.data/agent-descriptors/` 目录；会话绑定描述符版本（`.data/thread-agents.json`）。配置文件是唯一可编辑入口。旧 Thread 检测到版本不匹配时提示用户执行 `/new`，不自动迁移。
+
+### 4. 文件服务从工具层独立提取
+
+[`server/modules/data/files.mjs`](../server/modules/data/files.mjs) 提供安全文件访问，文件权限边界（路径、扩展名、大小、操作类型）由文件服务自身执行，不依赖沙箱 cwd 约束。工具快照工厂注入文件服务，无跨快照引用。
+
+### 5. 边界锁与模块职责分离
+
+边界锁位于 [`server/modules/agents/boundary.mjs`](../server/modules/agents/boundary.mjs)，不在 `agents/index.mjs`。[`server/main.mjs`](../server/main.mjs) 只做编排：读定义 → 准备路径 → 注册服务 → 连接 Codex → 核验 → 生成描述符 → HTTP 就绪。各模块内部逻辑不上浮到 main。
+
+### 6. 业务状态本地 JSON（s03 专属）
+
+本阶段不依赖数据库：
+
+| 文件 | 用途 |
+|------|------|
+| `.data/messages.json` | 业务任务消息（原子替换写入） |
+| `.data/thread-agents.json` | Thread 与 Agent 描述符绑定 |
+| `.data/agent-descriptors/*.json` | 每次启动生成的描述符快照 |
+| `.data/codex/` | Codex 原生 SQLite/JSONL，不修改结构 |
+
+`server/modules/data/index.mjs` 中的 `JsonJobs` 使用原子 JSON 替换；服务重启后执行中任务恢复为 unconfirmed 并暂停，不重发。
+
+## 技术实现流程
+
+```
+本地 CLI
+  │  HTTP / SSE
+  ▼
+Node 服务（server/main.mjs）
+  │  解析 agents/writing-agent.json（schemaVersion 1.0）
+  │  装配角色指令 + 工具白名单 + 资料绑定
+  │  生成 Agent 描述符 → .data/agent-descriptors/
+  │  stdio
+  ▼
+本机 Codex 进程（@openai/codex 0.154.0）
+  │  原生 loop / Responses API
+  ▼
+模型 API（CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL）
+```
+
+**Thread 生命周期**：
+
+- **新建**：`cwd` 设为工作区目录，跨重启保留；绑定写入 `.data/thread-agents.json`。
+- **恢复**：检索 Codex 原生项目历史，再通过 `.data/thread-agents.json` 检查描述符版本；匹配则恢复，不匹配提示 `/new`。未绑定的旧历史不自动接管。
+- **排队执行**：用户消息按 FIFO 调度，模型执行循环由 Codex 负责；不确定性失败不自动重发。
+
+**工具传输**：MCP bridge（`server/modules/tools/mcp-server.mjs`）。
+
+**运行目录**：`.runs/app-server-*`，保留最近 5 次和 7 天内记录。
+
+## 核心代码
+
+以下为**伪代码**，展示关键流程，非直接可执行代码。
+
+### 启动装配
+
+```js
+// server/main.mjs（伪代码）
+config = loadServerConfig()
+agent = loadAgentDefinition(config.agentFile)   // 校验 JSON schema 1.0
+runtime = preparePaths(agent.workspacePath)
+files = createScopedFileService(runtime.workspaceDir, agent.sources, agent.outputs)
+tools = registerAllowedTools(agent.tools.allow, files)
+codex = connectLocalCodex(runtime, agent.instructions, tools)
+
+skills = verifyNativeSkills(codex, agent)
+verifyNativeToolsAndMemory(codex)
+descriptor = agent.activate(tools.version, skills)  // 写 .data/agent-descriptors/
+startHttpService(sessions, messages, tools)
+```
+
+### 工具调用（list 与 call 均执行 allowlist）
+
+```js
+// server/modules/tools 工厂（伪代码）
+function createToolHandler(toolAllowlist, fileService) {
+  return {
+    list() {
+      return allTools.filter(t => toolAllowlist.has(t.name));
+    },
+    async call(name, params) {
+      if (!toolAllowlist.has(name)) throw new ForbiddenError(name);
+      const tool = toolRegistry.get(name);
+      return tool.execute(params, { fileService });
+    }
+  };
+}
+```
+
+### 版本校验（Thread 恢复前检查描述符）
+
+```js
+// sessions/index.mjs（伪代码）
+async function resumeThread(threadId) {
+  const binding = await loadFromJson('.data/thread-agents.json', threadId);
+  const currentDescriptor = await loadCurrentDescriptor();
+  if (binding.descriptorHash !== currentDescriptor.hash) {
+    throw new VersionMismatchError('配置已变更，请使用 /new 新建会话');
+  }
+  return nativeCodex.resumeThread(threadId);
+}
+```
+
+### 原子 JSON 写入
+
+```js
+// server/modules/data/index.mjs JsonJobs（伪代码）
+async function atomicWrite(path, data) {
+  const tmp = path + '.tmp.' + Date.now();
+  await fs.writeFile(tmp, JSON.stringify(data));
+  await fs.rename(tmp, path);   // 原子替换，避免写一半损坏
+}
+```
+
+## 快速开始
+
+```bash
+cd stages/s03-agent-core
+npm ci
+
+# 准备环境变量
+test -f .env || cp .env.example .env
+# 编辑 .env：填写 CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL
+# 端口默认 4313
+
+# 启动服务（s03 不依赖数据库，无需 data:migrate）
+npm run server
+
+# 另开终端
+npm run chat
+```
+
+## 六项配置真实位置
+
+| 配置字段 | 文件位置 |
+|---------|---------|
+| `agent.instructions` | [`agents/writing-agent.json`](../agents/writing-agent.json) → [`agents/roles/writing-assistant.md`](../agents/roles/writing-assistant.md) |
+| `agent.skills` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
+| `agent.tools.allow` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
+| `agent.dataBindings` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
+| `agent.outputs` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
+| `agent.memory` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
+
+服务主文件：[`server/main.mjs`](../server/main.mjs)  
+装配与校验：[`server/modules/agents/index.mjs`](../server/modules/agents/index.mjs)  
+边界锁：[`server/modules/agents/boundary.mjs`](../server/modules/agents/boundary.mjs)  
+文件权限服务：[`server/modules/data/files.mjs`](../server/modules/data/files.mjs)
+
+## 文件工具与资料绑定
+
+详细流程、自动归类规则和验证语句见 [工具机制详解](tools.md)。以下为摘要：
+
+工具：`read_file`、`write_file`、`list_files`。默认目录：`inputs / research / drafts / outputs`（`articles` 是指向 `outputs` 的来源 ID，不是另一份目录）。
+
+- `inputs` 只读；`research` / `drafts` 可读可创建；`outputs` 通过产物规则允许创建，读取来自独立的 `articles` 来源绑定。
+- 默认仅 `.md`/`.txt`，256 KiB，创建新文件，不覆盖，不跟随软链接/硬链接。
+- `list_files` 只返回已授权路径下的文件，不能通过父目录访问其他来源。
+- 文件成功落盘后检查文件存在性与扩展名，并归入 `turn.artifacts`；不证明语义正确或引用真实性。
+
+## CLI 命令
+
+| 命令 | 说明 |
+|------|------|
+| `/new` | 新建会话 |
+| `/resume [关键词]` | 搜索 Thread，显示结果后输入完整 Thread ID 选择恢复 |
+| `/append 内容` | 向当前轮次追加内容 |
+| `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
+| `/continue` | 继续暂停的队列，不重发未确认任务 |
+| `/queue` | 查看排队任务 |
+| `/tools` | 查看当前可用工具 |
+| `/memory` | 查看记忆状态 |
+| `/exit` | 退出 CLI 客户端，不停止服务端进程 |
+| `/help` | 显示帮助 |
+
+## 记忆边界
+
+- **读记忆**：`AGENT_MEMORY_USE` 与 `agent.memory.use` 的交集，两者均为 true 且总开关开启后才允许原生召回。
+- **贡献记忆**：`AGENT_MEMORY_ENABLED` 与 `agent.memory.contribute` 的交集；`contribute: false` 不禁止读取，不删除旧记忆。
+- **后台生成**：`AGENT_MEMORY_GENERATE` 独立控制，整体受 `AGENT_MEMORY_ENABLED` 总开关约束。
+- 当前禁用原生写工具，合并摘要仍处于 blocked 状态。
+
+## 验证
+
+```bash
+npm test
+npm run test:codex-tools
+npm run test:codex-memory
+npm run check
+npm run check:server   # 需先停止本阶段的服务
+```
+
+测试使用本机模拟模型，无需真实 API Key。`check` 校验配置，可能创建默认模板目录；`check:server` 复用完整启动流程。
+
+集成验证从 stages 目录执行：
+
+```bash
+cd stages
+node verify.mjs --integration
+node verify.mjs --docs-only
+```
+
+结果写入 [`../verification.json`](../../verification.json)，文档不预填数字。
+
+## 限制说明
+
+| 限制项 | 说明 |
+|--------|------|
+| 单机单用户 | 每实例一个 Agent 多 Thread，不支持多账户或多 Agent 编排 |
+| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s04 |
+| 工具热增 | 新增工具需同时配置 allow 并受控重启 |
+| Skill 支持范围 | 仅验证原生文本指令型 Skill；带脚本/附件的工作流不保证运行 |
+| 记忆链路 | 读开关与提炼限制路径已测；合并摘要当前 blocked，完整链路未最终验收 |
+
+## 本地 Web 外部客户端
+
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
+
+## 机制课程与逐课实验
+
+本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-3)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](../lessons/README.md)。页面推演与终端运行结果分开展示。

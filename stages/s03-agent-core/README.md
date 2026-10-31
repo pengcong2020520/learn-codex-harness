@@ -1,255 +1,206 @@
-# s03 — 配置驱动 Agent 核心（独立副本）
+# s03: 可配置 Agent — 配置是装配合同，不是临时提示词
 
-本阶段是独立源码快照，用于教学和验证配置驱动 Agent 核心。不共享 `app/` 的运行状态，不随 `app/` 自动更新。服务监听 `127.0.0.1:4313`，本机开发，无多用户公网授权。
+[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+> *"改配置就能换 Agent，但模型不能自己给自己加权限"* — 能力和边界写在同一份 JSON 里，一起生效、一起失效。
+>
+> **Harness 层**: 装配 — 角色、Skills、工具和资料边界由配置决定，由服务端执行。
 
-工具机制详见 [工具机制详解](docs/tools.md)。
+---
 
-> **与旧版本的区别**：s03 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 s04，见 [数据层升级说明](../s04-data-layer/docs/data-layer.md)。
+## 问题
 
-## 设计原理
+你想把写作助手改成客服助手：换角色提示词、换资料目录、去掉联网工具。如果这些都写在代码里，每换一个 Agent 就要改一次代码。
 
-前两个 Demo 演示了单轮和多轮对话基础。s03 解决的问题是：**如何让同一套服务代码支持不同的角色、工具、资料权限和 Skill，而不修改代码本身？**
+就算把它们挪进配置文件，边界问题依然存在：
 
-答案是配置驱动：把"这个 Agent 是谁、能用什么工具、能访问哪些资料"全部写进一个 JSON 文件，服务启动时读取并装配。调整角色或授权范围只需改配置；新增能力仍需实现工具或适配器。
+1. **隐藏不等于禁止**：工具清单里不列某个工具，模型仍可能凭名字直接调用它。
+2. **在工作区里不等于有权读写**：Agent 能看到 `workspace/`，不代表它可以读 `drafts/`，更不代表它能覆盖 `outputs/` 里的成品。
+3. **配置变了，旧会话还以为是原来的自己**：服务运行中有人改了角色文件或工具白名单，正在进行的会话继续用旧权限干活。
 
-**三个设计约束**：
+---
 
-1. **单机单用户**：每服务实例只服务一个 Agent，支持多 Thread，不做多账户或多 Agent 编排。
-2. **模型不能自行扩权**：工具白名单由配置决定，`list` 与 `call` 同时执行 allowlist；模型不能加载任意代码。
-3. **变更可检测**：配置、角色、Skill 任一文件变更后服务检测到差异并拒绝后续请求，必须重启，保证运行状态与配置一致。
+## 解决方案
 
-## 架构改进
+![配置驱动 Agent](images/agent-assembly.svg)
 
-与 s01/s02 相比，本阶段引入以下结构性改进：
+一份 [`agents/writing-agent.json`](agents/writing-agent.json) 是唯一的装配入口：
 
-### 1. Agent 定义文件集中管理
+| 字段 | 决定什么 |
+|------|---------|
+| `agent.instructions` | 角色正文所在的文件（`roles/*.md`），不从环境变量读取 |
+| `agent.skills` | 启用哪些原生 Skill；范围外的一律禁用 |
+| `agent.tools.allow` | 工具白名单；列出工具和调用工具时都检查 |
+| `agent.dataBindings` | 每个资料源允许的动作：`read` / `create` |
+| `agent.outputs` | 产物目录、格式与写入方式（`create-only`，不覆盖） |
+| `agent.memory` | 是否使用、是否贡献原生记忆 |
+| `bindings` | 工作区目录、资料源路径、执行策略（只读沙箱、关闭原生 shell 与写文件） |
 
-[`agents/writing-agent.json`](agents/writing-agent.json) 是唯一装配入口，遵循 `schemaVersion: "1.0"`，包含六项核心字段：`agent.instructions`（角色文件路径）、`agent.skills`、`agent.tools.allow`（工具白名单）、`agent.dataBindings`（资料源与目录映射）、`agent.outputs`（产物规则）、`agent.memory`（记忆开关）；以及 `agent.executionRef`（执行环境引用，指向 `bindings.executions` 策略条目）和 `bindings`（工作区目录、资料源、执行策略表）。未知字段直接拒绝。
+服务端（`npm run server`，端口 4313）读取配置、装配运行态，再通过 HTTP / SSE 对外提供服务；CLI（`npm run chat`）只是一个客户端。工具通过 MCP 入口进入 Codex。
 
-### 2. 角色与服务解耦
+---
 
-角色正文位于 [`agents/roles/writing-assistant.md`](agents/roles/writing-assistant.md)，路径在 JSON 的 `agent.instructions` 字段中声明。加载器只读取文件，不读取环境变量中的角色路径指令。`AGENT_DEFINITION` 环境变量可改变定义入口文件。
+## 工作原理
 
-### 3. 描述符版本机制
+**第 1 步**：一份 JSON 描述 Agent。未知字段直接拒绝（Schema `1.0`）。
 
-每次启动生成 Agent 描述符，记录角色哈希、Skill 版本、工具版本、有效资源策略，并写入本地 `.data/agent-descriptors/` 目录；会话绑定描述符版本（`.data/thread-agents.json`）。配置文件是唯一可编辑入口。旧 Thread 检测到版本不匹配时提示用户执行 `/new`，不自动迁移。
-
-### 4. 文件服务从工具层独立提取
-
-[`server/modules/data/files.mjs`](server/modules/data/files.mjs) 提供安全文件访问，文件权限边界（路径、扩展名、大小、操作类型）由文件服务自身执行，不依赖沙箱 cwd 约束。工具快照工厂注入文件服务，无跨快照引用。
-
-### 5. 边界锁与模块职责分离
-
-边界锁位于 [`server/modules/agents/boundary.mjs`](server/modules/agents/boundary.mjs)，不在 `agents/index.mjs`。[`server/main.mjs`](server/main.mjs) 只做编排：读定义 → 准备路径 → 注册服务 → 连接 Codex → 核验 → 生成描述符 → HTTP 就绪。各模块内部逻辑不上浮到 main。
-
-### 6. 业务状态本地 JSON（s03 专属）
-
-本阶段不依赖数据库：
-
-| 文件 | 用途 |
-|------|------|
-| `.data/messages.json` | 业务任务消息（原子替换写入） |
-| `.data/thread-agents.json` | Thread 与 Agent 描述符绑定 |
-| `.data/agent-descriptors/*.json` | 每次启动生成的描述符快照 |
-| `.data/codex/` | Codex 原生 SQLite/JSONL，不修改结构 |
-
-`server/modules/data/index.mjs` 中的 `JsonJobs` 使用原子 JSON 替换；服务重启后执行中任务恢复为 unconfirmed 并暂停，不重发。
-
-## 技术实现流程
-
-```
-本地 CLI
-  │  HTTP / SSE
-  ▼
-Node 服务（server/main.mjs）
-  │  解析 agents/writing-agent.json（schemaVersion 1.0）
-  │  装配角色指令 + 工具白名单 + 资料绑定
-  │  生成 Agent 描述符 → .data/agent-descriptors/
-  │  stdio
-  ▼
-本机 Codex 进程（@openai/codex 0.154.0）
-  │  原生 loop / Responses API
-  ▼
-模型 API（CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL）
-```
-
-**Thread 生命周期**：
-
-- **新建**：`cwd` 设为工作区目录，跨重启保留；绑定写入 `.data/thread-agents.json`。
-- **恢复**：检索 Codex 原生项目历史，再通过 `.data/thread-agents.json` 检查描述符版本；匹配则恢复，不匹配提示 `/new`。未绑定的旧历史不自动接管。
-- **排队执行**：用户消息按 FIFO 调度，模型执行循环由 Codex 负责；不确定性失败不自动重发。
-
-**工具传输**：MCP bridge（`server/modules/tools/mcp-server.mjs`）。
-
-**运行目录**：`.runs/app-server-*`，保留最近 5 次和 7 天内记录。
-
-## 核心代码
-
-以下为**伪代码**，展示关键流程，非直接可执行代码。
-
-### 启动装配
-
-```js
-// server/main.mjs（伪代码）
-config = loadServerConfig()
-agent = loadAgentDefinition(config.agentFile)   // 校验 JSON schema 1.0
-runtime = preparePaths(agent.workspacePath)
-files = createScopedFileService(runtime.workspaceDir, agent.sources, agent.outputs)
-tools = registerAllowedTools(agent.tools.allow, files)
-codex = connectLocalCodex(runtime, agent.instructions, tools)
-
-skills = verifyNativeSkills(codex, agent)
-verifyNativeToolsAndMemory(codex)
-descriptor = agent.activate(tools.version, skills)  // 写 .data/agent-descriptors/
-startHttpService(sessions, messages, tools)
-```
-
-### 工具调用（list 与 call 均执行 allowlist）
-
-```js
-// server/modules/tools 工厂（伪代码）
-function createToolHandler(toolAllowlist, fileService) {
-  return {
-    list() {
-      return allTools.filter(t => toolAllowlist.has(t.name));
-    },
-    async call(name, params) {
-      if (!toolAllowlist.has(name)) throw new ForbiddenError(name);
-      const tool = toolRegistry.get(name);
-      return tool.execute(params, { fileService });
-    }
-  };
-}
-```
-
-### 版本校验（Thread 恢复前检查描述符）
-
-```js
-// sessions/index.mjs（伪代码）
-async function resumeThread(threadId) {
-  const binding = await loadFromJson('.data/thread-agents.json', threadId);
-  const currentDescriptor = await loadCurrentDescriptor();
-  if (binding.descriptorHash !== currentDescriptor.hash) {
-    throw new VersionMismatchError('配置已变更，请使用 /new 新建会话');
+```json
+{
+  "schemaVersion": "1.0",
+  "agent": {
+    "id": "writing-assistant",
+    "instructions": "roles/writing-assistant.md",
+    "skills": [],
+    "tools": { "allow": ["list_files", "read_file", "write_file", "search_web", "read_webpage"] },
+    "dataBindings": [
+      { "sourceRef": "originals", "actions": ["read"], "methods": ["files"], "required": true },
+      { "sourceRef": "drafts", "actions": ["read", "create"], "methods": ["files"], "required": true }
+    ],
+    "outputs": { "directory": "outputs", "formats": ["md", "txt"], "writeMode": "create-only" }
   }
-  return nativeCodex.resumeThread(threadId);
 }
 ```
 
-### 原子 JSON 写入
+**第 2 步**：服务启动时按固定顺序装配（[`server/main.mjs`](server/main.mjs)）：读定义 → 准备运行目录 → 文件服务 → 工具 → 连接 Codex → 核验 Skill → 生成描述符。
 
-```js
-// server/modules/data/index.mjs JsonJobs（伪代码）
-async function atomicWrite(path, data) {
-  const tmp = path + '.tmp.' + Date.now();
-  await fs.writeFile(tmp, JSON.stringify(data));
-  await fs.rename(tmp, path);   // 原子替换，避免写一半损坏
+```javascript
+const agent = new AgentDefinition(config.root, config.agentFile);
+const runtime = await prepareRun(config.launch, config.root, { workspaceDir: agent.workspacePath, instructions: agent.instructions });
+const localFiles = createFileTools(config.root, { workspaceDir: runtime.workspaceDir, sources: agent.sources,
+  outputs: agent.outputs, assertCurrent: () => agent.assertCurrent() });
+const tools = new ToolManager({ config, runtime, files, agent, boundary, log: safeLog, redact });
+await tools.open();
+const rpc = new CodexConnection({ launch: config.launch, runtime, redact, cli, log: safeLog });
+await rpc.open();
+const skills = await verifySkills(rpc, agent, runtime.workspaceDir);
+await agent.activate(tools.registry.version, skills);
+```
+
+**第 3 步**：配置、角色、Skill 文件的内容一起算哈希。任何一个变了，立刻撤销，后续调用全部停止，必须重启并新建会话。
+
+```javascript
+sourceHash() {
+  return digest([fs.readFileSync(this.file, "utf8"), fs.readFileSync(this.roleFile, "utf8"),
+    ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);
+}
+assertCurrent() {
+  try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }
+  if (this.revoked) {
+    const error = new AppError("Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。", 409, "AGENT_CHANGED");
+    this.revocation.abort(error); throw error;
+  }
+}
+allowsTool(name) { this.assertCurrent(); return this.definition.agent.tools.allow.includes(name); }
+```
+
+**第 4 步**：Skill 只启用配置里声明的。Codex 发现的其他 Skill 会被主动关掉；关不掉就拒绝运行。
+
+```javascript
+for (const skill of discovered) {
+  const enabled = requested.has(canonical(skill.path));
+  if (skill.enabled !== enabled) {
+    await rpc.request("skills/config/write", { path: skill.path, enabled });
+    changed = true;
+  }
+}
+if (discovered.some(skill => skill.enabled && !requested.has(canonical(skill.path))))
+  throw new Error("Codex 仍启用了 Agent 范围外的 Skill，已停止执行。");
+```
+
+**第 5 步**：每次工具调用都要过白名单和参数合同（JSON Schema）。错误统一包装成工具结果返回给模型，不会让服务崩溃。
+
+```javascript
+validate(name, args) {
+  const entry = entries.get(name);
+  if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
+  if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
+  return entry;
+},
+async call({ tool, namespace, arguments: args }, { signal } = {}) {
+  if (namespace != null) throw new Error("未授权的工具命名空间。");
+  const entry = this.validate(tool, args);
+  const data = await entry.execute(args, { signal });
+  return { success: true, contentItems: [{ type: "inputText", text: JSON.stringify(data ?? null) }] };
 }
 ```
 
-## 快速开始
+**第 6 步**：所有工具走同一个 MCP 入口，而不是每个工具起一个服务。入口校验本地凭据，拒绝跨源请求，每次调用最多 30 秒。
 
-```bash
+```javascript
+if (request.headers.origin || auth.length !== expected.length || !timingSafeEqual(auth, expected)) {
+  response.writeHead(403); response.end(); return;
+}
+server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: registry.specs }));
+server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra) => {
+  const result = await registry.call({ tool: params.name, arguments: params.arguments || {} },
+    { signal: AbortSignal.any([extra.signal, controller.signal, AbortSignal.timeout(30000)]) });
+  return { isError: !result.success, content: result.contentItems.map(item => ({ type: "text", text: redact(item.text) })) };
+});
+```
+
+**第 7 步**：文件服务按资料绑定逐目录授权。能读的目录、能新建的目录、产物目录分开判断。
+
+```javascript
+const readable = (relative) =>
+  !sources ||
+  sources.some(
+    (source) =>
+      source.actions.includes("read") && covers(source.locator, relative),
+  );
+const writable = (relative) =>
+  !sources ||
+  sources.some(
+    (source) =>
+      source.actions.includes("create") && covers(source.locator, relative),
+  ) ||
+  (outputs && covers(outputs.directory, relative));
+```
+
+从这一章开始，"这个 Agent 能做什么"不再是代码里的常量，而是一份可审查、可替换的合同。模型只能在合同范围内行动；合同一变，旧的权限立即作废。
+
+---
+
+## 试一下
+
+**准备**：
+
+```sh
 cd stages/s03-agent-core
 npm ci
-
-# 准备环境变量
-test -f .env || cp .env.example .env
-# 编辑 .env：填写 CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL
-# 端口默认 4313
-
-# 启动服务（s03 不依赖数据库，无需 data:migrate）
-npm run server
-
-# 另开终端
-npm run chat
+cp .env.example .env    # 填入模型配置；本阶段不需要数据库
 ```
 
-## 六项配置真实位置
+**运行**（两个终端）：
 
-| 配置字段 | 文件位置 |
-|---------|---------|
-| `agent.instructions` | [`agents/writing-agent.json`](agents/writing-agent.json) → [`agents/roles/writing-assistant.md`](agents/roles/writing-assistant.md) |
-| `agent.skills` | [`agents/writing-agent.json`](agents/writing-agent.json) |
-| `agent.tools.allow` | [`agents/writing-agent.json`](agents/writing-agent.json) |
-| `agent.dataBindings` | [`agents/writing-agent.json`](agents/writing-agent.json) |
-| `agent.outputs` | [`agents/writing-agent.json`](agents/writing-agent.json) |
-| `agent.memory` | [`agents/writing-agent.json`](agents/writing-agent.json) |
-
-服务主文件：[`server/main.mjs`](server/main.mjs)  
-装配与校验：[`server/modules/agents/index.mjs`](server/modules/agents/index.mjs)  
-边界锁：[`server/modules/agents/boundary.mjs`](server/modules/agents/boundary.mjs)  
-文件权限服务：[`server/modules/data/files.mjs`](server/modules/data/files.mjs)
-
-## 文件工具与资料绑定
-
-详细流程、自动归类规则和验证语句见 [工具机制详解](docs/tools.md)。以下为摘要：
-
-工具：`read_file`、`write_file`、`list_files`。默认目录：`inputs / research / drafts / outputs`（`articles` 是指向 `outputs` 的来源 ID，不是另一份目录）。
-
-- `inputs` 只读；`research` / `drafts` 可读可创建；`outputs` 通过产物规则允许创建，读取来自独立的 `articles` 来源绑定。
-- 默认仅 `.md`/`.txt`，256 KiB，创建新文件，不覆盖，不跟随软链接/硬链接。
-- `list_files` 只返回已授权路径下的文件，不能通过父目录访问其他来源。
-- 文件成功落盘后检查文件存在性与扩展名，并归入 `turn.artifacts`；不证明语义正确或引用真实性。
-
-## CLI 命令
-
-| 命令 | 说明 |
-|------|------|
-| `/new` | 新建会话 |
-| `/resume [关键词]` | 搜索 Thread，显示结果后输入完整 Thread ID 选择恢复 |
-| `/append 内容` | 向当前轮次追加内容 |
-| `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
-| `/continue` | 继续暂停的队列，不重发未确认任务 |
-| `/queue` | 查看排队任务 |
-| `/tools` | 查看当前可用工具 |
-| `/memory` | 查看记忆状态 |
-| `/exit` | 退出 CLI 客户端，不停止服务端进程 |
-| `/help` | 显示帮助 |
-
-## 记忆边界
-
-- **读记忆**：`AGENT_MEMORY_USE` 与 `agent.memory.use` 的交集，两者均为 true 且总开关开启后才允许原生召回。
-- **贡献记忆**：`AGENT_MEMORY_ENABLED` 与 `agent.memory.contribute` 的交集；`contribute: false` 不禁止读取，不删除旧记忆。
-- **后台生成**：`AGENT_MEMORY_GENERATE` 独立控制，整体受 `AGENT_MEMORY_ENABLED` 总开关约束。
-- 当前禁用原生写工具，合并摘要仍处于 blocked 状态。
-
-## 验证
-
-```bash
-npm test
-npm run test:codex-tools
-npm run test:codex-memory
-npm run check
-npm run check:server   # 需先停止本阶段的服务
+```sh
+npm run server          # 终端 1：服务监听 127.0.0.1:4313
+npm run chat            # 终端 2：CLI 客户端
 ```
 
-测试使用本机模拟模型，无需真实 API Key。`check` 校验配置，可能创建默认模板目录；`check:server` 复用完整启动流程。
+先放一份资料（`mkdir -p workspace/inputs` 后放入任意 `.md` 文件），然后试试：
 
-集成验证从 stages 目录执行：
+1. `列出你能看到的资料目录`
+2. `读取 inputs 下的资料并总结，保存到 outputs/summary.md`
+3. `把 outputs/summary.md 改写成另一个版本并覆盖原文件`：create-only，应该被拒绝
+4. 服务运行时修改 `agents/roles/writing-assistant.md` 的任意一个字，再让它列出资料目录：工具调用会被拒绝，提示受控重启后新建会话
 
-```bash
-cd stages
-node verify.mjs --integration
-node verify.mjs --docs-only
+CLI 常用命令：`/new` 新建会话、`/resume` 恢复、`/tools` 查看可用工具、`/queue` 查看排队任务、`/exit` 退出客户端（服务不停）。
+
+**离线实验**：
+
+```sh
+npm run lesson -- s03-agent-config    # 未知字段、权限提升被拒绝；改动立即撤销旧权限
+npm run lesson -- s03-skills          # 范围外 Skill 被禁用
+npm run lesson -- s03-tool-registry   # 工具名、参数合同和实现如何接在一起
+npm run lesson -- s03-mcp             # 入口拒绝无令牌和跨源请求
+npm run lesson -- s03-workspace       # 路径遍历、符号链接绕过被拒绝；产物不能覆盖
 ```
 
-结果写入 [`../verification.json`](../verification.json)，文档不预填数字。
+六项配置的完整说明、文件工具规则与当前限制见 [s03 设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
 
-## 限制说明
+---
 
-| 限制项 | 说明 |
-|--------|------|
-| 单机单用户 | 每实例一个 Agent 多 Thread，不支持多账户或多 Agent 编排 |
-| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s04 |
-| 工具热增 | 新增工具需同时配置 allow 并受控重启 |
-| Skill 支持范围 | 仅验证原生文本指令型 Skill；带脚本/附件的工作流不保证运行 |
-| 记忆链路 | 读开关与提炼限制路径已测；合并摘要当前 blocked，完整链路未最终验收 |
+## 接下来
 
-## 本地 Web 外部客户端
+业务状态还存在 `.data/*.json` 里。写任务和通知执行器是两步操作，服务在中间崩溃，任务就可能永远没人执行；Agent 根据原文写了摘要，后来原文改了一句，摘要却不知道自己已经过期。
 
-启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
-
-## 机制课程与逐课实验
-
-本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-3)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](lessons/README.md)。页面推演与终端运行结果分开展示。
+s04 数据层 → PostgreSQL 记事实，Redis 只负责叫醒。消息收到了，为什么还需要一条 outbox？

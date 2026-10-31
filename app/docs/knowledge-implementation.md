@@ -10,7 +10,7 @@
 
 s05 / app 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 通用门禁 → 04 知识与资源服务 → 05 数据与索引。
 
-逐层说明与运行示例见 [Demo 架构导读](../../stages/s05-knowledge-layer/README.md)；下文保留实现约束和接口细节。
+逐层说明与运行示例见 [s05 设计说明](../../stages/s05-knowledge-layer/docs/design.md)；下文保留实现约束和接口细节。
 
 ## 整体结构
 
@@ -101,7 +101,7 @@ Agent knowledge[].mode 声明期望模式，持久为 desired_mode；运行中 `
 
 ## 权限门禁与知识工具
 
-`server/modules/permissions/index.mjs` 统一同进程判定（见 [s05 架构导读](../../stages/s05-knowledge-layer/README.md) 中的「03 通用门禁」一节）：
+`server/modules/permissions/index.mjs` 统一同进程判定（见 [s05 设计说明](../../stages/s05-knowledge-layer/docs/design.md) 中的「03 通用门禁」一节）：
 
 - 工具名在 allow 列表 **AND** 资源所有权/KB 挂载合法 **AND** `actions` 包含当前操作。
 - 整库授权（不是页面级 ACL）；默认私有，未挂载不可见。
