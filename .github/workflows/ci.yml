@@ -1,0 +1,57 @@
+# 只运行离线检查：不调用真实模型，不依赖 PostgreSQL / Redis。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - stages/s00-sdk-quickstart
+          - stages/s01-single-turn
+          - stages/s02-multi-turn
+          - stages/s03-agent-core
+          - stages/s04-data-layer
+          - stages/s05-knowledge-layer
+          - app
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Web 工作台与课程一致性
+        if: matrix.package == 'app'
+        run: |
+          npm run test:web
+          npm run course:check
+
+  docs:
+    name: 阶段文档与结构
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: node stages/verify.mjs --docs-only

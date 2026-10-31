@@ -1,0 +1,17 @@
+{
+  "name": "learn-codex-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "从 SDK 调用到配置驱动的 Agent 服务：分阶段学习 Codex Harness",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "setup": "node scripts/run-all.mjs install",
+    "test": "node scripts/run-all.mjs test",
+    "verify:docs": "node stages/verify.mjs --docs-only",
+    "course:build": "npm --prefix app run course:build",
+    "web": "npm --prefix app run web"
+  }
+}
