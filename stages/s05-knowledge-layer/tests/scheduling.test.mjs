@@ -96,6 +96,38 @@ test("追加超时或其他拒绝不自动新开 turn，防止重复执行", asy
   }
 });
 
+// 记录权限门禁的开启与结束。
+function recordGate(r, start = () => {}) {
+  const calls = [];
+  r.messages.gate = { operator: () => null, run: (_principal, action) => action(), maintenance: () => null, start: job => { calls.push(["start", job.id]); start(); }, end: (threadId, turnId) => calls.push(["end", threadId, turnId ?? null]), close() {} };
+  return calls;
+}
+
+test("追加失败不结束正在运行轮次的权限门禁", async t => {
+  for (const mode of ["uncertain-steer", "denied-steer"]) {
+    const r = await rig(t); const gate = recordGate(r);
+    await r.submit("A", "a"); await until(() => r.messages.job("a").status === "running");
+    r.rpc.mode = mode;
+    await r.submit("补充", "append", "append", r.messages.job("a").turnId);
+    await until(() => ["failed", "unconfirmed"].includes(r.messages.job("append").status));
+    assert.deepEqual(gate, [["start", "a"]], `${mode}：追加没有开启新的上下文，也不能结束任务 a 的`);
+    assert.equal(r.messages.job("a").status, "running");
+  }
+});
+
+test("新任务发出后失败才结束它自己开启的权限门禁；门禁拒绝开启时不结束会话里已有的", async t => {
+  const r = await rig(t); const gate = recordGate(r);
+  r.rpc.mode = "uncertain-start";
+  await r.submit("A", "a"); await until(() => r.messages.job("a").status === "unconfirmed");
+  assert.deepEqual(gate, [["start", "a"], ["end", r.session.id, null]]);
+
+  const denied = await rig(t);
+  const calls = recordGate(denied, () => { throw new Error("该会话已有运行中的任务。"); });
+  await denied.submit("B", "b"); await until(() => denied.messages.job("b").status === "failed");
+  assert.deepEqual(calls, [["start", "b"]]);
+  assert.ok(!denied.rpc.calls.some(call => call.method === "turn/start"));
+});
+
 test("不同 thread 的事件和执行互相隔离", async t => {
   const r = await rig(t); const second = await r.sessions.create();
   await r.submit("A", "a"); await r.submit("B", "b", "enqueue", null, second.id);

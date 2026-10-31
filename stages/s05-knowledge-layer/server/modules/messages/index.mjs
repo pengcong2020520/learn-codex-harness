@@ -173,6 +173,8 @@ export class MessageService {
         this.sessions.publish(threadId);
       });
     } catch (error) {
+      // 只结束本任务自己开启的权限上下文：gate.start 成功后 sent 才为真；start 被拒（该会话已有运行中的任务）时不能结束别人的。
+      if (sent) this.gate?.end(threadId);
       await this.executionError(job, error, sent);
     }
     await this.publish(threadId);
@@ -207,8 +209,8 @@ export class MessageService {
     }
     await this.publish(job.threadId);
   }
+  // steer 失败也走这里：追加消息沿用正在运行轮次的权限上下文，这里不结束它，否则该轮后续的工具调用都会被拒。
   async executionError(job, error, sent) {
-    this.gate?.end(job.threadId);
     const knownRejection = Number.isInteger(error.code);
     await this.store.patch(job.id, {
       status:
