@@ -15,7 +15,7 @@ if (id === 'list') {
   if (flags.length > 1 || flags.some(flag => flag !== item.requiredFlag)) fail('本课参数只允许：' + (item.requiredFlag || '无；不接受任意命令或参数'));
   const quote = value => /^[a-zA-Z0-9_./=:-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
   console.log(`\n${item.id} · ${item.title}\n学习问题：${item.question}`);
-  console.log('实际校验命令（在本 Demo 目录）：node ' + item.args.map(quote).join(' '));
+  console.log('实际校验命令（在本阶段目录）：node ' + item.args.map(quote).join(' '));
   console.log('预期观察（以下是待验证断言，不是运行结果）：');
   item.observations.forEach(value => console.log('  - ' + value));
   console.log('为何如此：' + item.why + '\n边界：' + item.boundary);

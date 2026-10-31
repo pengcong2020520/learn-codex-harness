@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1470" viewBox="0 0 1280 1470" role="img" aria-labelledby="title desc"><title id="title">Demo 5 总体架构</title><desc id="desc">按职责分层；右侧为独立 Codex 原生进程；红色表示相较上一 Demo 的新增或变化。</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8" fill="#305780"/></marker></defs><rect width="1280" height="1470" fill="#f7f9fc"/>
-<text x="40" y="55" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="32" font-weight="650" fill="#192d44">DEMO 5  /  知识层与通用门禁</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1470" viewBox="0 0 1280 1470" role="img" aria-labelledby="title desc"><title id="title">s05 总体架构</title><desc id="desc">按职责分层；右侧为独立 Codex 原生进程；红色表示相较上一 Demo 的新增或变化。</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8" fill="#305780"/></marker></defs><rect width="1280" height="1470" fill="#f7f9fc"/>
+<text x="40" y="55" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="32" font-weight="650" fill="#192d44">S05  /  知识层与通用门禁</text>
 <text x="40" y="91" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">纵向箭头表示能力依赖；右侧箭头表示与 Codex 的实际通信</text>
-<text x="40" y="122" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">红色：本 Demo 新增或变化    ·    蓝色：复用能力    ·    分层表示职责，不代表独立服务</text>
+<text x="40" y="122" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">红色：本阶段新增或变化    ·    蓝色：复用能力    ·    分层表示职责，不代表独立服务</text>
 <rect x="40" y="150" width="820" height="100" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
 <text x="60" y="186" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">01  交互入口</text>
 <text x="60" y="221" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#586d81">本地 CLI / knowledge CLI  →  HTTP / SSE  ·  本地 Bearer 凭据</text>

@@ -10,10 +10,12 @@ import { runAppServer as runChat, buildAppServerLaunch as chatLaunch } from "../
 import { tempRoot } from "../s03-agent-core/tests/helpers.mjs";
 import { responsesFixture, answer, toolSpecs } from "../s03-agent-core/tests/responses-fixture.mjs";
 
+const STAGE_DIRS = { 1: "s01-single-turn", 2: "s02-multi-turn" };
+
 async function fixture(t, stage, build) {
   const root = tempRoot(t);
   const provider = await responsesFixture(root, () => answer("合成回答：已接收。"));
-  const require = createRequire(new URL(`../demo${stage}/package.json`, import.meta.url));
+  const require = createRequire(new URL(`../${STAGE_DIRS[stage]}/package.json`, import.meta.url));
   const cli = path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin/codex.js");
   const launch = build({ CODEX_API_KEY: "local-test-only", CODEX_BASE_URL: provider.url,
     CODEX_MODEL: "local-test-model", CODEX_MODEL_CATALOG_ENABLED: "true",
@@ -33,7 +35,7 @@ function calls(root) {
       .trim().split("\n").map(JSON.parse).filter(row => row.direction === "client").map(row => row.message));
 }
 
-test("demo1：真实 Codex 完成单轮并关闭，状态只写入独立 demo 根目录", { timeout: 15000 }, async t => {
+test("s01：真实 Codex 完成单轮并关闭，状态只写入独立阶段根目录", { timeout: 15000 }, async t => {
   const r = await fixture(t, 1, singleLaunch);
   await runSingle(r.launch, { mode: "run", prompt: "SINGLE_DEMO_FIXTURE" }, r.cli, r.root);
   assert.equal(r.provider.requests.length, 1);
@@ -45,7 +47,7 @@ test("demo1：真实 Codex 完成单轮并关闭，状态只写入独立 demo �
   assert.deepEqual(r.provider.errors, []);
 });
 
-test("demo2：真实 Codex 同 Thread 多 turn，退出后搜索恢复仍携带原生上下文", { timeout: 15000 }, async t => {
+test("s02：真实 Codex 同 Thread 多 turn，退出后搜索恢复仍携带原生上下文", { timeout: 15000 }, async t => {
   const r = await fixture(t, 2, chatLaunch);
   await runChat(r.launch, { mode: "chat" }, r.cli, r.root,
     io("BLUE_WHALE_FIXTURE\n追问本次会话代号\n/exit\n"));

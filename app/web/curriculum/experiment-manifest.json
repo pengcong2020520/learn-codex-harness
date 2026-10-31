@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "lessons": [
     {
-      "id": "d1-transport",
+      "id": "s01-transport",
       "demo": 1,
       "title": "用消息 ID 连接请求与事件",
       "question": "为何 stdout 中的一个 JSON 消息不一定是这次调用的答案？",
-      "command": "npm run lesson -- d1-transport",
+      "command": "npm run lesson -- s01-transport",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -14,7 +14,7 @@
         "仅一次 thread/start 和一次 turn/start；输入和最终答案正确"
       ],
       "why": "请求回包与 turn 通知可以乱序；真实入口必须按协议关联它们。",
-      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
       "args": [
         "--test",
         "--test-reporter=tap",
@@ -24,11 +24,11 @@
       ]
     },
     {
-      "id": "d1-lifecycle",
+      "id": "s01-lifecycle",
       "demo": 1,
       "title": "结束状态决定成功与失败",
       "question": "有文字输出却没有 turn/completed，可以显示成功吗？",
-      "command": "npm run lesson -- d1-lifecycle",
+      "command": "npm run lesson -- s01-lifecycle",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -36,7 +36,7 @@
         "hang 触发测试设置的 150ms 超时"
       ],
       "why": "文字增量不是完成凭据；只有明确终态才允许交付成功。",
-      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
       "args": [
         "--test",
         "--test-reporter=tap",
@@ -46,11 +46,11 @@
       ]
     },
     {
-      "id": "d2-fifo",
+      "id": "s02-fifo",
       "demo": 2,
       "title": "终端提前输入也不能丢",
       "question": "用户一次输入两行时，第二行会不会丢失或抢跑？",
-      "command": "npm run lesson -- d2-fifo",
+      "command": "npm run lesson -- s02-fifo",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -58,7 +58,7 @@
         "同一 Thread 产生两个 turn；旧轮 STALE 事件不会串入新答案"
       ],
       "why": "输入队列保留 readline 先到的行；聊天循环按轮次消费，Codex 维护 Thread 上下文。",
-      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。",
+      "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。",
       "args": [
         "--test",
         "--test-reporter=tap",
@@ -68,11 +68,11 @@
       ]
     },
     {
-      "id": "d2-resume",
+      "id": "s02-resume",
       "demo": 2,
       "title": "恢复 Thread 而非重放聊天",
       "question": "恢复失败时，是否应该悄悄创建另一个 Thread？",
-      "command": "npm run lesson -- d2-resume",
+      "command": "npm run lesson -- s02-resume",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -80,7 +80,7 @@
         "取消、无结果、失败时保留原会话"
       ],
       "why": "产品只保存选择与切换规则，历史仍由 Codex Thread 承担。",
-      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
       "args": [
         "--test",
         "--test-reporter=tap",
@@ -90,11 +90,11 @@
       ]
     },
     {
-      "id": "d3-agent-config",
+      "id": "s03-agent-config",
       "demo": 3,
       "title": "把 Agent 定义变成有效约束",
       "question": "角色说“可以执行 shell”，是否就获得了 shell 权限？",
-      "command": "npm run lesson -- d3-agent-config",
+      "command": "npm run lesson -- s03-agent-config",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -113,11 +113,11 @@
       ]
     },
     {
-      "id": "d3-skills",
+      "id": "s03-skills",
       "demo": 3,
       "title": "发现 Skill 不等于授权 Skill",
       "question": "工作区出现一个新 Skill，能否自动让当前 Agent 使用？",
-      "command": "npm run lesson -- d3-skills",
+      "command": "npm run lesson -- s03-skills",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -136,11 +136,11 @@
       ]
     },
     {
-      "id": "d3-tool-registry",
+      "id": "s03-tool-registry",
       "demo": 3,
       "title": "从配置装配可调用工具",
       "question": "新增工具为何不需要在主程序再加一个 if 分支？",
-      "command": "npm run lesson -- d3-tool-registry",
+      "command": "npm run lesson -- s03-tool-registry",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -159,11 +159,11 @@
       ]
     },
     {
-      "id": "d3-mcp",
+      "id": "s03-mcp",
       "demo": 3,
       "title": "工具通道也要有刷新边界",
       "question": "工具正在运行时切换 MCP 注册表，会留下什么不一致？",
-      "command": "npm run lesson -- d3-mcp",
+      "command": "npm run lesson -- s03-mcp",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -182,11 +182,11 @@
       ]
     },
     {
-      "id": "d3-workspace",
+      "id": "s03-workspace",
       "demo": 3,
       "title": "稳定工作区与受限文件入口",
       "question": "把每次 runDir 当工作区，为什么会丢失上次产物？",
-      "command": "npm run lesson -- d3-workspace",
+      "command": "npm run lesson -- s03-workspace",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -205,11 +205,11 @@
       ]
     },
     {
-      "id": "d4-persistence",
+      "id": "s04-persistence",
       "demo": 4,
       "title": "把产品状态落进事务",
       "question": "服务重启后，凭什么确定排队项和会话归属仍然可信？",
-      "command": "npm run lesson -- d4-persistence",
+      "command": "npm run lesson -- s04-persistence",
       "mode": "integration",
       "offlineOrIntegration": "integration",
       "observations": [
@@ -218,20 +218,20 @@
         "真实服务链路重启后仍能检查持久任务状态"
       ],
       "why": "PostgreSQL 保存产品元数据和任务原文；它不替代 Codex 的完整 Thread 历史。",
-      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
       "args": [
         "scripts/test-data.mjs"
       ],
       "requiredFlag": "--integration",
-      "integrationCommand": "npm run lesson -- d4-persistence --integration",
+      "integrationCommand": "npm run lesson -- s04-persistence --integration",
       "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
     },
     {
-      "id": "d4-dispatch",
+      "id": "s04-dispatch",
       "demo": 4,
       "title": "提交与唤醒分开负责",
       "question": "Redis 丢失一次唤醒，会不会连任务本身也丢失？",
-      "command": "npm run lesson -- d4-dispatch",
+      "command": "npm run lesson -- s04-dispatch",
       "mode": "integration",
       "offlineOrIntegration": "integration",
       "observations": [
@@ -240,20 +240,20 @@
         "Redis 失败后 outbox 可补投"
       ],
       "why": "PG 是任务事实来源，Redis Set 中的 Thread ID 负责唤醒；测试不宣称端到端 exactly-once。",
-      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
       "args": [
         "scripts/test-data.mjs"
       ],
       "requiredFlag": "--integration",
-      "integrationCommand": "npm run lesson -- d4-dispatch --integration",
+      "integrationCommand": "npm run lesson -- s04-dispatch --integration",
       "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
     },
     {
-      "id": "d4-versions",
+      "id": "s04-versions",
       "demo": 4,
       "title": "稳定资料 ID 与变化的版本",
       "question": "资料正文变了，旧引用为何不能继续当有效证据？",
-      "command": "npm run lesson -- d4-versions",
+      "command": "npm run lesson -- s04-versions",
       "mode": "integration",
       "offlineOrIntegration": "integration",
       "observations": [
@@ -262,20 +262,20 @@
         "外部改写或删除来源会使派生内容失效"
       ],
       "why": "路径、资料身份和内容版本分别解决定位、追踪与证据有效性。",
-      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
       "args": [
         "scripts/test-data.mjs"
       ],
       "requiredFlag": "--integration",
-      "integrationCommand": "npm run lesson -- d4-versions --integration",
+      "integrationCommand": "npm run lesson -- s04-versions --integration",
       "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
     },
     {
-      "id": "d5-gate",
+      "id": "s05-gate",
       "demo": 5,
       "title": "让工具只接受可信任务身份",
       "question": "模型自己补一个 ownerId，能否获得维护权限？",
-      "command": "npm run lesson -- d5-gate",
+      "command": "npm run lesson -- s05-gate",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -294,11 +294,11 @@
       ]
     },
     {
-      "id": "d5-mounts",
+      "id": "s05-mounts",
       "demo": 5,
       "title": "知识库存在不等于挂载",
       "question": "Agent 没有挂载的 KB，能否通过宽泛 inputs 路径绕过？",
-      "command": "npm run lesson -- d5-mounts",
+      "command": "npm run lesson -- s05-mounts",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [
@@ -317,11 +317,11 @@
       ]
     },
     {
-      "id": "d5-wiki",
+      "id": "s05-wiki",
       "demo": 5,
       "title": "知识页由证据和版本约束",
       "question": "两次维护同时提交，为什么只能有一个新版本生效？",
-      "command": "npm run lesson -- d5-wiki",
+      "command": "npm run lesson -- s05-wiki",
       "mode": "integration",
       "offlineOrIntegration": "integration",
       "observations": [
@@ -335,15 +335,15 @@
         "scripts/test-data.mjs"
       ],
       "requiredFlag": "--integration",
-      "integrationCommand": "npm run lesson -- d5-wiki --integration",
+      "integrationCommand": "npm run lesson -- s05-wiki --integration",
       "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
     },
     {
-      "id": "d5-rag",
+      "id": "s05-rag",
       "demo": 5,
       "title": "来源分块进入混合召回",
       "question": "向量索引完成，为什么还不能证明知识回答准确？",
-      "command": "npm run lesson -- d5-rag",
+      "command": "npm run lesson -- s05-rag",
       "mode": "integration",
       "offlineOrIntegration": "integration",
       "observations": [
@@ -358,15 +358,15 @@
         "--rag"
       ],
       "requiredFlag": "--rag",
-      "integrationCommand": "npm run lesson -- d5-rag --rag",
+      "integrationCommand": "npm run lesson -- s05-rag --rag",
       "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server / chroma，以及可用的 chromadb npm 包；测试使用临时本地服务，不读取项目 .env。"
     },
     {
-      "id": "d5-modes",
+      "id": "s05-modes",
       "demo": 5,
       "title": "期望模式与实际模式分开",
       "question": "首次选择 RAG 但索引未就绪，与已启用 RAG 后故障，应当同样回退吗？",
-      "command": "npm run lesson -- d5-modes",
+      "command": "npm run lesson -- s05-modes",
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "observations": [

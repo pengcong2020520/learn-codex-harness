@@ -6,21 +6,21 @@
 
 ## 演进路径
 
-| 阶段 | 课程名 | 核心能力 | 新引入的机制 | 默认端口 |
-|------|--------|---------|-------------|---------|
-| [s00-sdk-quickstart](s00-sdk-quickstart/README.md) | 前置 | 用官方 SDK 调用 Codex | Thread / Turn、事件流、结构化输出、沙箱 | — |
-| [s01-single-turn](s01-single-turn/README.md) | Demo 1 | 单轮对话 | 直连 App Server JSON-RPC，按终态判定成败 | — |
-| [s02-multi-turn](s02-multi-turn/README.md) | Demo 2 | 单进程多轮对话 | FIFO 输入、同一 Thread 多 Turn、原生历史恢复 | — |
-| [s03-agent-core](s03-agent-core/README.md) | Demo 3 | 配置驱动 Agent 核心 | Agent JSON 装配、Skills、MCP 工具注册表、工作区边界 | 4313 |
-| [s04-data-layer](s04-data-layer/README.md) | Demo 4 | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
-| [s05-knowledge-layer](s05-knowledge-layer/README.md) | Demo 5 | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
-| [../app](../app/README.md) | 当前项目 | 持续开发的完整项目 | 在 s05 之上继续演进 | 4317 |
+| 阶段 | 核心能力 | 新引入的机制 | 默认端口 |
+|------|---------|-------------|---------|
+| [s00-sdk-quickstart](s00-sdk-quickstart/README.md) | 用官方 SDK 调用 Codex | Thread / Turn、事件流、结构化输出、沙箱 | — |
+| [s01-single-turn](s01-single-turn/README.md) | 单轮对话 | 直连 App Server JSON-RPC，按终态判定成败 | — |
+| [s02-multi-turn](s02-multi-turn/README.md) | 单进程多轮对话 | FIFO 输入、同一 Thread 多 Turn、原生历史恢复 | — |
+| [s03-agent-core](s03-agent-core/README.md) | 配置驱动 Agent 核心 | Agent JSON 装配、Skills、MCP 工具注册表、工作区边界 | 4313 |
+| [s04-data-layer](s04-data-layer/README.md) | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
+| [s05-knowledge-layer](s05-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
+| [../app](../app/README.md) | 持续开发的完整项目 | 在 s05 之上继续演进 | 4317 |
 
-课程、Web 工作台和服务 API 里仍用 `Demo 1–5` 作为显示名和标识（如 `/api/agent/demo5`），对应上表的 s01–s05。
+课程、Web 工作台、服务 API 与实验命令统一使用这套编号，例如 `/api/agent/s05`、`npm run lesson -- s01-transport`。旧书签里的 `?stage=demoN` 会自动对应到 `s0N`。
 
 ## 互动课程与 Web 工作台
 
-在 `../app` 运行 `npm run web`，打开 [五章互动课程](http://127.0.0.1:4320/course/) 或 [版本工作台](http://127.0.0.1:4320/)。课程先看架构、再逐层拆解，共 17 节，每节的源码摘录都直接取自本目录；工作台选择对应 Demo，连接它自己的运行服务和数据。使用说明见 [Web 客户端说明](../app/web/README.md)。
+在 `../app` 运行 `npm run web`，打开 [五章互动课程](http://127.0.0.1:4320/course/) 或 [版本工作台](http://127.0.0.1:4320/)。课程先看架构、再逐层拆解，共 17 节，每节的源码摘录都直接取自本目录；工作台选择对应阶段，连接它自己的运行服务和数据。使用说明见 [Web 客户端说明](../app/web/README.md)。
 
 ## 关键约束
 
@@ -53,4 +53,4 @@ node verify.mjs --integration --rag  # 另需 Chroma CLI，包含真实 RAG 验�
 
 实际结果见 [`verification.json`](verification.json)，文档不预填数字。该文件是目录重组前生成的记录，其中的 `demoN` 目录名对应现在的 s01–s05；下次运行集成验证时会按新目录名重新生成。
 
-s04 使用 v1 数据结构，s05 使用 v2；同时保留两个版本时，使用同一 PostgreSQL 实例中的不同数据库，避免旧版连接已经升级的库。默认示例分别为 agent_demo4 / agent_demo5。各 Compose 使用相同宿主端口，不要同时启动两套争抢端口；可共用一组服务并分别创建数据库。
+s04 使用 v1 数据结构，s05 使用 v2；同时保留两个版本时，使用同一 PostgreSQL 实例中的不同数据库，避免旧版连接已经升级的库。默认示例分别为 agent_s04 / agent_s05。各 Compose 使用相同宿主端口，不要同时启动两套争抢端口；可共用一组服务并分别创建数据库。

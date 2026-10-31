@@ -49,7 +49,7 @@
       "name": "write_file",
       "label": "保存文件",
       "readOnly": false,
-      "description": "在 Agent 授权范围新建 .md/.txt 文件，不覆盖。文件引用登记在 Demo 4 数据层提供，本阶段只保存正文。",
+      "description": "在 Agent 授权范围新建 .md/.txt 文件，不覆盖。文件引用登记在 s04 数据层提供，本阶段只保存正文。",
       "inputSchema": {
         "type": "object",
         "properties": {

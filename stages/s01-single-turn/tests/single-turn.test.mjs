@@ -10,7 +10,7 @@ const fixture = { CODEX_API_KEY: "test-not-a-real-key", CODEX_BASE_URL: "https:/
   CODEX_MODEL: "unit-model", DEMO_TIMEOUT_MS: "3000" };
 const catalogFixture = { ...fixture, CODEX_MODEL_CATALOG_ENABLED: "true", CODEX_MODEL_CONTEXT_WINDOW: "128000" };
 function workspace(t) {
-  const root = mkdtempSync(path.join(tmpdir(), "demo1-test-"));
+  const root = mkdtempSync(path.join(tmpdir(), "s01-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }

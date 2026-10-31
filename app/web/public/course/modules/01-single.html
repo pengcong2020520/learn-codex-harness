@@ -18,7 +18,7 @@
       <button class="arch-component" data-desc="你在终端执行 npm start，这里是唯一的调用入口。main.mjs 只解析参数，把控制权交给下一层，不直接触碰模型。">① 用户终端 / main.mjs</button>
       <button class="arch-component" data-desc="05-app-server.mjs 是编排核心：读取配置、准备目录，通过 child_process.spawn 拉起本机 Codex 子进程，并全程维护 JSON-RPC 通信状态。">② Node 主进程（编排层）</button>
       <button class="arch-component" data-desc="标准输入输出管道。Node 把请求序列化为 JSON-RPC 消息写入 stdin；Codex 把事件通知和响应写回 stdout。两端完全解耦，无需 HTTP 端口。">③ stdio 通道（JSON-RPC 2.0）</button>
-      <button class="arch-component" data-desc="本机 Codex App Server 子进程。它负责：维护 Thread/Turn 状态、调用 Responses API、向上游推送 turn/completed 通知。本 Demo 由它负责调用模型，Node 负责调度。">④ 本机 Codex 子进程</button>
+      <button class="arch-component" data-desc="本机 Codex App Server 子进程。它负责：维护 Thread/Turn 状态、调用 Responses API、向上游推送 turn/completed 通知。本阶段由它负责调用模型，Node 负责调度。">④ 本机 Codex 子进程</button>
       <button class="arch-component" data-desc="远端大语言模型服务，通过 Responses API 接口访问。Codex 内部封装了这层调用，Node 主进程感知不到具体的 HTTP 细节。">⑤ 远端模型服务（Responses API）</button>
     </div>
     <div class="arch-description">点击上方组件查看职责说明</div>
@@ -129,7 +129,7 @@
 <!-- Screen 4: 真实源码 -->
 <section class="screen animate-in" id="m1-screen-4">
   <h2 class="screen-heading">真实代码：runTurn 的核心逻辑</h2>
-  <p>以下是 Demo1 源码中 runTurn 函数的实际片段，展示先分配本轮状态、再发送请求的顺序。</p>
+  <p>以下是 s01 源码中 runTurn 函数的实际片段，展示先分配本轮状态、再发送请求的顺序。</p>
 
   <div class="translation-block">
     <div class="translation-code">
@@ -281,14 +281,14 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        Demo1 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
-        <strong>Demo1 → Demo2</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
-        <strong>Demo3+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
+        s01 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
+        <strong>s01 → s02</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
+        <strong>s03+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
         本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<span class="term" data-definition="模型服务提供的请求与响应接口约定；这里需要 Responses API 兼容能力。">Responses API</span> 是执行引擎对远端服务的要求。
       </div>
     </div>
     <div class="pattern-card">
-      <div class="pattern-title">⌨️ 实践命令（Demo1 <span class="term" data-definition="命令行界面，在终端输入命令来运行程序；npm 是本项目启动与检查脚本的入口。">CLI</span>）</div>
+      <div class="pattern-title">⌨️ 实践命令（s01 <span class="term" data-definition="命令行界面，在终端输入命令来运行程序；npm 是本项目启动与检查脚本的入口。">CLI</span>）</div>
       <div class="pattern-desc">
         <code>cd stages/s01-single-turn &amp;&amp; npm ci</code><br>
         <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model）<br>
@@ -296,13 +296,13 @@
         <code>npm start</code>（默认提示词）<br>
         <code>npm start -- "你的问题"</code>（自定义输入）<br>
         <code>npm test</code>（离线模拟测试）<br>
-        <a href="../../?stage=demo1">→ 打开 Demo1 命令与教学模拟</a>
+        <a href="../../?stage=s01">→ 打开 s01 命令与教学模拟</a>
       </div>
     </div>
     <div class="pattern-card">
       <div class="pattern-title">🚧 边界说明</div>
       <div class="pattern-desc">
-        Demo1/2 无独立 HTTP 服务，不提供网页连接入口，实践即 CLI 命令。<br>
+        s01/s02 无独立 HTTP 服务，不提供网页连接入口，实践即 CLI 命令。<br>
         回答采用整段聚合输出，不支持逐 <span class="term" data-definition="模型处理文本时使用的小片段，可以是一个字、词的一部分或标点。">token</span> 流式打印。<br>
         <code>features.memories=false</code>：关闭跨会话记忆，但本次会话日志仍可持久化。<br>
         工作目录仅做应用层路径过滤，非操作系统级<span class="term" data-definition="用来限制程序可访问资源的隔离机制；应用层路径检查不能等同于强隔离。">沙箱</span>。

@@ -1,6 +1,6 @@
 # 数据层升级工程文档
 
-> **适用版本**：Demo 4 数据层（单机单用户）
+> **适用版本**：s04 数据层（单机单用户）
 > **文档位置**：`app/docs/data-layer.md`，同步至 `stages/s04-data-layer/docs/data-layer.md`
 > **读者**：略懂代码的初学者，需理解本期边界、改法原理及如何复现排查
 
@@ -8,9 +8,9 @@
 
 ## 总体架构
 
-![Demo 4 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 工具与资源服务 → 04 数据与文件。](assets/demo4-architecture.svg)
+![s04 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 工具与资源服务 → 04 数据与文件。](assets/s04-architecture.svg)
 
-Demo 4 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 工具与资源服务 → 04 数据与文件。
+s04 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 工具与资源服务 → 04 数据与文件。
 
 逐层说明与运行示例见 [Demo 架构导读](../README.md)；下文保留实现约束和接口细节。
 
@@ -317,7 +317,7 @@ async function writeFileWithProvenance(db, path, content, sourceVersions):
 
 ### 环境要求
 
-以下命令在项目目录执行；若运行 demo4，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
+以下命令在项目目录执行；若运行 s04，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
 
 ```bash
 cd app
@@ -348,7 +348,7 @@ docker compose up -d
 编辑 `.env` 文件，**手动添加以下两行**（尖括号内容为占位说明，不要直接粘贴运行）：
 
 ```dotenv
-DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:5432/agent_demo4
+DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:5432/agent_s04
 REDIS_URL=redis://127.0.0.1:6379/0
 ```
 
@@ -427,7 +427,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 | 命令 | 覆盖内容 |
 |---|---|
-| `npm test` | 单元/集成测试，project 和 demo4 均已通过，具体数目以最终验收输出为准 |
+| `npm test` | 单元/集成测试，project 和 s04 均已通过，具体数目以最终验收输出为准 |
 | `npm run test:data` | 真实 PG/Redis/Codex/MCP/文件链路，新建临时集群、随机回环端口、不读 `.env`；含外部更新/删除按需失效、Redis 故障注入补投、JSON 迁移预检/幂等/冲突回滚 |
 | `npm run test:codex-tools` | Codex 工具，使用显式 test double 替代真实存储，不证明 PG 链路 |
 | `npm run test:codex-memory` | 原生记忆，原生合并功能仍 blocked |
@@ -436,7 +436,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `test:data` 为本机模拟，不声称真实网络断网演练，无真实 DeepSeek 端到端，无真实存量导入验收。
 
-演进目录的 `node verify.mjs --integration` 会执行 demo1 至 demo5 的测试及 demo4 / demo5 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
+演进目录的 `node verify.mjs --integration` 会执行 s01 至 s05 的测试及 s04 / s05 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
 
 ---
 

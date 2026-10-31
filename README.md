@@ -57,7 +57,7 @@ npm run web      # 课程 http://127.0.0.1:4320/course/  工作台 http://127.0.
 
 ```bash
 cd stages/s01-single-turn && npm ci
-npm run lesson -- d1-transport
+npm run lesson -- s01-transport
 ```
 
 s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](app/docs/data-layer.md)。
@@ -66,11 +66,11 @@ s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 
 | 阶段 | 机制课 |
 |------|--------|
-| s01 单轮问答 | `d1-transport` 先建立通信，再派发任务 · `d1-lifecycle` 收到请求，不等于完成任务 |
-| s02 多轮会话 | `d2-fifo` 连续输入如何不丢、不抢跑 · `d2-resume` 恢复会话，为何不是重新拼历史 |
-| s03 可配置 Agent | `d3-agent-config` 配置是装配合同，不是临时提示词 · `d3-skills` Skill 给方法，权限仍要单独核验 · `d3-tool-registry` 工具名、参数合同和实现怎样接在一起 · `d3-mcp` MCP 是调用边界，不是一工具一服务 · `d3-workspace` 在工作区里，也不等于有权读写 |
-| s04 数据层 | `d4-persistence` 消息收到了，为什么还需要一条 outbox？ · `d4-dispatch` Redis 丢了，哪条任务还能继续？ · `d4-versions` 原文改了一句，旧产物还能读吗？ |
-| s05 知识层 | `d5-gate` 工具参数里的“我是管理员”为什么不算身份？ · `d5-mounts` 读得到 inputs，不等于读得到所有知识库 · `d5-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `d5-rag` 新索引失败，为什么旧索引指针不能先切？ · `d5-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
+| s01 单轮问答 | `s01-transport` 先建立通信，再派发任务 · `s01-lifecycle` 收到请求，不等于完成任务 |
+| s02 多轮会话 | `s02-fifo` 连续输入如何不丢、不抢跑 · `s02-resume` 恢复会话，为何不是重新拼历史 |
+| s03 可配置 Agent | `s03-agent-config` 配置是装配合同，不是临时提示词 · `s03-skills` Skill 给方法，权限仍要单独核验 · `s03-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s03-mcp` MCP 是调用边界，不是一工具一服务 · `s03-workspace` 在工作区里，也不等于有权读写 |
+| s04 数据层 | `s04-persistence` 消息收到了，为什么还需要一条 outbox？ · `s04-dispatch` Redis 丢了，哪条任务还能继续？ · `s04-versions` 原文改了一句，旧产物还能读吗？ |
+| s05 知识层 | `s05-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s05-mounts` 读得到 inputs，不等于读得到所有知识库 · `s05-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s05-rag` 新索引失败，为什么旧索引指针不能先切？ · `s05-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
 
 课程的源码摘录由 `npm run course:build` 直接从 `stages/` 取出并记录哈希，`npm run course:check` 会在源码变化后提示重建。
 
@@ -80,11 +80,11 @@ s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 learn-codex-harness/
 ├── stages/                     # 教学迭代：每个阶段一份独立、冻结的可运行快照
 │   ├── s00-sdk-quickstart/     #   SDK 入门（examples/01–05、fixture、doctor）
-│   ├── s01-single-turn/        #   Demo 1：单轮问答
-│   ├── s02-multi-turn/         #   Demo 2：多轮会话
-│   ├── s03-agent-core/         #   Demo 3：配置驱动 Agent 核心
-│   ├── s04-data-layer/         #   Demo 4：PostgreSQL + Redis 数据层
-│   ├── s05-knowledge-layer/    #   Demo 5：知识层 + 通用门禁
+│   ├── s01-single-turn/        #   s01：单轮问答
+│   ├── s02-multi-turn/         #   s02：多轮会话
+│   ├── s03-agent-core/         #   s03：配置驱动 Agent 核心
+│   ├── s04-data-layer/         #   s04：PostgreSQL + Redis 数据层
+│   ├── s05-knowledge-layer/    #   s05：知识层 + 通用门禁
 │   ├── tests/                  #   跨阶段集成测试
 │   └── verify.mjs              #   阶段文档、结构与测试验证
 ├── app/                        # 完整项目（持续开发）

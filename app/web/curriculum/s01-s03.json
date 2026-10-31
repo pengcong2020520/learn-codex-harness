@@ -1,6 +1,6 @@
 [
   {
-    "id": "d1-transport",
+    "id": "s01-transport",
     "demo": 1,
     "title": "先建立通信，再派发任务",
     "principle": "本地握手只证明 Node 能与 Codex 通信，不证明远端模型已经可用。",
@@ -156,13 +156,13 @@
     ],
     "experiment": {
       "command": "npm start -- --handshake-only",
-      "action": "在 demo1 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
+      "action": "在 s01 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
       "observe": [
         "成功时先显示握手成功，再显示已加载模型目录。",
         "日志明确显示没有发送 turn/start、没有发起模型生成；随后输出协议日志位置。",
         "若本地配置或 Codex 启动有问题，检查会失败；这与模型是否能回答仍是两层问题。"
       ],
-      "boundary": "此命令运行本机 Codex 并可能创建 .runs 与本 Demo 状态目录，不提交模型生成。这里给出实验入口，不声称已用用户真实配置运行。"
+      "boundary": "此命令运行本机 Codex 并可能创建 .runs 与本阶段状态目录，不提交模型生成。这里给出实验入口，不声称已用用户真实配置运行。"
     },
     "quiz": {
       "question": "连接检查通过，但第一次提问报远端认证失败。应如何解释之前的“成功”？",
@@ -181,7 +181,7 @@
     }
   },
   {
-    "id": "d1-lifecycle",
+    "id": "s01-lifecycle",
     "demo": 1,
     "title": "收到请求，不等于完成任务",
     "principle": "用 Thread 定位会话、Turn 定位任务，并等待该 Turn 的成功终态后才输出答案。",
@@ -337,7 +337,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='单轮闭环|单轮错误' tests/single-turn.test.mjs",
-      "action": "在 demo1 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
+      "action": "在 s01 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
       "observe": [
         "success 与 early 都只创建一个 Thread、一个 Turn，并得到同一条模拟回复。",
         "failed 与 hang 由测试确认 reject，不会显示为 completed。",
@@ -362,15 +362,15 @@
     }
   },
   {
-    "id": "d2-fifo",
+    "id": "s02-fifo",
     "demo": 2,
     "title": "连续输入如何不丢、不抢跑",
     "principle": "输入队列只安排下一条用户消息何时提交，不控制当前 Turn 如何推理。",
     "problem": "用户在模型回答前连续输入 first、second。若只在等待输入时监听一行，second 会丢；若两行一到就同时启动任务，会让会话推进难以解释。",
     "change": {
-      "before": "Demo1 执行一次问题后退出，没有持续读取用户输入的需求。",
+      "before": "s01 执行一次问题后退出，没有持续读取用户输入的需求。",
       "added": "readline 始终收行，提前到达的行进入 FIFO；交互循环 await 当前 runTurn 后才取下一行。",
-      "kept": "每一轮仍使用 Demo1 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
+      "kept": "每一轮仍使用 s01 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
     },
     "ownership": {
       "codex": "执行单个 Turn 内的模型任务，并维护该会话上下文。",
@@ -518,7 +518,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='命令行输入|循环聊天' 05-app-server.test.mjs",
-      "action": "在 demo2 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
+      "action": "在 s02 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
       "observe": [
         "提前输入的 first、second 依次被 question() 取出，EOF 后返回 null。",
         "协议中只有一个 thread/start，两个 turn/start 共用同一 Thread ID。",
@@ -543,13 +543,13 @@
     }
   },
   {
-    "id": "d2-resume",
+    "id": "s02-resume",
     "demo": 2,
     "title": "恢复会话，为何不是重新拼历史",
     "principle": "恢复成功后才切换当前 Thread；检索元数据与保存原生正文是两份不同职责。",
     "problem": "用户想接着昨天的问题聊。客户端能查到标题，却没有完整历史数组；有人因此准备把聊天正文复制进 Node，再每次重新发送。",
     "change": {
-      "before": "Demo1 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
+      "before": "s01 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
       "added": "按本项目范围检索 Thread 元数据，数字选择后调用 thread/resume，并在响应成功后更新 threadId。",
       "kept": "历史正文、上下文装配与原生持久化仍由 Codex 管理，Node 不实现摘要压缩。"
     },
@@ -568,7 +568,7 @@
       },
       {
         "term": "恢复与记忆",
-        "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。Demo2 关闭后者，不能用恢复成功证明记忆开启。"
+        "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。s02 关闭后者，不能用恢复成功证明记忆开启。"
       }
     ],
     "mechanism": "listProjectThreads 从本项目的运行目录和索引限定范围，分页读取 thread/list，再按名称、开场预览、ID 过滤。用户选数字后先检查项目目录，再 await thread/resume；selectThread 只在成功响应之后执行。于是取消、无结果、无效选择或恢复失败都不会提前覆盖当前 threadId。excludeTurns=true 仅是不在响应里带回完整 Turn 列表，不是删除原生历史。",
@@ -699,7 +699,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='resume 搜索|resume 取消' 05-app-server.test.mjs",
-      "action": "在 demo2 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
+      "action": "在 s02 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
       "observe": [
         "成功路径不调用 thread/start；后续问题沿用 selected Thread ID 和只读权限。",
         "取消、无结果或恢复错误后，后续问题仍发给原 Thread。",
@@ -715,7 +715,7 @@
         "只要使用 /resume，就同时打开了跨会话长期记忆。"
       ],
       "answer": 0,
-      "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，Demo2 明确关闭 memories。"
+      "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，s02 明确关闭 memories。"
     },
     "reference": {
       "session": "s08",
@@ -724,13 +724,13 @@
     }
   },
   {
-    "id": "d3-agent-config",
+    "id": "s03-agent-config",
     "demo": 3,
     "title": "配置是装配合同，不是临时提示词",
     "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
     "problem": "运营修改了角色文件，旧会话仍按旧工具和资料边界执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
     "change": {
-      "before": "Demo2 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
+      "before": "s02 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
       "added": "AgentDefinition 校验装配配置，记录文件指纹，生成描述符并让 Thread 绑定版本。",
       "kept": "仍是一实例一套 Agent 配置、多个 Thread；Codex 执行任务，产品层不改写模型循环。"
     },
@@ -880,7 +880,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='Agent schema|描述符不复制|工具双重' tests/agent-core.test.mjs",
-      "action": "在 demo3 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+      "action": "在 s03 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
       "observe": [
         "未知字段、缺失引用、nativeShell=true 等定义被拒绝。",
         "无版本绑定的旧 Thread、不同描述符或排队消息版本不匹配会报错。",
@@ -905,7 +905,7 @@
     }
   },
   {
-    "id": "d3-skills",
+    "id": "s03-skills",
     "demo": 3,
     "title": "Skill 给方法，权限仍要单独核验",
     "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
@@ -922,7 +922,7 @@
     "concepts": [
       {
         "term": "原生 Skill",
-        "meaning": "提供任务方法的说明文件；本 Demo 只验证文本指令型 Skill，带 shell、fileWrite、assets 依赖的工作流不自动放行。"
+        "meaning": "提供任务方法的说明文件；本阶段只验证文本指令型 Skill，带 shell、fileWrite、assets 依赖的工作流不自动放行。"
       },
       {
         "term": "发现与授权",
@@ -1061,7 +1061,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='原生 Skill|必需 Skill' tests/agent-core.test.mjs",
-      "action": "在 demo3 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+      "action": "在 s03 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
       "observe": [
         "接口夹具中的范围外 other 从 enabled=true 变成 false。",
         "$allowed 生成 type:skill；$other 被拒绝，而普通 $HOME 和前缀相近名称不误匹配。",
@@ -1086,13 +1086,13 @@
     }
   },
   {
-    "id": "d3-tool-registry",
+    "id": "s03-tool-registry",
     "demo": 3,
     "title": "工具名、参数合同和实现怎样接在一起",
     "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
     "problem": "模型输出了一个看似正确的工具名，却夹带了额外参数；如果程序只按名称查函数，错误输入就可能直接进入文件或网络操作。",
     "change": {
-      "before": "Demo2 没有本项目外部工具装配；仅描述“可以读取资料”不能产生真实执行能力。",
+      "before": "s02 没有本项目外部工具装配；仅描述“可以读取资料”不能产生真实执行能力。",
       "added": "从受信配置加载工具规格与工厂实现，编译 inputSchema，形成带版本的 Registry，list 与 call 都执行授权。",
       "kept": "模型何时选择工具、如何利用结果仍由 Codex 决定；产品只提供可调用合同与实现。"
     },
@@ -1249,7 +1249,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='schema 与运行时' tests/tools.test.mjs",
-      "action": "在 demo3 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+      "action": "在 s03 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
       "observe": [
         "每项 specs 都使用 inputSchema，并禁止未声明的额外参数。",
         "read_file 缺 path、write_file 的 content=null、未知 bash 等输入被拒绝。",
@@ -1274,7 +1274,7 @@
     }
   },
   {
-    "id": "d3-mcp",
+    "id": "s03-mcp",
     "demo": 3,
     "title": "MCP 是调用边界，不是一工具一服务",
     "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
@@ -1437,7 +1437,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='MCP 入口' tests/tool-loading.test.mjs",
-      "action": "在 demo3 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+      "action": "在 s03 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
       "observe": [
         "连接 URL 使用 http://127.0.0.1: 加临时端口。",
         "没有令牌的 POST 返回 403；带正确令牌但有 Origin 的 POST 仍返回 403。",
@@ -1462,7 +1462,7 @@
     }
   },
   {
-    "id": "d3-workspace",
+    "id": "s03-workspace",
     "demo": 3,
     "title": "在工作区里，也不等于有权读写",
     "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
@@ -1610,7 +1610,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='来源范围|工作区内的窄来源' tests/agent-core.test.mjs",
-      "action": "在 demo3 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+      "action": "在 s03 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
       "observe": [
         "移除 articles 读绑定后，outputs/new.md 仍能创建，但不能通过 read_file 读回。",
         "同名产物再次创建失败，原文件内容保留。",

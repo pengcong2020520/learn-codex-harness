@@ -1,10 +1,10 @@
 # 数据层升级工程文档
 
-> **适用版本**：Demo 4 数据层（单机单用户）
+> **适用版本**：s04 数据层（单机单用户）
 > **文档位置**：`app/docs/data-layer.md`，同步至 `stages/s04-data-layer/docs/data-layer.md`
 > **读者**：略懂代码的初学者，需理解本期边界、改法原理及如何复现排查
 
-> **知识层设计基线**：[知识层架构方案](knowledge-layer-design.md)。复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。Demo 5 已实现的具体范围见 [知识层实现说明](knowledge-implementation.md)，设计中的扩展项不等于已实现。
+> **知识层设计基线**：[知识层架构方案](knowledge-layer-design.md)。复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。s05 已实现的具体范围见 [知识层实现说明](knowledge-implementation.md)，设计中的扩展项不等于已实现。
 
 ---
 
@@ -311,7 +311,7 @@ async function writeFileWithProvenance(db, path, content, sourceVersions):
 
 ### 环境要求
 
-以下命令在项目目录执行；若运行 demo4，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
+以下命令在项目目录执行；若运行 s04，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
 
 ```bash
 cd app
@@ -421,7 +421,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 | 命令 | 覆盖内容 |
 |---|---|
-| `npm test` | 单元/集成测试，project 和 demo4 均已通过，具体数目以最终验收输出为准 |
+| `npm test` | 单元/集成测试，project 和 s04 均已通过，具体数目以最终验收输出为准 |
 | `npm run test:data` | 真实 PG/Redis/Codex/MCP/文件链路，新建临时集群、随机回环端口、不读 `.env`；含外部更新/删除按需失效、Redis 故障注入补投、JSON 迁移预检/幂等/冲突回滚 |
 | `npm run test:codex-tools` | Codex 工具，使用显式 test double 替代真实存储，不证明 PG 链路 |
 | `npm run test:codex-memory` | 原生记忆，原生合并功能仍 blocked |
@@ -430,7 +430,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `test:data` 为本机模拟，不声称真实网络断网演练，无真实 DeepSeek 端到端，无真实存量导入验收。
 
-演进目录的 `node verify.mjs --integration` 会执行 demo1 至 demo5 的测试及 demo4 / demo5 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
+演进目录的 `node verify.mjs --integration` 会执行 s01 至 s05 的测试及 s04 / s05 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
 
 ---
 

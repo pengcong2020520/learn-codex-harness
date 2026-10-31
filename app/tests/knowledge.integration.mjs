@@ -99,9 +99,9 @@ test('真实 Codex + PG + Redis：动态工具任务身份、维护范围持久�
   const config=loadServerConfig(root,{CODEX_API_KEY:'local-test-only',CODEX_BASE_URL:provider.url,CODEX_MODEL:'local-test-model',CODEX_MODEL_CATALOG_ENABLED:'true',CODEX_MODEL_CONTEXT_WINDOW:'128000',DEMO_TIMEOUT_MS:'15000',DATABASE_URL:databaseUrl,REDIS_URL:redisUrl});config.port=0;
   const app=await startAgentServer({config,log:()=>{}});cleanup(root,()=>app.close());
   const { createWorkbench }=await import('../web/server.mjs');
-  const bridge=createWorkbench({port:0,targets:[{id:'demo5',root,live:true,name:'test'}]});const bridgeUrl=await bridge.listen();cleanup(root,()=>bridge.close());
+  const bridge=createWorkbench({port:0,targets:[{id:'s05',root,live:true,name:'test'}]});const bridgeUrl=await bridge.listen();cleanup(root,()=>bridge.close());
   const boot=await fetch(bridgeUrl+'/api/bootstrap'),cookie=boot.headers.get('set-cookie').split(';')[0];
-  const web=async(route,body)=>{const response=await fetch(bridgeUrl+'/api/agent/demo5'+route,{method:body===undefined?'GET':'POST',headers:{cookie,'x-workbench':'1',...(body===undefined?{}:{origin:bridgeUrl,'content-type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});const value=await response.json();assert.ok(response.ok,JSON.stringify(value));return value;};
+  const web=async(route,body)=>{const response=await fetch(bridgeUrl+'/api/agent/s05'+route,{method:body===undefined?'GET':'POST',headers:{cookie,'x-workbench':'1',...(body===undefined?{}:{origin:bridgeUrl,'content-type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body)});const value=await response.json();assert.ok(response.ok,JSON.stringify(value));return value;};
   assert.equal((await web('/workbench')).agent.id,app.agent.definition.agent.id);
   const imported=await web('/knowledge/source',{kbId:'general',name:'web-import.md',content:'# Web 导入\n来自工作台的原文。'});
   assert.ok(imported.versionId);assert.equal((await web('/workspace/read?path=inputs%2Fgeneral%2Fweb-import.md')).versionId,imported.versionId);

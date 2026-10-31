@@ -33,6 +33,6 @@ const upstream=createServer(async(req,res)=>{
 });
 await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
 fs.writeFileSync(path.join(root,'.data/connection.json'),JSON.stringify({url:`http://127.0.0.1:${upstream.address().port}`,token:'fixture-only-no-real-credentials'}));
-const bridge=createWorkbench({port:4321,targets:[{id:'demo5',root,live:true,name:'UI fixture'}]});
+const bridge=createWorkbench({port:4321,targets:[{id:'s05',root,live:true,name:'UI fixture'}]});
 console.log(await bridge.listen());
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await bridge.close();upstream.closeAllConnections();await new Promise(r=>upstream.close(r));fs.rmSync(root,{recursive:true,force:true});process.exit(0);});

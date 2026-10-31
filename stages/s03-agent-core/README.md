@@ -1,14 +1,14 @@
-# Demo 3 — 配置驱动 Agent 核心（独立副本）
+# s03 — 配置驱动 Agent 核心（独立副本）
 
-本 demo 是独立源码快照，用于教学和验证配置驱动 Agent 核心。不共享 `app/` 的运行状态，不随 `app/` 自动更新。服务监听 `127.0.0.1:4313`，本机开发，无多用户公网授权。
+本阶段是独立源码快照，用于教学和验证配置驱动 Agent 核心。不共享 `app/` 的运行状态，不随 `app/` 自动更新。服务监听 `127.0.0.1:4313`，本机开发，无多用户公网授权。
 
 工具机制详见 [工具机制详解](docs/tools.md)。
 
-> **与旧版本的区别**：Demo 3 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 Demo 4，见 [数据层升级说明](../s04-data-layer/docs/data-layer.md)。
+> **与旧版本的区别**：s03 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 s04，见 [数据层升级说明](../s04-data-layer/docs/data-layer.md)。
 
 ## 设计原理
 
-前两个 Demo 演示了单轮和多轮对话基础。Demo 3 解决的问题是：**如何让同一套服务代码支持不同的角色、工具、资料权限和 Skill，而不修改代码本身？**
+前两个 Demo 演示了单轮和多轮对话基础。s03 解决的问题是：**如何让同一套服务代码支持不同的角色、工具、资料权限和 Skill，而不修改代码本身？**
 
 答案是配置驱动：把"这个 Agent 是谁、能用什么工具、能访问哪些资料"全部写进一个 JSON 文件，服务启动时读取并装配。调整角色或授权范围只需改配置；新增能力仍需实现工具或适配器。
 
@@ -20,7 +20,7 @@
 
 ## 架构改进
 
-与 Demo 1/2 相比，本 Demo 引入以下结构性改进：
+与 s01/s02 相比，本阶段引入以下结构性改进：
 
 ### 1. Agent 定义文件集中管理
 
@@ -42,9 +42,9 @@
 
 边界锁位于 [`server/modules/agents/boundary.mjs`](server/modules/agents/boundary.mjs)，不在 `agents/index.mjs`。[`server/main.mjs`](server/main.mjs) 只做编排：读定义 → 准备路径 → 注册服务 → 连接 Codex → 核验 → 生成描述符 → HTTP 就绪。各模块内部逻辑不上浮到 main。
 
-### 6. 业务状态本地 JSON（Demo 3 专属）
+### 6. 业务状态本地 JSON（s03 专属）
 
-本 Demo 不依赖数据库：
+本阶段不依赖数据库：
 
 | 文件 | 用途 |
 |------|------|
@@ -158,7 +158,7 @@ test -f .env || cp .env.example .env
 # 编辑 .env：填写 CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL
 # 端口默认 4313
 
-# 启动服务（Demo 3 不依赖数据库，无需 data:migrate）
+# 启动服务（s03 不依赖数据库，无需 data:migrate）
 npm run server
 
 # 另开终端
@@ -221,7 +221,7 @@ npm test
 npm run test:codex-tools
 npm run test:codex-memory
 npm run check
-npm run check:server   # 需先停止本 demo 的服务
+npm run check:server   # 需先停止本阶段的服务
 ```
 
 测试使用本机模拟模型，无需真实 API Key。`check` 校验配置，可能创建默认模板目录；`check:server` 复用完整启动流程。
@@ -241,14 +241,14 @@ node verify.mjs --docs-only
 | 限制项 | 说明 |
 |--------|------|
 | 单机单用户 | 每实例一个 Agent 多 Thread，不支持多账户或多 Agent 编排 |
-| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 Demo 4 |
+| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s04 |
 | 工具热增 | 新增工具需同时配置 allow 并受控重启 |
 | Skill 支持范围 | 仅验证原生文本指令型 Skill；带脚本/附件的工作流不保证运行 |
 | 记忆链路 | 读开关与提炼限制路径已测；合并摘要当前 blocked，完整链路未最终验收 |
 
 ## 本地 Web 外部客户端
 
-启动本 Demo 的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本 Demo。Web 接入层使用本 Demo 的连接文件，状态仍归本 Demo 管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
 
 ## 机制课程与逐课实验
 

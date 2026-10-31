@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="810" viewBox="0 0 1080 810" role="img" aria-labelledby="title desc">
-<title id="title">Demo 2 总体架构</title><desc id="desc">产品侧组织任务，独立 Codex 子进程负责模型与原生上下文。红色为本版新增职责。</desc>
+<title id="title">s02 总体架构</title><desc id="desc">产品侧组织任务，独立 Codex 子进程负责模型与原生上下文。红色为本版新增职责。</desc>
 <defs><marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7" fill="#8b9b80"/></marker></defs><rect width="1080" height="810" fill="#fafbf6"/>
-<text x="34" y="48" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="27" fill="#31482f" font-weight="600">DEMO 2 / 多轮会话：顺序与恢复</text>
+<text x="34" y="48" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="27" fill="#31482f" font-weight="600">S02 / 多轮会话：顺序与恢复</text>
 <text x="34" y="83" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="17" fill="#67775d" font-weight="400">红色：本版新增职责  ·  箭头：通信或调用关系  ·  只展示本版已实现能力</text>
 <rect x="34" y="117" width="604" height="123" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
 <text x="55" y="150" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#395735" font-weight="600">01  CLI 多轮入口</text>

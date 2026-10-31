@@ -19,7 +19,7 @@
       <button class="arch-component" data-desc="agent.tools.allow：工具白名单数组，如 ['list_files','read_file','write_file']。list 与 call 均执行此白名单，模型无法调用未列出的工具。">③ 工具白名单（tools.allow）</button>
       <button class="arch-component" data-desc="agent.dataBindings：资料源与目录映射。每条绑定声明 sourceRef、actions（read/create）和 methods。inputs 只读，research/drafts 可读可创建，outputs 按产物规则写入。">④ 资料绑定（dataBindings）</button>
       <button class="arch-component" data-desc="agent.outputs：产物规则，声明允许的输出目录、格式（md/txt）和写入模式（create-only，不覆盖）。文件落盘后检查存在性与扩展名。">⑤ 产物规则（outputs）</button>
-      <button class="arch-component" data-desc="agent.memory：记忆开关。use 控制是否召回原生记忆，contribute 控制是否向记忆库贡献。Demo3 两者均为 false。Skill 不等于记忆权限。">⑥ 记忆开关（memory）</button>
+      <button class="arch-component" data-desc="agent.memory：记忆开关。use 控制是否召回原生记忆，contribute 控制是否向记忆库贡献。s03 两者均为 false。Skill 不等于记忆权限。">⑥ 记忆开关（memory）</button>
     </div>
     <div class="arch-description">点击插槽查看各字段职责</div>
   </div>
@@ -54,7 +54,7 @@
     <div class="pattern-card">
       <div class="pattern-title"><span class="term" data-definition="Model Context Protocol，一种标准化协议，允许模型通过统一接口发现和调用外部工具，不是一工具一服务">MCP（模型上下文协议）</span></div>
       <div class="pattern-desc">
-        Demo3 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
+        s03 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
       </div>
     </div>
     <div class="pattern-card">
@@ -108,7 +108,7 @@
         <p class="tl"><strong>tools.allow</strong>：5 个工具名组成白名单，list 和 call 都受此约束，模型不可自行扩权。</p>
         <p class="tl"><strong>dataBindings</strong>：四个资料源，originals 和 articles 仅 read，research 和 drafts 可 read+create。articles 指向 outputs 目录，是来源绑定别名，不是新目录。</p>
         <p class="tl"><strong>executionRef</strong>：引用 bindings.executions 中的策略条目，当前为 restricted-local（只读沙箱，禁止原生 shell 和文件写）。</p>
-        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，Demo3 不读取也不贡献跨会话记忆。</p>
+        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，s03 不读取也不贡献跨会话记忆。</p>
       </div>
     </div>
   </div>
@@ -201,8 +201,8 @@
   <div class="callout callout-accent">
     <span class="callout-icon">⚠️</span>
     <div class="callout-content">
-      <p class="callout-title">业务状态存 JSON，不存数据库（Demo3 专属）</p>
-      <p>Demo3 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 Demo4 引入。</p>
+      <p class="callout-title">业务状态存 JSON，不存数据库（s03 专属）</p>
+      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s04 引入。</p>
     </div>
   </div>
 
@@ -239,22 +239,22 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        <strong>Demo2 → Demo3</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 Demo4。<br>
-        <strong>Demo3 → Demo4</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
-        Demo3 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
+        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s04。<br>
+        <strong>s03 → s04</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        s03 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
       </div>
     </div>
     <div class="pattern-card">
-      <div class="pattern-title">⌨️ 实践命令（Demo3 HTTP 服务）</div>
+      <div class="pattern-title">⌨️ 实践命令（s03 HTTP 服务）</div>
       <div class="pattern-desc">
         <code>cd stages/s03-agent-core &amp;&amp; npm ci</code><br>
         <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4313）<br>
         <code>npm run check</code>（本地配置校验）<br>
-        <code>npm run server</code>（启动服务，Demo3 无需数据库迁移）<br>
+        <code>npm run server</code>（启动服务，s03 无需数据库迁移）<br>
         另开终端：<code>npm run chat</code><br>
         验证工具：在 chat 中输入 <code>/tools</code><br>
         <code>npm test &amp;&amp; npm run test:codex-tools</code><br>
-        <a href="../../?stage=demo3">→ 进入 Demo3 练习</a>
+        <a href="../../?stage=s03">→ 进入 s03 练习</a>
       </div>
     </div>
     <div class="pattern-card">
@@ -314,8 +314,8 @@
     </div>
 
     <div class="quiz-question-block" data-correct="b"
-         data-explanation-right="正确。Demo3 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
-         data-explanation-wrong="A选项错误：Demo3 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
+         data-explanation-right="正确。s03 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
+         data-explanation-wrong="A选项错误：s03 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
       <h3 class="quiz-question">你新增第六个已授权工具，担心还要开第六个端口。按本项目结构，应该怎样接入？</h3>
       <div class="quiz-options">
         <button class="quiz-option" data-value="a" onclick="selectOption(this)">

@@ -4,11 +4,11 @@ services:
     environment:
       POSTGRES_USER: agent
       POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD in the terminal}
-      POSTGRES_DB: agent_demo4
+      POSTGRES_DB: agent_s04
     ports: ["127.0.0.1:5432:5432"]
     volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agent -d agent_demo4"]
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_s04"]
       interval: 5s
       timeout: 3s
       retries: 10

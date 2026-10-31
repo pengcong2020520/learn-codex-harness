@@ -1,4 +1,4 @@
-# Demo1：单轮会话问答
+# s01：单轮会话问答
 
 在阅读与运行本阶段代码前，请先查阅[总览](../README.md)完成基础环境安装与配置文件准备。
 
@@ -10,7 +10,7 @@ Codex 内部统一采用 Responses API 规范调用远端模型服务，因此�
 
 ## 架构改进
 
-作为演化序列的起点，Demo 1 建立了主控程序与执行引擎的解耦结构，规范了外部驱动的通信生命周期：
+作为演化序列的起点，s01 建立了主控程序与执行引擎的解耦结构，规范了外部驱动的通信生命周期：
 
 - 进程分层：[main.mjs](main.mjs) 仅作为执行入口，负责参数解析并调用 [05-app-server.mjs](05-app-server.mjs) 的启动逻辑，避免将流程管理与协议编排混杂。
 - 目录与配置隔离：[runtime.mjs](server/modules/codex/runtime.mjs) 负责准备 `.runs` 运行目录并写入当次 `models.json`；`05-app-server.mjs` 设置独立的 `.data/codex` 原生状态目录，避免与个人 Codex 状态混用。
@@ -24,7 +24,7 @@ Node 主进程 -> stdio JSON-RPC -> Codex 子进程 -> 远端模型服务
 
 整个单轮交互流程严格遵循顺序控制与状态收敛逻辑：
 
-1. 配置就绪与生成：读取环境参数并由配置模块构建模型目录，`runtime.mjs` 将它写入 `.runs`；`05-app-server.mjs` 创建并设置本 demo 的 `.data/codex` 状态目录。
+1. 配置就绪与生成：读取环境参数并由配置模块构建模型目录，`runtime.mjs` 将它写入 `.runs`；`05-app-server.mjs` 创建并设置本阶段的 `.data/codex` 状态目录。
 2. 进程挂载与握手：在 [05-app-server.mjs](05-app-server.mjs) 中通过 `child_process.spawn` 启动 Codex App Server，发送 `initialize` 方法并确认 `initialized` 通知，建立协议连接。
 3. 会话开启：调用 `thread/start` 建立新 Thread，并注入系统预设的基础 `baseInstructions`。
 4. 任务提交与监听：调用 `turn/start` 派发当前用户输入。由于由 `turn/start` 触发的事件通知可能在 RPC 调用结果返回前先一步到达 stdio，程序先暂存通知事件，待取得确认的 `turnId` 后再行匹配。

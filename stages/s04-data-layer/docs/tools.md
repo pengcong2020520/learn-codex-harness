@@ -1,12 +1,12 @@
-# Demo 3 工具机制详解
+# s03 工具机制详解
 
-> 本文是 Demo 3 的工具专题文档，只解释当前独立代码副本中已实现的工具机制，不涉及其他 demo 的实现细节。[返回 Demo 3 总览](../README.md)
+> 本文是 s03 的工具专题文档，只解释当前独立代码副本中已实现的工具机制，不涉及其他 demo 的实现细节。[返回 s03 总览](../README.md)
 
 ## 设计原理
 
-Demo 3 的工具系统围绕一个核心问题展开：如何让远端语言模型安全、可控地操作本地文件和网络资源？
+s03 的工具系统围绕一个核心问题展开：如何让远端语言模型安全、可控地操作本地文件和网络资源？
 
-Demo 3 把工具作为受版本管控的服务端能力：模型决定何时调用，程序负责检查权限并执行。当前范围是单机单用户、每服务实例一个 Agent 多 Thread，不是多租户安全隔离方案。
+s03 把工具作为受版本管控的服务端能力：模型决定何时调用，程序负责检查权限并执行。当前范围是单机单用户、每服务实例一个 Agent 多 Thread，不是多租户安全隔离方案。
 
 数据层升级后，正常服务注入的是 `data/resources.mjs`，再复用 `data/files.mjs` 的底层路径检查。前者增加 PostgreSQL 归属、资料 ID、版本、来源失效检查及正文快照；下文底层文件伪代码不代表完整持久化流程，详见 [数据层说明](data-layer.md)。`read_file` 额外返回 `resourceId` / `versionId`；`write_file` 可选 `source_versions: [{resourceId, versionId}]` 登记引用，不增加自动分类工具。
 
@@ -94,7 +94,7 @@ MCP SDK 将 `tools/list` 转给 `registry.specs`，将 `tools/call` 转给 `regi
 
 官方接口说明确认，`config/mcpServer/reload` 重读 MCP 配置并为已加载 Thread 排队刷新，`mcpServerStatus/list` 用于查看工具清单；是否允许继续旧会话，由本项目的版本规则另行决定。[Codex App Server 官方文档](https://learn.chatgpt.com/docs/app-server)
 
-以下以本 demo 锁定的 `@openai/codex 0.154.0` 和本地实现为准，不把其他版本的新接口当作已经接入。
+以下以本阶段锁定的 `@openai/codex 0.154.0` 和本地实现为准，不把其他版本的新接口当作已经接入。
 
 工具清单使用严格 JSON，不支持注释。加载器递归收集配置和实现，拒绝软链接、越界模块、重名和缺失处理函数；单个扫描文件不超过 1 MiB，最多收集 200 个文件。生成的 `.data/codex/config.toml` 是运行产物，不是手工维护工具清单的入口。
 
@@ -324,7 +324,7 @@ execFile(process.execPath, [固定 web-cli 路径, action, ...参数], {
 ### 启动验证
 
 ```bash
-# 从 repo 根目录进入 demo3
+# 从 repo 根目录进入 s03
 cd stages/s03-agent-core
 
 # 首次安装依赖
@@ -333,7 +333,7 @@ npm ci
 # 准备环境变量（.env 已存在则跳过，不要覆盖）
 test -f .env || cp .env.example .env
 # 编辑 .env，填写 CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL
-# 按 .env.example 配置时，demo3 端口为 4313，与 app 的 4317 区分
+# 按 .env.example 配置时，s03 端口为 4313，与 app 的 4317 区分
 # 不要使用 OPENAI_API_KEY
 
 # 启动服务（终端 1）
@@ -434,7 +434,7 @@ npm run test:codex-tools
 
 集成测试使用本地 fake 响应，不调用真实 DeepSeek/Google，不验证语义分类正确性。`npm test` 包含 fixtures，测试通过不等于模型在实际对话中的分类行为完全正确。
 
-文档验证：在 demo3 目录运行 `node ../verify.mjs --docs-only`，检查演进 README 的结构和链接；这个脚本不会递归检查本工具专题，本文的链接需另行检查。`--docs-only` 不更新 `verification.json`，单独运行 `npm test` 和集成测试也不更新该汇总记录。
+文档验证：在 s03 目录运行 `node ../verify.mjs --docs-only`，检查演进 README 的结构和链接；这个脚本不会递归检查本工具专题，本文的链接需另行检查。`--docs-only` 不更新 `verification.json`，单独运行 `npm test` 和集成测试也不更新该汇总记录。
 
 协议日志位于 `.runs/app-server-*/protocol.jsonl`；当前任务输入存 PostgreSQL，旧 `.data/messages.json` 原件也可能含用户文本。脱敏不等于没有隐私内容，排错只分享必要片段，不公开完整日志或真实密钥。
 

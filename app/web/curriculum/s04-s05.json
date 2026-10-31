@@ -1,6 +1,6 @@
 [
   {
-    "id": "d4-persistence",
+    "id": "s04-persistence",
     "demo": 4,
     "title": "消息收到了，为什么还需要一条 outbox？",
     "principle": "任务正文和待唤醒记录在同一个 PostgreSQL 事务里提交，才不会留下“已接收却永远没人处理”的任务。",
@@ -162,12 +162,12 @@
     ],
     "experiment": {
       "command": "npm run test:data",
-      "action": "在 demo4 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
+      "action": "在 s04 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
       "observe": [
         "失败期间任务仍为 queued，deliveries() 仍能找到 outbox。",
         "恢复后 Thread 被投递；同消息 ID 的端到端重试没有增加模型夹具请求。"
       ],
-      "boundary": "Node.js 24+，先安装本 Demo 依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
     },
     "quiz": {
       "question": "任务已提交，但 Redis 断开。用户想确认是否需要重新发一条，最合理的依据是什么？",
@@ -186,7 +186,7 @@
     }
   },
   {
-    "id": "d4-dispatch",
+    "id": "s04-dispatch",
     "demo": 4,
     "title": "Redis 丢了，哪条任务还能继续？",
     "principle": "Redis 只负责提醒检查某个 Thread；PG 的状态转换决定领取，未知结果不能自动重发。",
@@ -348,7 +348,7 @@
     ],
     "experiment": {
       "command": "node --test tests/scheduling.test.mjs",
-      "action": "在 demo4 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
+      "action": "在 s04 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
       "observe": [
         "重启后 A 为 unconfirmed、B 为 queued、会话 paused=true。",
         "迟到的绑定响应不能把 unconfirmed 改为 running；原 turn/start 只调用一次。"
@@ -372,7 +372,7 @@
     }
   },
   {
-    "id": "d4-versions",
+    "id": "s04-versions",
     "demo": 4,
     "title": "原文改了一句，旧产物还能读吗？",
     "principle": "资源 ID 指向同一份资料，版本 ID 指向一次内容快照；来源变化应让依赖旧版本的产物失效。",
@@ -534,12 +534,12 @@
     ],
     "experiment": {
       "command": "npm run test:data",
-      "action": "在 demo4 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
+      "action": "在 s04 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
       "observe": [
         "原文变化前后 resourceId 相同，versionId 不同。",
         "直接读取旧摘要或最终产物失败；撤销后通过路径与 ID 两种入口都不能读取。"
       ],
-      "boundary": "Node.js 24+，先安装本 Demo 依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
     },
     "quiz": {
       "question": "原文已更新，旧摘要文件仍在。哪项足以说明摘要可以继续使用？",
@@ -558,7 +558,7 @@
     }
   },
   {
-    "id": "d5-gate",
+    "id": "s05-gate",
     "demo": 5,
     "title": "工具参数里的“我是管理员”为什么不算身份？",
     "principle": "身份由服务端从当前任务和 Turn 绑定产生，模型只能填写业务参数，不能自己授予权限。",
@@ -720,7 +720,7 @@
     ],
     "experiment": {
       "command": "node --test tests/knowledge.test.mjs",
-      "action": "在 demo5 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
+      "action": "在 s05 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
       "observe": [
         "伪造身份、shell 工具、跨 owner、普通任务更新全部拒绝。",
         "正确维护任务对挂载 KB 的 update 通过；旧上下文结束后不能复用。"
@@ -744,7 +744,7 @@
     }
   },
   {
-    "id": "d5-mounts",
+    "id": "s05-mounts",
     "demo": 5,
     "title": "读得到 inputs，不等于读得到所有知识库",
     "principle": "知识库挂载决定可见范围，文件路径入口也必须经过同一边界，不能用宽目录权限绕过窄知识库权限。",
@@ -906,7 +906,7 @@
     ],
     "experiment": {
       "command": "node --test tests/knowledge.test.mjs",
-      "action": "在 demo5 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
+      "action": "在 s05 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
       "observe": [
         "宽 inputs 权限不能读取未挂载的 foreign 原文。",
         "普通 write_file 不能写入 Wiki 目录；合法 mount 的 read 检查可以通过。"
@@ -930,7 +930,7 @@
     }
   },
   {
-    "id": "d5-wiki",
+    "id": "s05-wiki",
     "demo": 5,
     "title": "两次更新同时提交，谁能成为当前 Wiki？",
     "principle": "Wiki 提交必须同时证明“我依据的来源仍有效”和“我修改的页面版本仍是当前版本”。",
@@ -1092,12 +1092,12 @@
     ],
     "experiment": {
       "command": "npm run test:data",
-      "action": "在 demo5 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
+      "action": "在 s05 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
       "observe": [
         "相同 expectedVersion 的两次并发提交只有一次成功，另一次返回 VERSION_CONFLICT。",
         "原文在磁盘变更后 kb_read 拒绝旧 Wiki；write_file 不能绕过 Wiki 接口。"
       ],
-      "boundary": "Node.js 24+，先安装本 Demo 依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
     },
     "quiz": {
       "question": "页面 current_version 没变，但它引用的原文已经更新。expectedVersion 仍匹配，提交就该成功吗？",
@@ -1116,7 +1116,7 @@
     }
   },
   {
-    "id": "d5-rag",
+    "id": "s05-rag",
     "demo": 5,
     "title": "新索引失败，为什么旧索引指针不能先切？",
     "principle": "向量与关键词索引属于同一个版本；两边完成并核对来源后才推进指针，检索再按名次融合。",
@@ -1278,13 +1278,13 @@
     ],
     "experiment": {
       "command": "npm run test:rag",
-      "action": "在 demo5 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
+      "action": "在 s05 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
       "observe": [
         "混合召回能找到中文原文，重建失败后 indexRevision 保持原值。",
         "索引完成后旧服务仍是 wiki；重新打开 KnowledgeService 才是 rag。",
         "来源修改后搜索拒绝旧索引；embedding 失败不静默回退 Wiki。"
       ],
-      "boundary": "Node.js 24+，先安装本 Demo 依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。 另需本机 chroma 命令（或 CHROMA_TEST_BIN）与 chromadb 依赖；embedding 为确定性本机夹具，不能证明真实向量语义质量。仅查算法可运行 node --test tests/knowledge.test.mjs。"
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。 另需本机 chroma 命令（或 CHROMA_TEST_BIN）与 chromadb 依赖；embedding 为确定性本机夹具，不能证明真实向量语义质量。仅查算法可运行 node --test tests/knowledge.test.mjs。"
     },
     "quiz": {
       "question": "向量列表 [a,b]、关键词列表 [b,c] 做 RRF60，为什么 b 可能排在 a 前面？",
@@ -1303,7 +1303,7 @@
     }
   },
   {
-    "id": "d5-modes",
+    "id": "s05-modes",
     "demo": 5,
     "title": "配置改成 RAG，为什么旧会话不能马上接着聊？",
     "principle": "期望模式、有效模式和 Thread 绑定是不同状态；配置变更经过重启，能力版本变化后新建 Thread。",
@@ -1465,7 +1465,7 @@
     ],
     "experiment": {
       "command": "node --test tests/agent-core.test.mjs tests/knowledge.test.mjs",
-      "action": "在 demo5 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
+      "action": "在 s05 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
       "observe": [
         "Agent 定义热改后拒绝调用，改回文件也不能免重启恢复已撤销的权限。",
         "旧 Thread/排队项与新 descriptor 不兼容时，不发送下一轮。",

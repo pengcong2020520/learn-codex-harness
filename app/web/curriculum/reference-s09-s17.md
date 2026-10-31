@@ -1,6 +1,6 @@
 # s09–s17：从机制教材到本项目的取舍
 
-本记录支持 `demo45.json` 的 8 个课题。参考固定为 [learn-claude-code / ce8f9f1](https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3)。已逐节阅读 s09–s17 的完整 `README.zh.md` 与 `code.py`，并对照本地 Demo4/5 的数据、调度、知识库、门禁、Agent 绑定及测试代码。参考代码按 Python AST 识别重复函数，重复部分与已读原函数逐项一致；新增及变化部分单独逐段读取。没有运行参考的模型客户端，也没有复制其循环进入本项目。
+本记录支持 `s04-s05.json` 的 8 个课题。参考固定为 [learn-claude-code / ce8f9f1](https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3)。已逐节阅读 s09–s17 的完整 `README.zh.md` 与 `code.py`，并对照本地 本项目 s04/s05 的数据、调度、知识库、门禁、Agent 绑定及测试代码。参考代码按 Python AST 识别重复函数，重复部分与已读原函数逐项一致；新增及变化部分单独逐段读取。没有运行参考的模型客户端，也没有复制其循环进入本项目。
 
 当前写作采用宿主基于源码的原创撰写。根任务已尝试 gemini-doc-writer，agy 返回配额 429；本次没有重复调用。课程中的动画均为教学模拟；JSON 状态不是当前服务器实时数据。参考的实现事实、本项目已有实现和可借鉴的未来机制分别说明。
 
@@ -22,7 +22,7 @@
 
 代码校对发现：`extract_json_array` 在解析不到数组时返回 `[]`，`select_relevant_memories` 只有异常分支才执行 keyword fallback。因此“任何 JSON 解析失败都自动关键词召回”不是当前代码严格保证的行为。合并的文件回滚也不是并发事务系统。
 
-本项目没有自行实现这套 Markdown 自动抽取/合并系统。早期版本调用 Codex 原生 memory 接口；Demo5 挂载 KB 时明确禁止有效原生 memory 开启。KB 的 Wiki/RAG 用受控原文与精确版本，不承担“从每段对话自动学会偏好”的职责。采用其生命周期讲法生成 `d4-versions` 和 `d5-modes`，不把长期记忆、Thread 历史、业务数据库、知识库当作同一存储层。
+本项目没有自行实现这套 Markdown 自动抽取/合并系统。早期版本调用 Codex 原生 memory 接口；本项目 s05 挂载 KB 时明确禁止有效原生 memory 开启。KB 的 Wiki/RAG 用受控原文与精确版本，不承担“从每段对话自动学会偏好”的职责。采用其生命周期讲法生成 `s04-versions` 和 `s05-modes`，不把长期记忆、Thread 历史、业务数据库、知识库当作同一存储层。
 
 本地证据：`s05-knowledge-layer/server/modules/agents/index.mjs::configure/activate/checkBinding`；`server/modules/memory/index.mjs`；`s04-data-layer/server/modules/data/resources.mjs::version/refreshSources`。
 
@@ -34,7 +34,7 @@
 
 单独 s10 没有并发锁，保存用 `write_text`；创建使用排他文件创建。`owner` 字段存在不等于多执行器领取已安全，更不等于团队运行时已经出现。s13 才加入线程锁/进程文件锁及原子替换等并发机制。
 
-本项目的 `agent_data.tasks` 是用户消息队列，不是模型规划出的 DAG。顺序来自数据库 sequence，普通消息逐个启动 Turn，显式 append 另有语义。Demo4 的关键新增是事务内保存 task 和 outbox，以及条件领取和重启隔离未知结果。`d4-persistence` 借鉴“状态移出上下文”；`d5-wiki` 借鉴“转移必须具备可执行前提”，但绝不写成本项目已有 blockedBy。
+本项目的 `agent_data.tasks` 是用户消息队列，不是模型规划出的 DAG。顺序来自数据库 sequence，普通消息逐个启动 Turn，显式 append 另有语义。本项目 s04 的关键新增是事务内保存 task 和 outbox，以及条件领取和重启隔离未知结果。`s04-persistence` 借鉴“状态移出上下文”；`s05-wiki` 借鉴“转移必须具备可执行前提”，但绝不写成本项目已有 blockedBy。
 
 本地证据：`s04-data-layer/server/modules/data/jobs.mjs::create/patch/recover`、`schema.sql::tasks/outbox`；`messages/index.mjs::dispatch`；`s05-knowledge-layer/server/modules/knowledge/index.mjs::submit`。
 
@@ -46,7 +46,7 @@
 
 单独 s11 只会在下一次模型调用前收集结果。模型已经返回并等用户输入时，任务完成并不会主动唤醒它；自动后台事件唤醒是 s15 整合后的行为。进程内字典也不能保证重启后找回运行中的 shell。
 
-我们的 Redis 是 Thread 唤醒集合，没有后台任意 bash。`d4-dispatch` 用相同分层方法区分“通知到了”“PG 领取成功”“Turn 有终态”；Demo5 的索引 worker 是固定功能后台作业，不是具备自有推理上下文的子 Agent。
+我们的 Redis 是 Thread 唤醒集合，没有后台任意 bash。`s04-dispatch` 用相同分层方法区分“通知到了”“PG 领取成功”“Turn 有终态”；本项目 s05 的索引 worker 是固定功能后台作业，不是具备自有推理上下文的子 Agent。
 
 本地证据：`s04-data-layer/server/modules/data/queue.mjs::poll`、`jobs.mjs::recover`、`messages/index.mjs::executionError/bind/continue`；`s05-knowledge-layer/server/modules/knowledge/worker.mjs`。
 
@@ -58,7 +58,7 @@
 
 持久化的是计划和待投递状态，不是机器关闭期间仍在运行的时钟。离线错过的时间点没有自动补齐；需要进程常驻，跨进程关机唤醒需要 OS 或外部调度。异步线程无法进行终端交互确认，相关工具会拒绝。
 
-本项目没有 cron 表达式调度或定时创建模型输入。RedisQueue 的 200ms poll 检查已有可投递工作，不是用户定时计划；knowledge worker 的 1s tick 同理。`d4-dispatch` 只学习“持久状态与临时投递分开”，不新增定时功能。
+本项目没有 cron 表达式调度或定时创建模型输入。RedisQueue 的 200ms poll 检查已有可投递工作，不是用户定时计划；knowledge worker 的 1s tick 同理。`s04-dispatch` 只学习“持久状态与临时投递分开”，不新增定时功能。
 
 ## s13 Agent Teams：长期队友需要协议与共享工作状态
 
@@ -76,9 +76,9 @@
 
 这一节从 s04 分支增加 MCP，并非线性继承 s13。代码的 MCPClient 是进程内 mock 注册表，以 docs/deploy 示例演示 tools/list、tools/call 的语义，没有真实网络传输。每轮动态组装工具及 handler；前一轮新连接的工具到下一轮才可见。名称加 namespace 并校验长度/冲突，绑定 lambda 时固定 server/tool，避免闭包引用最后一项。
 
-外部 readOnlyHint 只是元数据。真正允许、拒绝或确认由宿主 policy 决定；未知工具不能因名字像只读就默认允许。该边界适合 `d5-mounts`：工具可见不等于所有资源可读。
+外部 readOnlyHint 只是元数据。真正允许、拒绝或确认由宿主 policy 决定；未知工具不能因名字像只读就默认允许。该边界适合 `s05-mounts`：工具可见不等于所有资源可读。
 
-本项目 Demo4 使用真实 MCP 传输和受限文件工具；Demo5 的代码路径 `ToolManager.configuration/dynamicTools` 在存在 gate 时提供 dynamicTools，RPC 回调按 Thread/Turn 找到可信上下文再调用同一 registry。审查时发现一条“新 Thread 只注册 MCP”的过时注释；根任务已同步修正 Demo5 与 project 的注释，课程以执行分支及集成测试为准。这里没有照搬参考的 mock 客户端。
+本项目 s04 使用真实 MCP 传输和受限文件工具；本项目 s05 的代码路径 `ToolManager.configuration/dynamicTools` 在存在 gate 时提供 dynamicTools，RPC 回调按 Thread/Turn 找到可信上下文再调用同一 registry。审查时发现一条“新 Thread 只注册 MCP”的过时注释；根任务已同步修正 本项目 s05 与 project 的注释，课程以执行分支及集成测试为准。这里没有照搬参考的 mock 客户端。
 
 ## s15 Integrated Harness：整合会改变机制的组合边界
 
@@ -90,7 +90,7 @@
 
 整合不代表前节所有增强逐字保留：独立 s12 持久 last_fired，而 s15 `_last_fired` 是内存表；其 durable pending 逻辑也不同，不能把 s12 的细节无条件投射到 s15。s15 内置 TOOLS 实际为 26 项，说明中某汇总表写 25；应按代码核对数量，课程不依赖该数字。
 
-本项目已有固定权限与事件处理，但没有暴露通用 UserPromptSubmit/PreToolUse/PostToolUse/Stop hooks 插件系统，没有自行实现 Todo、subagent/team 或上下文压缩循环；这些属于参考宿主机制，而当前 Codex 的推理和上下文循环仍由 Codex 承担。`d5-gate` 只采用统一边界检查的设计原则。
+本项目已有固定权限与事件处理，但没有暴露通用 UserPromptSubmit/PreToolUse/PostToolUse/Stop hooks 插件系统，没有自行实现 Todo、subagent/team 或上下文压缩循环；这些属于参考宿主机制，而当前 Codex 的推理和上下文循环仍由 Codex 承担。`s05-gate` 只采用统一边界检查的设计原则。
 
 ## s16 Workflow Runtime：计划变成受信代码，结果可按语义键复用
 
@@ -102,7 +102,7 @@ run_id 用排他创建预留；跨线程与 POSIX 文件锁覆盖执行和持久
 
 两处教学边界：事件叫 async_launched，但 `WorkflowTool.call` 自身等待 script 完成，`run_workflow_sync` 通过 asyncio.run 阻塞到结果；不能根据事件名宣称主 agent 已自由继续。预算在调用返回、知道 token 数以后累计并判断，不是保证 API 在花费前绝不越预算的配额闸。schema validator 也是教学子集，integer 与 number 都接收数值，不应当作完整 JSON Schema 校验器。
 
-本项目没有 Workflow 注册执行器、并行 agent 编排、journal resume 或语义结果缓存。RAG 构建只是固定管线，`d5-rag` 借鉴其“阶段、状态、提交、失败可观察”方法；暂存索引失败要重建，不宣称可从任意中间分块透明续跑。knowledge_jobs 运行中断会标 failed。
+本项目没有 Workflow 注册执行器、并行 agent 编排、journal resume 或语义结果缓存。RAG 构建只是固定管线，`s05-rag` 借鉴其“阶段、状态、提交、失败可观察”方法；暂存索引失败要重建，不宣称可从任意中间分块透明续跑。knowledge_jobs 运行中断会标 failed。
 
 ## s17 Goal Loop：一轮想停止，不等于目标证据齐全
 
@@ -132,12 +132,12 @@ run_id 用排他创建预留；跨线程与 POSIX 文件锁覆盖执行和持久
 
 ## 本项目落地与验证
 
-`demo45.json` 包含 `d4-persistence`、`d4-dispatch`、`d4-versions`、`d5-gate`、`d5-mounts`、`d5-wiki`、`d5-rag`、`d5-modes`。每个 source.needle 在对应 Demo 源文件中唯一匹配，前后上下文由构建器从真实文件提取，课程没有手工伪造代码片段。64 个教学步骤使用同课一致状态键；所有 event 明示“教学模拟”。
+`s04-s05.json` 包含 `s04-persistence`、`s04-dispatch`、`s04-versions`、`s05-gate`、`s05-mounts`、`s05-wiki`、`s05-rag`、`s05-modes`。每个 source.needle 在对应阶段源文件中唯一匹配，前后上下文由构建器从真实文件提取，课程没有手工伪造代码片段。64 个教学步骤使用同课一致状态键；所有 event 明示“教学模拟”。
 
 本次局部实际执行：
 
-- Demo4：`node --test tests/scheduling.test.mjs`，11/11 通过。
-- Demo5：`node --test tests/agent-core.test.mjs tests/knowledge.test.mjs`，13/13 通过。
+- 本项目 s04：`node --test tests/scheduling.test.mjs`，11/11 通过。
+- 本项目 s05：`node --test tests/agent-core.test.mjs tests/knowledge.test.mjs`，13/13 通过。
 - JSON 的 8 个 ID、16 个四步场景、24 个概念、8 个测验答案范围、8 个唯一源码锚点均已检查。
 
 这些局部测试是夹具与真实业务函数验证，不代表真实模型回答质量。JSON 中的 `npm run test:data`、`npm run test:rag` 命令已核对脚本：创建隔离临时 PG/Redis（RAG 另有 Chroma），使用本机模型/embedding 夹具，不读取 `.env`，不操作既有数据服务。本局部任务未重复运行整套基础设施验收，由根任务统筹；没有把未执行命令报告成已通过。

@@ -6,13 +6,13 @@
 
 本期数据层已接入 PostgreSQL + Redis + 文件存储，并保留 Codex 原生存储。审查结论、迁移步骤和验收边界见 [数据层升级说明](docs/data-layer.md)。当前仍是本机单用户入口，未实现账号登录或多用户运行环境隔离。
 
-知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。Demo 5 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
+知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s05 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
 
 运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。第三方模型端点必须支持 Responses API；只有 Chat Completions 接口不能直接接入，生成模型目录 JSON 不会转换协议。
 
-## 五个 Demo 的教学与 Web 工作台
+## 五个阶段的教学与 Web 工作台
 
-在本目录运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [Agent 工作台](http://127.0.0.1:4320/)。课程无需模型服务；工作台可切换五个 Demo 和当前项目，连接已启动的对应服务。完整操作与边界见 [web/README.md](web/README.md)。
+在本目录运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [Agent 工作台](http://127.0.0.1:4320/)。课程无需模型服务；工作台可切换五个阶段和当前项目，连接已启动的对应服务。完整操作与边界见 [web/README.md](web/README.md)。
 
 两个可复制场景见 [examples](examples/README.md)。配置选择、会话兼容、工具身份接口及冒烟模板见 [脚手架升级说明](docs/harness-upgrade.md)。
 
@@ -195,4 +195,4 @@ npm run check:server
 
 当前实现包含配置装配、结构化来源、Wiki、可选 RAG 和可信工具上下文；真实模型完整记忆生成及多用户认证/运行隔离仍后置。
 
-工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；独立教学版本见 [Demo 3–5 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
+工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；独立教学版本见 [s03–s05 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。

@@ -1,34 +1,34 @@
-# Demo 5 — 知识层与通用门禁
+# s05 — 知识层与通用门禁
 
-在 Demo 4 数据层基础上新增知识库（KB / Wiki / 可选 RAG）和统一权限门禁。`app/` 同步升级至此实现。服务监听 `127.0.0.1:4315`。知识层实现细节见 [知识实现详解](docs/knowledge-implementation.md)。
+在 s04 数据层基础上新增知识库（KB / Wiki / 可选 RAG）和统一权限门禁。`app/` 同步升级至此实现。服务监听 `127.0.0.1:4315`。知识层实现细节见 [知识实现详解](docs/knowledge-implementation.md)。
 
-![Demo 5 系统架构总图](docs/assets/demo5-architecture.svg)
+![s05 系统架构总图](docs/assets/s05-architecture.svg)
 
-> 图为职责划分，不是每层起一个独立进程。右侧 Codex 原生运行时独立进程：通过 stdio 与 02 层通信，通过 **dynamicTools 回调** 进入 03 门禁。红色标注为相比 Demo 4 的新增/变化项。
+> 图为职责划分，不是每层起一个独立进程。右侧 Codex 原生运行时独立进程：通过 stdio 与 02 层通信，通过 **dynamicTools 回调** 进入 03 门禁。红色标注为相比 s04 的新增/变化项。
 
 ---
 
 ## 设计原理
 
-Demo 4 解决了业务数据的可靠存储与调度。Demo 5 解决两个新问题：
+s04 解决了业务数据的可靠存储与调度。s05 解决两个新问题：
 
 **1. 知识组织**：让 Agent 基于本机原始资料维护结构化知识（Wiki），并可选建立语义索引（RAG），而不是直接读取散落文件。
 
-**2. 权限一致性**：工具调用、知识访问、文件读写的权限判定散落各模块，Demo 5 在同进程内以统一门禁拦截所有工具路径。
+**2. 权限一致性**：工具调用、知识访问、文件读写的权限判定散落各模块，s05 在同进程内以统一门禁拦截所有工具路径。
 
 **设计要点：**
 
 - **正文版本不可变**：工作区原文可以由操作者更新；登记的原文快照与 Wiki 正文以不可变 blob 保存，版本可追踪。
 - **Wiki 基于原文**：Codex 阅读原始资料后，通过 `kb_submit_revision` 工具写 Wiki；Wiki 不能引用 Wiki 自身，仅引用当前有效原文版本（直接来源）。
 - **门禁统一**：所有工具（文件、知识）通过同一 `server/modules/permissions/index.mjs` 判定，权限来自服务端签发的任务上下文，不依赖模型自称身份。
-- **传输升级**：Demo 5 真实数据主流程使用 Codex 原生 **dynamicTools**（实验性 `item/tool/call`），通过 native RPC envelope 绑定任务上下文并进入统一门禁；MCP 实现保留供兼容测试，生产配置不向 Codex 暴露 MCP 入口（门禁模式下不启 MCP listener）。
+- **传输升级**：s05 真实数据主流程使用 Codex 原生 **dynamicTools**（实验性 `item/tool/call`），通过 native RPC envelope 绑定任务上下文并进入统一门禁；MCP 实现保留供兼容测试，生产配置不向 Codex 暴露 MCP 入口（门禁模式下不启 MCP listener）。
 
 **关键约束：**
 
 - 单机单 owner，多 Thread；无登录、无共享 KB、无多主机。
 - 挂 KB 须 `AGENT_MEMORY_ENABLED=false`；原生记忆禁用，原生会话历史继续保留；权限收窄后需新建 Thread，旧历史不可撤回。
 - Chroma 可选；RAG 需先配置后重启构建，不热切换；已生效 rag 不兼容则拒绝启动，运行错误不 fallback 至 wiki。
-- 使用数据库 `agent_demo5`（schema v2）；两个 Demo 的 Compose 都绑定 5432/6379，不能同时启动两套依赖；可共用一组 PG/Redis 并使用不同数据库。
+- 使用数据库 `agent_s05`（schema v2）；两个 Demo 的 Compose 都绑定 5432/6379，不能同时启动两套依赖；可共用一组 PG/Redis 并使用不同数据库。
 
 ---
 
@@ -46,7 +46,7 @@ Demo 4 解决了业务数据的可靠存储与调度。Demo 5 解决两个新问
 | 输出 | SSE token 流；任务 ID；知识 CLI 响应 |
 | 代码 | [HTTP 路由](server/modules/http/index.mjs)、[knowledge CLI](scripts/knowledge.mjs) |
 
-与 Demo 4 相比：新增 knowledge CLI 子命令入口，HTTP 也经过门禁（详见 03 层）。
+与 s04 相比：新增 knowledge CLI 子命令入口，HTTP 也经过门禁（详见 03 层）。
 
 ### 02 Agent 装配与任务调度
 
@@ -126,11 +126,11 @@ Codex 每次工具调用触发 `item/tool/call` → 02 层回调 → 03 层门�
 
 ### 05 数据与索引
 
-**为何存在**：在 Demo 4 schema v1 基础上，以顺序迁移（`002-knowledge.sql`）扩展知识层所需表。
+**为何存在**：在 s04 schema v1 基础上，以顺序迁移（`002-knowledge.sql`）扩展知识层所需表。
 
 | 子系统 | 用途 | 关键约束 |
 |--------|------|----------|
-| **PostgreSQL** `agent_demo5` | v1 + 知识相关表 | schema v2；顺序迁移并验证旧 checksum |
+| **PostgreSQL** `agent_s05` | v1 + 知识相关表 | schema v2；顺序迁移并验证旧 checksum |
 | **Redis** | Thread ID Set + knowledge_jobs 独立 key | 两个独立唤醒路径 |
 | **文件** `.data/files/objects/` | 资源与 Wiki immutable blob | 无 hash 子目录 |
 | **BM25** `.data/knowledge/bm25/` | 持久 BM25 索引文件 | 每 revision 一个 JSON 文件 |
@@ -170,7 +170,7 @@ test -f .env || cp .env.example .env
 #   CODEX_API_KEY=...
 #   CODEX_BASE_URL=...
 #   CODEX_MODEL=...
-#   DATABASE_URL=postgresql://agent:<密码>@127.0.0.1:5432/agent_demo5
+#   DATABASE_URL=postgresql://agent:<密码>@127.0.0.1:5432/agent_s05
 #   REDIS_URL=redis://127.0.0.1:6379
 #   AGENT_MEMORY_ENABLED=false
 # 两套 Compose 的依赖端口相同，不可同时启动两套
@@ -349,7 +349,7 @@ await gate.run(context, async () => {
 
 ## 本地 Web 外部客户端
 
-启动本 Demo 的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本 Demo。Web 接入层使用本 Demo 的连接文件，状态仍归本 Demo 管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
 
 ## 机制课程与逐课实验
 

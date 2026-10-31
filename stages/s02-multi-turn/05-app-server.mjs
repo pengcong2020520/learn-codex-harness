@@ -1,4 +1,4 @@
-// demo2：从当前 project 重建的多轮对话教学版，不依赖原项目。
+// s02：从当前 project 重建的多轮对话教学版，不依赖原项目。
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
@@ -14,7 +14,7 @@ export const PROJECT_ROOT = fileURLToPath(new URL("./", import.meta.url));
 const require = createRequire(import.meta.url);
 const DEFAULT_PROMPT = "只回复：App Server 已连接。不要调用工具。";
 
-// 复用本 demo 内的配置模块，角色与模型目录保持同一来源。
+// 复用本阶段内的配置模块，角色与模型目录保持同一来源。
 export { loadEnvironment, buildModelCatalog, buildAppServerLaunch, createLogRedactor };
 
 export function parseOptions(argv) {
@@ -66,7 +66,7 @@ export { listProjectThreads };
 export { prepareRun };
 
 export async function runAppServer(launch, options, cli, root = PROJECT_ROOT, io = {}) {
-  // 每个 demo 拥有独立的 Codex 状态，不访问个人目录或其他版本。
+  // 每个阶段拥有独立的 Codex 状态，不访问个人目录或其他版本。
   const home = path.join(root, ".data", "codex");
   for (const directory of [path.join(root, ".data"), home]) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -324,9 +324,9 @@ export async function main(argv = process.argv.slice(2)) {
     const launch = buildAppServerLaunch(environment);
     let cli;
     try { cli = path.join(path.dirname(require.resolve("@openai/codex/package.json")), "bin/codex.js"); }
-    catch { throw new Error("未安装 Codex 依赖。请在本 demo 目录运行 npm ci。"); }
+    catch { throw new Error("未安装 Codex 依赖。请在本阶段目录运行 npm ci。"); }
     console.log("项目目录：", PROJECT_ROOT);
-    console.log("配置来源：本 demo 的 .env（同名终端环境变量优先）");
+    console.log("配置来源：本阶段的 .env（同名终端环境变量优先）");
     console.log("认证方式：", launch.authMode === "apiKey" ? "API Key（不显示密钥）" : "已有 Codex 配置/登录");
     console.log("配置模型：", redact(launch.model || "使用 Codex 默认值"));
     if (launch.baseUrl) console.log("API 地址：", redact(launch.baseUrl));

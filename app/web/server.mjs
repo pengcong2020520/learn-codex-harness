@@ -9,7 +9,7 @@ const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
 // Demo N 的源码快照位于仓库 stages/ 下；课程构建也从这里取目录，避免两处各写一份。
 export const stageDirs = ['s01-single-turn','s02-multi-turn','s03-agent-core','s04-data-layer','s05-knowledge-layer'].map(name => `stages/${name}`);
 export const defaultTargets = [
-  ...[1,2,3,4,5].map(n => ({ id:`demo${n}`,name:`Demo ${n}`,root:path.resolve(root,'..',stageDirs[n-1]),live:n>=3,port:4310+n })),
+  ...[1,2,3,4,5].map(n => ({ id:`s0${n}`,name:`s0${n}`,root:path.resolve(root,'..',stageDirs[n-1]),live:n>=3,port:4310+n })),
   {id:'project',name:'当前项目',root,live:true,port:4317}
 ];
 const readRoutes = new Set(['/health','/workbench','/sessions','/state','/events','/tools','/memory','/preferences','/workspace','/workspace/read','/resources/read','/knowledge','/knowledge/pages','/knowledge/read','/knowledge/job']);

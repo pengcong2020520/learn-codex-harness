@@ -10,12 +10,12 @@
 <!-- Screen 1: 总架构对比图 -->
 <section class="screen animate-in" id="m2-screen-1">
   <h2 class="screen-heading">全景：从单轮到多轮的三个关键变化</h2>
-  <p>Demo2 在 Demo1 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
+  <p>s02 在 s01 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
 
   <div class="pattern-cards">
     <div class="pattern-card">
       <div class="pattern-title">变化 1：<span class="term" data-definition="持续保存一段对话上下文的会话容器，如一本笔记本。">Thread</span> 跨 <span class="term" data-definition="同一会话里的一次用户任务，如笔记本的一页；有独立的唯一标识。">Turn</span> 复用</div>
-      <div class="pattern-desc">Demo1：一次执行一个 Thread，结束即关闭。Demo2：同一 Thread 可以持续接收新 Turn，直到用户退出或执行 /resume 切换。</div>
+      <div class="pattern-desc">s01：一次执行一个 Thread，结束即关闭。s02：同一 Thread 可以持续接收新 Turn，直到用户退出或执行 /resume 切换。</div>
     </div>
     <div class="pattern-card">
       <div class="pattern-title">变化 2：<span class="term" data-definition="先进先出：早输入的消息先执行，上一轮结束后再处理下一条。">FIFO 输入缓冲</span></div>
@@ -92,7 +92,7 @@
       <span class="translation-label">关键区分</span>
       <div class="translation-lines">
         <p class="tl">FIFO 决定的是"你的第三条消息要等第二条处理完才能发出"，而不是模型"思考"的步骤数。</p>
-        <p class="tl">从执行机制看，一个 Turn 可包含多次推理与工具往返，由 Codex 的内部循环控制。本 Demo 的工具能力受限，不能把这种机制理解为已开放外部工具。</p>
+        <p class="tl">从执行机制看，一个 Turn 可包含多次推理与工具往返，由 Codex 的内部循环控制。本阶段的工具能力受限，不能把这种机制理解为已开放外部工具。</p>
         <p class="tl">结论：FIFO 是外部排队，<span class="term" data-definition="模型推理-行动-观察的循环，由执行引擎内部控制，与用户消息队列无关">ReAct</span> 是内部循环，两者分工不同。</p>
       </div>
     </div>
@@ -101,11 +101,11 @@
   <div class="pattern-cards">
     <div class="pattern-card">
       <div class="pattern-title">为什么需要 FIFO？</div>
-      <div class="pattern-desc">如果同时推进多个用户输入，客户端必须处理更复杂的会话状态。本 Demo 按顺序等待每个 Turn 完成，使输入与结果的对应关系清晰。</div>
+      <div class="pattern-desc">如果同时推进多个用户输入，客户端必须处理更复杂的会话状态。本阶段按顺序等待每个 Turn 完成，使输入与结果的对应关系清晰。</div>
     </div>
     <div class="pattern-card">
       <div class="pattern-title">超时后恢复原会话</div>
-      <div class="pattern-desc">Demo2 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 Demo3 的服务能力。</div>
+      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s03 的服务能力。</div>
     </div>
   </div>
 </section>
@@ -129,7 +129,7 @@
       <div class="pattern-title">记忆（Memory）是什么</div>
       <div class="pattern-desc">
         长期记忆可将有用信息跨会话保留并在后续会话召回；它与重新打开某一个历史会话是不同机制。<br>
-        Demo2 <strong>不开启</strong>跨会话记忆（<code>features.memories=false</code>），/resume 恢复的是历史上下文，不是记忆注入。
+        s02 <strong>不开启</strong>跨会话记忆（<code>features.memories=false</code>），/resume 恢复的是历史上下文，不是记忆注入。
       </div>
     </div>
   </div>
@@ -170,8 +170,8 @@
 
 <!-- Screen 5: runTurn 源码 -->
 <section class="screen animate-in" id="m2-screen-5">
-  <h2 class="screen-heading">源码对照：Demo2 的 runTurn 与 Demo1 的相似与差异</h2>
-  <p>Demo2 的 runTurn 结构与 Demo1 高度相似，关键在于 Thread 复用逻辑和超时错误提示的变化。</p>
+  <h2 class="screen-heading">源码对照：s02 的 runTurn 与 s01 的相似与差异</h2>
+  <p>s02 的 runTurn 结构与 s01 高度相似，关键在于 Thread 复用逻辑和超时错误提示的变化。</p>
 
   <div class="translation-block">
     <div class="translation-code">
@@ -188,11 +188,11 @@
         threadId, input: [{ type: <span class="code-string">"text"</span>, text: prompt, text_elements: [] }]</code></pre>
     </div>
     <div class="translation-english">
-      <span class="translation-label">与 Demo1 的关键差异</span>
+      <span class="translation-label">与 s01 的关键差异</span>
       <div class="translation-lines">
         <p class="tl"><strong>threadId 复用</strong>：<code>if (!threadId) await startThread()</code>——若已有 Thread 则跳过创建，直接在同一 Thread 内发起新 Turn，这是多轮连续对话的核心。</p>
-        <p class="tl"><strong>超时提示变化</strong>：Demo2 的超时错误信息增加了"可重启后 /resume"——提示用户会话可恢复，不必从头开始。</p>
-        <p class="tl"><strong>buffer 机制相同</strong>：早到事件的缓冲与回放逻辑与 Demo1 完全一致，两版复用了同一解决方案。</p>
+        <p class="tl"><strong>超时提示变化</strong>：s02 的超时错误信息增加了"可重启后 /resume"——提示用户会话可恢复，不必从头开始。</p>
+        <p class="tl"><strong>buffer 机制相同</strong>：早到事件的缓冲与回放逻辑与 s01 完全一致，两版复用了同一解决方案。</p>
       </div>
     </div>
   </div>
@@ -217,13 +217,13 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        <strong>Demo1 → Demo2</strong>：新增 FIFO 输入缓冲、Thread 跨 Turn 复用、/resume 会话恢复、会话元数据本地索引。<br>
-        <strong>Demo2 → Demo3</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层、配置驱动 Agent、MCP 工具协议、沿用 FIFO，并增加持久化任务状态与重启暂停。<br>
-        Demo2 <strong>仍无独立 HTTP 服务</strong>，不提供网页连接入口。
+        <strong>s01 → s02</strong>：新增 FIFO 输入缓冲、Thread 跨 Turn 复用、/resume 会话恢复、会话元数据本地索引。<br>
+        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层、配置驱动 Agent、MCP 工具协议、沿用 FIFO，并增加持久化任务状态与重启暂停。<br>
+        s02 <strong>仍无独立 HTTP 服务</strong>，不提供网页连接入口。
       </div>
     </div>
     <div class="pattern-card">
-      <div class="pattern-title">⌨️ 实践命令（Demo2 <span class="term" data-definition="命令行界面：本章通过终端输入消息和命令，不提供独立网页服务。">CLI</span>）</div>
+      <div class="pattern-title">⌨️ 实践命令（s02 <span class="term" data-definition="命令行界面：本章通过终端输入消息和命令，不提供独立网页服务。">CLI</span>）</div>
       <div class="pattern-desc">
         <code>cd stages/s02-multi-turn &amp;&amp; npm ci</code><br>
         <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model）<br>
@@ -232,7 +232,7 @@
         验证多轮：输入“记住代号是蓝鲸”→回答后再问“代号是什么”；核对同一 Thread ID、不同 Turn ID，检查回答而非预设成功<br>
         验证恢复：/exit 退出后重启，输入 /resume<br>
         <code>npm test</code>（离线模拟测试）<br>
-        <a href="../../?stage=demo2">→ 打开 Demo2 命令与教学模拟</a>
+        <a href="../../?stage=s02">→ 打开 s02 命令与教学模拟</a>
       </div>
     </div>
     <div class="pattern-card">
@@ -240,7 +240,7 @@
       <div class="pattern-desc">
         无跨会话原生记忆沉淀，/resume 恢复的是会话上下文而非长期记忆。<br>
         回答仍为整段聚合输出，不支持流式打印。<br>
-        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（Demo3 起引入）。<br>
+        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s03 起引入）。<br>
         单机单 owner 单 Agent，不支持多账户或多 Agent 编排。
       </div>
     </div>
@@ -271,7 +271,7 @@
 
     <div class="quiz-question-block" data-correct="c"
          data-explanation-right="正确。FIFO 是用户消息的入队排序机制，保证上一 Turn 执行完才取下一条输入，不控制模型内部的推理步骤（ReAct loop）。"
-         data-explanation-wrong="A选项错误：FIFO 控制的是用户消息的发出顺序，与模型内部一个 Turn 内调用几次工具无关——那是 Codex 内部的 ReAct loop，FIFO 无法干预。B选项错误：FIFO 不是 Codex 内部的重试机制，也不决定工具调用是否重试；Demo2 超时会断开并提示重启后 /resume，输入队列本身不负责自动重试。">
+         data-explanation-wrong="A选项错误：FIFO 控制的是用户消息的发出顺序，与模型内部一个 Turn 内调用几次工具无关——那是 Codex 内部的 ReAct loop，FIFO 无法干预。B选项错误：FIFO 不是 Codex 内部的重试机制，也不决定工具调用是否重试；s02 超时会断开并提示重启后 /resume，输入队列本身不负责自动重试。">
       <h3 class="quiz-question">用户连续输入三条问题，第二条等了很久；他希望调整 FIFO 来减少单轮工具调用。哪种判断正确？</h3>
       <div class="quiz-options">
         <button class="quiz-option" data-value="a" onclick="selectOption(this)">
@@ -291,13 +291,13 @@
     </div>
 
     <div class="quiz-question-block" data-correct="a"
-         data-explanation-right="正确。/resume 恢复的是某个 Thread 的原生会话历史，让对话可以从断点继续。而跨会话记忆是从多个历史会话中提炼关键信息注入新会话，Demo2 明确关闭了此功能。"
-         data-explanation-wrong="B选项错误：/resume 不能检索消息内容全文，只能基于会话名称、开场预览和 ID 做基础匹配，无法通过任意关键词找到特定消息。C选项错误：/resume 恢复的是历史 Thread 的上下文，不会把跨会话记忆注入到新 Thread——这是两个独立机制，Demo2 中记忆功能处于关闭状态。">
+         data-explanation-right="正确。/resume 恢复的是某个 Thread 的原生会话历史，让对话可以从断点继续。而跨会话记忆是从多个历史会话中提炼关键信息注入新会话，s02 明确关闭了此功能。"
+         data-explanation-wrong="B选项错误：/resume 不能检索消息内容全文，只能基于会话名称、开场预览和 ID 做基础匹配，无法通过任意关键词找到特定消息。C选项错误：/resume 恢复的是历史 Thread 的上下文，不会把跨会话记忆注入到新 Thread——这是两个独立机制，s02 中记忆功能处于关闭状态。">
       <h3 class="quiz-question">用户 /resume 后接着聊旧话题成功，却发现新会话不记得旧代号。该如何解释？</h3>
       <div class="quiz-options">
         <button class="quiz-option" data-value="a" onclick="selectOption(this)">
           <div class="quiz-option-radio"></div>
-          <span>/resume 恢复的是某个 Thread 的历史上下文；跨会话记忆是从多个会话中提炼知识并注入新会话（Demo2 关闭）</span>
+          <span>/resume 恢复的是某个 Thread 的历史上下文；跨会话记忆是从多个会话中提炼知识并注入新会话（s02 关闭）</span>
         </button>
         <button class="quiz-option" data-value="b" onclick="selectOption(this)">
           <div class="quiz-option-radio"></div>

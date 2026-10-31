@@ -1,28 +1,28 @@
-# Demo 4 — 数据层升级
+# s04 — 数据层升级
 
-在 Demo 3 全部配置能力基础上，将业务数据迁移至 PostgreSQL，以 Redis 提供调度唤醒。服务监听 `127.0.0.1:4314`。数据层技术细节见 [数据层详解](docs/data-layer.md)。
+在 s03 全部配置能力基础上，将业务数据迁移至 PostgreSQL，以 Redis 提供调度唤醒。服务监听 `127.0.0.1:4314`。数据层技术细节见 [数据层详解](docs/data-layer.md)。
 
-![Demo 4 系统架构总图](docs/assets/demo4-architecture.svg)
+![s04 系统架构总图](docs/assets/s04-architecture.svg)
 
-> 图为职责划分，不是每层起一个独立进程。右侧 Codex 原生运行时是独立进程，与主进程通过 stdio 通信，自有原生存储（`.data/codex/`）由 Codex 管理不改动。红色标注为相比 Demo 3 的新增/变化项。
+> 图为职责划分，不是每层起一个独立进程。右侧 Codex 原生运行时是独立进程，与主进程通过 stdio 通信，自有原生存储（`.data/codex/`）由 Codex 管理不改动。红色标注为相比 s03 的新增/变化项。
 
 ---
 
 ## 设计原理
 
-Demo 3 已有 FIFO/steer、重启不确定执行暂停，但以单文件 JSON 管理状态，存在以下局限：
+s03 已有 FIFO/steer、重启不确定执行暂停，但以单文件 JSON 管理状态，存在以下局限：
 
 1. **资源元数据缺失**：文件内容无版本记录，依赖链无法追踪，来源失效无感知。
 2. **跨记录操作无事务保证**：任务与调度出口若分两步写，崩溃时可能不一致。
 
-Demo 4 目标：**以关系型事务保证任务入队原子性，以不可变内容版本支撑来源追踪，以 Redis Set 加速调度唤醒。**
+s04 目标：**以关系型事务保证任务入队原子性，以不可变内容版本支撑来源追踪，以 Redis Set 加速调度唤醒。**
 
 **关键约束：**
 
 - **单机单 owner**：owner 由 `.data/identity.json` 生成，DB 记录归属；无多账户登录，无共享 KB，Bearer 是本地服务凭据而非用户认证。
 - **PG / Redis 必需**，不回退本地 JSON。
 - **数据库不存完整原生对话**：PG 的 `tasks.text` 保存用户任务原文；完整模型回复与工具历史由 Codex 原生存储（SQLite/JSONL）管理。
-- demo4 使用数据库 `agent_demo4`（schema v1）；demo5 使用独立的 `agent_demo5`（v2）。两个 Compose 都绑定 5432/6379，不能同时启动两套依赖；可共用一组 PG/Redis 并使用不同数据库。
+- s04 使用数据库 `agent_s04`（schema v1）；s05 使用独立的 `agent_s05`（v2）。两个 Compose 都绑定 5432/6379，不能同时启动两套依赖；可共用一组 PG/Redis 并使用不同数据库。
 
 ---
 
@@ -40,7 +40,7 @@ Demo 4 目标：**以关系型事务保证任务入队原子性，以不可变�
 | 输出 | SSE token 流；任务 ID；会话状态 |
 | 代码 | [HTTP 路由](server/modules/http/index.mjs)、[CLI](client/main.mjs) |
 
-owner 来自服务端 `.data/identity.json`；本 Demo 尚未引入 Demo 5 的统一 Task 门禁。
+owner 来自服务端 `.data/identity.json`；本阶段尚未引入 s05 的统一 Task 门禁。
 
 ### 02 Agent 装配与任务调度
 
@@ -77,7 +77,7 @@ owner 来自服务端 `.data/identity.json`；本 Demo 尚未引入 Demo 5 的�
 
 | 子系统 | 作用 | 关键约束 |
 |--------|------|----------|
-| **PostgreSQL** `agent_demo4` | 所有业务状态；单实例多 Thread 共用 | schema v1；PG 内操作原子，跨存储（blob+PG）非原子 |
+| **PostgreSQL** `agent_s04` | 所有业务状态；单实例多 Thread 共用 | schema v1；PG 内操作原子，跨存储（blob+PG）非原子 |
 | **Redis** | Thread ID Set；200ms 唤醒；失联时 outbox 补投 | 仅唤醒，不存任务 ID 队列 |
 | **文件** `.data/files/objects/` | immutable blob，sha256 命名 | 无 hash 子目录；`.data/codex/` 由 Codex 管理 |
 
@@ -120,7 +120,7 @@ test -f .env || cp .env.example .env
 #   CODEX_API_KEY=...
 #   CODEX_BASE_URL=...
 #   CODEX_MODEL=...
-#   DATABASE_URL=postgresql://agent:<密码>@127.0.0.1:5432/agent_demo4
+#   DATABASE_URL=postgresql://agent:<密码>@127.0.0.1:5432/agent_s04
 #   REDIS_URL=redis://127.0.0.1:6379
 
 export AGENT_DB_PASSWORD=自己设置的密码
@@ -164,17 +164,17 @@ Codex 通过 MCP bridge（`server/modules/tools/mcp-server.mjs`）发起工具�
 ```bash
 npm run data:check           # 验证 PG / Redis 状态
 
-# 使用本 Demo 的 Compose 查询业务任务
-docker compose exec postgres psql -U agent -d agent_demo4 \
+# 使用本阶段的 Compose 查询业务任务
+docker compose exec postgres psql -U agent -d agent_s04 \
   -c "SELECT id, status, substring(text,1,60) FROM agent_data.tasks ORDER BY created_at DESC LIMIT 5;"
 ```
 
 - `status=completed`：任务正常完成；检查 `workspace/outputs/report-summary.md` 及聊天中的工具结果。
 - `status=unconfirmed`：执行中服务异常重启，已暂停，需人工决策是否重试。不自动重发。
 
-### 步骤 4：可选 — 从 Demo 3 导入数据（04 层）
+### 步骤 4：可选 — 从 s03 导入数据（04 层）
 
-仅在需要迁移 Demo 3 本地 JSON 时执行。**必须停服并备份**；将待导入的旧业务 JSON 放到本 Demo 的 `.data/` 后先预检，原文件不删。原生 Codex 历史不由此命令迁移：
+仅在需要迁移 s03 本地 JSON 时执行。**必须停服并备份**；将待导入的旧业务 JSON 放到本阶段的 `.data/` 后先预检，原文件不删。原生 Codex 历史不由此命令迁移：
 
 ```bash
 npm run data:import            # dry-run 预检
@@ -227,16 +227,16 @@ async function createTask(db, taskData):
 |--------|------|
 | 单机单 owner | 无多账户；owner 由本机 identity 文件生成；Bearer 是本地凭据 |
 | PG / Redis 必需 | 不回退本地 JSON |
-| 端口独占 | Demo 4 / Demo 5 的 compose 共用 5432/6379，不可同时启动 |
+| 端口独占 | s04 / s05 的 compose 共用 5432/6379，不可同时启动 |
 | 任务文本存储 | PG `tasks.text` 存用户任务原文；完整原生对话由 Codex 管理 |
 | 来源声明非语义证明 | `source_versions` 声明来源，不证明模型语义引用完全 |
 | 跨存储非原子 | blob 文件与 PG 记录无跨存储原子保证；PG 内操作原子 |
 | 执行不确定不重发 | 重启后执行中任务变 unconfirmed，不自动重发 |
-| 不声称生产验收 | Demo 4 是可靠性基础提升，非已验收生产系统 |
+| 不声称生产验收 | s04 是可靠性基础提升，非已验收生产系统 |
 
 ## 本地 Web 外部客户端
 
-启动本 Demo 的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本 Demo。Web 接入层使用本 Demo 的连接文件，状态仍归本 Demo 管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../app/web/README.md)。
 
 ## 机制课程与逐课实验
 

@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {stageDirs} from './server.mjs';
 const project=fileURLToPath(new URL('../',import.meta.url)),repo=path.dirname(project),dir=path.join(project,'web/curriculum');
-const lessons=['demo123.json','demo45.json'].flatMap(f=>JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')));
+const lessons=['s01-s03.json','s04-s05.json'].flatMap(f=>JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')));
 const experiments=new Map(JSON.parse(fs.readFileSync(path.join(dir,'experiment-manifest.json'),'utf8')).lessons.map(x=>[x.id,x]));
 if(lessons.length!==17||experiments.size!==17)throw Error('Expected 17 lessons and experiments');
 const ids=new Set();

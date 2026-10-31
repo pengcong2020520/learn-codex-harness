@@ -16,22 +16,22 @@
       <h2 class="screen-heading">四层架构：谁存什么、谁唤醒谁</h2>
 
       <p>
-        Demo 3 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。Demo 4 在此基础上新增关系事务与内容版本追踪。
-        Demo 4 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
+        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s04 在此基础上新增关系事务与内容版本追踪。
+        s04 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <img src="assets/demo4-architecture.svg" width="100%" alt="Demo 4 系统架构总图：四层存储职责划分" />
+      <img src="assets/s04-architecture.svg" width="100%" alt="s04 系统架构总图：四层存储职责划分" />
 
       <div class="callout">
         <div class="callout-text">
-          图示说明：四层是逻辑职责，PG、Redis 为独立服务；右侧 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；红色标注为相比 Demo 3 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；右侧 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；红色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
         </div>
       </div>
 
-      <div class="flow-steps" aria-label="Demo 4 分层职责">
+      <div class="flow-steps" aria-label="s04 分层职责">
         <div class="flow-step"><strong>01 交互入口</strong><p><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> / <span class="term" tabindex="0" data-definition="命令行客户端；在终端输入命令来调用本地服务。">CLI</span> 收消息，校验本地凭据；返回任务 ID 与事件。</p></div><span class="flow-arrow">→</span>
         <div class="flow-step"><strong>02 装配与调度</strong><p>读取 Agent 配置，写 tasks + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span>；领取任务并驱动 Codex。</p></div><span class="flow-arrow">→</span>
-        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；Demo 4 使用它，Demo 5 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s04 使用它，s05 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
         <div class="flow-step"><strong>04 数据与文件</strong><p>PG 管业务事实，Redis 管唤醒，blob 管正文；原生历史另由 Codex 管理。</p></div>
       </div>
       <div class="pattern-cards stagger-children">
@@ -66,7 +66,7 @@
 
       <p>
         想象银行转账：从 A 账户扣钱和向 B 账户加钱必须同时成功或同时失败，不能只做一半。
-        Demo 4 把「写任务」和「写调度出口」绑进同一个 <span class="term" data-definition="事务（Transaction）是数据库的承诺：事务里的所有操作要么全部生效，要么全部撤销，中间崩溃不会留下半成品状态。">PG 事务</span>——服务崩溃时，账本要么两条都有，要么两条都没有，不会出现任务存在但调度出口丢失的情况。
+        s04 把「写任务」和「写调度出口」绑进同一个 <span class="term" data-definition="事务（Transaction）是数据库的承诺：事务里的所有操作要么全部生效，要么全部撤销，中间崩溃不会留下半成品状态。">PG 事务</span>——服务崩溃时，账本要么两条都有，要么两条都没有，不会出现任务存在但调度出口丢失的情况。
       </p>
 
       <p class="pattern-desc">源码：<code>stages/s04-data-layer/server/modules/data/jobs.mjs:75–81</code></p>
@@ -265,7 +265,7 @@
     ═══════════════════════════════════════════════ -->
     <div class="screen" id="m4-screen-blob">
       <h2 class="screen-heading">不可变 Blob：内容寻址与来源追踪</h2>
-<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。Demo 4 使用数据库 agent_demo4（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），Demo 5 使用 agent_demo5（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
+<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s04 使用数据库 agent_s04（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s05 使用 agent_s05（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
 
       <p>
         sha256 是内容指纹，正文按指纹命名保存。内容改动会生成新 blob，已登记版本不被覆盖；这不等于承诺永久保留。
@@ -297,7 +297,7 @@
 
       <div class="callout">
         <div class="callout-text">
-          🛠️ <strong>命令实践入口：</strong>以下命令用于验证 PG/Redis 状态和查询任务记录。在 <code>stages/s04-data-layer</code> 中完成依赖安装、环境配置、PG/Redis 启动、<code>npm run data:migrate</code> 与 <code>npm run server</code> 后执行，练习场景入口见 <a href="../../?stage=demo4">互动练习</a>。
+          🛠️ <strong>命令实践入口：</strong>以下命令用于验证 PG/Redis 状态和查询任务记录。在 <code>stages/s04-data-layer</code> 中完成依赖安装、环境配置、PG/Redis 启动、<code>npm run data:migrate</code> 与 <code>npm run server</code> 后执行，练习场景入口见 <a href="../../?stage=s04">互动练习</a>。
         </div>
       </div>
 
@@ -307,7 +307,7 @@
           <pre><code><span class="code-keyword">npm</span> run data:check
 
 <span class="code-keyword">docker</span> compose exec postgres psql \
-  -U agent -d agent_demo4 \
+  -U agent -d agent_s04 \
   -c <span class="code-string">"SELECT id, status, substring(text,1,60) \
   FROM agent_data.tasks \
   ORDER BY created_at DESC LIMIT 5;"</span></code></pre>
@@ -316,7 +316,7 @@
           <span class="translation-label">命令说明</span>
           <div class="translation-lines">
             <p class="tl"><code>npm run data:check</code>：运行内置检查脚本，验证 PG 连接是否正常、schema 表结构是否完整、Redis 是否可达。</p>
-            <p class="tl"><code>docker compose exec postgres psql</code>：进入 <span class="term" tabindex="0" data-definition="用容器启动依赖服务的工具；这里用于准备 PG、Redis 和可选 Chroma。">Docker</span> 容器内的 PostgreSQL 命令行，以 <code>agent</code> 用户连接 <code>agent_demo4</code> 数据库。</p>
+            <p class="tl"><code>docker compose exec postgres psql</code>：进入 <span class="term" tabindex="0" data-definition="用容器启动依赖服务的工具；这里用于准备 PG、Redis 和可选 Chroma。">Docker</span> 容器内的 PostgreSQL 命令行，以 <code>agent</code> 用户连接 <code>agent_s04</code> 数据库。</p>
             <p class="tl"><code>SELECT id, status, substring(text,1,60) FROM agent_data.tasks</code>：查询最新 5 条任务记录，显示 ID、状态、任务原文前 60 字符。用于排查任务是否入队、是否卡住、是否变为 <code>unconfirmed</code>。</p>
           </div>
         </div>
@@ -367,7 +367,7 @@
         <!-- 题 2 -->
         <div class="quiz-question-block"
              data-correct="c"
-             data-explanation-right="正确。status=unconfirmed 是系统在告诉你&quot;执行中服务意外重启了，我不知道任务完成没有，所以我暂停了，等你决定&quot;。Demo 4 不自动重发，需人工判断是否重试。"
+             data-explanation-right="正确。status=unconfirmed 是系统在告诉你&quot;执行中服务意外重启了，我不知道任务完成没有，所以我暂停了，等你决定&quot;。s04 不自动重发，需人工判断是否重试。"
              data-explanation-wrong="A：unconfirmed 不代表任务被拒绝或权限不足；选项中的 Bearer 凭据失败会在入口被拒绝，不能据此解释执行中的不确定状态。B：unconfirmed 不是排队中——排队中的状态是 queued。unconfirmed 明确表示执行过程中发生了不确定性事件（重启），不是正常等待。D：直接重试不是系统建议的操作；需要人工决策，因为任务可能已部分完成，盲目重试可能造成重复操作。">
           <h3 class="quiz-question">
             场景二：一位 AI 程序员告诉你某条任务的 <code>status</code> 是 <code>unconfirmed</code>，问你该怎么处理。你会如何解释这个状态，以及下一步该做什么？

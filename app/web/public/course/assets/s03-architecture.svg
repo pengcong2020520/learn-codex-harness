@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="810" viewBox="0 0 1080 810" role="img" aria-labelledby="title desc">
-<title id="title">Demo 3 总体架构</title><desc id="desc">产品侧组织任务，独立 Codex 子进程负责模型与原生上下文。红色为本版新增职责。</desc>
+<title id="title">s03 总体架构</title><desc id="desc">产品侧组织任务，独立 Codex 子进程负责模型与原生上下文。红色为本版新增职责。</desc>
 <defs><marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7" fill="#8b9b80"/></marker></defs><rect width="1080" height="810" fill="#fafbf6"/>
-<text x="34" y="48" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="27" fill="#31482f" font-weight="600">DEMO 3 / 可配置 Agent：装配与工具</text>
+<text x="34" y="48" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="27" fill="#31482f" font-weight="600">S03 / 可配置 Agent：装配与工具</text>
 <text x="34" y="83" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="17" fill="#67775d" font-weight="400">红色：本版新增职责  ·  箭头：通信或调用关系  ·  只展示本版已实现能力</text>
 <rect x="34" y="117" width="604" height="123" rx="12" fill="#fff5ee" stroke="#bd7155"/>
 <text x="55" y="150" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#a54f33" font-weight="600">01  交互与任务入口</text>
@@ -31,7 +31,7 @@
 <text x="750" y="384" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">模型执行循环</text>
 <text x="750" y="420" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">原生 Thread / Turn</text>
 <text x="750" y="456" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">上下文与历史</text>
-<text x="750" y="492" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">原生 Skills（Demo 3 启用）</text>
+<text x="750" y="492" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">原生 Skills（s03 启用）</text>
 <path d="M884 270L884 217" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
 <path d="M638 306L729 306" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
 <text x="644" y="285" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="15" fill="#67775d" font-weight="400">stdio</text>

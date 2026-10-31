@@ -33,7 +33,7 @@
   ],
   "lessons": [
     {
-      "id": "d1-transport",
+      "id": "s01-transport",
       "demo": 1,
       "title": "先建立通信，再派发任务",
       "principle": "本地握手只证明 Node 能与 Codex 通信，不证明远端模型已经可用。",
@@ -77,7 +77,7 @@
         "start": 179,
         "anchor": 180,
         "code": "  try {\n    await request(\"initialize\", {\n      clientInfo: { name: \"app_server_project\", title: \"App Server Project\", version: \"1.0.0\" },\n      capabilities: null\n    });\n    send({ method: \"initialized\", params: {} });\n    console.log(\"App Server 握手成功（不代表 API Key 已通过验证）。\");\n\n    if (options.mode === \"check-server\") {\n      const listing = await request(\"model/list\", {});\n      console.log(\"App Server 已加载模型目录：\", redact(listing.data.map(item => item.model).join(\", \")));\n      console.log(\"连接检查完成；没有发送 turn/start，没有发起模型生成。\");\n      return;\n    }",
-        "hash": "20436f2b1863cdbe24311ee6f3ca5a06c02efcd96eebb610075bc15723196d12"
+        "hash": "703031bc0323f7f48c8ece6acf9299ab14ba410e91deaadfa1e765e4ff919667"
       },
       "scenarios": [
         {
@@ -192,13 +192,13 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d1-transport",
-        "action": "在 demo1 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
+        "command": "npm run lesson -- s01-transport",
+        "action": "在 s01 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
         "observe": [
           "success 与 early 两种顺序均执行断言",
           "仅一次 thread/start 和一次 turn/start；输入和最终答案正确"
         ],
-        "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
+        "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
       },
       "quiz": {
         "question": "连接检查通过，但第一次提问报远端认证失败。应如何解释之前的“成功”？",
@@ -217,7 +217,7 @@
       }
     },
     {
-      "id": "d1-lifecycle",
+      "id": "s01-lifecycle",
       "demo": 1,
       "title": "收到请求，不等于完成任务",
       "principle": "用 Thread 定位会话、Turn 定位任务，并等待该 Turn 的成功终态后才输出答案。",
@@ -261,7 +261,7 @@
         "start": 161,
         "anchor": 165,
         "code": "    try {\n      const result = await request(\"turn/start\", {\n        threadId, input: [{ type: \"text\", text: prompt, text_elements: [] }]\n      });\n      turn.id = result.turn.id;\n      console.log(\"turn id:\", turn.id);\n      for (const message of turn.buffer) handleTurnEvent(message);\n      turn.buffer = [];\n      // RPC 响应仅表示受理；每一轮都必须等自己的 turn/completed。\n      await turn.completed.promise;\n      console.log(\"模型回复：\", redact([...turn.answers.values()].join(\"\\n\")));\n      console.log(\"本轮状态：completed；对话 ID：\", threadId);\n    } finally {\n      clearTimeout(timer);\n      activeTurn = null;\n    }\n  }",
-        "hash": "20436f2b1863cdbe24311ee6f3ca5a06c02efcd96eebb610075bc15723196d12"
+        "hash": "703031bc0323f7f48c8ece6acf9299ab14ba410e91deaadfa1e765e4ff919667"
       },
       "scenarios": [
         {
@@ -376,13 +376,13 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d1-lifecycle",
-        "action": "在 demo1 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
+        "command": "npm run lesson -- s01-lifecycle",
+        "action": "在 s01 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
         "observe": [
           "failed 被拒绝并保留错误",
           "hang 触发测试设置的 150ms 超时"
         ],
-        "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
+        "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
       },
       "quiz": {
         "question": "日志已经出现 turn/completed，但 UI 显示失败。哪项排查最有价值？",
@@ -401,15 +401,15 @@
       }
     },
     {
-      "id": "d2-fifo",
+      "id": "s02-fifo",
       "demo": 2,
       "title": "连续输入如何不丢、不抢跑",
       "principle": "输入队列只安排下一条用户消息何时提交，不控制当前 Turn 如何推理。",
       "problem": "用户在模型回答前连续输入 first、second。若只在等待输入时监听一行，second 会丢；若两行一到就同时启动任务，会让会话推进难以解释。",
       "change": {
-        "before": "Demo1 执行一次问题后退出，没有持续读取用户输入的需求。",
+        "before": "s01 执行一次问题后退出，没有持续读取用户输入的需求。",
         "added": "readline 始终收行，提前到达的行进入 FIFO；交互循环 await 当前 runTurn 后才取下一行。",
-        "kept": "每一轮仍使用 Demo1 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
+        "kept": "每一轮仍使用 s01 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
       },
       "ownership": {
         "codex": "执行单个 Turn 内的模型任务，并维护该会话上下文。",
@@ -445,7 +445,7 @@
         "start": 33,
         "anchor": 36,
         "code": "  const queue = [];\n  let waiting = null;\n  let ended = false;\n  terminal.on(\"line\", line => {\n    if (waiting) { const resolve = waiting; waiting = null; resolve(line); }\n    else queue.push(line);\n  });\n  terminal.on(\"close\", () => {\n    ended = true;\n    if (waiting) { waiting(null); waiting = null; }\n  });\n  terminal.on(\"SIGINT\", onCancel);\n  return {\n    async question(prompt) {\n      output.write(prompt);\n      // 缓冲提前输入/管道输入，避免等待模型时丢失后续行。\n      if (queue.length) return queue.shift();\n      if (ended) return null;\n      return new Promise(resolve => { waiting = resolve; });",
-        "hash": "3d3ad916fa60edd35b951649f0582f781cb8195549b248f9f9bf1c5267a67810"
+        "hash": "5262e6383ca3692ddb9d64d3d032da2fbc716408a0e12472dff25991bf9d77e0"
       },
       "scenarios": [
         {
@@ -560,13 +560,13 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d2-fifo",
-        "action": "在 demo2 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
+        "command": "npm run lesson -- s02-fifo",
+        "action": "在 s02 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
         "observe": [
           "提前输入的 first / second 按顺序取出",
           "同一 Thread 产生两个 turn；旧轮 STALE 事件不会串入新答案"
         ],
-        "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。"
+        "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。"
       },
       "quiz": {
         "question": "用户建议把 FIFO 长度改成 1，以限制模型一次任务只能调用一个工具。应如何回应？",
@@ -585,13 +585,13 @@
       }
     },
     {
-      "id": "d2-resume",
+      "id": "s02-resume",
       "demo": 2,
       "title": "恢复会话，为何不是重新拼历史",
       "principle": "恢复成功后才切换当前 Thread；检索元数据与保存原生正文是两份不同职责。",
       "problem": "用户想接着昨天的问题聊。客户端能查到标题，却没有完整历史数组；有人因此准备把聊天正文复制进 Node，再每次重新发送。",
       "change": {
-        "before": "Demo1 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
+        "before": "s01 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
         "added": "按本项目范围检索 Thread 元数据，数字选择后调用 thread/resume，并在响应成功后更新 threadId。",
         "kept": "历史正文、上下文装配与原生持久化仍由 Codex 管理，Node 不实现摘要压缩。"
       },
@@ -610,7 +610,7 @@
         },
         {
           "term": "恢复与记忆",
-          "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。Demo2 关闭后者，不能用恢复成功证明记忆开启。"
+          "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。s02 关闭后者，不能用恢复成功证明记忆开启。"
         }
       ],
       "mechanism": "listProjectThreads 从本项目的运行目录和索引限定范围，分页读取 thread/list，再按名称、开场预览、ID 过滤。用户选数字后先检查项目目录，再 await thread/resume；selectThread 只在成功响应之后执行。于是取消、无结果、无效选择或恢复失败都不会提前覆盖当前 threadId。excludeTurns=true 仅是不在响应里带回完整 Turn 列表，不是删除原生历史。",
@@ -629,7 +629,7 @@
         "start": 239,
         "anchor": 243,
         "code": "      const selected = /^\\d+$/.test(value) ? threads[Number(value) - 1] : undefined;\n      if (!selected) { console.log(\"请输入列表中有效的会话编号。\"); continue; }\n      if (selected.id === threadId) { console.log(\"这就是当前会话，可以继续聊天。\"); return false; }\n      await ensureThreadDirectory(root, selected.cwd);\n      const result = await request(\"thread/resume\", {\n        ...threadOptions, threadId: selected.id, cwd: selected.cwd, excludeTurns: true\n      });\n      selectThread(result);\n      console.log(\"已恢复会话：\", safeTitle(selected.name || selected.preview));\n      console.log(\"后续消息沿用原会话历史，使用上面显示的当前配置模型。\");\n      return false;",
-        "hash": "3d3ad916fa60edd35b951649f0582f781cb8195549b248f9f9bf1c5267a67810"
+        "hash": "5262e6383ca3692ddb9d64d3d032da2fbc716408a0e12472dff25991bf9d77e0"
       },
       "scenarios": [
         {
@@ -744,13 +744,13 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d2-resume",
-        "action": "在 demo2 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
+        "command": "npm run lesson -- s02-resume",
+        "action": "在 s02 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
         "observe": [
           "选中 saved-thread 后沿用该 ID 和只读权限",
           "取消、无结果、失败时保留原会话"
         ],
-        "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
+        "boundary": "离线协议夹具：执行本阶段的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。"
       },
       "quiz": {
         "question": "恢复接口设置 excludeTurns:true，产品经理担心旧聊天被清空。正确解释是什么？",
@@ -760,7 +760,7 @@
           "只要使用 /resume，就同时打开了跨会话长期记忆。"
         ],
         "answer": 0,
-        "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，Demo2 明确关闭 memories。"
+        "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，s02 明确关闭 memories。"
       },
       "reference": {
         "session": "s08",
@@ -769,13 +769,13 @@
       }
     },
     {
-      "id": "d3-agent-config",
+      "id": "s03-agent-config",
       "demo": 3,
       "title": "配置是装配合同，不是临时提示词",
       "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
       "problem": "运营修改了角色文件，旧会话仍按旧工具和资料边界执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
       "change": {
-        "before": "Demo2 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
+        "before": "s02 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
         "added": "AgentDefinition 校验装配配置，记录文件指纹，生成描述符并让 Thread 绑定版本。",
         "kept": "仍是一实例一套 Agent 配置、多个 Thread；Codex 执行任务，产品层不改写模型循环。"
       },
@@ -928,8 +928,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d3-agent-config",
-        "action": "在 demo3 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+        "command": "npm run lesson -- s03-agent-config",
+        "action": "在 s03 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
         "observe": [
           "未知字段、缺失引用、权限提升被 schema 拒绝",
           "Agent 改动立即撤销旧工具权限；恢复旧文件也不能免重启",
@@ -954,7 +954,7 @@
       }
     },
     {
-      "id": "d3-skills",
+      "id": "s03-skills",
       "demo": 3,
       "title": "Skill 给方法，权限仍要单独核验",
       "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
@@ -971,7 +971,7 @@
       "concepts": [
         {
           "term": "原生 Skill",
-          "meaning": "提供任务方法的说明文件；本 Demo 只验证文本指令型 Skill，带 shell、fileWrite、assets 依赖的工作流不自动放行。"
+          "meaning": "提供任务方法的说明文件；本阶段只验证文本指令型 Skill，带 shell、fileWrite、assets 依赖的工作流不自动放行。"
         },
         {
           "term": "发现与授权",
@@ -1113,8 +1113,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d3-skills",
-        "action": "在 demo3 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+        "command": "npm run lesson -- s03-skills",
+        "action": "在 s03 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
         "observe": [
           "范围外发现结果被禁用",
           "授权 Skill 生成显式 skill 输入；未授权名称被拒绝",
@@ -1139,13 +1139,13 @@
       }
     },
     {
-      "id": "d3-tool-registry",
+      "id": "s03-tool-registry",
       "demo": 3,
       "title": "工具名、参数合同和实现怎样接在一起",
       "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
       "problem": "模型输出了一个看似正确的工具名，却夹带了额外参数；如果程序只按名称查函数，错误输入就可能直接进入文件或网络操作。",
       "change": {
-        "before": "Demo2 没有本项目外部工具装配；仅描述“可以读取资料”不能产生真实执行能力。",
+        "before": "s02 没有本项目外部工具装配；仅描述“可以读取资料”不能产生真实执行能力。",
         "added": "从受信配置加载工具规格与工厂实现，编译 inputSchema，形成带版本的 Registry，list 与 call 都执行授权。",
         "kept": "模型何时选择工具、如何利用结果仍由 Codex 决定；产品只提供可调用合同与实现。"
       },
@@ -1305,8 +1305,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d3-tool-registry",
-        "action": "在 demo3 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+        "command": "npm run lesson -- s03-tool-registry",
+        "action": "在 s03 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
         "observe": [
           "echo_note 真正经 registry.call 返回输入",
           "重复名、缺实现、坏 schema、越界模块被拒绝",
@@ -1331,7 +1331,7 @@
       }
     },
     {
-      "id": "d3-mcp",
+      "id": "s03-mcp",
       "demo": 3,
       "title": "MCP 是调用边界，不是一工具一服务",
       "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
@@ -1497,8 +1497,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d3-mcp",
-        "action": "在 demo3 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+        "command": "npm run lesson -- s03-mcp",
+        "action": "在 s03 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
         "observe": [
           "活动 Thread 存在时不发布新 registry",
           "刷新失败回滚旧配置",
@@ -1523,7 +1523,7 @@
       }
     },
     {
-      "id": "d3-workspace",
+      "id": "s03-workspace",
       "demo": 3,
       "title": "在工作区里，也不等于有权读写",
       "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
@@ -1674,8 +1674,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d3-workspace",
-        "action": "在 demo3 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+        "command": "npm run lesson -- s03-workspace",
+        "action": "在 s03 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
         "observe": [
           "两次运行共用 workspaceDir，但 runDir 不同",
           "来源过滤同时约束 list/read；产物不能覆盖",
@@ -1700,7 +1700,7 @@
       }
     },
     {
-      "id": "d4-persistence",
+      "id": "s04-persistence",
       "demo": 4,
       "title": "消息收到了，为什么还需要一条 outbox？",
       "principle": "任务正文和待唤醒记录在同一个 PostgreSQL 事务里提交，才不会留下“已接收却永远没人处理”的任务。",
@@ -1865,15 +1865,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d4-persistence",
-        "action": "在 demo4 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
+        "command": "npm run lesson -- s04-persistence",
+        "action": "在 s04 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
         "observe": [
           "迁移重复执行保持幂等，事务失败回滚",
           "归属约束与单实例执行器锁受到真实 PG 断言",
           "真实服务链路重启后仍能检查持久任务状态"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- d4-persistence --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s04-persistence --integration"
       },
       "quiz": {
         "question": "任务已提交，但 Redis 断开。用户想确认是否需要重新发一条，最合理的依据是什么？",
@@ -1892,7 +1892,7 @@
       }
     },
     {
-      "id": "d4-dispatch",
+      "id": "s04-dispatch",
       "demo": 4,
       "title": "Redis 丢了，哪条任务还能继续？",
       "principle": "Redis 只负责提醒检查某个 Thread；PG 的状态转换决定领取，未知结果不能自动重发。",
@@ -2057,15 +2057,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d4-dispatch",
-        "action": "在 demo4 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
+        "command": "npm run lesson -- s04-dispatch",
+        "action": "在 s04 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
         "observe": [
           "任务提交与 outbox 同事务",
           "重复投递只成功领取一次",
           "Redis 失败后 outbox 可补投"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- d4-dispatch --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s04-dispatch --integration"
       },
       "quiz": {
         "question": "重启后 A=unconfirmed，B=queued。continue 的正确含义是什么？",
@@ -2084,7 +2084,7 @@
       }
     },
     {
-      "id": "d4-versions",
+      "id": "s04-versions",
       "demo": 4,
       "title": "原文改了一句，旧产物还能读吗？",
       "principle": "资源 ID 指向同一份资料，版本 ID 指向一次内容快照；来源变化应让依赖旧版本的产物失效。",
@@ -2249,15 +2249,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d4-versions",
-        "action": "在 demo4 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
+        "command": "npm run lesson -- s04-versions",
+        "action": "在 s04 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
         "observe": [
           "更新版本保留稳定资源 ID",
           "移动不改变资料 ID，旧版本引用被拒绝",
           "外部改写或删除来源会使派生内容失效"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- d4-versions --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s04-versions --integration"
       },
       "quiz": {
         "question": "原文已更新，旧摘要文件仍在。哪项足以说明摘要可以继续使用？",
@@ -2276,7 +2276,7 @@
       }
     },
     {
-      "id": "d5-gate",
+      "id": "s05-gate",
       "demo": 5,
       "title": "工具参数里的“我是管理员”为什么不算身份？",
       "principle": "身份由服务端从当前任务和 Turn 绑定产生，模型只能填写业务参数，不能自己授予权限。",
@@ -2441,8 +2441,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d5-gate",
-        "action": "在 demo5 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
+        "command": "npm run lesson -- s05-gate",
+        "action": "在 s05 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
         "observe": [
           "伪造上下文与外部 owner 被拒绝",
           "普通任务不能更新 Wiki；合法维护任务可以",
@@ -2467,7 +2467,7 @@
       }
     },
     {
-      "id": "d5-mounts",
+      "id": "s05-mounts",
       "demo": 5,
       "title": "读得到 inputs，不等于读得到所有知识库",
       "principle": "知识库挂载决定可见范围，文件路径入口也必须经过同一边界，不能用宽目录权限绕过窄知识库权限。",
@@ -2632,8 +2632,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d5-mounts",
-        "action": "在 demo5 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
+        "command": "npm run lesson -- s05-mounts",
+        "action": "在 s05 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
         "observe": [
           "当前 KB 的读取通过；另一 KB 的直接路径读取被拒绝",
           "未挂载 KB 与错误 owner 被拒绝",
@@ -2658,7 +2658,7 @@
       }
     },
     {
-      "id": "d5-wiki",
+      "id": "s05-wiki",
       "demo": 5,
       "title": "两次更新同时提交，谁能成为当前 Wiki？",
       "principle": "Wiki 提交必须同时证明“我依据的来源仍有效”和“我修改的页面版本仍是当前版本”。",
@@ -2823,15 +2823,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d5-wiki",
-        "action": "在 demo5 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
+        "command": "npm run lesson -- s05-wiki",
+        "action": "在 s05 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
         "observe": [
           "Wiki 提交后可读取，两个并发 expectedVersion 只成功一个",
           "来源改写后不能继续返回旧正文",
           "真实本地 Codex 维护任务带服务端知识权限并调用知识工具"
         ],
         "boundary": "集成门禁：默认未运行。显式开启后运行现有 test:data 小组（data.integration + knowledge.integration）；真实临时 PG/Redis、本地 Codex 与假 Responses 服务。RAG 用例无 Chroma 时明确跳过；不代表 RAG 已通过。",
-        "integrationCommand": "npm run lesson -- d5-wiki --integration"
+        "integrationCommand": "npm run lesson -- s05-wiki --integration"
       },
       "quiz": {
         "question": "页面 current_version 没变，但它引用的原文已经更新。expectedVersion 仍匹配，提交就该成功吗？",
@@ -2850,7 +2850,7 @@
       }
     },
     {
-      "id": "d5-rag",
+      "id": "s05-rag",
       "demo": 5,
       "title": "新索引失败，为什么旧索引指针不能先切？",
       "principle": "向量与关键词索引属于同一个版本；两边完成并核对来源后才推进指针，检索再按名次融合。",
@@ -3015,15 +3015,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d5-rag",
-        "action": "在 demo5 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
+        "command": "npm run lesson -- s05-rag",
+        "action": "在 s05 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
         "observe": [
           "真实 Chroma 与 BM25 双索引提交",
           "中文查询经混合召回返回对应来源",
           "失败保留旧索引，源版本变化拒绝陈旧结果"
         ],
         "boundary": "RAG 集成门禁：仅 --rag 显式执行现有完整 test:rag 小组。真实临时 Chroma/PG/Redis，embedding 为本地确定性假服务，无外部 embedding 或模型。",
-        "integrationCommand": "npm run lesson -- d5-rag --rag"
+        "integrationCommand": "npm run lesson -- s05-rag --rag"
       },
       "quiz": {
         "question": "向量列表 [a,b]、关键词列表 [b,c] 做 RRF60，为什么 b 可能排在 a 前面？",
@@ -3042,7 +3042,7 @@
       }
     },
     {
-      "id": "d5-modes",
+      "id": "s05-modes",
       "demo": 5,
       "title": "配置改成 RAG，为什么旧会话不能马上接着聊？",
       "principle": "期望模式、有效模式和 Thread 绑定是不同状态；配置变更经过重启，能力版本变化后新建 Thread。",
@@ -3207,8 +3207,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- d5-modes",
-        "action": "在 demo5 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
+        "command": "npm run lesson -- s05-modes",
+        "action": "在 s05 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
         "observe": [
           "首次期望 RAG、未就绪时实际仍 Wiki",
           "索引就绪后当前实例不自行切换；重新 open 才选择 RAG",

@@ -1,10 +1,10 @@
 [
   {
-    "id": "d5-gate",
+    "id": "s05-gate",
     "demo": 5,
     "title": "让工具只接受可信任务身份",
     "question": "模型自己补一个 ownerId，能否获得维护权限？",
-    "command": "npm run lesson -- d5-gate",
+    "command": "npm run lesson -- s05-gate",
     "mode": "offline",
     "offlineOrIntegration": "offline",
     "observations": [
@@ -23,11 +23,11 @@
     ]
   },
   {
-    "id": "d5-mounts",
+    "id": "s05-mounts",
     "demo": 5,
     "title": "知识库存在不等于挂载",
     "question": "Agent 没有挂载的 KB，能否通过宽泛 inputs 路径绕过？",
-    "command": "npm run lesson -- d5-mounts",
+    "command": "npm run lesson -- s05-mounts",
     "mode": "offline",
     "offlineOrIntegration": "offline",
     "observations": [
@@ -46,11 +46,11 @@
     ]
   },
   {
-    "id": "d5-wiki",
+    "id": "s05-wiki",
     "demo": 5,
     "title": "知识页由证据和版本约束",
     "question": "两次维护同时提交，为什么只能有一个新版本生效？",
-    "command": "npm run lesson -- d5-wiki",
+    "command": "npm run lesson -- s05-wiki",
     "mode": "integration",
     "offlineOrIntegration": "integration",
     "observations": [
@@ -64,15 +64,15 @@
       "scripts/test-data.mjs"
     ],
     "requiredFlag": "--integration",
-    "integrationCommand": "npm run lesson -- d5-wiki --integration",
+    "integrationCommand": "npm run lesson -- s05-wiki --integration",
     "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
   },
   {
-    "id": "d5-rag",
+    "id": "s05-rag",
     "demo": 5,
     "title": "来源分块进入混合召回",
     "question": "向量索引完成，为什么还不能证明知识回答准确？",
-    "command": "npm run lesson -- d5-rag",
+    "command": "npm run lesson -- s05-rag",
     "mode": "integration",
     "offlineOrIntegration": "integration",
     "observations": [
@@ -87,15 +87,15 @@
       "--rag"
     ],
     "requiredFlag": "--rag",
-    "integrationCommand": "npm run lesson -- d5-rag --rag",
+    "integrationCommand": "npm run lesson -- s05-rag --rag",
     "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server / chroma，以及可用的 chromadb npm 包；测试使用临时本地服务，不读取项目 .env。"
   },
   {
-    "id": "d5-modes",
+    "id": "s05-modes",
     "demo": 5,
     "title": "期望模式与实际模式分开",
     "question": "首次选择 RAG 但索引未就绪，与已启用 RAG 后故障，应当同样回退吗？",
-    "command": "npm run lesson -- d5-modes",
+    "command": "npm run lesson -- s05-modes",
     "mode": "offline",
     "offlineOrIntegration": "offline",
     "observations": [
