@@ -5,8 +5,8 @@
       "type": "node",
       "request": "launch",
       "name": "1. 调试最小调用",
-      "program": "${workspaceFolder}/examples/01-hello.mjs",
-      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/stages/s00-sdk-quickstart/examples/01-hello.mjs",
+      "cwd": "${workspaceFolder}/stages/s00-sdk-quickstart",
       "runtimeArgs": ["--env-file-if-exists=.env"],
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
@@ -15,8 +15,8 @@
       "type": "node",
       "request": "launch",
       "name": "2. 调试自动修复与事件",
-      "program": "${workspaceFolder}/examples/02-fix.mjs",
-      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/stages/s00-sdk-quickstart/examples/02-fix.mjs",
+      "cwd": "${workspaceFolder}/stages/s00-sdk-quickstart",
       "runtimeArgs": ["--env-file-if-exists=.env"],
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]

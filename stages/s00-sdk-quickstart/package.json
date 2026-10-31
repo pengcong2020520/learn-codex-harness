@@ -1,0 +1,23 @@
+{
+  "name": "codex-harness-starter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "从零调用 Codex harness 的 JavaScript 示例",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "hello": "node --env-file-if-exists=.env examples/01-hello.mjs",
+    "fix": "node --env-file-if-exists=.env examples/02-fix.mjs",
+    "resume": "node --env-file-if-exists=.env examples/03-resume.mjs",
+    "json": "node --env-file-if-exists=.env examples/04-json.mjs",
+    "app-server": "node --env-file-if-exists=.env examples/05-app-server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@openai/codex": "0.154.0",
+    "@openai/codex-sdk": "0.154.0"
+  }
+}

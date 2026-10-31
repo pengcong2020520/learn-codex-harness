@@ -1,0 +1,345 @@
+<section class="module" id="module-3">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">03</span>
+  <h2 class="module-title">配置：装配一个 Agent</h2>
+  <p class="module-subtitle">如何让同一套服务代码支持不同角色、工具和权限——答案是配置驱动。从 JSON 装配文件到工具白名单，逐层拆解 Agent 的组装逻辑。</p>
+</header>
+<div class="module-body">
+
+<!-- Screen 1: 总架构 -->
+<section class="screen animate-in" id="m3-screen-1">
+  <h2 class="screen-heading">全景：装配工作台的六个插槽</h2>
+  <p>想象一张装配工作台：服务代码是台架，配置文件是装配清单，六个插槽决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
+
+  <div class="arch-diagram">
+    <div class="arch-zone">
+      <button class="arch-component" data-desc="agent.instructions：指向角色正文文件路径（如 roles/writing-assistant.md）。角色内容与服务代码解耦，换角色只改路径，不改代码。">① 角色指令（instructions）</button>
+      <button class="arch-component" data-desc="agent.skills：声明原生 Skill 列表。Skill 提供方法指导，但不授予工具权限——工具权限必须通过 tools.allow 单独授权。">② 原生 Skills</button>
+      <button class="arch-component" data-desc="agent.tools.allow：工具白名单数组，如 ['list_files','read_file','write_file']。list 与 call 均执行此白名单，模型无法调用未列出的工具。">③ 工具白名单（tools.allow）</button>
+      <button class="arch-component" data-desc="agent.dataBindings：资料源与目录映射。每条绑定声明 sourceRef、actions（read/create）和 methods。inputs 只读，research/drafts 可读可创建，outputs 按产物规则写入。">④ 资料绑定（dataBindings）</button>
+      <button class="arch-component" data-desc="agent.outputs：产物规则，声明允许的输出目录、格式（md/txt）和写入模式（create-only，不覆盖）。文件落盘后检查存在性与扩展名。">⑤ 产物规则（outputs）</button>
+      <button class="arch-component" data-desc="agent.memory：记忆开关。use 控制是否召回原生记忆，contribute 控制是否向记忆库贡献。Demo3 两者均为 false。Skill 不等于记忆权限。">⑥ 记忆开关（memory）</button>
+    </div>
+    <div class="arch-description">点击插槽查看各字段职责</div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">📌</span>
+    <div class="callout-content">
+      <p class="callout-title">唯一装配入口</p>
+      <p><span class="term" data-definition="用字段名和值表达结构化数据的文本格式，这里用作装配清单。">JSON</span> 文件 <code>agents/writing-agent.json</code> 是配置的唯一可编辑入口，遵循 <span class="term" data-definition="配置文件格式版本声明，用于校验字段完整性、拒绝未知字段、供加载器选择对应的校验规则">schemaVersion: "1.0"</span>。未知字段直接拒绝，缺少必填字段也会报错，保证运行状态与配置严格一致。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 2: Schema / Registry / MCP / Skills 概念定义 -->
+<section class="screen animate-in" id="m3-screen-2">
+  <h2 class="screen-heading">四个核心概念：装配台的底层语言</h2>
+  <p>读懂配置文件前，先理解这四个词各自指的是什么，以及它们之间的边界。</p>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="配置的结构定义与校验规则，规定哪些字段必填、哪些值合法，超出范围即拒绝">Schema（模式）</span></div>
+      <div class="pattern-desc">
+        writing-agent.json 的 <code>schemaVersion: "1.0"</code> 声明了当前配置遵循的 Schema 版本。加载器按 Schema 校验所有字段：多余字段拒绝，缺失必填字段报错。Schema 是配置的"格式合同"。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="工具的注册表，记录所有可用工具的名称、描述和执行逻辑，白名单在 Registry 基础上做过滤">Registry（注册表）</span></div>
+      <div class="pattern-desc">
+        ToolManager 的 <code>build()</code> 方法生成一个带版本号的 registry，其中包含当前版本的工具规格。list 和 call 都受工具白名单约束，Registry 是工具的"电话簿"。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="Model Context Protocol，一种标准化协议，允许模型通过统一接口发现和调用外部工具，不是一工具一服务">MCP（模型上下文协议）</span></div>
+      <div class="pattern-desc">
+        Demo3 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title"><span class="term" data-definition="封装了特定能力的指令集，告诉模型如何完成某类任务，但不直接授予工具权限">Skills（原生技能）</span></div>
+      <div class="pattern-desc">
+        Skills 是方法指导文本，指导模型"如何做"某类任务（如写作流程）。工具权限由 <code>tools.allow</code> 单独控制——Skill 里提到某工具，不代表该工具自动被授权。两者必须分开配置。
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">🔑</span>
+    <div class="callout-content">
+      <p class="callout-title">方法 vs 授权：最重要的边界</p>
+      <p>Skills 告诉模型<strong>怎么做</strong>，tools.allow 决定模型<strong>能做什么</strong>。即使 Skill 里描述了"调用 write_file 保存结果"，如果 allow 列表里没有 write_file，模型调用时仍会被拒绝。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 3: 真实 JSON 配置解读 -->
+<section class="screen animate-in" id="m3-screen-3">
+  <h2 class="screen-heading">解剖真实配置文件</h2>
+  <p>以下是 writing-agent.json 的实际片段，展示装配工作台中的角色、工具、资料与执行配置。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 1–18 行</span>
+      <pre><code>{
+  <span class="code-string">"schemaVersion"</span>: <span class="code-string">"1.0"</span>,
+  <span class="code-string">"agent"</span>: {
+    <span class="code-string">"id"</span>: <span class="code-string">"writing-assistant"</span>,
+    <span class="code-string">"version"</span>: <span class="code-string">"1.0.0"</span>,
+    <span class="code-string">"instructions"</span>: <span class="code-string">"roles/writing-assistant.md"</span>,
+    <span class="code-string">"skills"</span>: [],
+    <span class="code-string">"tools"</span>: { <span class="code-string">"allow"</span>: [<span class="code-string">"list_files"</span>, <span class="code-string">"read_file"</span>, <span class="code-string">"write_file"</span>, <span class="code-string">"search_web"</span>, <span class="code-string">"read_webpage"</span>] },
+    <span class="code-string">"dataBindings"</span>: [</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"originals"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"research"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>, <span class="code-string">"create"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"drafts"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>, <span class="code-string">"create"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> },
+      { <span class="code-string">"sourceRef"</span>: <span class="code-string">"articles"</span>, <span class="code-string">"actions"</span>: [<span class="code-string">"read"</span>], <span class="code-string">"methods"</span>: [<span class="code-string">"files"</span>], <span class="code-string">"required"</span>: <span class="code-keyword">true</span> }
+    ],
+    <span class="code-string">"executionRef"</span>: <span class="code-string">"restricted-local"</span>,
+    <span class="code-string">"memory"</span>: { <span class="code-string">"use"</span>: <span class="code-keyword">false</span>, <span class="code-string">"contribute"</span>: <span class="code-keyword">false</span> },
+    <span class="code-string">"outputs"</span>: { <span class="code-string">"directory"</span>: <span class="code-string">"outputs"</span>, <span class="code-string">"formats"</span>: [<span class="code-string">"md"</span>, <span class="code-string">"txt"</span>], <span class="code-string">"writeMode"</span>: <span class="code-string">"create-only"</span>, <span class="code-string">"requiredChecks"</span>: [<span class="code-string">"file-exists"</span>, <span class="code-string">"format"</span>] }
+  },</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">字段解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong>schemaVersion</strong>：版本声明，加载器据此选择校验规则，未知版本直接拒绝。</p>
+        <p class="tl"><strong>instructions</strong>：角色正文文件路径，不是内联文本——角色内容与配置结构分离，易于独立维护。</p>
+        <p class="tl"><strong>tools.allow</strong>：5 个工具名组成白名单，list 和 call 都受此约束，模型不可自行扩权。</p>
+        <p class="tl"><strong>dataBindings</strong>：四个资料源，originals 和 articles 仅 read，research 和 drafts 可 read+create。articles 指向 outputs 目录，是来源绑定别名，不是新目录。</p>
+        <p class="tl"><strong>executionRef</strong>：引用 bindings.executions 中的策略条目，当前为 restricted-local（只读沙箱，禁止原生 shell 和文件写）。</p>
+        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，Demo3 不读取也不贡献跨会话记忆。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 4: ToolManager 源码 + MCP 机制 -->
+<section class="screen animate-in" id="m3-screen-4">
+  <h2 class="screen-heading">工具注册与 MCP 服务：ToolManager 的工作方式</h2>
+  <p><span class="term" data-definition="统一管理工具注册、版本控制、MCP 服务暴露和边界锁的模块">ToolManager</span> 是工具层的核心，负责把配置里的 allow 列表变成 Codex 可调用的 MCP 接口。</p>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/server/modules/tools/index.mjs · 第 15–31 行</span>
+      <pre><code>export class ToolManager {
+  constructor({ config, runtime, log, redact, files, agent, boundary = <span class="code-keyword">new</span> ExecutionBoundary() }) {
+    Object.assign(this, { config, runtime, log, redact, files, agent, boundary });
+    this.configFile = codexPaths(config.root).configFile;
+    this.token = randomBytes(<span class="code-number">32</span>).toString(<span class="code-string">"hex"</span>);
+    this.status = <span class="code-string">"loading"</span>; this.error = null;
+    Object.assign(boundary, { pending: () =&gt; Boolean(this.pending), unavailable: () =&gt; this.closed || this.broken,
+      refresh: <span class="code-keyword">async</span> () =&gt; { <span class="code-keyword">try</span> { this.scan(); } catch (error) { this.pending = null; this.report(error); } }, apply: () =&gt; this.apply() });
+  }</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>  <span class="code-keyword">async</span> open() {
+    this.registry = <span class="code-keyword">await</span> this.build(readToolSources(this.config.root));
+    this.server = <span class="code-keyword">await</span> createMcpToolServer({ token: this.token, redact: this.redact });
+    this.server.registries.set(this.registry.version, this.registry);
+    this.config.launch.env = { ...this.config.launch.env, PROJECT_MCP_TOKEN: this.token };
+    this.status = <span class="code-string">"ready"</span>;
+    <span class="code-keyword">return</span> this;
+  }</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">关键设计解读</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="这里是证明调用方获得授权的一段随机凭据，由程序生成和传递，无需复制到教学页面。">随机 token</span></strong>：每次启动生成 32 字节随机 token，作为 MCP <span class="term" data-definition="调用请求携带的授权凭据，用来核验访问本地工具服务的身份。">Bearer 令牌</span>写入 Codex 环境变量，防止未授权调用。</p>
+        <p class="tl"><strong>build() → registry</strong>：扫描工具源，构建带版本号的 Registry 快照，存入 <code>server.registries</code> Map。</p>
+        <p class="tl"><strong>createMcpToolServer</strong>：启动本地 HTTP MCP 服务端，<strong>一个服务承载本项目的工具</strong>，不是一工具一服务。</p>
+        <p class="tl"><strong><span class="term" data-definition="协调执行与更新的边界锁，避免活跃任务执行到一半时切换工具状态。">ExecutionBoundary</span></strong>：边界锁模块注入 ToolManager，保证工具刷新不在任务中途发生，维护状态一致性。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">工具刷新的限制</div>
+      <div class="pattern-desc">工具刷新受边界锁协调，不能在任务中途切换。Agent 配置、角色或 Skill 文件变更后，会拒绝后续请求并要求重启；新增工具还需实现、加入 allow 并受控重启。</div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">list 与 call 双重过滤</div>
+      <div class="pattern-desc">模型请求 list_tools 时，只返回 allow 列表内的工具；call_tool 时再次校验 allowlist，两道过滤缺一不可。模型看不到、也调不到白名单外的工具。</div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 5: 描述符版本机制 + workspace 边界 -->
+<section class="screen animate-in" id="m3-screen-5">
+  <h2 class="screen-heading">描述符版本机制与 Workspace 边界</h2>
+  <p>配置变更如何被检测？文件操作的边界在哪里？这两个问题是排障时最常碰到的。</p>
+
+  <div class="step-cards">
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>启动时生成描述符</strong><br>
+        每次服务启动，系统生成 <span class="term" data-definition="记录当次启动时角色哈希、Skill 版本、工具版本和资源策略的快照文件">Agent 描述符</span>，写入 <code>.data/agent-descriptors/</code>，包含角色<span class="term" data-definition="根据文件内容计算的指纹，用来发现变化，不是文件内容本身。">哈希</span>、Skill 版本、工具版本。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Thread 绑定描述符版本</strong><br>
+        新建 Thread 时，其描述符版本写入 <code>.data/thread-agents.json</code>。恢复旧 Thread 时，先比对当前描述符哈希与记录值是否一致。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>不匹配则提示 /new</strong><br>
+        配置、角色或 Skill 文件变更后先重启服务；如果新描述符与旧会话绑定不同，系统拒绝恢复并提示用户执行 <code>/new</code> 新建会话，<strong>不自动迁移</strong>旧 Thread。
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>文件权限边界</strong><br>
+        <span class="term" data-definition="限制文件访问范围的服务模块，控制路径、扩展名、大小和操作类型，由文件服务自身执行而非沙箱 cwd">文件服务（files.mjs）</span>自身执行权限边界，不依赖 Codex cwd 约束。工具快照工厂注入文件服务，无跨快照引用，防止历史快照影响当前操作。
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-accent">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-content">
+      <p class="callout-title">业务状态存 JSON，不存数据库（Demo3 专属）</p>
+      <p>Demo3 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 Demo4 引入。</p>
+    </div>
+  </div>
+
+  <div class="translation-block">
+    <div class="translation-code">
+      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 19–29 行</span>
+      <pre><code>  <span class="code-string">"bindings"</span>: {
+    <span class="code-string">"workspaceDir"</span>: <span class="code-string">"../workspace"</span>,
+    <span class="code-string">"skills"</span>: {},
+    <span class="code-string">"sources"</span>: {
+      <span class="code-string">"originals"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"inputs"</span> },
+      <span class="code-string">"research"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"research"</span> },</code></pre><span class="translation-label">同一文件 · 连续下段</span><pre><code>      <span class="code-string">"drafts"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"drafts"</span> },
+      <span class="code-string">"articles"</span>: { <span class="code-string">"type"</span>: <span class="code-string">"files"</span>, <span class="code-string">"root"</span>: <span class="code-string">"outputs"</span> }
+    },
+    <span class="code-string">"executions"</span>: { <span class="code-string">"restricted-local"</span>: { <span class="code-string">"sandbox"</span>: <span class="code-string">"read-only"</span>, <span class="code-string">"approvalPolicy"</span>: <span class="code-string">"never"</span>, <span class="code-string">"nativeShell"</span>: <span class="code-keyword">false</span>, <span class="code-string">"nativeFileWrite"</span>: <span class="code-keyword">false</span> } }
+  }</code></pre>
+    </div>
+    <div class="translation-english">
+      <span class="translation-label">关键说明</span>
+      <div class="translation-lines">
+        <p class="tl"><strong><span class="term" data-definition="Agent 的工作目录入口。cwd 指当前工作目录，但文件访问许可还由文件服务独立检查。">workspaceDir</span></strong>：Agent 的工作根目录，Thread 的 cwd 设为此路径，跨重启保留。</p>
+        <p class="tl"><strong>articles → outputs</strong>：articles 是 outputs 目录的来源绑定别名，不是独立目录。list_files 只返回已授权路径的文件，无法通过 articles 访问 outputs 以外内容。</p>
+        <p class="tl"><strong>restricted-local</strong>：沙箱策略条目，禁止原生 shell 和文件写，approvalPolicy: never 表示不通过弹出审批来申请额外执行权限；工具仍受白名单与文件服务边界约束。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Screen 6: 版本说明 + 实践 + 测验 -->
+<section class="screen animate-in" id="m3-screen-6">
+  <h2 class="screen-heading">版本边界、实践命令与知识测验</h2>
+
+  <div class="pattern-cards">
+    <div class="pattern-card">
+      <div class="pattern-title">🔖 版本变化说明</div>
+      <div class="pattern-desc">
+        <strong>Demo2 → Demo3</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 Demo4。<br>
+        <strong>Demo3 → Demo4</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        Demo3 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">⌨️ 实践命令（Demo3 HTTP 服务）</div>
+      <div class="pattern-desc">
+        <code>cd stages/s03-agent-core &amp;&amp; npm ci</code><br>
+        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4313）<br>
+        <code>npm run check</code>（本地配置校验）<br>
+        <code>npm run server</code>（启动服务，Demo3 无需数据库迁移）<br>
+        另开终端：<code>npm run chat</code><br>
+        验证工具：在 chat 中输入 <code>/tools</code><br>
+        <code>npm test &amp;&amp; npm run test:codex-tools</code><br>
+        <a href="../../?stage=demo3">→ 进入 Demo3 练习</a>
+      </div>
+    </div>
+    <div class="pattern-card">
+      <div class="pattern-title">🚧 边界说明</div>
+      <div class="pattern-desc">
+        单机单用户，每实例一个 Agent 多 <span class="term" data-definition="一个持续会话，可包含多轮任务；多个会话仍共用本实例的同一套Agent配置。">Thread</span>，不支持多账户或多 Agent 编排。<br>
+        Skill 仅验证原生文本指令型；带脚本/附件的工作流不保证运行。<br>
+        记忆链路读/提炼限制已测；合并摘要当前 <span class="term" data-definition="该处理路径目前受限制而无法完成，不能视作完整记忆链路已经验收。">blocked</span>，完整链路未最终验收。<br>
+        新增工具需同时配置 allow 并受控重启，不支持热增不重启。<br>
+        文件服务限制路径、扩展名、大小和操作：默认 .md/.txt、256 KiB，只创建不覆盖，不跟随软链接或硬链接；不能仅凭 cwd 判断访问权限。
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-container" id="m3-quiz">
+
+    <div class="quiz-question-block" data-correct="c"
+         data-explanation-right="正确。tools.allow 是工具白名单，list 和 call 操作都会执行此过滤。Skill 只是方法指导文本，不授予工具权限——两者必须分开配置。"
+         data-explanation-wrong="A选项错误：Skills 里描述了某工具的使用方法，并不意味着该工具被自动授权。工具权限必须在 tools.allow 中单独声明，两者完全独立。B选项错误：memory.use 控制的是是否召回跨会话原生记忆，与工具权限无关。工具白名单是必要授权，实际执行还受参数校验和资源范围限制；记忆开关不授予工具权限。">
+      <h3 class="quiz-question">你给 Skill 新增“用 write_file 保存文章”，模型却仍被拒绝。首先应检查哪一项授权？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 Skill 文件中是否描述了该工具的使用方法</span>
+        </button>
+        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 memory.use 是否为 true</span>
+        </button>
+        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>取决于 agent.tools.allow 白名单，list 和 call 都执行此过滤</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="a"
+         data-explanation-right="正确。旧 Thread 恢复时，系统比对当前描述符哈希与 thread-agents.json 中的记录值，不匹配则提示执行 /new，不自动迁移旧 Thread。"
+         data-explanation-wrong="B选项错误：描述符不匹配时系统不会自动迁移旧 Thread 的数据到新配置下继续运行——这样做可能导致上下文与新配置不一致，因此必须由用户主动执行 /new。C选项错误：服务不会在检测到版本差异时自动回滚到旧配置——回滚意味着用手动干预将配置文件还原，系统只做检测和拒绝，不做自动回滚。">
+      <h3 class="quiz-question">你修改 Agent 角色并重启了服务。现在 /resume 旧 Thread，描述符版本不同，应如何处理？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>系统比对描述符哈希，不匹配则拒绝恢复并提示执行 /new，不自动迁移</span>
+        </button>
+        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>系统自动将旧 Thread 的数据迁移到新配置下继续运行</span>
+        </button>
+        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>服务检测到版本差异后自动回滚到旧配置</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+    <div class="quiz-question-block" data-correct="b"
+         data-explanation-right="正确。Demo3 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
+         data-explanation-wrong="A选项错误：Demo3 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
+      <h3 class="quiz-question">你新增第六个已授权工具，担心还要开第六个端口。按本项目结构，应该怎样接入？</h3>
+      <div class="quiz-options">
+        <button class="quiz-option" data-value="a" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>以函数形式直接注入 Codex 进程内部，无需网络调用</span>
+        </button>
+        <button class="quiz-option" data-value="b" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>通过一个本地 HTTP MCP 服务端统一暴露，Codex 以 MCP 协议发现并调用已授权工具</span>
+        </button>
+        <button class="quiz-option" data-value="c" onclick="selectOption(this)">
+          <div class="quiz-option-radio"></div>
+          <span>每个工具单独启动一个 HTTP 服务，Codex 分别连接</span>
+        </button>
+      </div>
+      <div class="quiz-feedback"></div>
+    </div>
+
+  </div>
+  <button class="quiz-check-btn" onclick="checkQuiz('m3-quiz')">提交答案</button>
+  <button class="quiz-reset-btn" onclick="resetQuiz('m3-quiz')" style="margin-left:8px">重置</button>
+
+</section>
+
+</div>
+</div>
+</section>
