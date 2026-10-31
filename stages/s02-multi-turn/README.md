@@ -1,6 +1,6 @@
 # s02: 多轮会话 — 连续输入不丢、不抢跑
 
-[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → `s02` → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → `s02` → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
 > *"顺序交给队列，历史留给 Codex"* — Node 端只管按顺序发 Turn，不保存、不拼接、不重发历史。
 >
 > **Harness 层**: 会话 — 同一个 Thread 上的多次 Turn，以及退出后的恢复。

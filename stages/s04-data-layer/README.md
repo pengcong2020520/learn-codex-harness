@@ -1,6 +1,6 @@
 # s04: 数据层 — 让每次执行有据可查
 
-[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → `s04` → [s05](../s05-knowledge-layer/) → [app](../../app/)
+[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → `s04` → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
 > *"PostgreSQL 记事实，Redis 只负责叫醒"* — 任务和调度出口写在同一个事务里，丢了唤醒信号也能补投。
 >
 > **Harness 层**: 持久化 — 任务、调度与资源版本。

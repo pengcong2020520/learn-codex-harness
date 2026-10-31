@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1470" viewBox="0 0 1280 1470" role="img" aria-labelledby="title desc"><title id="title">s05 总体架构</title><desc id="desc">按职责分层；右侧为独立 Codex 原生进程；红色表示相较上一 Demo 的新增或变化。</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8" fill="#305780"/></marker></defs><rect width="1280" height="1470" fill="#f7f9fc"/>
+<text x="40" y="55" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="32" font-weight="650" fill="#192d44">S05  /  知识层与通用门禁</text>
+<text x="40" y="91" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">纵向箭头表示能力依赖；右侧箭头表示与 Codex 的实际通信</text>
+<text x="40" y="122" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">红色：本阶段新增或变化    ·    蓝色：复用能力    ·    分层表示职责，不代表独立服务</text>
+<rect x="40" y="150" width="820" height="100" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="60" y="186" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">01  交互入口</text>
+<text x="60" y="221" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#586d81">本地 CLI / knowledge CLI  →  HTTP / SSE  ·  本地 Bearer 凭据</text>
+<path d="M450,250 L450,279" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="40" y="280" width="820" height="170" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="60" y="316" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">02  Agent 装配与任务调度</text>
+<text x="60" y="352" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">Agent 配置 → 角色、原生 Skills、工具白名单、KB 挂载</text>
+<text x="60" y="382" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">会话绑定 · FIFO / steer · 原生 Thread / Turn 控制（stdio）</text>
+<text x="60" y="419" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#b63743">服务端签发 Task 上下文，再绑定原生 Thread / Turn</text>
+<path d="M860,355 L920,355" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="920" y="150" width="320" height="100" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="944" y="190" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">模型 API</text>
+<text x="944" y="224" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">推理请求与响应</text>
+<rect x="920" y="280" width="320" height="355" rx="14" fill="#edf4fa" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="944" y="320" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">Codex app-server</text>
+<text x="944" y="394" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">本机独立子进程</text>
+<text x="944" y="424" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生模型 / 工具循环</text>
+<text x="944" y="454" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生 Skills</text>
+<text x="944" y="484" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">Thread / Turn / 上下文</text>
+<text x="944" y="550" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="600" fill="#305780">工具调用返回产品侧</text>
+<text x="944" y="585" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#b63743">dynamicTools 回调</text>
+<path d="M1080,280 L1080,250" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<path d="M450,450 L450,504" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="40" y="505" width="820" height="150" rx="14" fill="#fff9f9" stroke="#d9a0a6" stroke-width="1.5"/>
+<text x="60" y="541" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#b63743">03  通用门禁</text>
+<text x="60" y="577" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">可信 Task 上下文 ∩ 工具白名单 ∩ 资源归属 / KB 授权</text>
+<text x="60" y="607" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生工具回调与 HTTP 操作共用判定；同一 Node 进程</text>
+<path d="M920,580 L860,580" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M450,655 L450,714" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="40" y="715" width="820" height="200" rx="14" fill="#fff9f9" stroke="#d9a0a6" stroke-width="1.5"/>
+<text x="60" y="751" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#b63743">04  知识与资源服务</text>
+<text x="60" y="788" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">Wiki（默认）</text>
+<text x="450" y="788" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">RAG（可选）</text>
+<text x="60" y="825" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="400" fill="#586d81">原生 Skill + Codex 维护</text>
+<text x="60" y="855" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="400" fill="#586d81">修订校验后自动生效</text>
+<text x="450" y="825" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="400" fill="#586d81">原文 → Chroma + BM25</text>
+<text x="450" y="855" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="400" fill="#586d81">按 effectiveMode 查询</text>
+<text x="60" y="895" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" font-weight="400" fill="#586d81">共用资源服务：原文版本、不可变正文、来源有效性</text>
+<path d="M450,915 L450,969" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="40" y="970" width="820" height="300" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="60" y="1006" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">05  数据与索引</text>
+<rect x="60" y="1031" width="370" height="108" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="77" y="1063" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#192d44">PostgreSQL  ·  持久业务状态</text>
+<text x="77" y="1096" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">会话 / 任务 / outbox / 资源版本</text>
+<text x="77" y="1126" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">+ KB / Wiki 指针 / 索引任务</text>
+<rect x="450" y="1031" width="390" height="108" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="467" y="1063" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#192d44">Redis  ·  调度唤醒</text>
+<text x="467" y="1096" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">Set 保存 Thread ID，状态以 PG 为准</text>
+<text x="467" y="1126" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">+ 知识索引任务独立唤醒 key</text>
+<rect x="60" y="1155" width="780" height="94" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="77" y="1185" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">文件系统 + 可选 Chroma</text>
+<text x="77" y="1216" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">workspace/ 原文与产物 · .data/files/objects/ 不可变正文</text>
+<text x="77" y="1241" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">新增：.data/knowledge/bm25/ · Chroma 向量索引</text>
+<rect x="920" y="750" width="320" height="205" rx="14" fill="#edf4fa" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="944" y="790" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">Codex 原生存储</text>
+<text x="944" y="827" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">.data/codex/</text>
+<text x="944" y="857" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">SQLite / JSONL</text>
+<text x="944" y="887" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生上下文与会话历史</text>
+<text x="944" y="929" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">挂 KB 时禁用原生记忆</text>
+<path d="M1080,635 L1080,750" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="40" y="1320" width="1200" height="85" rx="14" fill="#eaf0f6" stroke="#d5e0e9" stroke-width="1.5"/>
+<text x="60" y="1353" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#192d44">存储边界：PG 管业务事实，Redis 管唤醒，文件管正文，Codex 管原生会话。</text>
+<text x="60" y="1383" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">单机 · 单 owner · 多 Thread  |  Wiki 与 RAG 分别基于原文；无手工发布、无查询失败自动回退</text></svg>

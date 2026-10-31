@@ -1,0 +1,906 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: file:"><title>Agent 脚手架设计方案 · v1.0</title><style>
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:#f3f6fa;color:#24384b;font:16px/1.9 system-ui,-apple-system,'PingFang SC',sans-serif}aside{position:fixed;inset:0 auto 0 0;width:245px;padding:32px 22px;background:#eaf0f6;border-right:1px solid #dbe3ed;overflow:auto}aside b{display:block;color:#19354e;font-size:18px;margin-bottom:7px}aside small{color:#60788e;font-size:12px}aside ul{list-style:none;padding:0;margin-top:27px}aside li{font-size:13px;margin:13px 0;line-height:1.65}main{margin:30px 30px 65px 275px;padding:40px 44px;max-width:1120px;background:white;border:1px solid #dde5ed;border-radius:12px}h1{font-size:30px;line-height:1.45;margin:0 0 22px;color:#16324b}h2{font-size:24px;line-height:1.5;margin:42px 0 17px;padding-top:15px;border-top:1px solid #e1e8f0;color:#17364e}h3{font-size:18px;margin:27px 0 10px;color:#21435f}p{margin:12px 0}li{margin:6px 0}a{color:#2667a3;text-decoration:none}a:hover{text-decoration:underline}strong{color:#17354d}blockquote{margin:20px 0;padding:8px 18px;border-left:4px solid #5b90bd;background:#eff5fc}hr{display:none}.table-wrap{overflow-x:auto;margin:20px 0}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.7}td,th{border:1px solid #dce4ec;padding:10px 12px;vertical-align:top;min-width:100px}th{text-align:left;background:#ecf2f8}tr:nth-child(even){background:#fafcfe}code{font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;background:#edf2f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{font-size:13px;line-height:1.6;background:#eff3f8;padding:19px;border-radius:8px;overflow-x:auto}pre code{padding:0;background:none;white-space:pre}svg{display:block;width:100%;height:auto;margin:24px 0}img{max-width:100%}.badge{font-size:12px;letter-spacing:.04em;color:#50738e;margin-bottom:18px}footer{margin-top:35px;padding-top:20px;border-top:1px solid #e4ebf2;color:#647a8e;font-size:12px}@media(min-width:1650px){main{margin-left:calc(245px + (100vw - 245px - 1180px)/2)}}@media(max-width:1000px){aside{display:none}main{margin:16px;padding:30px 25px}}@media(max-width:560px){body{font-size:15px}main{margin:0;padding:25px 17px;border:0;border-radius:0}h1{font-size:25px}h2{font-size:21px}.table-wrap td{min-width:135px}svg{min-width:690px}.diagram-wrap{overflow-x:auto}}@media print{aside,.badge{display:none}main{margin:0;padding:0;max-width:none;border:0}body{background:white;font-size:10pt}h1{font-size:22pt}h2{break-after:avoid;font-size:15pt}table{font-size:8pt}tr,blockquote{break-inside:avoid}svg{max-height:20cm}a{color:inherit}}
+</style></head><body><aside><b>Agent 脚手架设计</b><small>v1.0 · 2026-09-29 · 设计基线</small><ul><li><a href="#section-1">1 目标与边界</a></li><li><a href="#section-2">2 现状与能力归属</a></li><li><a href="#section-3">3 总体结构与装配流程</a></li><li><a href="#section-4">4 工作区与状态存储</a></li><li><a href="#section-5">5 数据层与访问方式</a></li><li><a href="#section-6">6 Agent 定义与资源绑定</a></li><li><a href="#section-7">7 能力范围与执行约束</a></li><li><a href="#section-8">8 会话、配置版本与产物</a></li><li><a href="#section-9">9 现有模块调整与实施顺序</a></li><li><a href="#section-10">10 验收标准</a></li><li><a href="#section-11">11 依据与待验证事项</a></li></ul><p><a href="agent-core-design.md">Markdown 源文档</a></p></aside><main><div class="badge">实施前设计基线 · CODEX APP SERVER 0.154.0</div><h1>基于 Codex App Server 的 Agent 脚手架设计方案</h1>
+<p><strong>文档日期：</strong> 2026-09-29<br><strong>设计版本：</strong> v1.0<br><strong>原生依赖锁定：</strong> <code>@openai/codex</code> 0.154.0，Node ≥ 24<br><strong>状态：</strong> 实施前设计基线；首版已实施，当前行为、旧会话限制与测试结果见 <a href="../README.md">项目说明</a>。本文目标表不代表全部验收通过。</p>
+<blockquote>
+<p><strong>范围说明：</strong> 本文档描述面向单机、单用户、每服务加载一个 Agent 定义与项目工作区、多原生 Thread 的轻量级 Agent 脚手架设计。多用户、多账户、跨主机演进、Skill/Tool 市场化、强制向量数据库及托管基础设施均<strong>不在本版范围内</strong>。Web/App 端客户端为远期愿景，当前 CLI 保持不变，本版本不承诺新 UI 客户端。工作目录体系详细规范以 <a href="workspace-design.md">workspace-design.md</a> 为权威，本文仅汇总关键约束，不重新定义。早期<a href="multi-user-upgrade-plan.md">多用户升级方案</a>为后置参考，非本版交付计划，不纳入本版路线图。</p>
+</blockquote>
+<hr>
+<h2 id="section-1">1 目标与边界</h2>
+<h3>1.1 核心目标</h3>
+<p>将当前固定的写作辅助工具（writing assistant）演进为<strong>以项目工作区为中心、可配置的 Agent 脚手架</strong>，使同一运行时可通过不同的 Agent 定义覆盖写作、研究、客服支持、数据分析等使用场景，同时保持：</p>
+<ul>
+<li>单一本地服务实例，不新增独立运行时或规划队列；</li>
+<li>原生 Codex App Server 作为模型/工具执行权威，脚手架负责资源管理与访问验证；</li>
+<li>复用现有连接、工具注册、会话与消息模块；保留已验证的会话和调度行为；</li>
+<li>凭证仅通过服务端引用传递，绝不以明文出现于示例配置、提示词或日志。</li>
+</ul>
+<h3>1.2 明确不做的事</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>排除项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>多用户 / 账户 / 权限分层</td>
+<td>本版仅单一部署配置，不实现多租户隔离</td>
+</tr>
+<tr>
+<td>多 Agent 引擎并发 / 编排平台</td>
+<td>Agent 定义描述用例行为，不等于多个引擎实例</td>
+</tr>
+<tr>
+<td>全量 Skill / Tool 市场化</td>
+<td>Tool 目录文件保持独立可复用定义，不构建市场</td>
+</tr>
+<tr>
+<td>强制向量数据库或托管基础设施</td>
+<td>数据后端可按工作负载选型，本版无静默新增 DB 要求</td>
+</tr>
+<tr>
+<td>任务隔离（Task Isolation）自动提供</td>
+<td>M1 后按需扩展；Worktree 不是 OS 沙箱，不作为首阶段前提</td>
+</tr>
+<tr>
+<td>新 Web / App / CLI 客户端</td>
+<td>现有 CLI 维持不变，新客户端为远期计划</td>
+</tr>
+</tbody></table></div>
+<h3>1.3 首个交付闭环</h3>
+<p>加载一份 Agent 配置 → 绑定项目工作区与允许资料 → 启用可用 Skill 和工具 → 由 Codex 执行任务 → 生成可检查的产物。</p>
+<p>先用写作场景验证这条链路，再按场景增加结构化查询、Wiki 与检索。数据层是目标设计，当前尚未实现。</p>
+<hr>
+<h2 id="section-2">2 现状与能力归属</h2>
+<h3>2.1 现有服务端结构</h3>
+<p><a href="../server/main.mjs">server/main.mjs</a> 启动单一服务，包含以下核心模块：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../server/modules/tools/index.mjs"><code>ToolManager</code></a></td>
+<td>工具注册与执行</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/connection.mjs"><code>CodexConnection</code></a></td>
+<td>原生 Codex 进程连接与协议通信</td>
+</tr>
+<tr>
+<td><a href="../server/modules/sessions/index.mjs"><code>SessionService</code></a></td>
+<td>会话生命周期，使用 <code>baseInstructions</code></td>
+</tr>
+<tr>
+<td><a href="../server/modules/messages/index.mjs"><code>MessageService</code></a></td>
+<td>消息路由，维护外部产品 FIFO/steer 队列</td>
+</tr>
+<tr>
+<td><a href="../server/modules/memory/index.mjs"><code>MemoryService</code></a></td>
+<td>记忆配置验证、摘要读取、Thread 贡献控制</td>
+</tr>
+</tbody></table></div>
+<p>本地 Bearer HTTP/SSE + CLI 访问；<strong>不新增另一个运行时、规划器或队列</strong>。</p>
+<h3>2.2 角色定义现状（待重构）</h3>
+<p><a href="../server/modules/role/index.mjs">server/modules/role/index.mjs</a> 当前<strong>嵌入</strong>项目/工作区目录约定，含：</p>
+<ul>
+<li>身份描述与工作流程</li>
+<li>工具限制</li>
+<li>项目/工作区路径约定（当前硬编码于角色源文件中，而非通过配置参数化）</li>
+</ul>
+<p>该角色源文件被以下两处消费：</p>
+<ol>
+<li><a href="../server/modules/sessions/index.mjs">server/modules/sessions/index.mjs</a>：通过 <code>baseInstructions</code> 注入会话；</li>
+<li><a href="../server/modules/config/index.mjs">server/modules/config/index.mjs</a>：通过 <code>AGENT_INSTRUCTIONS</code> 导入，作为模型目录（model-catalog）的 <code>instructions_template</code> 字段。</li>
+</ol>
+<p><strong>角色源与两处消费方需同步重构</strong>，防止会话指令与模型目录模板不一致。<code>codex/config.mjs</code> 负责生成原生配置，并不消费上述角色模板。</p>
+<blockquote>
+<p><strong>待验证：</strong> 所提议的角色加载器对原生 harness 行为的兼容性；<code>baseInstructions</code> vs <code>developerInstructions</code> 参数兼容性须在锁定版本下核实，不可假定参数替换是琐碎操作。</p>
+</blockquote>
+<h3>2.3 运行时工作区现状</h3>
+<p><a href="../server/modules/codex/runtime.mjs">server/modules/codex/runtime.mjs</a> 中 <code>prepareRun</code> 创建随机 <code>.runs/app-server-*</code> 目录作为 <code>runtime.workspace</code>（即 <code>runDir</code> 的实际路径，非整个 <code>.runs</code>）；连接 spawn <code>cwd</code>、日志及会话启动 <code>cwd</code> 均使用该目录。<a href="../server/modules/tools/files.mjs">server/modules/tools/files.mjs</a> 和 <a href="../server/modules/tools/loader.mjs">server/modules/tools/loader.mjs</a> 独立推导根目录/工作区。</p>
+<p>当前二者不同：Codex 的 <code>cwd</code> 是启动目录，文件工具使用 <code>serviceRoot/workspace</code>。目标是统一到配置的 <code>workspaceDir</code>；<code>cwd</code> 本身不构成安全边界。</p>
+<p>文件工具约束（现状）：</p>
+<ul>
+<li>仅处理 <code>.md</code> / <code>.txt</code>，单文件上限 256 KiB</li>
+<li><code>inputs</code> 目录只读；<code>research</code> / <code>drafts</code> / <code>outputs</code> 为默认写作模板目录；首阶段路径变更时保留现有限制</li>
+<li>禁止覆盖、软链接和文件硬链接；当前检查固定四目录，目标再叠加每个 Agent 的来源范围</li>
+</ul>
+<p><a href="../server/modules/sessions/history.mjs">server/modules/sessions/history.mjs</a> 枚举 <code>.runs</code> 并有遗留导入；<a href="../server/modules/maintenance/index.mjs">server/modules/maintenance/index.mjs</a> 保留索引和活动路径。</p>
+<p><strong>工作区语义变更方向已确认，实施待 M1 完成</strong>；M1 将当前混用的 <code>runtime.workspace</code> 拆成 <code>workspaceDir</code> 与 <code>runDir</code>。详见 <a href="workspace-design.md">workspace-design.md</a>。工作区布局不是框架的强制要求。</p>
+<h3>2.4 工具加载与能力范围</h3>
+<p><a href="../server/modules/tools/loader.mjs">server/modules/tools/loader.mjs</a>：Ajv schema 验证、受信模块、带 <code>execute</code> 的注册表；<a href="../server/modules/tools/index.mjs">server/modules/tools/index.mjs</a>：版本化快照与全局空闲边界重载；<a href="../server/modules/tools/mcp-server.mjs">server/modules/tools/mcp-server.mjs</a> 按版本 URL，共享单一 Token。</p>
+<p><strong>当前无可配置 Agent 作用域</strong>：<code>tools/list</code> 返回完整注册表；<code>registry.call</code> 在执行时对调用者无 Agent 特定作用域验证。目标状态下，<code>tools/list</code> 过滤和 <code>registry.call</code> 执行层均拒绝超出 Agent 允许范围的调用，包括绕过 <code>tools/list</code> 的直接伪造调用。</p>
+<p>现有 MCP 已有文件路径约束，但尚无基于 Agent 身份的数据作用域验证；MCP 请求当前不携带可信 Thread 身份，不可用 <code>modelAgentId</code> / <code>threadId</code> 作为授权依据。</p>
+<blockquote>
+<p>来源加载根目录 ≠ 目标状态下的数据工作目录。</p>
+</blockquote>
+<h3>2.5 配置与沙箱</h3>
+<p><a href="../server/modules/codex/config.mjs">server/modules/codex/config.mjs</a>：<code>.data/codex</code> 为稳定 <code>CODEX_HOME</code>；原生 SQLite/JSONL 状态<strong>非手工可编辑的业务 DB</strong>，是独立于脚手架元数据（D1）的原生运行时状态。原生配置文件由该模块生成；<a href="../server/modules/config/index.mjs">server/modules/config/index.mjs</a> 构建启动参数，当前禁用：shell、<code>apply_patch</code>、agents、apps、<code>view_image</code>；session sandbox 为只读，<code>approvalPolicy</code> 为 <code>never</code>。</p>
+<p>原生 <code>enabled_tools</code> 字段适用于命名的 MCP server，不自动覆盖所有原生工具；shell 和 <code>apply_patch</code> 通过独立配置项控制，应继续分别验证其有效开关。目标的单 Agent 首阶段中，所有 Thread 共享同一有效策略；策略通过受信服务端凭证/路由绑定，描述符不可变。</p>
+<blockquote>
+<p><strong>重要：</strong> 原生沙箱<strong>不自动</strong>约束自定义 MCP server 的文件系统/DB/网络操作，需在服务层实施资源执行约束。现有限制在明确实施独立变更前予以保留。</p>
+</blockquote>
+<h3>2.6 记忆服务现状</h3>
+<p><a href="../server/modules/memory/index.mjs">server/modules/memory/index.mjs</a>：配置验证 / 摘要读取 / Thread 贡献控制。</p>
+<p>当前以 <code>use_memories</code> 控制读取、<code>generate_memories</code> 控制后台生成；<code>thread/memoryMode/set</code> 单独控制 Thread 是否参与未来记忆贡献。<strong>关闭贡献（<code>contribute: false</code>）不禁用读取、不删除已有记忆、不取消已提交的异步生成任务</strong>——正在进行的后台生成仍可能写入。贡献 API 仅控制未来的资格，不保证拒绝所有已排队的异步写入。读取可通过 <code>use_memories=false</code> 关闭；这不会抹除已经进入会话上下文的信息。</p>
+<p>记忆<strong>生成</strong>（background pipeline）是独立的服务侧标志，与贡献标志分开；示例以 <code>use: false, contribute: false</code> 为 Agent 默认值，服务侧同时关闭生成。以后启用生成须先解决当前合并受阻的问题，并验证实际行为。</p>
+<p>生成最终摘要受阻（无原生写工具）；提取、整合、注入为独立步骤。当前无跨 Thread 独立的 Agent 记忆隔离保证。Wiki 持久化领域知识与 Codex 跨会话记忆是不同概念。</p>
+<p><a href="../tests/codex-memory.integration.mjs">tests/codex-memory.integration.mjs</a>：有 fake-provider + 真实二进制的覆盖，这是<strong>代码中的现有证据</strong>，不证明真实模型质量或端到端生成可用。</p>
+<hr>
+<h2 id="section-3">3 总体结构与装配流程</h2>
+<h3>3.1 逻辑架构</h3>
+<p><div class="diagram-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1180" height="790" viewBox="0 0 1180 790" role="img" aria-labelledby="title desc">
+<title id="title">Agent 脚手架目标架构与职责边界</title>
+<desc id="desc">配置、资源绑定与服务端策略经装配层进入 Codex。既有消息队列驱动 Codex；工具及数据访问独立执行范围检查。Codex 状态与运行日志分开。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#59748d"/></marker></defs>
+<rect width="1180" height="790" rx="18" fill="#f5f7fb"/>
+<text x="40" y="43" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="27" fill="#14304c" font-weight="600">原生执行内核 · 可配置的资源与能力</text>
+<text x="40" y="74" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="16" fill="#5e7286" font-weight="400">目标架构｜项目工作区为主，任务隔离按需｜设计待实施</text>
+<rect x="40" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Agent 定义</text>
+<text x="62" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">角色 / Skills / 工具 / 产物要求</text>
+<text x="62" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">记忆策略 / 声明职责与依赖</text>
+<rect x="420" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="442" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">资源绑定</text>
+<text x="442" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">项目工作区 / 数据源 / 执行环境</text>
+<text x="442" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">逻辑引用解析为实际资源</text>
+<rect x="800" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="822" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">服务端策略</text>
+<text x="822" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">工具操作范围 + 数据访问范围</text>
+<text x="822" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">配置不自动授予权限</text>
+<path d="M210 220 L210 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M590 220 L590 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M970 220 L970 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="40" y="266" width="1100" height="94" rx="12" fill="#e9f2fc" stroke="#aec6df"/>
+<text x="62" y="300" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">轻量装配层</text>
+<text x="62" y="328" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">校验配置 → 解析引用 → 检查依赖与范围 → 验证有效能力 → 记录版本与绑定</text>
+<path d="M590 360 L590 430" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<text x="604" y="402" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#59748d" font-weight="400">原生配置与运行绑定</text>
+<rect x="40" y="430" width="280" height="116" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">客户端与既有消息队列</text>
+<text x="62" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">CLI（现有）</text>
+<text x="62" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">Web / App 共用入口（后续）</text>
+<path d="M320 486 L420 486" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="420" y="430" width="340" height="116" rx="12" fill="#e9f5ee" stroke="#b6d5bf"/>
+<text x="442" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Codex App Server</text>
+<text x="442" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">Thread / Turn / 模型与工具循环</text>
+<text x="442" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">原生指令、技能、上下文与历史</text>
+<path d="M760 486 L860 486" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="860" y="430" width="280" height="116" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="882" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Codex 原生状态</text>
+<text x="882" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">稳定 CODEX_HOME</text>
+<text x="882" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">SQLite / JSONL / 原生记忆</text>
+<path d="M590 546 L590 614" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<text x="606" y="588" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#59748d" font-weight="400">MCP 调用与结果</text>
+<rect x="420" y="614" width="340" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="442" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">工具服务与执行校验</text>
+<text x="442" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">受限工具列表 + 调用权限检查</text>
+<text x="442" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">复用 Registry 与 MCP</text>
+<path d="M420 669 L320 669" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="40" y="614" width="280" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">受控数据访问</text>
+<text x="62" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">业务查询 / 文件 / Wiki / 检索</text>
+<text x="62" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">按阶段接入，保留来源与版本</text>
+<path d="M760 669 L860 669" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-dasharray="6 5"/>
+<rect x="860" y="614" width="280" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="882" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">独立运行记录</text>
+<text x="882" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">runDir：日志与临时文件</text>
+<text x="882" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">不承担会话或项目文件存储</text>
+<text x="40" y="764" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#5e7286" font-weight="400">实线：配置或调用关系；虚线：运行记录。图中为逻辑模块，不代表独立部署的服务。</text>
+</svg></div></p>
+<p><em>图注：上图为逻辑分层，不代表独立部署服务。Codex App Server 执行模型与工具循环；产品脚手架负责资源管理与访问验证。</em></p>
+<h3>3.2 装配流程</h3>
+<pre><code>1. 验证 Agent 定义 JSON（schemaVersion、必填字段、引用合法性）
+2. 解析受信引用与路径（workspaceDir、sourceRef 定位器、executionRef）
+3. 取 Agent 作用域 ∩ 服务端策略 ∩ 环境能力 → 有效能力集
+4. 生成原生 Codex 配置 + 限定作用域的工具/数据处理器
+5. 探测原生有效能力（skills/list、mcpServerStatus/list，结合实际调用测试）
+6. 记录运行时描述符（定义摘要值 + 角色/技能/工具版本 + 有效工具列表 + 工作区 + 来源绑定及修订策略 + 策略摘要值）
+7. 创建或恢复 Thread → 执行事件与产物交付
+</code></pre>
+<p><strong>约束：</strong></p>
+<ul>
+<li>不拼接所有文档或自动安装依赖/提升权限</li>
+<li>启动时不暴露作用域外工具</li>
+<li>错误须明确报告，不以&quot;配置成功&quot;掩盖未就绪状态</li>
+<li>模型参数不可伪造作用域或 Agent ID</li>
+</ul>
+<p>原生 <code>threadId</code> 定位会话，<code>turnId</code> 定位执行轮次；产品消息任务保留自己的 <code>jobId</code> 并记录两者的映射。<code>runDir</code> 是服务启动目录，不是任务执行 ID。</p>
+<h3>3.3 目录结构参考（示意）</h3>
+<p>工作区布局不是框架强制要求；以下为写作场景的参考示例。Agent 定义可以是单一 JSON 文件（如 <code>agents/writing-agent.json</code>），角色指令位于配置目录下的 <code>roles/writing-assistant.md</code>，路径均相对于配置目录解析，无需强制 <code>definitions/</code> 与 <code>bindings/</code> 拆分。工作区内可选放置 <code>AGENTS.md</code> 和 <code>.agents/skills</code> 作为原生发现的输入。</p>
+<pre><code>serviceRoot/
+├── agents/
+│   ├── writing-agent.json      # Agent 定义（含绑定）
+│   └── roles/
+│       └── writing-assistant.md # 相对配置目录解析的角色指令
+├── workspace/                  # workspaceDir（稳定绝对路径，可外部挂载）
+│   ├── AGENTS.md               # 可选，原生发现输入
+│   ├── .agents/skills/         # 可选，原生 Skill 发现路径
+│   ├── inputs/                 # 只读源文档（当前写作模板，首阶段保留）
+│   ├── research/
+│   ├── drafts/
+│   └── outputs/
+├── .runs/app-server-*/         # runDir（实际路径形如此，非整个 .runs）
+└── .data/codex/                # codexHome：原生 SQLite/JSONL，不手工编辑
+</code></pre>
+<hr>
+<h2 id="section-4">4 工作区与状态存储</h2>
+<h3>4.1 工作区约定（方向确认，M1 实施）</h3>
+<p>依据 <a href="workspace-design.md">workspace-design.md</a>，关键约束摘要：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>属性</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>serviceRoot</code></td>
+<td>服务部署根目录</td>
+</tr>
+<tr>
+<td><code>workspaceDir</code></td>
+<td>稳定配置绝对真实路径，默认 <code>serviceRoot/workspace</code>，可外部配置</td>
+</tr>
+<tr>
+<td>Codex <code>cwd</code> + 文件工具</td>
+<td>使用同一有效工作区，不产生分歧；<code>cwd</code> 本身不是安全边界</td>
+</tr>
+<tr>
+<td><code>runDir</code></td>
+<td>实际路径形如 <code>.runs/app-server-*</code>，服务启动级日志/临时，非 task run ID</td>
+</tr>
+<tr>
+<td><code>codexHome</code></td>
+<td><code>.data/codex</code>，原生存储</td>
+</tr>
+<tr>
+<td>新 Thread</td>
+<td>共享项目文件，对话独立持久化，无需每次聊天 <code>mkdir</code></td>
+</tr>
+<tr>
+<td>并发工作</td>
+<td>不做全局 <code>process.chdir</code>，不破坏并发工作</td>
+</tr>
+</tbody></table></div>
+<p><strong>M1 实施：</strong> 在 <a href="../server/modules/codex/runtime.mjs">runtime.mjs</a> 分离工作区与启动目录。会话恢复使用原会话工作区，路径缺失则报错。同步调整 <a href="../server/modules/sessions/history.mjs">history.mjs</a> 的历史定位与 <a href="../server/modules/maintenance/index.mjs">maintenance</a> 的清理规则，保留遗留 Thread ID 和历史；迁移验证通过前不移除兼容逻辑。</p>
+<p><strong>明确不做（M1）：</strong> Worktree/任务目录不由 <code>thread/start</code> 自动提供，不作为 OS 沙箱，任务隔离为 M1 后可选扩展。</p>
+<blockquote>
+<p>原生 <code>AGENTS.md</code> / <code>.agents/skills</code> 的父级发现与项目配置须纳入有效配置检查；分离 <code>CODEX_HOME</code> 不能自行消除 <code>~/.agents/skills</code> 发现路径。</p>
+</blockquote>
+<h3>4.2 状态存储层级</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>载体</th>
+<th>可编辑性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>脚手架元数据（Agent 定义、绑定、版本、访问规则）（D1）</td>
+<td>受信 JSON 配置</td>
+<td>仅运维人员，模型/客户端不可编辑</td>
+</tr>
+<tr>
+<td>原生 Codex 状态（独立于 D1）</td>
+<td>SQLite/JSONL（<a href="../server/modules/codex/config.mjs">server/modules/codex/config.mjs</a> 管理路径）</td>
+<td>不手工编辑</td>
+</tr>
+<tr>
+<td>业务运行元数据（消息/会话索引 JSON）</td>
+<td>现有 JSON</td>
+<td>受控迁移；无需引入 PostgreSQL 仅为配置 Agent</td>
+</tr>
+<tr>
+<td>工作区文件产物</td>
+<td>工作区目录文件系统</td>
+<td>受工具策略约束</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="section-5">5 数据层与访问方式</h2>
+<h3>5.1 五类数据逻辑归属</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>类型</th>
+<th>示例</th>
+<th>所有权</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>D1</td>
+<td>脚手架元数据</td>
+<td>Agent 定义、绑定、来源配置、访问规则（仅脚手架所有）</td>
+<td>服务运维</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>外部结构化业务数据</td>
+<td>订单、产品、指标</td>
+<td>外部系统，通过受信连接器/动作查询</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>原始源文档（含媒体）</td>
+<td>合同、研究文献、产品说明</td>
+<td>原始资料权威版本，只读保留</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>派生知识</td>
+<td>解析文本、Wiki 页面、摘要、实体</td>
+<td>生成产物，须保留溯源</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>索引</td>
+<td>FTS / 分块 / 向量</td>
+<td>可重建，不作为主权威</td>
+</tr>
+</tbody></table></div>
+<p>原生 Codex 状态（SQLite/JSONL）是独立于 D1 的原生运行时状态，不是 D1 子集。现有消息/会话索引 JSON 是<strong>业务运行元数据</strong>，不是业务配置。Markdown 文件可以是源（D3）也可以是派生（D4），由溯源而非格式决定所有权。</p>
+<h3>5.2 访问模式与最小访问合约</h3>
+<p>同一场景下，结构化查询、直接文件访问、Wiki 导航、检索可按需组合：</p>
+<ul>
+<li><strong>结构化查询：</strong> 通过受信连接器动作；查询输入含服务端校验的 <code>sourceRef</code>、查询条件和允许过滤器；输出为带 <code>sourceId</code>、读取时间 <code>asOf</code> 与可用版本信息的类型化行。后端声明支持的方法；不支持的必需方法须提前报错，不作无声降级。不要求向量，不允许 Agent 自主选择原始 DB 连接。</li>
+<li><strong>直接文件：</strong> 工作区路径范围内，受文件工具策略约束（D3/D4）；<code>read_file</code> 仅产出来源内容；<code>list_files</code> 同样受允许范围过滤；Skill 资产读取为独立的受信授权，与知识读取分开。</li>
+<li><strong>Wiki 导航：</strong> 组织维护页 + 原始只读 + 治理；人工编辑保留版本/作者/证据；非全量可丢弃缓存（D4）。</li>
+<li><strong>检索适配器：</strong> RAG 不强制要求向量；查询时检索可指向原始或 Wiki 页（D5→D3/D4）。</li>
+<li><strong>LLM Wiki 与 RAG</strong> 是互补的知识组织/使用策略，不是独立存储类型。</li>
+</ul>
+<p>文件、Wiki 与检索返回统一的来源信息：<code>content</code>、<code>sourceId</code>、<code>revision</code>、<code>locator</code>，附可用状态与更新时间。SQL 行级查询、检索候选筛选及按文档 ID 获取详情都须执行范围校验，不能通过切换访问入口绕过。</p>
+<h3>5.3 数据完整性约束</h3>
+<ul>
+<li><strong>保留原始版本：</strong> 生成内容标明机器生成及核实状态；原始资料也不自动等于已核实事实</li>
+<li><strong>溯源链接：</strong> 来源版本、定位器、陈旧标记及重新编译/重建索引</li>
+<li><strong>删除/撤销：</strong> 立即阻止后续检索并异步清理派生物；无法抹除已有聊天上下文中的数据可见性</li>
+<li><strong>人工编辑：</strong> 进入 Wiki 的人工修改须保留版本/作者/证据，不将所有 Wiki 视为可丢弃缓存</li>
+<li><strong>受限合并摘要：</strong> 须满足所有贡献来源的权限许可，或分别重新推导；禁止跨允许组 Wiki 泄漏</li>
+<li><strong>禁止将生成输出无审查提升为源真相</strong></li>
+<li><strong>凭证以服务端引用传递</strong>，不出现于提示词或配置示例</li>
+</ul>
+<h3>5.4 轻量来源合约字段</h3>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;product-notes&quot;,
+  &quot;type&quot;: &quot;files&quot;,
+  &quot;locator&quot;: &quot;inputs/product&quot;,
+  &quot;capabilities&quot;: [&quot;read&quot;],
+  &quot;revision&quot;: &quot;2026-09-01&quot;,
+  &quot;freshness&quot;: &quot;2026-09-29T00:00:00Z&quot;,
+  &quot;status&quot;: &quot;ready&quot;
+}
+</code></pre>
+<p>元数据不含密钥；授权在服务端处理；<code>sourceRef</code> 解析为受信定位器。摄取/解析/索引任务状态：<code>ready</code> / <code>stale</code> / <code>failed</code> / <code>unsupported</code>；所需能力未就绪 → 显式报错，可选明确降级。结构化数据须区分最新读取与历史快照读取；<code>asOf</code> 记录数据时间，不代表所有连接器都支持历史查询。必需的快照能力不受支持时应报错。</p>
+<p>数据库/向量产品选型延后，首阶段使用受信 JSON 配置与现有元数据持久化 + 本地文件。文件适配器在 M2 实施；数据来源合约在 M2 确定，<strong>不推迟到 M3</strong>；M3 独立门控的结构化读连接器、Wiki、检索适配器，公共合约夹具可独立验证，但不证明实际后端集成。重量级解析/索引任务为可选独立作业，不为所有适配器新增大型队列。</p>
+<hr>
+<h2 id="section-6">6 Agent 定义与资源绑定</h2>
+<h3>6.1 八个配置维度</h3>
+<p>Agent 定义描述角色与能力要求，部署绑定将资源引用解析到实际路径和连接。八个维度如下，<code>id</code> 与 <code>version</code> 另作身份元数据。定义与绑定可存入同一 JSON，均由服务端受信配置管理。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>字段</th>
+<th>语义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>角色</td>
+<td><code>agent.instructions</code></td>
+<td>角色 .md 文件路径（相对配置目录）</td>
+</tr>
+<tr>
+<td>技能</td>
+<td><code>agent.skills</code></td>
+<td>能力实现方式（受信 ID + <code>required</code> 标志）</td>
+</tr>
+<tr>
+<td>工具</td>
+<td><code>agent.tools</code></td>
+<td>允许工具列表，仅用现有确切名称</td>
+</tr>
+<tr>
+<td>数据绑定</td>
+<td><code>agent.dataBindings</code></td>
+<td>数据源绑定（sourceRef + 动作 + 方法）</td>
+</tr>
+<tr>
+<td>执行策略引用</td>
+<td><code>agent.executionRef</code></td>
+<td>受信执行策略的引用</td>
+</tr>
+<tr>
+<td>工作区</td>
+<td><code>bindings.workspaceDir</code></td>
+<td>本次部署绑定的项目目录；首阶段每服务一个</td>
+</tr>
+<tr>
+<td>记忆</td>
+<td><code>agent.memory</code></td>
+<td><code>use</code> / <code>contribute</code> 标志</td>
+</tr>
+<tr>
+<td>产物</td>
+<td><code>agent.outputs</code></td>
+<td>产物目录、格式、写入模式、所需检查</td>
+</tr>
+</tbody></table></div>
+<p><strong>设计原则：</strong> 每个维度不强制新配置文件；可同居一份 JSON 条目。技能目录缺少必需条目时报错；已知但未支持的可选技能标记为降级；未知字段报错。记忆生成（background pipeline）是独立的服务侧配置，不作为 Agent 定义的必填字段。</p>
+<h3>6.2 配置示例（提案，待实施）</h3>
+<p>以下示例为<strong>自定义脚手架合约提案</strong>，尚待实施，<strong>非当前 Codex 可直接使用的配置</strong>。下列 Skill ID 仅作示例，不代表已安装；装配时须与受信目录和原生发现匹配，必需项不满足则报错。角色指令路径相对配置目录；来源/产物路径相对工作区；沙箱只读适用原生层，MCP 受控写入仅允许通过工具策略的输出创建，两者不矛盾。<code>outputs.writeMode</code> 仅声明创建权限，不附带读取授权；<code>read_file</code> 只可读取允许来源；<code>read</code> 动作包含该来源内的受限目录浏览，<code>list_files</code> 须过滤范围外条目。</p>
+<pre><code class="language-json">{
+  &quot;schemaVersion&quot;: &quot;1.0&quot;,
+  &quot;agent&quot;: {
+    &quot;id&quot;: &quot;writing-assistant-v1&quot;,
+    &quot;version&quot;: &quot;0.1.0&quot;,
+    &quot;instructions&quot;: &quot;roles/writing-assistant.md&quot;,
+    &quot;skills&quot;: [
+      { &quot;id&quot;: &quot;research-outline&quot;, &quot;required&quot;: true },
+      { &quot;id&quot;: &quot;citation-formatter&quot;, &quot;required&quot;: false }
+    ],
+    &quot;tools&quot;: {
+      &quot;allow&quot;: [
+        &quot;list_files&quot;,
+        &quot;read_file&quot;,
+        &quot;write_file&quot;
+      ]
+    },
+    &quot;dataBindings&quot;: [
+      {
+        &quot;sourceRef&quot;: &quot;product-notes&quot;,
+        &quot;actions&quot;: [&quot;read&quot;],
+        &quot;methods&quot;: [&quot;files&quot;],
+        &quot;required&quot;: true
+      }
+    ],
+    &quot;executionRef&quot;: &quot;restricted-local&quot;,
+    &quot;memory&quot;: {
+      &quot;use&quot;: false,
+      &quot;contribute&quot;: false
+    },
+    &quot;outputs&quot;: {
+      &quot;directory&quot;: &quot;outputs&quot;,
+      &quot;formats&quot;: [&quot;md&quot;, &quot;txt&quot;],
+      &quot;writeMode&quot;: &quot;create-only&quot;,
+      &quot;requiredChecks&quot;: [&quot;file-exists&quot;, &quot;format&quot;]
+    }
+  },
+  &quot;bindings&quot;: {
+    &quot;workspaceDir&quot;: &quot;/srv/projects/article&quot;,
+    &quot;sources&quot;: {
+      &quot;product-notes&quot;: {
+        &quot;type&quot;: &quot;files&quot;,
+        &quot;root&quot;: &quot;inputs/product&quot;
+      }
+    },
+    &quot;executions&quot;: {
+      &quot;restricted-local&quot;: {
+        &quot;sandbox&quot;: &quot;read-only&quot;,
+        &quot;approvalPolicy&quot;: &quot;never&quot;,
+        &quot;nativeShell&quot;: false,
+        &quot;nativeFileWrite&quot;: false
+      }
+    }
+  }
+}
+</code></pre>
+<p><strong>字段说明补充：</strong></p>
+<ul>
+<li><code>tools.allow</code> 中仅列出现有确切工具名；可选扩展（<code>search_web</code>、<code>read_webpage</code>）如需可添加</li>
+<li><code>requiredChecks</code> 的 <code>format</code> 检查文件扩展名/格式合规性，不检查语义真实性；引用（<code>references</code>）可作为可选的手工审查扩展</li>
+<li><code>required: false</code> 的可选技能在语法已知时支持降级；未知字段或声明启用但不支持的操作须被拒绝</li>
+<li><code>memory.contribute: false</code> 仅关闭未来贡献资格，不停止已排队的异步生成，不禁用读取</li>
+</ul>
+<hr>
+<h2 id="section-7">7 能力范围与执行约束</h2>
+<h3>7.1 Skill 生命周期</h3>
+<p><strong>不自行实现 SKILL.md 解析器或循环</strong>；原生引擎为权威。脚手架注册表将受信 ID 映射到路径/版本；实际发现须与 <code>enabled</code> 集合匹配；变更须重新验证。</p>
+<p>原生 <code>turn/start</code> 输入项中 Skill 输入的正确语法为 <code>{&quot;type&quot;: &quot;skill&quot;, &quot;name&quot;: &quot;…&quot;, &quot;path&quot;: &quot;…&quot;}</code>。<code>skills/list</code>、<code>skills/config/write</code> 及 Skill 输入项已在锁定版本生成的协议中确认。<code>enabled_tools</code> / <code>disabled_tools</code> 属于 MCP 原生配置，需验证在该版本下的实际效果。协议字段存在不等于本项目已经接通。</p>
+<p>原生发现范围：<code>repo</code> / <code>user</code> / <code>admin</code> / <code>system</code>；分离 <code>CODEX_HOME</code> 不能自行消除 <code>~/.agents/skills</code> 全局路径。<strong>新全局/父级发现的 Skill 不可自动启用</strong>；须验证显式禁用名称/路径 + 发现范围；关闭隐式调用不等于禁止显式调用。必需 Skill 依赖 shell 但 shell 不可用时 → Agent 阻塞，不得为此 Skill 宽泛启用 shell；未来作用域化运行时兼容方案须经验证后才可授权。</p>
+<p>Skill 目录允许控制<strong>启用与调用</strong>，不等于无法以文本模拟工作流；文件保密性为独立关注点。</p>
+<h3>7.2 工具执行约束</h3>
+<p>目标中，<code>tools/list</code> 仅暴露允许工具，<code>tools/call</code> / Registry 再校验执行权限。即使伪造工具名直接调用，也必须拒绝。现有文件约束继续保留，并叠加 Agent 数据作用域。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>约束项</th>
+<th>当前状态</th>
+<th>目标状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>工具列表可见性</td>
+<td>完整注册表可见</td>
+<td>仅 Agent 允许工具集可见，直接调用同样拒绝</td>
+</tr>
+<tr>
+<td>MCP 凭证路由</td>
+<td>共享单一 Token</td>
+<td>服务端绑定，运行时策略描述符不可变</td>
+</tr>
+<tr>
+<td>native shell</td>
+<td>禁用</td>
+<td>明确实施独立变更前保留禁用</td>
+</tr>
+<tr>
+<td><code>apply_patch</code></td>
+<td>禁用</td>
+<td>保留</td>
+</tr>
+<tr>
+<td>MCP 文件系统约束</td>
+<td>已有路径限制，无 Agent 数据作用域</td>
+<td>服务层增加 Agent 数据作用域约束（M2）</td>
+</tr>
+<tr>
+<td>来源/根目录范围</td>
+<td>限定固定四目录，尚未支持配置来源</td>
+<td>保留现有限制，并叠加 Agent 允许来源</td>
+</tr>
+</tbody></table></div>
+<p><strong>工作区内的来源/根目录限制仍然有效</strong>；路径遍历在工作区边界内同样被拦截，不只是防止逃逸到工作区外。</p>
+<p>产物写入为独立授权；Skill 资产读取与知识读取权限分开；不做大范围根目录读取授权。</p>
+<h3>7.3 版本与策略生命周期</h3>
+<p><strong>首阶段方案（待实施）：</strong> 整体 Agent 策略/配置变更在受控服务重启或空闲边界应用，立即撤销生效（新调用立即拒绝），不支持每条消息热切换。现有工具热重载适配到同一整体策略门控，不可独立于授权变更注册表。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Thread 恢复时配置不兼容</td>
+<td>显式兼容迁移或新建会话，不静默授权旧权限</td>
+</tr>
+<tr>
+<td>锁定版本实现不可用</td>
+<td>不可伪装重放旧版本</td>
+</tr>
+<tr>
+<td>安全撤销</td>
+<td>立即拒绝新的不允许调用；尽可能取消进行中请求并报告状态</td>
+</tr>
+<tr>
+<td>旧数据可见性</td>
+<td>无法取消已有上下文的数据可见；强隔离须新建干净上下文</td>
+</tr>
+</tbody></table></div>
+<p>有效元数据状态：<code>configured</code> / <code>available</code> / <code>blocked</code> / <code>unverified</code>；声明功能 ≠ 可用。配置 API 当前未经完整运行时验证；现有注册表重载适配到同一策略门控。</p>
+<hr>
+<h2 id="section-8">8 会话、配置版本与产物</h2>
+<h3>8.1 运行时描述符</h3>
+<p>描述符记录最小解析定义摘要，包含：</p>
+<ul>
+<li>Agent 定义摘要值、角色内容版本与 Skill 版本</li>
+<li>工具版本 + 有效工具列表（解析后）</li>
+<li>工作区绑定路径</li>
+<li>数据源绑定 ID + 修订策略</li>
+<li>策略摘要值及有效设置（沙箱模式、写入模式）</li>
+</ul>
+<p><strong>描述符不包含：</strong> 重复的聊天历史、全量冻结的业务数据快照。</p>
+<h3>8.2 会话恢复</h3>
+<ul>
+<li>恢复时对比当前描述符与存储描述符；</li>
+<li>发现不兼容变更 → 显式报错并提示新建会话；</li>
+<li>兼容迁移须明确定义迁移路径；</li>
+<li>不静默提升权限；版本不匹配时不伪装重放旧版本。</li>
+</ul>
+<h3>8.3 产物管理</h3>
+<ul>
+<li>写入模式 <code>create-only</code>：不覆盖，不软链接</li>
+<li>格式检查：文件扩展名/格式合规性（非语义真实性核查）</li>
+<li>任务产物须可验证存在并符合格式要求（验收 A15，M2 必需）</li>
+<li>引用限制：可选扩展，手工审查，不阻塞核心交付</li>
+</ul>
+<hr>
+<h2 id="section-9">9 现有模块调整与实施顺序</h2>
+<h3>9.1 调整范围</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>调整内容</th>
+<th>阶段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../server/modules/role/index.mjs">role/index.mjs</a></td>
+<td>角色源从嵌入式改为外部加载器（读取相对路径的 .md 或 JSON）；同步更新 SessionService <code>baseInstructions</code> 消费与模型目录 <code>instructions_template</code> 消费，三处一致</td>
+<td>M2 重构</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/runtime.mjs">codex/runtime.mjs</a></td>
+<td>分离稳定 <code>workspaceDir</code> 与临时 <code>runDir</code>，分别传递给调用方</td>
+<td>M1</td>
+</tr>
+<tr>
+<td><a href="../server/modules/sessions/index.mjs">sessions/index.mjs</a> + <a href="../server/modules/sessions/history.mjs">sessions/history.mjs</a></td>
+<td>Thread/Turn ID 不变；统一 cwd、历史索引与恢复逻辑，并记录装配版本绑定</td>
+<td>M1/M2</td>
+</tr>
+<tr>
+<td><a href="../server/modules/maintenance/index.mjs">maintenance/index.mjs</a></td>
+<td>runDir 清理与历史兼容性验证，无历史丢失</td>
+<td>M1</td>
+</tr>
+<tr>
+<td><a href="../server/modules/config/index.mjs">config/index.mjs</a></td>
+<td>按 Agent 定义筛选有效工具暴露；同步更新模型目录 <code>instructions_template</code> 引用</td>
+<td>M2 新增</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/loader.mjs">tools/loader.mjs</a> + <a href="../server/modules/tools/index.mjs">tools/index.mjs</a></td>
+<td>注册表按有效工具集装配；热重载与整体策略同步；<a href="../server/modules/tools/mcp-server.mjs">mcp-server.mjs</a> 在列表和调用入口执行校验</td>
+<td>M2 调整</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/files.mjs">tools/files.mjs</a></td>
+<td>M1 注入独立工作区；M2 接入来源合约和 Agent 范围</td>
+<td>M1/M2</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/config.mjs">codex/config.mjs</a></td>
+<td>生成有效 MCP、Skill 与记忆配置；保持原生状态目录稳定</td>
+<td>M2/M4</td>
+</tr>
+<tr>
+<td><a href="../server/modules/memory/index.mjs">memory/index.mjs</a></td>
+<td>记忆管道实际端到端验证（真实模型）</td>
+<td>M4</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/connection.mjs">codex/connection.mjs</a></td>
+<td>连接 cwd 指向 workspaceDir；协议日志和启动记录继续写入 runDir</td>
+<td>M1</td>
+</tr>
+</tbody></table></div>
+<p>新增最小的 <code>agents</code> 装配模块与 <code>data</code> 适配接口，由 <code>server/main.mjs</code> 接线；其余复用现有模块。消息模块保留 FIFO/steer 和任务—轮次映射，不增加第二套模型执行循环。</p>
+<h3>9.2 实施里程碑</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>里程碑</th>
+<th>交付内容</th>
+<th>能力状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>M1</strong></td>
+<td>分离临时 runDir 与稳定工作区；遗留 ID/历史兼容；共享 cwd 与多 Thread 独立历史；重启无历史丢失；缺失路径显式报错</td>
+<td>工作区路径稳定；遗留 ID/历史保留</td>
+</tr>
+<tr>
+<td><strong>M2</strong></td>
+<td>Agent 定义加载 + 角色外化（源与两处消费方一致）+ 原生 Skill 依赖验证 + 工具作用域双重拦截 + 文件数据适配器 → 单一可验证写作参考闭环</td>
+<td>角色可配置；工具作用域限定；单一来源适配；数据合约确立</td>
+</tr>
+<tr>
+<td><strong>M3</strong></td>
+<td>数据源合约可扩展性 + 真实结构化读连接器 + Wiki 版本/溯源 + 检索适配器（独立门控，夹具独立验证）</td>
+<td>按实际场景独立接入；每种后端需真实端到端验收，夹具结果不代替集成结果</td>
+</tr>
+<tr>
+<td><strong>M4</strong></td>
+<td>记忆管道端到端实际验证（真实模型）；任务隔离为可选扩展，非前提</td>
+<td>记忆实际验证；任务隔离可选</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="section-10">10 验收标准</h2>
+<p>以下各项均标注阶段标签；所有验收项为**待验证（pending）**状态；各里程碑表中的能力描述均为交付目标，不继承历史测试声明。标注 <code>(ext)</code> 为扩展项。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>验收条件</th>
+<th>阶段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A01</td>
+<td>共享 cwd、多 Thread 独立历史、重启无历史丢失；遗留 Thread ID 可寻址；恢复原会话 cwd；缺失路径显式报错；runDir 清理不删除项目文件或历史</td>
+<td>M1</td>
+</tr>
+<tr>
+<td>A02</td>
+<td>Agent 定义中必需引用（Skill、来源、<code>executionRef</code>）缺失时启动报错；可选引用缺失时降级不中断</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A03</td>
+<td>角色指令变更后原生 harness 行为验证；<code>baseInstructions</code> 与 <code>developerInstructions</code> 兼容性经锁定版本核实</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A04</td>
+<td>允许的 Skill 可通过显式加载（受信目录 + 原生发现匹配）及启用时的隐式路径激活；脚手架注册表与 <code>enabled</code> 集合一致</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A05</td>
+<td>显式禁用的 Skill 不可调用；全局父级新发现 Skill 不可自动启用</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A06</td>
+<td>所需依赖不可用时不提升权限，不假装就绪，显式阻塞报错</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A07</td>
+<td>Agent 允许范围外的工具对模型不可见；直接伪造调用同样被 registry 执行层拒绝</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A08</td>
+<td>路径遍历、软链接、超出 <code>workspaceDir</code> 及工作区内超出允许来源的读/列操作均被拦截（含工作区内错误来源的窄化数据允许列表测试）</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A09</td>
+<td>允许来源的实际文件可读；产物读取仅在另行授权时可用；<code>outputs</code> 创建写入实际落盘</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A10</td>
+<td>结构化查询遵守来源作用域限制；最新读取与历史快照能力可区分，结果记录数据时间，不支持的必需查询明确拒绝</td>
+<td>M3</td>
+</tr>
+<tr>
+<td>A11</td>
+<td>Wiki 页面保留版本/溯源/来源定位器；陈旧标记触发重新编译；删除/撤销阻止后续检索并清理派生物；不发生跨允许组 Wiki 泄漏</td>
+<td>M3</td>
+</tr>
+<tr>
+<td>A12</td>
+<td>RAG 检索结果包含来源版本/索引修订引用；索引刷新后结果可验证更新</td>
+<td>M3 <code>(ext)</code></td>
+</tr>
+<tr>
+<td>A13</td>
+<td>Thread 恢复时配置不兼容显式报错；不静默授权；合法兼容迁移路径明确定义</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A14</td>
+<td>记忆提取/整合/召回端到端实际验证（真实模型，非 fake provider）；<code>use: false</code> 与 <code>contribute: false</code> 分别独立可控且语义正确（关闭贡献不禁读取不删旧记忆）；生成管道为独立服务侧控制</td>
+<td>M4</td>
+</tr>
+<tr>
+<td>A15</td>
+<td>任务产物文件存在且格式合规；格式通过不等于语义或引用真实，引用质量另行评估</td>
+<td>M2</td>
+</tr>
+<tr>
+<td>A16</td>
+<td>Skill 资产读取与调用路径须经证明可用（完整 Skill 注入不足以证明引用资产可访问）</td>
+<td>M2</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="section-11">11 依据与待验证事项</h2>
+<h3>11.1 设计依据来源</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>来源</th>
+<th>类型</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../server/main.mjs">server/main.mjs</a> 等本地模块</td>
+<td>现有代码</td>
+<td>能力归属的直接证据</td>
+</tr>
+<tr>
+<td><a href="workspace-design.md">workspace-design.md</a></td>
+<td>已有设计文档</td>
+<td>工作区权威规范</td>
+</tr>
+<tr>
+<td><a href="../package.json">package.json</a></td>
+<td>现有配置</td>
+<td>锁定 <code>@openai/codex</code> 0.154.0</td>
+</tr>
+<tr>
+<td><a href="https://learn.chatgpt.com/docs/app-server">Codex App Server 文档</a></td>
+<td>官方文档</td>
+<td>原生协议参考</td>
+</tr>
+<tr>
+<td><a href="https://learn.chatgpt.com/docs/build-skills">Build Skills 文档</a></td>
+<td>官方文档</td>
+<td>Skill 生命周期参考</td>
+</tr>
+<tr>
+<td><a href="https://learn.chatgpt.com/docs/extend/mcp">MCP 扩展文档</a></td>
+<td>官方文档</td>
+<td>MCP 集成参考</td>
+</tr>
+<tr>
+<td><a href="https://learn.chatgpt.com/docs/customization/memories">Memories 定制文档</a></td>
+<td>官方文档</td>
+<td>记忆能力参考</td>
+</tr>
+<tr>
+<td><a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">LLM Wiki 概念（Karpathy）</a></td>
+<td>外部参考</td>
+<td>Wiki 知识组织思路参考</td>
+</tr>
+<tr>
+<td><a href="https://docs.langchain.com/oss/python/deepagents/retrieval">检索适配器思路（LangChain）</a></td>
+<td>外部参考</td>
+<td>检索设计参考；不代表采用 LangChain 运行时</td>
+</tr>
+</tbody></table></div>
+<h3>11.2 待验证事项清单</h3>
+<p>以下事项在本文档中描述为<strong>确认方向</strong>，但具体行为尚待锁定版本下实际验证：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>事项</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>原生 <code>baseInstructions</code> vs <code>developerInstructions</code> 兼容性（锁定版本 0.154.0）</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td><code>enabled_tools</code> / <code>disabled_tools</code> 在锁定版本下的实际行为（有文档，行为须编译适配器核实）</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td><code>turn/start</code> skill <code>{&quot;type&quot;:&quot;skill&quot;,&quot;name&quot;:&quot;…&quot;,&quot;path&quot;:&quot;…&quot;}</code> 在锁定版本下的资源引用可访问性</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td><code>skills/list</code>、<code>mcpServerStatus/list</code> 的接口存在性已由锁定 schema 确认；装配后的有效列表与调用行为</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td><code>skills/config/write</code> 在锁定版本下的有效配置边界</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>全局及父级 Skill 的禁用能否在发现、显式调用、隐式调用三处生效</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>记忆生成管道解除阻塞的具体条件（当前仅 fake-provider 证据）</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>记忆提取/整合/召回在真实模型下的实际质量</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>结构化数据连接器（<code>live</code> / <code>asOf</code>）后端实现选型</td>
+<td>选型延后，不阻塞本文档</td>
+</tr>
+<tr>
+<td>向量/FTS 索引后端选型</td>
+<td>选型延后，工作负载驱动决策</td>
+</tr>
+<tr>
+<td>Wiki 页面治理工具链</td>
+<td>M3 阶段选型</td>
+</tr>
+<tr>
+<td>任务隔离（Worktree/独立目录）及其与 OS 沙箱的边界</td>
+<td>M1 后可选扩展，方案待定</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><em>本文档为设计交付物，不包含实施步骤执行或测试运行。实施与测试结果将在后续文档或变更记录中体现。</em></p>
+<footer>由 Markdown 源文档生成。设计状态与验收结果以正文标识为准。</footer></main></body></html>

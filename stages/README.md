@@ -2,7 +2,7 @@
 
 每个阶段是一份**独立、可运行、已冻结**的源码快照：有自己的 `package.json`、`.env`、`.data`、`.runs` 和 `workspace`，互不共享，可以单独复制出去运行。阶段之间只做增量：下一阶段在上一阶段基础上只引入一个主要机制。
 
-持续开发发生在 [`../app`](../app/README.md)。它从 s05 出发继续演进，已经比 s05 多出配置选择、会话升级、协议兼容检查、Web 工作台等能力，因此**不再与任何阶段同步**。
+持续开发发生在 [`../app`](../app/README.md)，**不与任何阶段同步**。s06 是 2026-10-31 从 `app` 冻结的快照，因此也带着 s05 之后加入的配置选择、会话升级、协议兼容检查和流式推送协议 v2；s06 的章节只讲 Skill 与 Workflow。Web 工作台与互动课程只在 `app` 里，s06 的快照不包含它们。
 
 ## 演进路径
 
@@ -14,7 +14,8 @@
 | [s03-agent-core](s03-agent-core/README.md) | 配置驱动 Agent 核心 | Agent JSON 装配、Skills、MCP 工具注册表、工作区边界 | 4313 |
 | [s04-data-layer](s04-data-layer/README.md) | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
 | [s05-knowledge-layer](s05-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
-| [../app](../app/README.md) | 持续开发的完整项目 | 在 s05 之上继续演进 | 4317 |
+| [s06-skill-workflow](s06-skill-workflow/README.md) | Skill 与 Workflow | Agent 包、Skill 同步与隐式读取、Workflow（授权 / 步骤 / 验收）、任务提议 | 4316 |
+| [../app](../app/README.md) | 持续开发的完整项目 | 在 s06 之上继续演进 | 4317 |
 
 课程、Web 工作台、服务 API 与实验命令统一使用这套编号，例如 `/api/agent/s05`、`npm run lesson -- s01-transport`。旧书签里的 `?stage=demoN` 会自动对应到 `s0N`。
 
@@ -36,6 +37,8 @@ s00 用 SDK 跑通 Codex；s01/s02 去掉 SDK 封装，直接对接 App Server �
 s04 将此部分独立拆出：业务会话、任务、资源元数据迁移至 PostgreSQL；Redis 提供调度队列唤醒；文件正文保留本地版本对象存储。
 
 s05 在 s04 基础上叠加知识层（KB / Wiki / 可选 RAG）和统一门禁（基于 Thread/Turn 上下文的权限判定），并将工具传输从 MCP 改为 Codex 原生 `dynamicTools`（保留 MCP 供兼容测试）。
+
+s06 把 s05 里写死的知识维护推广成 Workflow：Agent 定义改为 Agent 包，Skill 移出工作区并在启动时同步到 `CODEX_HOME`；Workflow 规定本任务额外的授权、注入的 Skill、可写的位置和验收，多步任务在需要人拍板的地方停下等确认；模型可以用 `propose_task` 提议任务、用 `skill_read` 读取 Skill，但不能批准自己的提议。受限启动同时关闭了原生线程目标和工作区 `AGENTS.md` 的加载。
 
 ## 修改阶段快照的规则
 

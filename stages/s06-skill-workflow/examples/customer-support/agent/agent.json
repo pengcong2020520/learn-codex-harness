@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.2",
+  "agent": {
+    "id": "customer-support",
+    "version": "1.0.0",
+    "instructions": "role.md",
+    "skills": [],
+    "tools": {
+      "allow": [
+        "list_files",
+        "read_file",
+        "write_file",
+        "kb_list",
+        "kb_read",
+        "kb_search",
+        "kb_submit_revision"
+      ]
+    },
+    "dataBindings": [
+      {
+        "sourceRef": "policies",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "replies",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      }
+    ],
+    "executionRef": "restricted-local",
+    "memory": {
+      "use": false,
+      "contribute": false
+    },
+    "outputs": {
+      "directory": "work/replies",
+      "formats": [
+        "md",
+        "txt"
+      ],
+      "writeMode": "create-only",
+      "requiredChecks": [
+        "file-exists",
+        "format"
+      ]
+    },
+    "knowledge": [
+      {
+        "kbId": "support",
+        "mode": "wiki",
+        "actions": [
+          "read",
+          "update"
+        ]
+      }
+    ],
+    "workflows": [
+      {
+        "id": "knowledge-maintain"
+      }
+    ]
+  },
+  "bindings": {
+    "workspaceDir": "../workspace",
+    "skills": {},
+    "sources": {
+      "policies": {
+        "type": "files",
+        "root": "handbook/policies",
+        "readOnly": true
+      },
+      "replies": {
+        "type": "files",
+        "root": "work/replies"
+      }
+    },
+    "executions": {
+      "restricted-local": {
+        "sandbox": "read-only",
+        "approvalPolicy": "never",
+        "nativeShell": false,
+        "nativeFileWrite": false
+      }
+    },
+    "knowledgeBases": {
+      "support": {
+        "sourceRoot": "handbook/policies",
+        "wikiRoot": "knowledge/wiki"
+      }
+    }
+  }
+}

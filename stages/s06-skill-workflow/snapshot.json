@@ -1,0 +1,25 @@
+{
+  "stage": 6,
+  "name": "Skill 与 Workflow",
+  "snapshotDate": "2026-10-31",
+  "source": "../../app",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".DS_Store",
+    ".data",
+    ".env",
+    ".git",
+    ".runs",
+    "node_modules",
+    "output",
+    "workspace",
+    "web",
+    "docs/verification",
+    "tests/research-protocol",
+    "scripts/test-research-protocol.mjs"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  }
+}

@@ -12,6 +12,7 @@ export const packages = [
   "stages/s03-agent-core",
   "stages/s04-data-layer",
   "stages/s05-knowledge-layer",
+  "stages/s06-skill-workflow",
   "app",
 ];
 // 只包含不调用真实模型、不依赖 PostgreSQL / Redis 的检查；集成验证见 stages/README.md。

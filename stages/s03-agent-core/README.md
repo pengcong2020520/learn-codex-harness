@@ -1,6 +1,6 @@
 # s03: 可配置 Agent — 配置是装配合同，不是临时提示词
 
-[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
 > *"改配置就能换 Agent，但模型不能自己给自己加权限"* — 能力和边界写在同一份 JSON 里，一起生效、一起失效。
 >
 > **Harness 层**: 装配 — 角色、Skills、工具和资料边界由配置决定，由服务端执行。

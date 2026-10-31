@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 610" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="760" height="610" fill="#fafbfc" rx="8"/>
+  <rect x="0" y="0" width="760" height="48" fill="url(#header)" rx="8"/>
+  <rect x="0" y="40" width="760" height="8" fill="url(#header)"/>
+  <text x="380" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s06 · Skill 与 Workflow — Skill 教方法，Workflow 管边界和终点</text>
+  <rect x="24" y="66" width="236" height="96" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="36" y="88" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">Agent 包（受信配置）</text>
+  <text x="36" y="107" fill="#475569" font-size="11.5" text-anchor="start">agent.json · role.md</text>
+  <text x="36" y="123" fill="#475569" font-size="11.5" text-anchor="start">skills/&lt;id&gt;/SKILL.md + references/</text>
+  <text x="36" y="139" fill="#475569" font-size="11.5" text-anchor="start">workflows：授权 · Skill · 步骤 · 验收</text>
+  <rect x="290" y="66" width="200" height="96" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="390" y="88" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">CODEX_HOME/skills</text>
+  <text x="390" y="107" fill="#475569" font-size="11.5" text-anchor="middle">启动时同步，受管清单</text>
+  <text x="390" y="123" fill="#475569" font-size="11.5" text-anchor="middle">只启用 Agent 声明的 Skill</text>
+  <text x="390" y="139" fill="#475569" font-size="11.5" text-anchor="middle">工作区、HOME 里的一律关闭</text>
+  <path d="M 260 114 L 290 114" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <text x="275" y="106" fill="#b63743" font-size="11" text-anchor="middle">同步</text>
+  <rect x="520" y="66" width="216" height="96" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="628" y="88" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="middle">Workspace（用户数据）</text>
+  <text x="628" y="107" fill="#475569" font-size="11.5" text-anchor="middle">inputs · research · drafts · outputs</text>
+  <text x="628" y="123" fill="#475569" font-size="11.5" text-anchor="middle">不加载 AGENTS.md</text>
+  <text x="628" y="139" fill="#475569" font-size="11.5" text-anchor="middle">角色与 Skill 不能放这里</text>
+  <rect x="24" y="192" width="176" height="84" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="112" y="214" fill="#374151" font-size="13" font-weight="700" text-anchor="middle">提交任务</text>
+  <text x="112" y="233" fill="#475569" font-size="11.5" text-anchor="middle">/messages + workflow</text>
+  <text x="112" y="249" fill="#475569" font-size="11.5" text-anchor="middle">或用户确认的提议</text>
+  <rect x="230" y="192" width="250" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="242" y="214" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">Workflow 解析</text>
+  <text x="242" y="233" fill="#475569" font-size="11.5" text-anchor="start">参数校验，grants ⊆ Agent 能力</text>
+  <text x="242" y="249" fill="#475569" font-size="11.5" text-anchor="start">本步目标 · writes 收窄 · 验收</text>
+  <text x="242" y="265" fill="#475569" font-size="11.5" text-anchor="start">追加消息不能更换 workflow</text>
+  <rect x="510" y="192" width="226" height="84" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="623" y="214" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="middle">权限门：任务上下文</text>
+  <text x="623" y="233" fill="#475569" font-size="11.5" text-anchor="middle">grants 只在本任务有效</text>
+  <text x="623" y="249" fill="#475569" font-size="11.5" text-anchor="middle">按步骤收窄新建文件的位置</text>
+  <text x="623" y="265" fill="#475569" font-size="11.5" text-anchor="middle">轮次结束即撤销</text>
+  <path d="M 200 234 L 230 234" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 480 234 L 510 234" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="308" width="712" height="112" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="36" y="330" fill="#374151" font-size="13" font-weight="700" text-anchor="start">Codex 执行循环 —— 怎么做由模型决定</text>
+  <text x="36" y="349" fill="#475569" font-size="11.5" text-anchor="start">输入：任务说明（目标 · 授权 · 验收）+ 用户原文 + Workflow 指定的 Skill</text>
+  <text x="36" y="365" fill="#475569" font-size="11.5" text-anchor="start">拆解、先查什么、调哪些工具、调几次、失败换方法、何时收尾，都由模型决定</text>
+  <text x="36" y="381" fill="#475569" font-size="11.5" text-anchor="start">skill_read：按技能清单自行读取 Skill（隐式触发，只读已启用 Skill 的白名单文件）</text>
+  <text x="36" y="397" fill="#475569" font-size="11.5" text-anchor="start">propose_task：需要别的 workflow 时只能提议；用户确认前不执行、不授权</text>
+  <path d="M 623 276 L 623 308" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="24" y="452" width="300" height="100" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="36" y="474" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">验收（只看结果）</text>
+  <text x="36" y="493" fill="#475569" font-size="11.5" text-anchor="start">file-exists · format</text>
+  <text x="36" y="509" fill="#475569" font-size="11.5" text-anchor="start">sources-cited · wiki-effective</text>
+  <text x="36" y="525" fill="#475569" font-size="11.5" text-anchor="start">不检查调用过哪些工具、按什么顺序</text>
+  <path d="M 174 420 L 174 452" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <rect x="356" y="452" width="380" height="100" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="368" y="474" fill="#7a5b00" font-size="13" font-weight="700" text-anchor="start">一步结束后的去向</text>
+  <text x="368" y="493" fill="#475569" font-size="11.5" text-anchor="start">验收不通过 → needs-review（不暂停队列、不重试）</text>
+  <text x="368" y="509" fill="#475569" font-size="11.5" text-anchor="start">还有下一步且要确认 → waiting → /confirm 带补充说明</text>
+  <text x="368" y="525" fill="#475569" font-size="11.5" text-anchor="start">还有下一步不需确认 → 直接排队下一步</text>
+  <text x="368" y="541" fill="#475569" font-size="11.5" text-anchor="start">最后一步 → completed</text>
+  <path d="M 324 502 L 356 502" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <rect x="24" y="578" width="14" height="14" rx="3" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="44" y="589" fill="#475569" font-size="11" font-weight="400" text-anchor="start">红色：本阶段新增或变化</text>
+  <rect x="214" y="578" width="14" height="14" rx="3" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="234" y="589" fill="#475569" font-size="11" font-weight="400" text-anchor="start">蓝色：沿用的结构</text>
+</svg>

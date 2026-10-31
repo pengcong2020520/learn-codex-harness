@@ -1,6 +1,6 @@
 # s01: 单轮问答 — 先建立通信，再派发任务
 
-[s00](../s00-sdk-quickstart/) → `s01` → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+[s00](../s00-sdk-quickstart/) → `s01` → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
 > *"收到回包，不等于任务完成"* — 一轮的成败只看它自己的 `turn/completed`。
 >
 > **Harness 层**: 协议 — 在 stdio 上用 JSON-RPC 和 Codex App Server 对话。

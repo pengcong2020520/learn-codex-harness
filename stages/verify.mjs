@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
-// s01–s05 即课程里的 Demo 1–5；s00 是 SDK 入门，只有章节文档，没有设计说明。
-const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-agent-core", 4: "s04-data-layer", 5: "s05-knowledge-layer" };
+// s01–s05 即课程里的 Demo 1–5；s06 起只有章节，暂未接入课程。s00 是 SDK 入门，只有章节文档，没有设计说明。
+const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-agent-core", 4: "s04-data-layer", 5: "s05-knowledge-layer", 6: "s06-skill-workflow" };
 const CHAPTERS = ["s00-sdk-quickstart", ...Object.values(STAGES)];
 const options = new Set(process.argv.slice(2));
 if ([...options].some(option => !["--integration", "--docs-only", "--rag"].includes(option))) {
@@ -24,6 +24,7 @@ const docs = [
   ["s03-agent-core/docs/tools.md", "reference"],
   ["s04-data-layer/docs/data-layer.md", "reference"],
   ["s05-knowledge-layer/docs/knowledge-implementation.md", "reference"],
+  ["s06-skill-workflow/docs/skill-workflow-design.md", "reference"],
 ];
 function sourceLines(dir) {
   const walk = folder => fs.readdirSync(folder, { withFileTypes: true }).flatMap(entry => {
@@ -69,7 +70,7 @@ for (const [name, kind] of docs) {
   }
   report.docs.push(name);
 }
-for (const stage of [1, 2, 3, 4, 5]) {
+for (const stage of Object.keys(STAGES).map(Number)) {
   const cwd = path.join(root, STAGES[stage]);
   const pkg = JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8"));
   assert.equal(pkg.dependencies["@openai/codex"], "0.154.0");
@@ -77,7 +78,10 @@ for (const stage of [1, 2, 3, 4, 5]) {
   assert.match(template, /^CODEX_API_KEY=$/m, "模板不能包含真实密钥");
   assert.ok(!/^AGENT_INSTRUCTIONS=/m.test(template), "角色不能回到环境变量中");
   assert.equal(fs.existsSync(path.join(cwd, "server/modules/memory/index.mjs")), stage >= 3);
-  assert.equal(fs.existsSync(path.join(cwd, "agents/writing-agent.json")), stage >= 3);
+  // s06 起 Agent 定义改为 Agent 包：agents/<id>/agent.json。
+  assert.equal(fs.existsSync(path.join(cwd, "agents/writing-agent.json")), stage >= 3 && stage < 6);
+  assert.equal(fs.existsSync(path.join(cwd, "agents/writing/agent.json")), stage >= 6);
+  assert.equal(fs.existsSync(path.join(cwd, "server/modules/workflows/index.mjs")), stage >= 6);
 }
 assert.equal(fs.existsSync(path.join(root, 's03-agent-core/server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's04-data-layer/server/modules/knowledge/index.mjs')), false);
@@ -95,13 +99,15 @@ function run(directory, command, args) {
 }
 if (!options.has("--docs-only")) {
   run("s00-sdk-quickstart", "npm", ["test"]);
-  for (const stage of [1, 2, 3, 4, 5]) run(STAGES[stage], "npm", ["test"]);
+  for (const stage of Object.keys(STAGES).map(Number)) run(STAGES[stage], "npm", ["test"]);
   if (options.has("--integration") || options.has("--rag")) {
     run("", process.execPath, ["--test", "tests/evolution.integration.mjs"]);
     run("s03-agent-core", "npm", ["run", "test:codex-tools"]);
     run("s03-agent-core", "npm", ["run", "test:codex-memory"]);
     run("s04-data-layer", "npm", ["run", "test:data"]);
     run("s05-knowledge-layer", "npm", ["run", options.has('--rag') ? "test:rag" : "test:data"]);
+    run("s06-skill-workflow", "npm", ["run", "test:codex-tools"]);
+    run("s06-skill-workflow", "npm", ["run", "test:data"]);
   }
 }
 console.log(JSON.stringify(report, null, 2));

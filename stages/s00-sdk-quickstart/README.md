@@ -1,6 +1,6 @@
 # s00: SDK 入门 — 先让 Codex 替你干一件事
 
-`s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [app](../../app/)
+`s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
 > *"模型提出操作，Harness 负责执行"* — 用官方 SDK 驱动本机 Codex，跑通"发任务 → 改代码 → 自己验收"。
 >
 > **Harness 层**: 入口 — 你的程序第一次把任务交给 Codex。

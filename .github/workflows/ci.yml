@@ -27,6 +27,7 @@ jobs:
           - stages/s03-agent-core
           - stages/s04-data-layer
           - stages/s05-knowledge-layer
+          - stages/s06-skill-workflow
           - app
     defaults:
       run:

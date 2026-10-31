@@ -14,7 +14,8 @@ flowchart LR
   s02 --> s03["s03 Agent 核心<br/>配置装配 / Skills / MCP 工具"]
   s03 --> s04["s04 数据层<br/>PG outbox / Redis 调度 / 资源版本"]
   s04 --> s05["s05 知识层<br/>可信门禁 / Wiki / RAG"]
-  s05 --> app["app 完整项目<br/>Web 工作台 / 互动课程"]
+  s05 --> s06["s06 Skill 与 Workflow<br/>Agent 包 / 确认点 / 提议"]
+  s06 --> app["app 完整项目<br/>Web 工作台 / 互动课程"]
 ```
 
 | 阶段 | 主题 | 解决的问题 | 机制课 |
@@ -25,7 +26,8 @@ flowchart LR
 | [s03-agent-core](stages/s03-agent-core/README.md) | 可配置 Agent | 角色、Skills、工具、工作区由一份 JSON 装配，权限与能力一起生效 | 5 |
 | [s04-data-layer](stages/s04-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s05-knowledge-layer](stages/s05-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
-| [app](app/README.md) | 完整项目 | 在 s05 之上持续开发：配置选择、会话升级、Web 工作台、互动课程 | — |
+| [s06-skill-workflow](stages/s06-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
+| [app](app/README.md) | 完整项目 | 在 s06 之上持续开发：Web 工作台、互动课程等 | — |
 
 每章 README 都按「问题 → 解决方案 → 工作原理 → 试一下 → 接下来」组织，配一张机制图；工作原理里的代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
@@ -86,6 +88,7 @@ learn-codex-harness/
 │   ├── s03-agent-core/         #   s03：配置驱动 Agent 核心
 │   ├── s04-data-layer/         #   s04：PostgreSQL + Redis 数据层
 │   ├── s05-knowledge-layer/    #   s05：知识层 + 通用门禁
+│   ├── s06-skill-workflow/     #   s06：Agent 包、Skill 与 Workflow
 │   ├── tests/                  #   跨阶段集成测试
 │   └── verify.mjs              #   阶段文档、结构与测试验证
 ├── app/                        # 完整项目（持续开发）

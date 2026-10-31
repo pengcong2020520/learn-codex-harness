@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="790" viewBox="0 0 1180 790" role="img" aria-labelledby="title desc">
+<title id="title">Agent 脚手架目标架构与职责边界</title>
+<desc id="desc">配置、资源绑定与服务端策略经装配层进入 Codex。既有消息队列驱动 Codex；工具及数据访问独立执行范围检查。Codex 状态与运行日志分开。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#59748d"/></marker></defs>
+<rect width="1180" height="790" rx="18" fill="#f5f7fb"/>
+<text x="40" y="43" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="27" fill="#14304c" font-weight="600">原生执行内核 · 可配置的资源与能力</text>
+<text x="40" y="74" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="16" fill="#5e7286" font-weight="400">目标架构｜项目工作区为主，任务隔离按需｜设计待实施</text>
+<rect x="40" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Agent 定义</text>
+<text x="62" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">角色 / Skills / 工具 / 产物要求</text>
+<text x="62" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">记忆策略 / 声明职责与依赖</text>
+<rect x="420" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="442" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">资源绑定</text>
+<text x="442" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">项目工作区 / 数据源 / 执行环境</text>
+<text x="442" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">逻辑引用解析为实际资源</text>
+<rect x="800" y="108" width="340" height="112" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="822" y="142" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">服务端策略</text>
+<text x="822" y="170" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">工具操作范围 + 数据访问范围</text>
+<text x="822" y="195" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">配置不自动授予权限</text>
+<path d="M210 220 L210 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M590 220 L590 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M970 220 L970 266" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="40" y="266" width="1100" height="94" rx="12" fill="#e9f2fc" stroke="#aec6df"/>
+<text x="62" y="300" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">轻量装配层</text>
+<text x="62" y="328" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">校验配置 → 解析引用 → 检查依赖与范围 → 验证有效能力 → 记录版本与绑定</text>
+<path d="M590 360 L590 430" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<text x="604" y="402" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#59748d" font-weight="400">原生配置与运行绑定</text>
+<rect x="40" y="430" width="280" height="116" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">客户端与既有消息队列</text>
+<text x="62" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">CLI（现有）</text>
+<text x="62" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">Web / App 共用入口（后续）</text>
+<path d="M320 486 L420 486" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="420" y="430" width="340" height="116" rx="12" fill="#e9f5ee" stroke="#b6d5bf"/>
+<text x="442" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Codex App Server</text>
+<text x="442" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">Thread / Turn / 模型与工具循环</text>
+<text x="442" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">原生指令、技能、上下文与历史</text>
+<path d="M760 486 L860 486" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="860" y="430" width="280" height="116" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="882" y="464" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">Codex 原生状态</text>
+<text x="882" y="492" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">稳定 CODEX_HOME</text>
+<text x="882" y="517" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">SQLite / JSONL / 原生记忆</text>
+<path d="M590 546 L590 614" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<text x="606" y="588" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#59748d" font-weight="400">MCP 调用与结果</text>
+<rect x="420" y="614" width="340" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="442" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">工具服务与执行校验</text>
+<text x="442" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">受限工具列表 + 调用权限检查</text>
+<text x="442" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">复用 Registry 与 MCP</text>
+<path d="M420 669 L320 669" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="40" y="614" width="280" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="62" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">受控数据访问</text>
+<text x="62" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">业务查询 / 文件 / Wiki / 检索</text>
+<text x="62" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">按阶段接入，保留来源与版本</text>
+<path d="M760 669 L860 669" stroke="#59748d" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-dasharray="6 5"/>
+<rect x="860" y="614" width="280" height="110" rx="12" fill="#ffffff" stroke="#d2dce7"/>
+<text x="882" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="19" fill="#16324d" font-weight="600">独立运行记录</text>
+<text x="882" y="676" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">runDir：日志与临时文件</text>
+<text x="882" y="701" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#253b51" font-weight="400">不承担会话或项目文件存储</text>
+<text x="40" y="764" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="15" fill="#5e7286" font-weight="400">实线：配置或调用关系；虚线：运行记录。图中为逻辑模块，不代表独立部署的服务。</text>
+</svg>

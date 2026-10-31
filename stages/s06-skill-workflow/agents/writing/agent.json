@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "1.2",
+  "agent": {
+    "id": "writing-assistant",
+    "version": "1.1.0",
+    "instructions": "role.md",
+    "skills": [
+      {
+        "id": "knowledge",
+        "required": false
+      },
+      {
+        "id": "write-article",
+        "required": false
+      }
+    ],
+    "tools": {
+      "allow": [
+        "list_files",
+        "read_file",
+        "write_file",
+        "search_web",
+        "read_webpage",
+        "kb_list",
+        "kb_read",
+        "kb_search",
+        "kb_submit_revision",
+        "propose_task",
+        "skill_read"
+      ]
+    },
+    "dataBindings": [
+      {
+        "sourceRef": "originals",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "research",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "drafts",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "articles",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      }
+    ],
+    "executionRef": "restricted-local",
+    "memory": {
+      "use": false,
+      "contribute": false
+    },
+    "outputs": {
+      "directory": "outputs",
+      "formats": [
+        "md",
+        "txt"
+      ],
+      "writeMode": "create-only",
+      "requiredChecks": [
+        "file-exists",
+        "format"
+      ]
+    },
+    "knowledge": [
+      {
+        "kbId": "general",
+        "mode": "wiki",
+        "actions": [
+          "read",
+          "update",
+          "index"
+        ]
+      }
+    ],
+    "workflows": [
+      {
+        "id": "knowledge-maintain"
+      },
+      {
+        "id": "write-article",
+        "label": "写文章",
+        "skill": "write-article",
+        "steps": [
+          {
+            "id": "outline",
+            "goal": "理解用户观点，确定立意与大纲，保存到 drafts/ 并请用户确认",
+            "writes": [
+              "drafts"
+            ],
+            "confirm": true
+          },
+          {
+            "id": "final",
+            "goal": "按确认的大纲完成研究、写作、事实核查和润色，定稿保存到 outputs/",
+            "writes": [
+              "research",
+              "drafts",
+              "outputs"
+            ],
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "bindings": {
+    "workspaceDir": "../../workspace",
+    "skills": {
+      "knowledge": {
+        "path": "skills/knowledge/SKILL.md"
+      },
+      "write-article": {
+        "path": "skills/write-article/SKILL.md"
+      }
+    },
+    "sources": {
+      "originals": {
+        "type": "files",
+        "root": "inputs",
+        "readOnly": true
+      },
+      "research": {
+        "type": "files",
+        "root": "research"
+      },
+      "drafts": {
+        "type": "files",
+        "root": "drafts"
+      },
+      "articles": {
+        "type": "files",
+        "root": "outputs"
+      }
+    },
+    "executions": {
+      "restricted-local": {
+        "sandbox": "read-only",
+        "approvalPolicy": "never",
+        "nativeShell": false,
+        "nativeFileWrite": false
+      }
+    },
+    "knowledgeBases": {
+      "general": {
+        "sourceRoot": "inputs/general",
+        "wikiRoot": "research/general/wiki"
+      }
+    }
+  }
+}
