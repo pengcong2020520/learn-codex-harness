@@ -30,6 +30,7 @@ test("稳定工作区与 runDir 分离；缺失外部工作区和服务状态目
   assert.equal(runtime.workspaceDir, second.workspaceDir); assert.notEqual(runtime.runDir, second.runDir);
   await assert.rejects(resolveWorkspace(root, path.join(root, "missing")), /工作区不存在/);
   await assert.rejects(resolveWorkspace(root, root), /不能把服务/);
+  await assert.rejects(resolveWorkspace(root, path.dirname(root)), /不能包含服务目录/);
   const external = tempRoot(t);
   assert.equal(await resolveWorkspace(root, external), fs.realpathSync(external));
 });

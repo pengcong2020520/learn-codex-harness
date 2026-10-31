@@ -1,8 +1,5 @@
 [
-  "create_goal",
-  "get_goal",
   "legacy_tool",
   "probe_echo",
-  "request_user_input",
-  "update_goal"
+  "request_user_input"
 ]

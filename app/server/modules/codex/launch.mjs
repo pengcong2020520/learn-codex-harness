@@ -90,7 +90,10 @@ export function buildModelCatalog(environment, instructions = "") {
 export function buildRestrictedLaunch(environment) {
   const launch = buildAppServerLaunch({ ...environment,
     CODEX_MODEL_SHELL_TYPE: "disabled", CODEX_MODEL_APPLY_PATCH_TOOL_TYPE: "none" });
-  launch.args.push("-c", "features.shell_tool=false", "-c", "features.apply_patch_freeform=false",
+  // goals：线程目标会让 Codex 绕过任务队列自动连续发起轮次；project_doc_max_bytes=0：workspace
+  // 及其上级目录的 AGENTS.md 是用户数据，不能进入模型指令（角色指令走 instructions_template）。
+  launch.args.push("-c", "features.goals=false", "-c", "project_doc_max_bytes=0",
+    "-c", "features.shell_tool=false", "-c", "features.apply_patch_freeform=false",
     "-c", "agents.enabled=false", "-c", "features.view_image=false", "-c", "features.image_generation=false", "-c", "features.multi_agent=false", "-c", "features.apps=false", "-c", "features.hooks=false", "-c", "features.plugins=false");
   return launch;
 }

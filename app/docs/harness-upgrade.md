@@ -45,7 +45,7 @@ AGENT_DEFINITION=examples/customer-support/agent.json npm run server
 
 本版只验收 **Codex 0.154.0**，npm 包与实际二进制版本必须一致。未知版本拒绝启动，不尝试修改原会话。版本白名单独立于会话契约；以后通过协议验收且语义兼容的版本可加入白名单，无需仅因版本号变化作废会话。
 
-0.154.0 禁用看图应使用 `features.view_image=false`。旧 `tools.view_image=false` 不再作为限制依据。启动后通过 `experimentalFeature/list` 读取实际开关；shell、view_image、image_generation、multi_agent、apps、hooks、plugins 任一缺失、已移除或仍启用都阻止就绪。协议测试还检查模型真正收到的工具清单，不能只证明配置字符串写入了文件。0.154.0 的已记录原生辅助工具为 request_user_input、get_goal、create_goal、update_goal；业务工具在此基础上按白名单装配。
+0.154.0 禁用看图应使用 `features.view_image=false`。旧 `tools.view_image=false` 不再作为限制依据。启动后通过 `experimentalFeature/list` 读取实际开关；shell、view_image、image_generation、multi_agent、apps、hooks、plugins、goals 任一缺失、已移除或仍启用都阻止就绪。`goals` 关闭的原因是线程目标会让 Codex 绕过任务队列自动连续发起轮次。另外以工作区为 `cwd` 调用 `config/read`，核对 `project_doc_max_bytes` 生效为 0：工作区及其上级目录的 `AGENTS.md` 是用户数据，不能进入模型指令。协议测试还检查模型真正收到的工具清单，不能只证明配置字符串写入了文件。0.154.0 关闭上述能力后，剩余的原生辅助工具只有 request_user_input（默认模式下不可用，调用会返回错误）；业务工具在此基础上按白名单装配。
 
 升级流程：停止服务并备份 PostgreSQL、`.data`、配置和工作区 → 更新并锁定 Codex → 在候选版本分支调整兼容名单并运行 `test:protocol`、工具/记忆集成、数据层与真实冒烟 → 审查协议及工具清单变化 → 确认是否需提升契约 → 部署。候选白名单修改必须随验收结果一起审查，不能仅改版本号便发布。
 

@@ -3,12 +3,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 export const SUPPORTED_CODEX = Object.freeze(["0.154.0"]);
 // Native conversation helpers observed in the 0.154.0 Responses payload.
-export const NATIVE_TOOL_BASELINE = Object.freeze([
-  "request_user_input",
-  "get_goal",
-  "create_goal",
-  "update_goal",
-]);
+// 目标工具（create/get/update_goal）随 features.goals 一起关闭。
+export const NATIVE_TOOL_BASELINE = Object.freeze(["request_user_input"]);
 export const RESTRICTED_FEATURES = Object.freeze([
   "shell_tool",
   "view_image",
@@ -17,7 +13,10 @@ export const RESTRICTED_FEATURES = Object.freeze([
   "apps",
   "hooks",
   "plugins",
+  "goals",
 ]);
+// 不是功能开关、需要通过 config/read 核对生效值的限制。
+export const RESTRICTED_CONFIG = Object.freeze({ project_doc_max_bytes: 0 });
 export function requireSupportedVersion(version) {
   if (!SUPPORTED_CODEX.includes(version))
     throw new Error(
@@ -43,7 +42,7 @@ export function installedCodex() {
     throw new Error("Codex 包与实际二进制版本不一致，拒绝启动。");
   return { cli, version: actual };
 }
-export async function verifyRestrictedFeatures(rpc) {
+export async function verifyRestrictedFeatures(rpc, cwd = null) {
   const features = [],
     seen = new Set();
   let cursor;
@@ -62,9 +61,15 @@ export async function verifyRestrictedFeatures(rpc) {
     if (!feature || feature.enabled !== false || feature.stage === "removed")
       throw new Error(`Codex 原生能力 ${name} 未被有效关闭，拒绝启动。`);
   }
+  // 按工作区读取：项目层配置也不能把限制改回去。
+  const { config } = await rpc.request("config/read", { cwd });
+  for (const [key, value] of Object.entries(RESTRICTED_CONFIG))
+    if (config?.[key] !== value)
+      throw new Error(`Codex 配置 ${key} 未生效为 ${value}，拒绝启动。`);
   return {
     version: rpc.version,
     restrictedFeatures: RESTRICTED_FEATURES,
+    restrictedConfig: RESTRICTED_CONFIG,
     verified: true,
   };
 }

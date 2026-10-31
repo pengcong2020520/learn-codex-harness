@@ -14,6 +14,7 @@ export function finishRun(workspace) {
 
 export function assertWorkspaceLocation(serviceRoot, physical) {
   if (physical === serviceRoot || [".runs", ".data", "server", "client", "agents", "config"].some(name => physical === path.join(serviceRoot, name) || physical.startsWith(path.join(serviceRoot, name) + path.sep))) throw new Error("不能把服务代码、配置或运行状态目录作为工作区。");
+  if (serviceRoot.startsWith(physical + path.sep)) throw new Error("工作区不能包含服务目录：Agent 配置与运行状态会落进用户数据的范围。");
 }
 
 export async function resolveWorkspace(root, requested = path.join(root, "workspace")) {

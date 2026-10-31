@@ -1,18 +1,15 @@
 {
   "codexVersion": "0.154.0",
   "node": "v24.17.0",
-  "at": "2026-10-08T05:12:13.587Z",
+  "at": "2026-10-31T08:49:57.953Z",
   "tests": {
     "s1_s5_registered_tools": {
       "turnStatus": "completed",
-      "toolCount": 6,
+      "toolCount": 3,
       "tools": [
-        "create_goal",
-        "get_goal",
         "legacy_tool",
         "probe_echo",
-        "request_user_input",
-        "update_goal"
+        "request_user_input"
       ],
       "dynamicToolsVisible": true,
       "nativeExecOrPatch": []
@@ -30,14 +27,14 @@
       "duplicateCallIdDeliveries": 0
     },
     "s3a_tool_timeout_respects_signal": {
-      "abortedAfterMs": 30002,
+      "abortedAfterMs": 30001,
       "turnStatus": "completed",
-      "turnMs": 30048,
+      "turnMs": 30042,
       "modelSawOutput": "{\"error\":\"工具调用超时。\"}"
     },
     "s3c_timeout_ignores_signal": {
       "turnStatus": "completed",
-      "elapsedMs": 180,
+      "elapsedMs": 174,
       "modelSawOutput": "{\"error\":\"工具调用超时。\"}",
       "connectionFailure": null
     },
@@ -54,12 +51,9 @@
     "s4_deleted_tool_on_resumed_thread": {
       "resumeWithNewDynamicToolsError": null,
       "modelSawTools": [
-        "create_goal",
-        "get_goal",
         "legacy_tool",
         "probe_echo",
-        "request_user_input",
-        "update_goal"
+        "request_user_input"
       ],
       "legacyStillVisible": true,
       "newToolVisibleAfterResume": false,

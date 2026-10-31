@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { startAgentServer } from "../server/main.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 import { RunMaintenance, RUN_RETENTION } from "../server/modules/maintenance/index.mjs";
@@ -114,4 +115,27 @@ test("真实 Codex：原生 Skill 发现、显式正文注入与范围外拒绝"
   await app.messages.submit({ threadId: session.id, clientMessageId: "denied", text: "$core-denied 不允许。" });
   await until(() => app.messages.job("denied").status === "failed");
   assert.equal(provider.requests.length, 1, "不允许的显式 Skill 请求不能发给模型");
+});
+
+test("真实 Codex：workspace 及上级目录的 AGENTS.md 不进入模型上下文，原生目标工具不可见", { timeout: 60000 }, async t => {
+  const root = installToolFixture(tempRoot(t));
+  execFileSync("git", ["init", "-q", root]);
+  fs.writeFileSync(path.join(root, "AGENTS.md"), "PARENT_AGENTS_FIXTURE\n");
+  fs.writeFileSync(path.join(root, "workspace/AGENTS.md"), "WORKSPACE_AGENTS_FIXTURE\n");
+  const provider = await responsesFixture(root, body => {
+    const json = JSON.stringify(body), names = toolSpecs(body).map(tool => tool.name);
+    assert.ok(!json.includes("PARENT_AGENTS_FIXTURE") && !json.includes("WORKSPACE_AGENTS_FIXTURE"), "AGENTS.md 进入了模型上下文");
+    assert.ok(!names.some(name => /goal/.test(name || "")), `原生目标工具仍可见：${names}`);
+    return answer("好的。");
+  });
+  const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  cleanup(root, () => app.close());
+  assert.deepEqual(app.rpc.capabilities.restrictedConfig, { project_doc_max_bytes: 0 });
+  assert.ok(app.rpc.capabilities.restrictedFeatures.includes("goals"));
+  const session = await app.sessions.create();
+  await app.messages.submit({ threadId: session.id, clientMessageId: "agents-md", text: "你好" });
+  await done(app, "agents-md");
+  assert.equal(provider.requests.length, 1);
+  assert.deepEqual(provider.errors, []);
+  await assert.rejects(app.rpc.request("thread/goal/set", { threadId: session.id, objective: "不应生效" }));
 });

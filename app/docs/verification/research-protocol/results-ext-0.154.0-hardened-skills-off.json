@@ -2,6 +2,7 @@
   "codexVersion": "0.154.0",
   "hardened": true,
   "launchArgs": [
+    "features.goals=false",
     "features.shell_tool=false",
     "features.apply_patch_freeform=false",
     "agents.enabled=false",
@@ -17,7 +18,7 @@
   "hooksList": {
     "data": [
       {
-        "cwd": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/workspace",
+        "cwd": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/workspace",
         "hooks": [],
         "warnings": [],
         "errors": []
@@ -27,12 +28,12 @@
   "skillsList": {
     "data": [
       {
-        "cwd": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/workspace",
+        "cwd": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/workspace",
         "skills": [
           {
             "name": "workspace-skill",
             "description": "LEAKMARK-workspace-skill test skill",
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/workspace/.agents/skills/workspace-skill/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/workspace/.agents/skills/workspace-skill/SKILL.md",
             "scope": "repo",
             "enabled": true,
             "pluginId": null
@@ -40,7 +41,7 @@
           {
             "name": "codexhome-skill",
             "description": "LEAKMARK-codexhome-skill test skill",
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/codexhome-skill/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/codexhome-skill/SKILL.md",
             "scope": "user",
             "enabled": true,
             "pluginId": null
@@ -48,7 +49,7 @@
           {
             "name": "home-skill",
             "description": "LEAKMARK-home-skill test skill",
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/home/.agents/skills/home-skill/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/home/.agents/skills/home-skill/SKILL.md",
             "scope": "user",
             "enabled": true,
             "pluginId": null
@@ -59,14 +60,14 @@
             "interface": {
               "displayName": "Image Gen",
               "shortDescription": "Generate or edit images for websites, games, and more",
-              "iconSmall": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/imagegen/assets/imagegen-small.svg",
-              "iconLarge": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/imagegen/assets/imagegen.png",
+              "iconSmall": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "iconLarge": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/imagegen/assets/imagegen.png",
               "iconSmallUrl": null,
               "iconLargeUrl": null,
               "brandColor": null,
               "defaultPrompt": "Use $imagegen to make or edit an image for this project."
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/imagegen/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/imagegen/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -78,14 +79,14 @@
             "interface": {
               "displayName": "OpenAI Docs",
               "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
-              "iconSmall": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/openai-docs/assets/openai-small.svg",
-              "iconLarge": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/openai-docs/assets/openai.png",
+              "iconSmall": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "iconLarge": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/openai-docs/assets/openai.png",
               "iconSmallUrl": null,
               "iconLargeUrl": null,
               "brandColor": null,
               "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/openai-docs/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/openai-docs/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -96,14 +97,14 @@
             "interface": {
               "displayName": "Plugin Creator",
               "shortDescription": "Scaffold plugins and marketplace entries",
-              "iconSmall": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
-              "iconLarge": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "iconSmall": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "iconLarge": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/plugin-creator/assets/plugin-creator.png",
               "iconSmallUrl": null,
               "iconLargeUrl": null,
               "brandColor": null,
               "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/plugin-creator/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/plugin-creator/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -121,7 +122,7 @@
               "brandColor": null,
               "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/review-agent/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/review-agent/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -133,14 +134,14 @@
             "interface": {
               "displayName": "Skill Creator",
               "shortDescription": "Create or update a skill",
-              "iconSmall": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
-              "iconLarge": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "iconSmall": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "iconLarge": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-creator/assets/skill-creator.png",
               "iconSmallUrl": null,
               "iconLargeUrl": null,
               "brandColor": null,
               "defaultPrompt": null
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-creator/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-creator/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -152,14 +153,14 @@
             "interface": {
               "displayName": "Skill Installer",
               "shortDescription": "Install curated skills from openai/skills or other repos",
-              "iconSmall": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
-              "iconLarge": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "iconSmall": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "iconLarge": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-installer/assets/skill-installer.png",
               "iconSmallUrl": null,
               "iconLargeUrl": null,
               "brandColor": null,
               "defaultPrompt": null
             },
-            "path": "$TMPDIR/harness-research-protocol-LoZXCY/codex-ext-acSmlx/.data/codex/skills/.system/skill-installer/SKILL.md",
+            "path": "$TMPDIR/harness-research-protocol-eIA18f/codex-ext-c6LFPE/.data/codex/skills/.system/skill-installer/SKILL.md",
             "scope": "system",
             "enabled": true,
             "pluginId": null
@@ -191,11 +192,8 @@
   },
   "turnStatus": "completed",
   "modelSawTools": [
-    "create_goal",
-    "get_goal",
     "probe_echo",
-    "request_user_input",
-    "update_goal"
+    "request_user_input"
   ],
   "modelContextMentions": [],
   "dynamicToolHandlerCalls": 1,

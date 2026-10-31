@@ -1,7 +1,7 @@
 {
   "codexVersion": "0.154.0",
   "node": "v24.17.0",
-  "at": "2026-10-08T05:12:50.964Z",
+  "at": "2026-10-31T08:50:35.135Z",
   "tests": {
     "s6_multi_connection": {
       "bResumeSameThread": "ok",
@@ -9,20 +9,19 @@
       "toolCallDeliveredToA": [
         {
           "requestId": 0,
-          "callId": "c6d60a99-5763-4068-8c6c-ff2a370df6ab"
+          "callId": "e68bccd3-51fa-481c-8e36-4df23169c43c"
         }
       ],
       "toolCallDeliveredToB": [
         {
           "requestId": 0,
-          "callId": "c6d60a99-5763-4068-8c6c-ff2a370df6ab"
+          "callId": "e68bccd3-51fa-481c-8e36-4df23169c43c"
         }
       ],
       "sameRequestIdBroadcast": true,
       "modelGotOutput": "reply-from-B",
       "bReceivedNotifications": [
         "thread/tokenUsage/updated",
-        "thread/goal/cleared",
         "thread/status/changed",
         "turn/started",
         "item/started",
@@ -44,23 +43,23 @@
       "processes": 4,
       "each": [
         {
-          "openMs": 84,
-          "threadStartMs": 10,
-          "rssMb": 112
-        },
-        {
-          "openMs": 71,
-          "threadStartMs": 10,
-          "rssMb": 112
-        },
-        {
-          "openMs": 74,
+          "openMs": 86,
           "threadStartMs": 9,
           "rssMb": 112
         },
         {
-          "openMs": 70,
-          "threadStartMs": 10,
+          "openMs": 66,
+          "threadStartMs": 8,
+          "rssMb": 112
+        },
+        {
+          "openMs": 67,
+          "threadStartMs": 9,
+          "rssMb": 112
+        },
+        {
+          "openMs": 73,
+          "threadStartMs": 8,
           "rssMb": 112
         }
       ],

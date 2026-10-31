@@ -61,7 +61,7 @@ export class CodexConnection extends EventEmitter {
         capabilities: { experimentalApi: true }
       });
       this.send({ method: "initialized", params: {} });
-      if (this.version) this.capabilities = await verifyRestrictedFeatures(this);
+      if (this.version) this.capabilities = await verifyRestrictedFeatures(this, this.runtime.workspaceDir);
     } catch (error) { await this.close(); throw error; }
   }
 

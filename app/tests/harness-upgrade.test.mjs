@@ -286,19 +286,20 @@ test("未知 Codex 版本、缺失/失效/移除的原生开关 fail closed", as
     enabled: false,
     stage: "stable",
   }));
-  assert.equal(
-    (await verifyRestrictedFeatures({ request: async () => ({ data }) }))
-      .verified,
-    true,
+  const rpc = (features, config = { project_doc_max_bytes: 0 }) => ({
+    request: async (method) => (method === "config/read" ? { config } : { data: features }),
+  });
+  assert.equal((await verifyRestrictedFeatures(rpc(data))).verified, true);
+  await assert.rejects(
+    verifyRestrictedFeatures(rpc(data, { project_doc_max_bytes: 32768 })),
+    /project_doc_max_bytes/,
   );
   for (const bad of [
     data.slice(1),
     data.map((f) => (f.name === "view_image" ? { ...f, enabled: true } : f)),
     data.map((f) => ({ ...f, stage: "removed" })),
   ])
-    await assert.rejects(
-      verifyRestrictedFeatures({ request: async () => ({ data: bad }) }),
-    );
+    await assert.rejects(verifyRestrictedFeatures(rpc(bad)));
 });
 
 test("Schema 注释不影响兼容，但同名业务属性与 const 值不会被抹除", () => {
