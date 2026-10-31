@@ -3,6 +3,10 @@ import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from ".
 import { AppError, requireId } from "../../../shared/errors.mjs";
 import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
 
+// 每个会话在内存里最多保留的轮次。快照只发最后 SESSION_TURN_LIMIT 轮；完成的轮次结果已持久化，完整历史在 Codex 原生记录里。
+// 多留一些，给追加消息定位较早的目标轮次。
+export const SESSION_TURN_MEMORY = 100;
+
 const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { ...turn.artifacts }, revisions: { ...turn.revisions },
   tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] });
 
@@ -110,6 +114,7 @@ export class SessionService extends EventEmitter {
     if (!record) {
       record = { id: turn.id, status: turn.status || "inProgress", answers: {}, tools: {}, artifacts: {}, revisions: {}, messages: [], error: null };
       session.turns.set(turn.id, record);
+      this.forgetOldTurns(session);
     }
     // 早到的 completed 不能被随后到达的 turn/start RPC 响应覆盖成执行中。
     const terminal = ["completed", "failed", "interrupted"].includes(record.status);
@@ -121,6 +126,14 @@ export class SessionService extends EventEmitter {
     // 不让旧轮次迟到的完成事件覆盖最新轮次的定位。
     session.lastTurnId = [...session.turns.keys()].at(-1) || null;
     return record;
+  }
+
+  // 从最早的轮次开始丢，直到不超过上限；执行中的轮次不丢，工具请求和完成事件还要找它。
+  forgetOldTurns(session) {
+    for (const [id, turn] of session.turns) {
+      if (session.turns.size <= SESSION_TURN_MEMORY) break;
+      if (turn.status !== "inProgress" && id !== session.activeTurnId) session.turns.delete(id);
+    }
   }
 
   applyItem(turn, item) {
