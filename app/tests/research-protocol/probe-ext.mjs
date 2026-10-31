@@ -12,6 +12,7 @@ import { prepareRun } from "../../server/modules/codex/runtime.mjs";
 import { prepareCodexConfig } from "../../server/modules/codex/config.mjs";
 import { CodexConnection } from "../../server/modules/codex/connection.mjs";
 import { sendResponse, answer, toolSpecs } from "../responses-fixture.mjs";
+import { redactLocalPaths } from "./redact.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -105,5 +106,5 @@ out.hookMarkersWritten = fs.readdirSync(markers).sort();
 out.hookNotifications = hookEvents;
 await rpc.close(); http.close(); http.closeAllConnections();
 const file = path.join(outputDir, `results-ext-${codexVersion}${hardened ? "-hardened" : ""}${argv.includes("--disable-skills") ? "-skills-off" : ""}.json`);
-fs.writeFileSync(file, JSON.stringify(out, null, 2)); console.log(JSON.stringify(out, null, 2));
+fs.writeFileSync(file, redactLocalPaths(JSON.stringify(out, null, 2))); console.log(JSON.stringify(out, null, 2));
 fs.rmSync(root, { recursive: true, force: true }); process.exit(0);
