@@ -50,6 +50,7 @@ npm run chat
 
 ```bash
 export DEPLOY_HOST=root@<服务器地址>
+app/deploy/remote.sh check                                      # 服务器缺什么、怎么装
 app/deploy/remote.sh init-env && app/deploy/remote.sh deploy   # 首次部署
 app/deploy/remote.sh tunnel                                     # 浏览器打开 http://127.0.0.1:14320/
 ```
