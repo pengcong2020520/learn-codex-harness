@@ -482,3 +482,35 @@ test('升级预检登记描述符但不消费队列、不恢复执行状态、�
  assert.equal((await app.data.jobs.get('running-preflight')).status,'running');
  assert.equal(provider.requests.length,0);
 });
+
+test("真实 PG：迁移 003 把旧的知识维护任务转换为 knowledge-maintain，并接受 needs-review", async (t) => {
+  const admin = await openDatabase(databaseUrl);
+  const name = `migration_${randomUUID().replaceAll("-", "")}`;
+  await admin.query(`CREATE DATABASE ${name}`);
+  const url = new URL(databaseUrl);
+  url.pathname = `/${name}`;
+  const pool = await openDatabase(url.toString());
+  t.after(async () => { await pool.end(); await admin.query(`DROP DATABASE ${name}`); await admin.end(); });
+  // 只执行到 002，模拟升级前的数据库。
+  for (const [version, file] of [[1, "schema.sql"], [2, "migrations/002-knowledge.sql"]]) {
+    const sql = fs.readFileSync(new URL(`../server/modules/data/${file}`, import.meta.url), "utf8");
+    await pool.query(sql);
+    await pool.query("INSERT INTO agent_data.migrations VALUES($1,$2)", [version, createHash("sha256").update(sql).digest("hex")]);
+  }
+  const instance = randomUUID(), owner = randomUUID();
+  await pool.query("INSERT INTO agent_data.users VALUES($1,$2,'owner')", [instance, owner]);
+  await pool.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,'t',$2,'/w')", [instance, owner]);
+  const insert = (id, knowledge) => pool.query(
+    `INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,status,created_at,knowledge) VALUES($1,$2,'t','x','enqueue','completed',1,$3)`,
+    [instance, id, knowledge]);
+  await insert("legacy-maintain", { kbId: "general", operation: "update" });
+  await insert("legacy-chat", null);
+  await migrate(pool);
+  const rows = (await pool.query("SELECT id,workflow,params FROM agent_data.tasks ORDER BY id")).rows;
+  assert.deepEqual(rows, [
+    { id: "legacy-chat", workflow: "chat", params: null },
+    { id: "legacy-maintain", workflow: "knowledge-maintain", params: { kbId: "general" } },
+  ]);
+  await pool.query("UPDATE agent_data.tasks SET status='needs-review',checks=$2 WHERE id=$1", ["legacy-chat", JSON.stringify([{ id: "format", passed: false }])]);
+  await assert.rejects(pool.query("UPDATE agent_data.tasks SET status='unknown' WHERE id='legacy-chat'"), /tasks_status_check/);
+});

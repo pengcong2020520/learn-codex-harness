@@ -206,7 +206,7 @@ test("Agent 包：Skill 只能在包内、工作区外，目录只含 SKILL.md �
   const legacy = installToolFixture(tempRoot(t));
   fs.mkdirSync(path.join(legacy, "workspace/.agents/skills/old"), { recursive: true });
   fs.writeFileSync(path.join(legacy, "workspace/.agents/skills/old/SKILL.md"), "---\nname: old\n---\n");
-  edit(legacy, v => { v.schemaVersion = "1.1"; v.agent.skills = [{ id: "old", required: true }]; v.bindings.skills = { old: { path: ".agents/skills/old/SKILL.md" } }; });
+  edit(legacy, v => { v.schemaVersion = "1.1"; delete v.agent.workflows; v.agent.skills = [{ id: "old", required: true }]; v.bindings.skills = { old: { path: ".agents/skills/old/SKILL.md" } }; });
   const old = new AgentDefinition(legacy);
   assert.equal(old.skills[0].source, undefined);
   assert.equal(old.skills[0].path, fs.realpathSync(path.join(legacy, "workspace/.agents/skills/old/SKILL.md")));

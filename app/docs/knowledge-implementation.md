@@ -35,7 +35,7 @@ s05 / app 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 
 | `knowledge_indexes` | `instance_id`, `kb_id`, `revision`, `state`, `manifest` | 索引版本元数据 |
 | `knowledge_jobs` | `instance_id`, `id`, `kb_id`, `state`, `error`, `created_at` | 仅索引构建任务；maintain 使用普通 tasks 表 |
 
-`tasks.knowledge` 字段：`{ kbId, operation }` 记录知识任务类型。
+`tasks.workflow` / `tasks.params` 记录任务类型：知识维护是内置 Workflow `knowledge-maintain`，参数 `{ kbId }`（迁移 003 已把旧的 `tasks.knowledge` 转换过来，该列保留但不再写入）。
 
 ## Wiki 写入机制
 
@@ -129,9 +129,9 @@ knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，�
 | `npm run knowledge -- read <kbId> <slug>` | 读取 Wiki 页面 |
 | `npm run knowledge -- index <kbId>` | 手动触发索引构建 |
 | `npm run knowledge -- job <jobId>` | 查看知识 job 状态 |
-| `npm run knowledge -- maintain <kbId> "任务说明"` | 创建独立 Thread 提交 knowledge:{kbId,operation:'update'} 持久任务，返回任务/Thread ID，异步执行 |
+| `npm run knowledge -- maintain <kbId> "任务说明"` | 创建独立 Thread，按 Workflow `knowledge-maintain` 提交持久任务，返回任务/Thread ID，异步执行 |
 
-`maintain` 命令由服务端自动显式注入可用 knowledge skill；返回任务/Thread ID 后异步执行，可用聊天 `/resume` 或 GET /state?threadId= 查看进度；knowledge job 只查询索引任务。
+`maintain` 命令由 Workflow 注入任务说明与可用的 knowledge Skill，结束后检查 Wiki 修订是否生效；返回任务/Thread ID 后异步执行，可用聊天 `/resume` 或 GET /state?threadId= 查看进度；knowledge job 只查询索引任务。
 
 ## HTTP 接口（本机客户端使用）
 

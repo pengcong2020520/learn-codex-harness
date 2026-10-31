@@ -1,5 +1,8 @@
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
+import { runChecks } from "../workflows/index.mjs";
+
+const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]) });
 
 // Product input scheduling only. Codex continues to own its Agent loop and context.
 export class MessageService {
@@ -49,14 +52,15 @@ export class MessageService {
   async submit(body) {
     if (this.closed || this.failure)
       throw new AppError("执行服务不可用；请核对状态，不要盲目重发。", 503);
-    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","knowledge"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
+    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","workflow","params","knowledge"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
     const principal = this.gate?.submission();
     const threadId = requireId(body.threadId, "会话 ID"),
       id = requireId(body.clientMessageId, "消息 ID"),
       text = requireText(body.text);
-    const knowledge = this.gate ? await this.gate.run(principal, () => this.gate.maintenance(body.knowledge)) : null;
+    const workflow = this.resolve(this.legacyWorkflow(body));
+    if (workflow.grants.length && this.gate) await this.gate.run(principal, () => this.gate.authorize(workflow.grants));
     const mode = body.mode || "enqueue";
-    if (knowledge && mode === 'append') throw new AppError('知识维护必须作为新任务提交，追加消息不能扩大当前权限。', 403);
+    if (workflow.id !== "chat" && mode === "append") throw new AppError("Workflow 任务必须作为新任务提交；追加消息沿用当前任务的授权，不能更换 Workflow。", 403);
     if (!["enqueue", "append"].includes(mode))
       throw new AppError("消息模式只能是 enqueue 或 append。");
     const targetTurnId =
@@ -74,7 +78,8 @@ export class MessageService {
           existing.text !== text ||
           existing.mode !== mode ||
           existing.targetTurnId !== targetTurnId ||
-          JSON.stringify(existing.knowledge || null) !== JSON.stringify(knowledge)
+          (existing.workflow || "chat") !== workflow.id ||
+          JSON.stringify(existing.params || null) !== JSON.stringify(workflow.params)
         )
           throw new AppError(
             "同一个消息 ID 不能用于不同的消息。",
@@ -93,7 +98,8 @@ export class MessageService {
           text,
           mode,
           targetTurnId,
-          knowledge,
+          workflow: workflow.id,
+          params: workflow.params,
           agentHash: this.config.agent?.descriptor?.hash,
           createdAt: Date.now(),
         });
@@ -106,6 +112,33 @@ export class MessageService {
       if (!this.queue) this.schedule(threadId); // Test-only; production consumes Redis.
       return this.publicJob(await this.job(id));
     });
+  }
+  // 旧字段 knowledge: { kbId, operation: "update" } 等价于 knowledge-maintain，兼容一个版本。
+  legacyWorkflow(body) {
+    if (body.knowledge === undefined) return { id: body.workflow ?? "chat", params: body.params ?? null };
+    const value = body.knowledge;
+    if (body.workflow !== undefined || body.params !== undefined) throw new AppError("knowledge 与 workflow 不能同时使用。", 400);
+    if (!value || typeof value !== "object" || Object.keys(value).sort().join(",") !== "kbId,operation" || value.operation !== "update")
+      throw new AppError("knowledge 字段只接受 { kbId, operation: \"update\" }。", 400);
+    return { id: "knowledge-maintain", params: { kbId: value.kbId } };
+  }
+  resolve({ id, params }) {
+    if (typeof id !== "string") throw new AppError("workflow 必须是字符串。", 400);
+    const workflows = this.config.agent?.workflows;
+    if (!workflows) {
+      if (id !== "chat") throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
+      return CHAT;
+    }
+    return workflows.resolve(id, params);
+  }
+  // 验收只在轮次正常完成时运行；不通过记为 needs-review，不暂停队列、不自动重试。
+  outcome(job, turn) {
+    if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
+    let workflow;
+    try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
+    if (!workflow.checks.length) return { status: "completed", checks: null };
+    const checks = runChecks(workflow.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats });
+    return { status: checks.every(check => check.passed) ? "completed" : "needs-review", checks };
   }
   schedule(threadId) {
     if (this.closed || this.failure || this.scheduled.has(threadId)) return;
@@ -147,7 +180,8 @@ export class MessageService {
     await this.publish(threadId);
     let sent = false;
     try {
-      let input = job.knowledge && this.config.agent?.availableSkills?.some(s => s.name === "knowledge") ? `$knowledge ${job.text}` : job.text;
+      const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+      let input = job.text;
       if (job.mode === "append") {
         const original = this.sessions
           .getTurn(threadId, job.targetTurnId)
@@ -163,8 +197,9 @@ export class MessageService {
           threadId,
           input,
           job.agentHash,
+          workflow.id === "chat" ? null : workflow,
         );
-        this.gate?.start(job);
+        this.gate?.start(job, workflow.grants);
         sent = true;
         const result = await this.rpc.request("turn/start", {
           threadId,
@@ -224,19 +259,19 @@ export class MessageService {
     if (this.closed || this.failure) return;
     const job = await this.job(id),
       turn = this.sessions.getTurn(job.threadId, turnId);
-    const status = terminal.includes(turn?.status) ? turn.status : "running";
-    if (terminal.includes(status))
-      await this.sessions.persistTurn?.(job.threadId, turn);
+    const ended = terminal.includes(turn?.status);
+    if (ended) await this.sessions.persistTurn?.(job.threadId, turn);
+    const { status, checks } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
     if (
       !(await this.store.patch(
         id,
-        { turnId, status, error: turn?.error || null },
+        { turnId, status, error: turn?.error || null, ...(checks ? { checks } : {}) },
         executing,
       ))
     )
       return;
-    if (terminal.includes(status)) {
-      if (status !== "completed") await this.store.pause(job.threadId);
+    if (ended) {
+      if (turn.status !== "completed") await this.store.pause(job.threadId);
       await this.wake(job.threadId);
     } else if (!this.timers.has(turnId)) {
       const timer = setTimeout(() => {
@@ -263,12 +298,14 @@ export class MessageService {
     this.timers.delete(turn.id);
     await this.sessions.persistTurn?.(threadId, turn);
     for (const job of await this.store.list(threadId))
-      if (job.turnId === turn.id && executing.includes(job.status))
+      if (job.turnId === turn.id && executing.includes(job.status)) {
+        const { status, checks } = this.outcome(job, turn);
         await this.store.patch(
           job.id,
-          { status: turn.status, error: turn.error || null },
+          { status, error: turn.error || null, ...(checks ? { checks } : {}) },
           executing,
         );
+      }
     if (turn.status !== "completed") await this.store.pause(threadId);
     await this.publish(threadId);
     await this.wake(threadId);

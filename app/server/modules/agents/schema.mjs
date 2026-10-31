@@ -1,10 +1,22 @@
 import Ajv from "ajv";
+import { CHECKS, GRANT_TYPES } from "../workflows/index.mjs";
 
 const text = { type: "string", minLength: 1, maxLength: 500 };
 const object = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const array = items => ({ type: "array", items, uniqueItems: true });
 const choices = values => ({ type: "string", enum: values });
 const dictionary = value => ({ type: "object", additionalProperties: value });
+const slug = { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$" };
+// 参数只允许扁平的字符串字段：足够表达"维护哪个知识库"之类的选择，也便于 CLI 用 key=value 传入。
+const workflowParams = object({
+  type: { const: "object" }, additionalProperties: { const: false }, required: array(text),
+  properties: dictionary(object({ type: { const: "string" }, description: text, pattern: text, enum: array(text), maxLength: { type: "integer", minimum: 1, maximum: 10000 } }, ["type"]))
+}, ["type", "additionalProperties", "properties"]);
+const workflow = object({
+  id: slug, label: text, skill: text, params: workflowParams,
+  grants: array(object({ type: choices(GRANT_TYPES), kbId: { anyOf: [slug, object({ param: text })] } })),
+  checks: array(choices(CHECKS))
+}, ["id"]);
 const schema = object({
   schemaVersion: { enum: ["1.0", "1.1", "1.2"] },
   agent: object({
@@ -15,7 +27,8 @@ const schema = object({
     knowledge: array(object({ kbId: { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$" }, mode: choices(["wiki", "rag"]), actions: array(choices(["read", "update", "index"])) })),
     executionRef: text,
     memory: object({ use: { type: "boolean" }, contribute: { type: "boolean" } }),
-    outputs: object({ directory: text, formats: array(choices(["md", "txt"])), writeMode: { const: "create-only" }, requiredChecks: array(choices(["file-exists", "format"])) })
+    outputs: object({ directory: text, formats: array(choices(["md", "txt"])), writeMode: { const: "create-only" }, requiredChecks: array(choices(["file-exists", "format"])) }),
+    workflows: { type: "array", items: workflow, maxItems: 20 }
   }, ["id", "version", "instructions", "skills", "tools", "dataBindings", "executionRef", "memory", "outputs"]),
   bindings: object({
     workspaceDir: text,

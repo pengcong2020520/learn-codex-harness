@@ -83,6 +83,7 @@ Agent 包是受信配置，workspace 是用户和模型读写的数据：角色�
 | `agent.dataBindings` | 资料绑定，控制配置声明的任意资料目录及读写权限 |
 | `agent.outputs` | 产物规则，声明允许创建的输出格式与路径 |
 | `agent.memory` | 记忆开关：`{"use": false, "contribute": false}` |
+| `agent.workflows` | 启用的 Workflow（1.2 起）：只写 `id` 启用内置的，带其他字段的是自定义组合；`chat` 始终存在，见下文 |
 
 **`bindings` 块**：
 
@@ -145,6 +146,29 @@ Agent 包是受信配置，workspace 是用户和模型读写的数据：角色�
 - `read_file` 返回内容、来源 ID、内容 SHA256、定位路径和更新时间；`list_files` 同样过滤未授权来源。
 - 文件成功落盘后，检查文件存在性与扩展名并归入 `turn.artifacts`；不证明语义正确或引用真实性，模型自述"已保存"不等于文件真正写入成功。
 
+## Workflow
+
+Workflow 规定一类任务的边界和终点：本任务额外的授权、注入哪个 Skill、做完后检查什么。**怎么做由 Codex 自主决定**，Workflow 不写步骤。不指定时走 `chat`，在 Agent 基础权限内完全自主。设计见 [skill-workflow-design.md](docs/skill-workflow-design.md)。
+
+| 内置 | 参数 | 额外授权 | 验收 |
+|---|---|---|---|
+| `chat` | 无 | 无 | 无 |
+| `knowledge-maintain` | `kbId` | 本任务可以更新该知识库 | 本轮至少一次 Wiki 修订生效 |
+
+自定义 Workflow 只能组合代码里提供的积木：
+
+```jsonc
+"workflows": [
+  { "id": "knowledge-maintain" },
+  { "id": "report", "label": "写报告", "skill": "report", "checks": ["file-exists", "format", "sources-cited"] }
+]
+```
+
+- **提交**：`POST /messages` 带 `workflow` 与 `params`；CLI 用 `/workflow 名称 键=值 内容`。旧的 `knowledge: { kbId, operation: "update" }` 字段兼容一个版本，等价于 `knowledge-maintain`。
+- **派发**：服务端在用户原文之前加一段任务说明（目标、授权、验收），注入 Workflow 指定的 Skill；权限门为本任务签发 `grants`，任务结束即失效。追加消息沿用当前任务的授权，不能更换 Workflow。
+- **验收**：只看结果——`file-exists`、`format`、`sources-cited`、`wiki-effective`。不通过的任务记为 `needs-review` 并推送给客户端，不暂停队列、不自动重试。
+- **升级**：任务表新增 `workflow`、`params`、`checks` 列（迁移 003），升级后先运行 `npm run data:migrate`。
+
 ## Skill 使用说明
 
 1. **准备文件**：在 Agent 包的 `skills/<id>/` 下放符合原生规范的 `SKILL.md`，可带 `references/` 下的 `.md`/`.txt`；不能有脚本、链接或其他文件，单文件不超过 128 KiB。
@@ -180,6 +204,8 @@ Agent 包是受信配置，workspace 是用户和模型读写的数据：角色�
 | `/resume [关键词]` | 按关键词搜索 Thread，再输入完整 Thread ID 选择恢复 |
 | `/append 内容` | 向当前轮次追加内容 |
 | `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
+| `/workflow` | 列出当前 Agent 启用的 Workflow |
+| `/workflow <ID> [键=值 ...] 内容` | 按 Workflow 提交新任务，结束后报告验收结果 |
 | `/queue` | 查看排队任务 |
 | `/continue` | 继续暂停的尚未执行队列，不重发未确认任务 |
 | `/tools` | 查看当前可用工具 |

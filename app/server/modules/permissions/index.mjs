@@ -30,11 +30,12 @@ export class PermissionGate {
     if (context.kind === 'task' && this.runs.get(context.threadId)?.context !== context) denied();
     return context;
   }
-  start(job) {
+  // grants 来自 workflow 解析结果，只在本任务的上下文里有效。
+  start(job, grants = []) {
     if (this.runs.has(job.threadId) || (job.userId && job.userId !== this.scope.ownerId)) denied();
     const controller = new AbortController();
     const context = this.issue({ kind: 'task', taskId: job.id, threadId: job.threadId,
-      maintenanceKb: job.knowledge?.kbId || null, signal: controller.signal });
+      grants: Object.freeze(grants.map(grant => Object.freeze({ ...grant }))), signal: controller.signal });
     this.runs.set(job.threadId, { context, controller, turnId: null });
   }
   started(threadId, turnId) {
@@ -59,7 +60,7 @@ export class PermissionGate {
     const context = this.current();
     const mount = (this.agent.definition.agent.knowledge || []).find(m => m.kbId === kbId);
     if (!mount || !mount.actions.includes(action)) denied();
-    if (action !== 'read' && context.kind === 'task' && context.maintenanceKb !== kbId) denied();
+    if (action !== 'read' && context.kind === 'task' && !context.grants.some(g => g.type === 'knowledge.update' && g.kbId === kbId)) denied();
     return mount;
   }
   check(action, target = {}) {
@@ -83,11 +84,12 @@ export class PermissionGate {
     }
     denied();
   }
-  // This is called for authenticated product input, before a durable job is created.
-  maintenance(value) {
-    if (value == null) return null;
-    if (Object.keys(value).sort().join(',') !== 'kbId,operation' || value.operation !== 'update') denied();
-    this.mount(value.kbId, 'update');
-    return { kbId: value.kbId, operation: 'update' };
+  // 提交任务时（任务入库之前）核对 workflow 申请的额外授权确实在 Agent 能力之内。
+  authorize(grants) {
+    for (const grant of grants) {
+      if (grant.type !== 'knowledge.update') denied();
+      this.mount(grant.kbId, 'update');
+    }
+    return grants;
   }
 }

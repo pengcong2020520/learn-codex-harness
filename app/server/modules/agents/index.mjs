@@ -7,6 +7,7 @@ export { resourcePath } from "../data/paths.mjs";
 import path from "node:path";
 import { loadRole } from "../role/index.mjs";
 import { validateDefinition } from "./schema.mjs";
+import { defineWorkflows, describe } from "../workflows/index.mjs";
 import { readJson, writeJson } from "../storage/index.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
@@ -128,6 +129,8 @@ export class AgentDefinition {
       const source = path.dirname(fs.realpathSync(skillPath)), files = skillFiles(source);
       this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });
     }
+    if (agent.workflows && definition.schemaVersion !== "1.2") throw new Error("workflows 需要 schemaVersion 1.2。");
+    this.workflows = defineWorkflows(agent);
     this.expected = this.sourceHash();
     this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs })}`;
     freeze(this.sources); freeze(this.skills);
@@ -185,7 +188,8 @@ export class AgentDefinition {
     const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash;
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
-  input(text) {
+  // workflow 指定的 Skill 按 id 注入；任务说明（目标、授权、验收）放在用户原文之前。
+  input(text, workflow = null) {
     this.assertCurrent();
     const available = new Set((this.availableSkills || []).map(skill => skill.name));
     const mentions = new Set([...text.matchAll(/\$([a-zA-Z][a-zA-Z0-9_-]*)/g)].map(match => match[1]));
@@ -193,7 +197,9 @@ export class AgentDefinition {
       if (!available.has(name) && this.deniedSkillNames?.has(name)) throw new AppError(`Skill 未授权或不可用：${name}`, 409, "SKILL_UNAVAILABLE");
     }
     // 不解析 SKILL.md；原生引擎按已验证名称和路径注入正文。
-    const selected = (this.availableSkills || []).filter(skill => mentions.has(skill.name));
-    return [{ type: "text", text, text_elements: [] }, ...selected.map(({ name, path }) => ({ type: "skill", name, path }))];
+    const selected = (this.availableSkills || []).filter(skill => mentions.has(skill.name) || (workflow?.skill && skill.id === workflow.skill));
+    const brief = workflow ? describe(workflow) : null;
+    return [...(brief ? [{ type: "text", text: brief, text_elements: [] }] : []), { type: "text", text, text_elements: [] },
+      ...selected.map(({ name, path }) => ({ type: "skill", name, path }))];
   }
 }

@@ -94,6 +94,11 @@
           "index"
         ]
       }
+    ],
+    "workflows": [
+      {
+        "id": "knowledge-maintain"
+      }
     ]
   },
   "bindings": {

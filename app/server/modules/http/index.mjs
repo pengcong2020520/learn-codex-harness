@@ -53,7 +53,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         const definition = config.agent?.definition?.agent;
         return json(200, { agent: definition ? { id: definition.id, version: definition.version,
           skills: definition.skills, tools: definition.tools, memory: definition.memory,
-          outputs: definition.outputs, knowledge: definition.knowledge || [] } : null,
+          outputs: definition.outputs, knowledge: definition.knowledge || [], workflows: config.agent.workflows.list() } : null,
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }

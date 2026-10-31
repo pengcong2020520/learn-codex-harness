@@ -64,7 +64,7 @@ test('知识 Web 接口底层：原文导入、不可覆盖、目录隔离、任
     await assert.rejects(r.run(()=>r.knowledge.importSource({kbId:'a',name,content:'test'})),/文件名/);
   await assert.rejects(r.run(()=>r.knowledge.importSource({kbId:'b',name:'secret.md',content:'test'})),/未授权/);
   await assert.rejects(r.run(()=>r.knowledge.importSource({kbId:'a',name:'big.md',content:'x'.repeat(262145)})),/大小/);
-  r.gate.start({id:'task',threadId:'thread',knowledge:{kbId:'a'}});r.gate.started('thread','turn');
+  r.gate.start({id:'task',threadId:'thread'},[{type:'knowledge.update',kbId:'a'}]);r.gate.started('thread','turn');
   await assert.rejects(r.gate.run(r.gate.forTurn('thread','turn'),()=>r.knowledge.importSource({kbId:'a',name:'agent.md',content:'test'})),/只允许本地操作者/);
   r.gate.end('thread','turn');
   const page=await r.run(()=>r.knowledge.submit({kbId:'a',slug:'new-page',content:'# 页面\n事实',expectedVersion:null,source_versions:[{resourceId:imported.resourceId,versionId:imported.versionId}]}));
@@ -83,6 +83,7 @@ test('真实 Codex + PG + Redis：动态工具任务身份、维护范围持久�
   let step=0, refs;
   const provider=await responsesFixture(root,body=>{
     assert.ok(JSON.stringify(body).includes('普通对话没有维护权限时'), '原生知识 Skill 没有注入');
+    assert.ok(JSON.stringify(body).includes('可以更新知识库 general'), 'workflow 任务说明没有进入模型请求');
     const specs=toolSpecs(body);
     assert.ok(specs.some(s=>s.name==='kb_submit_revision'));
     assert.ok(!specs.some(s=>s.name?.startsWith('mcp__')));
@@ -105,11 +106,13 @@ test('真实 Codex + PG + Redis：动态工具任务身份、维护范围持久�
   const imported=await web('/knowledge/source',{kbId:'general',name:'web-import.md',content:'# Web 导入\n来自工作台的原文。'});
   assert.ok(imported.versionId);assert.equal((await web('/workspace/read?path=inputs%2Fgeneral%2Fweb-import.md')).versionId,imported.versionId);
   const session=await web('/sessions',{});
-  await web('/messages',{threadId:session.id,clientMessageId:'maintain',text:'维护知识库',knowledge:{kbId:'general',operation:'update'}});
+  await web('/messages',{threadId:session.id,clientMessageId:'maintain',text:'维护知识库',workflow:'knowledge-maintain',params:{kbId:'general'}});
   await until(async()=>['completed','failed','unconfirmed'].includes((await app.messages.job('maintain')).status),25000);
   assert.equal((await app.messages.job('maintain')).status,'completed');assert.deepEqual(provider.errors,[]);
   const result=await app.gate.run(app.gate.operator(),()=>app.knowledge.read({kbId:'general',slug:'services'}));assert.match(result.content,/三种/);
-  assert.equal((await app.messages.job('maintain')).knowledge.kbId,'general');
+  const job=await app.messages.job('maintain');
+  assert.equal(job.workflow,'knowledge-maintain');assert.deepEqual(job.params,{kbId:'general'});
+  assert.deepEqual(job.checks.map(c=>[c.id,c.passed]),[['wiki-effective',true]],'维护任务的 Wiki 修订应通过验收');
   assert.equal((await web('/knowledge/pages?kbId=general')).pages[0].slug,'services');
   assert.match((await web('/knowledge/read?kbId=general&slug=services')).content,/三种/);
   assert.equal(app.gate.runs.size,0);

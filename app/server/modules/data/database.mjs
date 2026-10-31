@@ -64,7 +64,7 @@ export async function openDatabase(url) {
   }
 }
 
-const migrations = ['schema.sql', 'migrations/002-knowledge.sql'].map((name, index) => {
+const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql'].map((name, index) => {
   const sql = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
   return { version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex') };
 });

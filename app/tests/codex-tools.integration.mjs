@@ -145,3 +145,32 @@ test("真实 Codex：workspace 及上级目录的 AGENTS.md 不进入模型上�
   assert.deepEqual(provider.errors, []);
   await assert.rejects(app.rpc.request("thread/goal/set", { threadId: session.id, objective: "不应生效" }));
 });
+
+test("真实 Codex：自定义 workflow 注入任务说明与包内 Skill，按真实写入结果验收", { timeout: 60000 }, async t => {
+  const root = installToolFixture(tempRoot(t));
+  fs.mkdirSync(path.join(root, "agents/writing/skills/report"), { recursive: true });
+  fs.writeFileSync(path.join(root, "agents/writing/skills/report/SKILL.md"), "---\nname: report\ndescription: 写报告的方法\n---\nREPORT_METHOD_FIXTURE\n");
+  definition(root, v => {
+    v.agent.tools.allow = ["list_files", "read_file", "write_file"];
+    v.agent.skills = [{ id: "report", required: true }];
+    v.bindings.skills = { report: { path: "skills/report/SKILL.md" } };
+    v.agent.workflows = [{ id: "report", label: "写报告", skill: "report", checks: ["file-exists", "format"] }];
+  });
+  let step = 0;
+  const provider = await responsesFixture(root, body => {
+    const json = JSON.stringify(body);
+    assert.ok(json.includes("【工作流】写报告（report）") && json.includes("产物文件存在"), "任务说明没有进入模型请求");
+    assert.ok(json.includes("REPORT_METHOD_FIXTURE"), "workflow 指定的 Skill 没有注入");
+    if (step++ === 0) return toolCall(toolSpecs(body).find(spec => spec.name?.endsWith("write_file")), { path: "outputs/report.md", content: "报告正文" });
+    return answer("报告已保存。");
+  });
+  const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  cleanup(root, () => app.close());
+  const session = await app.sessions.create();
+  await app.messages.submit({ threadId: session.id, clientMessageId: "report", text: "写一份周报", workflow: "report" });
+  await done(app, "report");
+  assert.deepEqual(provider.errors, []);
+  assert.deepEqual(app.messages.job("report").checks.map(check => [check.id, check.passed]), [["file-exists", true], ["format", true]]);
+  const user = app.sessions.snapshot(session.id).turns.at(-1).messages[0].text;
+  assert.match(user, /写一份周报/);
+});

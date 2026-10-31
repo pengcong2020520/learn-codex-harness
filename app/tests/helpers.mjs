@@ -22,6 +22,7 @@ export function installToolFixture(root, { knowledge = false } = {}) {
   cpSync(path.join(project, "server/modules/tools"), path.join(root, "server/modules/tools"), { recursive: true });
   cpSync(path.join(project, "server/modules/agents"), path.join(root, "server/modules/agents"), { recursive: true });
   cpSync(path.join(project, "server/modules/role"), path.join(root, "server/modules/role"), { recursive: true });
+  cpSync(path.join(project, "server/modules/workflows"), path.join(root, "server/modules/workflows"), { recursive: true });
   cpSync(path.join(project, "server/modules/storage"), path.join(root, "server/modules/storage"), { recursive: true });
   cpSync(path.join(project, "shared"), path.join(root, "shared"), { recursive: true });
   cpSync(path.join(project, "server/modules/data"), path.join(root, "server/modules/data"), { recursive: true });
@@ -32,6 +33,7 @@ export function installToolFixture(root, { knowledge = false } = {}) {
     const definition = JSON.parse(readFileSync(file));
     definition.agent.tools.allow = definition.agent.tools.allow.filter(n => !n.startsWith('kb_'));
     delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
+    definition.agent.workflows = (definition.agent.workflows || []).filter(w => w.id !== 'knowledge-maintain');
     definition.agent.skills = definition.agent.skills.filter(s => s.id !== 'knowledge');
     writeFileSync(file, JSON.stringify(definition));
   }

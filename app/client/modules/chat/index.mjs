@@ -4,6 +4,8 @@ import { applySessionEvent, isSessionEvent } from "../../../shared/session-event
 const HELP = `普通文字：提交普通队列；可连续输入，不必等待模型回复。
 /append 内容        显式追加当前或刚结束的任务（等价于追加按钮）
 /append-to ID 内容  指定目标 turn，避免多窗口时目标含糊
+/workflow           列出当前 Agent 启用的 Workflow
+/workflow ID [键=值 ...] 内容  按 Workflow 提交新任务，如 /workflow knowledge-maintain kbId=general 整理新资料
 /queue              查看队列
 /tools              查看已加载工具和更新状态
 /memory             查看记忆配置和产物状态（不触发模型）
@@ -27,7 +29,9 @@ export async function runChat(api, terminal) {
   let displayed = new Map();
   let queuePaused = false;
   let renderingTurnId = null;
+  let reported = new Set();
   const finished = Promise.withResolvers();
+  const failedChecks = job => (job.checks || []).filter(check => !check.passed).map(check => `${check.label}（${check.detail}）`).join("；");
 
   function renderSession(session) {
     if (current?.id !== session.id) return;
@@ -75,6 +79,7 @@ export async function runChat(api, terminal) {
     displayed = new Map();
     queuePaused = false;
     renderingTurnId = null;
+    reported = new Set();
     terminal.write(`Thread id: ${session.id}\n模型：${session.model || "服务端配置"}`);
     renderSession(session);
     const stream = api.subscribe(session.id, event => {
@@ -89,6 +94,13 @@ export async function runChat(api, terminal) {
       if (queue) {
         if (queue.paused && !queuePaused) terminal.write("队列已暂停，查看 /queue 后可用 /continue 明确继续。");
         queuePaused = queue.paused;
+        // Workflow 任务结束后报告一次验收结果；快照里的历史任务只记下，不重复刷屏。
+        for (const job of queue.jobs) {
+          if (!job.checks || !["completed", "needs-review"].includes(job.status) || reported.has(job.id)) continue;
+          reported.add(job.id);
+          if (event.type === "snapshot") continue;
+          terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
+        }
       }
       if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
       if (event.type === "tools") terminal.write(toolStatus(event.data));
@@ -148,7 +160,7 @@ export async function runChat(api, terminal) {
       const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
       renderSession(state.session);
       terminal.write(`队列${state.queue.paused ? "（暂停）" : ""}：`);
-      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}`);
+      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.workflow && job.workflow !== "chat" ? `[${job.workflow}] ` : ""}${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}${job.status === "needs-review" ? `；验收未通过：${failedChecks(job)}` : ""}`);
       if (!state.queue.jobs.length) terminal.write("暂无消息。");
       return;
     }
@@ -157,8 +169,19 @@ export async function runChat(api, terminal) {
       await api.request("/queue/continue", { threadId: current.id });
       return terminal.write("已请求继续待执行队列；未确认的旧消息不会重发。");
     }
-    let mode = "enqueue", content = text, targetTurnId;
-    if (/^\/append-to(?:\s|$)/.test(text)) {
+    let mode = "enqueue", content = text, targetTurnId, workflow;
+    if (/^\/workflow(?:\s|$)/.test(text)) {
+      const match = text.slice(9).trim().match(/^(\S+)((?:\s+[A-Za-z][\w-]*=\S+)*)\s*([\s\S]*)$/);
+      if (!match) {
+        const { agent } = await api.request("/workbench");
+        for (const item of agent?.workflows || [])
+          terminal.write(`${item.id}：${item.label}${item.params ? `  参数：${Object.keys(item.params.properties).map(key => `${key}=…`).join(" ")}` : ""}${item.checks.length ? `  验收：${item.checks.join("、")}` : ""}`);
+        return;
+      }
+      const pairs = match[2].trim() ? match[2].trim().split(/\s+/).map(pair => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]) : [];
+      workflow = { workflow: match[1], params: pairs.length ? Object.fromEntries(pairs) : null };
+      content = match[3].trim();
+    } else if (/^\/append-to(?:\s|$)/.test(text)) {
       const match = text.match(/^\/append-to\s+(\S+)\s+([\s\S]+)$/);
       if (!match) return terminal.write("用法：/append-to 目标turnID 补充内容");
       [, targetTurnId, content] = match;
@@ -172,7 +195,7 @@ export async function runChat(api, terminal) {
     if (mode === "append" && !targetTurnId) return terminal.write("当前没有可追加的目标轮次；先发送普通消息。");
     if (!current) await select(await api.request("/sessions", {}));
     const clientMessageId = randomUUID();
-    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId });
+    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId, ...workflow });
     // UUID 仅用于服务端幂等处理，不作为聊天界面的编号展示。
     if (["failed", "unconfirmed"].includes(result.status)) terminal.write(`消息状态：${result.status}${result.error ? `；${result.error}` : ""}`);
   }

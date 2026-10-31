@@ -156,6 +156,8 @@ async function chatFixture(t) {
       if (route === "/messages") return { status: "queued" };
       if (route === "/sessions" || route === "/sessions/resume") return structuredClone(session);
       if (route.startsWith("/sessions?q=")) return { sessions: [{ ...structuredClone(session), preview: "历史会话" }] };
+      if (route === "/workbench") return { agent: { workflows: [{ id: "chat", label: "普通对话", params: null, checks: [] },
+        { id: "knowledge-maintain", label: "知识库维护", params: { properties: { kbId: { type: "string" } } }, checks: ["wiki-effective"] }] } };
       throw new Error(`未模拟 ${route}`);
     },
     subscribe(id, callback) { listener = callback; return { close() { listener = null; }, resync() { resyncs.push(id); }, done: Promise.resolve() }; }
@@ -280,4 +282,21 @@ test("协议 v2：turn / delta 事件与完整快照渲染一致，增量接不�
   delta(99, "跳号");
   assert.deepEqual(f.resyncs, [THREAD_ID]);
   assert.doesNotMatch(f.text(), /跳号/);
+});
+
+test("/workflow 列出与提交：键=值作为参数，验收结果只报告一次", async t => {
+  const f = await chatFixture(t);
+  await f.send("/workflow");
+  assert.match(f.text(), /knowledge-maintain：知识库维护  参数：kbId=…  验收：wiki-effective/);
+  await f.send("/workflow knowledge-maintain kbId=general 整理新到的资料");
+  await until(() => f.calls.some(call => call.route === "/messages"));
+  const body = f.calls.find(call => call.route === "/messages").body;
+  assert.equal(body.workflow, "knowledge-maintain");
+  assert.deepEqual(body.params, { kbId: "general" });
+  assert.equal(body.text, "整理新到的资料");
+  const job = { id: "j1", status: "needs-review", workflow: "knowledge-maintain", text: "整理",
+    checks: [{ id: "wiki-effective", label: "Wiki 修订已生效", passed: false, detail: "本轮没有生效的 Wiki 修订。" }] };
+  f.event("queue", { paused: false, jobs: [job] });
+  f.event("queue", { paused: false, jobs: [job] });
+  assert.equal(f.text().split("验收未通过（knowledge-maintain）：Wiki 修订已生效（本轮没有生效的 Wiki 修订。）").length - 1, 1);
 });

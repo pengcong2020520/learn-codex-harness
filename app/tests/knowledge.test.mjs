@@ -18,10 +18,17 @@ test('统一门禁：伪造身份、未挂载 KB、普通任务更新、普通�
     assert.throws(() => gate.check('create', { path: 'research/private/wiki/page.md' }), /未授权/);
     gate.check('read', { kbId: 'private' });
   });
-  gate.end('t','v1'); gate.start({ id: 'two', threadId: 't', knowledge: { kbId: 'private' } }); gate.started('t','v2');
+  gate.end('t','v1'); gate.start({ id: 'two', threadId: 't' }, [{ type: 'knowledge.update', kbId: 'other' }]); gate.started('t','v2');
+  await assert.rejects(gate.run(gate.forTurn('t','v2'), async () => gate.check('update', { kbId: 'private' })), /未授权/, '授权只覆盖它点名的知识库');
+  gate.end('t','v2'); gate.start({ id: 'three', threadId: 't' }, [{ type: 'knowledge.update', kbId: 'private' }]); gate.started('t','v2');
   await assert.rejects(gate.run(ctx, () => gate.check('read', { kbId: 'private' })), /已结束|未授权/);
   assert.throws(() => gate.forTurn('t','v1'), /未授权/);
   await gate.run(gate.forTurn('t','v2'), () => gate.check('update', { kbId: 'private' }));
+  await gate.run(gate.user(), async () => {
+    assert.deepEqual(gate.authorize([{ type: 'knowledge.update', kbId: 'private' }]), [{ type: 'knowledge.update', kbId: 'private' }]);
+    assert.throws(() => gate.authorize([{ type: 'knowledge.update', kbId: 'foreign' }]), /未授权/, '未挂载的知识库不能授权');
+    assert.throws(() => gate.authorize([{ type: 'files.delete', path: 'inputs' }]), /未授权/, '未知授权类型一律拒绝');
+  });
   const controller = new AbortController(); controller.abort();
   await assert.rejects(gate.run(gate.forTurn('t','v2'), () => gate.current(), controller.signal));
 });

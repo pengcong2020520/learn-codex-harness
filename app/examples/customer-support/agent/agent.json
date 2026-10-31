@@ -65,6 +65,11 @@
           "update"
         ]
       }
+    ],
+    "workflows": [
+      {
+        "id": "knowledge-maintain"
+      }
     ]
   },
   "bindings": {

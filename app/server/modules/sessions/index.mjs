@@ -3,7 +3,7 @@ import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from ".
 import { AppError, requireId } from "../../../shared/errors.mjs";
 import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
 
-const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { ...turn.artifacts },
+const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { ...turn.artifacts }, revisions: { ...turn.revisions },
   tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] });
 
 export class SessionService extends EventEmitter {
@@ -43,10 +43,10 @@ export class SessionService extends EventEmitter {
   atBoundary(operation, options) { return this.boundary ? this.boundary.run(operation, options) : operation(); }
 
   assertCompatible(threadId, jobHash) { return this.config.agent?.assertCompatible(threadId, jobHash); }
-  async prepareInput(threadId, text, jobHash) {
+  async prepareInput(threadId, text, jobHash, workflow = null) {
     await this.assertCompatible(threadId, jobHash);
     await this.beforeTurn?.();
-    return this.config.agent?.input(text) || [{ type: "text", text, text_elements: [] }];
+    return this.config.agent?.input(text, workflow) || [{ type: "text", text, text_elements: [] }];
   }
 
   register(result) {
@@ -108,7 +108,7 @@ export class SessionService extends EventEmitter {
     if (!session || !turn?.id) return;
     let record = session.turns.get(turn.id);
     if (!record) {
-      record = { id: turn.id, status: turn.status || "inProgress", answers: {}, tools: {}, artifacts: {}, messages: [], error: null };
+      record = { id: turn.id, status: turn.status || "inProgress", answers: {}, tools: {}, artifacts: {}, revisions: {}, messages: [], error: null };
       session.turns.set(turn.id, record);
     }
     // 早到的 completed 不能被随后到达的 turn/start RPC 响应覆盖成执行中。
@@ -133,11 +133,15 @@ export class SessionService extends EventEmitter {
       }
       turn.tools[item.id] = { name: item.tool, label: this.tools?.label(item.tool) || item.tool, status: failed ? "failed" : item.status,
         error: error ? this.redact(String(error)).slice(0, 300) : null };
-      if (!failed && item.status === "completed" && item.tool === "write_file") {
+      // 只记录工具真实返回的结果，供 workflow 验收使用；不从模型回复中猜测文件或修订。
+      if (!failed && item.status === "completed" && ["write_file", "kb_submit_revision"].includes(item.tool)) {
         try {
           const output = JSON.parse(item.result?.content?.find(part => part.type === "text")?.text || item.contentItems?.find(part => part.type === "inputText")?.text || "null");
-          if (output?.created === true && output.artifact) turn.artifacts[item.id] = output.artifact;
-        } catch { /* 不从模型回复中猜测文件，也不把工具错误当作产物。 */ }
+          const sources = Array.isArray(item.arguments?.source_versions) ? item.arguments.source_versions.length : 0;
+          if (item.tool === "write_file" && output?.created === true && output.artifact) turn.artifacts[item.id] = { ...output.artifact, sources };
+          if (item.tool === "kb_submit_revision" && output?.effective === true)
+            turn.revisions[item.id] = { kbId: output.kbId, slug: output.slug, versionId: output.versionId, effective: true };
+        } catch { /* 工具错误不算产物或修订。 */ }
       }
     }
     if (item.type === "agentMessage" && typeof item.text === "string") {

@@ -36,7 +36,7 @@ try {
     else if (command === 'job') result = await client.request(`/knowledge/job?id=${encodeURIComponent(kbId)}`);
     else if (command === 'maintain' && kbId && rest.join(' ').trim()) {
       const session = await client.request('/sessions',{});
-      result = await client.request('/messages',{ threadId:session.id,clientMessageId:randomUUID(),text:rest.join(' '),knowledge:{kbId,operation:'update'} });
+      result = await client.request('/messages',{ threadId:session.id,clientMessageId:randomUUID(),text:rest.join(' '),workflow:'knowledge-maintain',params:{kbId} });
     } else throw new Error('用法：npm run knowledge -- list | read <kbId> <slug> | search <kbId> <问题> | maintain <kbId> <要求> | index <kbId> | job <jobId>');
     console.log(JSON.stringify(result,null,2));
   }
