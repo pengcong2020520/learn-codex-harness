@@ -63,7 +63,7 @@ test("拒绝目录/文件符号链接、硬链接及被替换的 workspace", t =
 
 test("schema 与运行时共用参数定义，未知工具/命名空间/额外参数不会执行", async t => {
   const tools = await createToolService(installToolFixture(tempRoot(t)));
-  assert.equal(tools.specs.length, 5);
+  assert.equal(tools.specs.length, 6);
   assert.ok(tools.specs.every(spec => !spec.inputSchema.additionalProperties));
   for (const [tool, args] of [["bash", { command: "ls" }], ["search_web", { query: "x", command: "whoami" }],
     ["read_file", {}], ["list_files", { path: 1 }], ["write_file", { path: "drafts/a.md", content: null }],

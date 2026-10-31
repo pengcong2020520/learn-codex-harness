@@ -170,7 +170,8 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 - **派发**：服务端在用户原文之前加一段任务说明（目标、授权、验收），注入 Workflow 指定的 Skill；权限门为本任务签发 `grants`，任务结束即失效。追加消息沿用当前任务的授权，不能更换 Workflow。
 - **验收**：只看结果——`file-exists`、`format`、`sources-cited`、`wiki-effective`。不通过的任务记为 `needs-review` 并推送给客户端，不暂停队列、不自动重试。
 - **多步与确认点**：`steps` 只在权限要变或需要人拍板的地方切步骤，每步是同一会话里的一轮。`writes` 收窄本步可新建文件的位置（由权限门执行），`confirm` 表示本步完成后进入 `waiting`。确认用 `POST /tasks/confirm`（可带补充说明作为下一步输入）或 CLI `/confirm`；结束用 `POST /tasks/cancel` 或 `/reject`。等待期间普通对话照常执行。
-- **升级**：任务表新增 `workflow`、`params`、`checks`、`step`、`note` 列（迁移 003、004），升级后先运行 `npm run data:migrate`。
+- **提议**：Agent 在 `tools.allow` 里允许 `propose_task` 时，模型发现需要某个 Workflow 而当前任务没有授权，可以提议。提议记录为 `proposed`，不排队、不授权；用户确认（`/confirm`、工作台"执行提议"）后才在用户身份下核对授权并排队，`/reject` 忽略。每个会话最多 3 个待确认提议。需要数据层的任务身份。
+- **升级**：任务表新增 `workflow`、`params`、`checks`、`step`、`note`、`reason` 列（迁移 003–005），升级后先运行 `npm run data:migrate`。
 
 ## Skill 使用说明
 
@@ -209,8 +210,8 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 | `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
 | `/workflow` | 列出当前 Agent 启用的 Workflow |
 | `/workflow <ID> [键=值 ...] 内容` | 按 Workflow 提交新任务，结束后报告验收结果 |
-| `/confirm [补充说明]` | 确认等待中的 Workflow 步骤，进入下一步 |
-| `/reject` | 结束等待确认的 Workflow 任务 |
+| `/confirm [补充说明]` | 确认等待中的 Workflow 步骤，或执行 Agent 的任务提议 |
+| `/reject` | 结束等待确认的 Workflow 任务，或忽略 Agent 的提议 |
 | `/queue` | 查看排队任务 |
 | `/continue` | 继续暂停的尚未执行队列，不重发未确认任务 |
 | `/tools` | 查看当前可用工具 |

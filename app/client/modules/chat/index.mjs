@@ -6,8 +6,8 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /append-to ID 内容  指定目标 turn，避免多窗口时目标含糊
 /workflow           列出当前 Agent 启用的 Workflow
 /workflow ID [键=值 ...] 内容  按 Workflow 提交新任务，如 /workflow knowledge-maintain kbId=general 整理新资料
-/confirm [补充说明]  确认等待中的 Workflow 步骤，进入下一步
-/reject             结束等待确认的 Workflow 任务
+/confirm [补充说明]  确认等待中的 Workflow 步骤，或执行 Agent 的任务提议
+/reject             结束等待确认的 Workflow 任务，或忽略 Agent 的提议
 /queue              查看队列
 /tools              查看已加载工具和更新状态
 /memory             查看记忆配置和产物状态（不触发模型）
@@ -100,9 +100,10 @@ export async function runChat(api, terminal) {
         // Workflow 任务结束后报告一次验收结果；快照里的历史任务只记下，不重复刷屏。
         for (const job of queue.jobs) {
           const key = `${job.id}:${job.status}:${job.step || 0}`;
-          if (reported.has(key) || !(job.status === "waiting" || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
+          if (reported.has(key) || !(["waiting", "proposed"].includes(job.status) || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
           reported.add(key);
-          if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/reject 结束。`);
+          if (job.status === "proposed") terminal.write(`Agent 提议执行工作流 ${job.workflow}${job.params ? ` ${JSON.stringify(job.params)}` : ""}：${job.text}\n理由：${job.reason}\n/confirm [补充说明] 执行，/reject 忽略。确认前不会执行，也不授予权限。`);
+          else if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/reject 结束。`);
           else if (event.type !== "snapshot") terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
         }
       }
@@ -171,15 +172,16 @@ export async function runChat(api, terminal) {
     if (/^\/(confirm|reject)(?:\s|$)/.test(text)) {
       if (!current) return terminal.write("请先选择会话。");
       const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
-      const job = state.queue.jobs.find(item => item.status === "waiting");
-      if (!job) return terminal.write("当前会话没有等待确认的 Workflow 任务。");
+      const job = state.queue.jobs.find(item => ["waiting", "proposed"].includes(item.status));
+      if (!job) return terminal.write("当前会话没有等待确认的 Workflow 任务或提议。");
+      const proposal = job.status === "proposed";
       if (text.startsWith("/confirm")) {
         const note = text.slice(8).trim();
         await api.request("/tasks/confirm", { threadId: current.id, taskId: job.id, ...(note ? { text: note } : {}) });
-        return terminal.write(`已确认，工作流 ${job.workflow} 进入下一步。`);
+        return terminal.write(proposal ? `已接受提议，工作流 ${job.workflow} 已排队。` : `已确认，工作流 ${job.workflow} 进入下一步。`);
       }
       await api.request("/tasks/cancel", { threadId: current.id, taskId: job.id });
-      return terminal.write(`已结束工作流 ${job.workflow}；已保存的文件不受影响。`);
+      return terminal.write(proposal ? `已忽略提议（${job.workflow}）。` : `已结束工作流 ${job.workflow}；已保存的文件不受影响。`);
     }
     if (text === "/continue") {
       if (!current) return terminal.write("请先选择会话。");

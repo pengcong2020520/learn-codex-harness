@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
 import { runChecks, stepOf } from "../workflows/index.mjs";
@@ -144,7 +145,25 @@ export class MessageService {
     if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
     return { status: "completed", checks };
   }
-  // 用户确认等待中的任务，进入下一步；text 是可选的补充说明，作为下一步的输入。
+  // 模型在任务中提议另一个 workflow：只校验并记录为 proposed，不排队、不授权。由工具调用，context 来自权限门。
+  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("提议只接受 workflow、params、text 与 reason。", 400);
+    const threadId = requireId(context.threadId, "会话 ID");
+    const workflow = this.resolve({ id, params });
+    if (workflow.id === "chat") throw new AppError("普通对话不需要提议，直接回答即可。", 400);
+    const body = requireText(text), why = requireText(reason).slice(0, 500);
+    return this.serial(threadId, async () => {
+      if ((await this.store.list(threadId)).filter(job => job.status === "proposed").length >= 3)
+        throw new AppError("本会话已有 3 个待确认的提议，请先等用户处理。", 429);
+      const job = { id: randomUUID(), threadId, userId: context.userId, text: body, mode: "enqueue", targetTurnId: null,
+        workflow: workflow.id, params: workflow.params, step: 0, status: "proposed", reason: why,
+        agentHash: this.config.agent?.descriptor?.hash, createdAt: Date.now() };
+      await this.store.create(job);
+      await this.publish(threadId);
+      return { taskId: job.id, status: "proposed", workflow: workflow.id, note: "已提议，等待用户确认；确认前不会执行，也不授予任何权限。" };
+    });
+  }
+  // 用户确认：等待中的多步任务进入下一步；模型提议的任务在用户身份下核对授权后排队。text 是可选的补充说明。
   async confirm({ threadId, taskId, text, ...rest }) {
     if (Object.keys(rest).length) throw new AppError("确认只接受 threadId、taskId 与 text。", 400);
     requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
@@ -153,7 +172,12 @@ export class MessageService {
     return this.serial(threadId, async () => {
       const job = await this.job(taskId);
       if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
-      if (!(await this.store.patch(taskId, { status: "queued", step: (job.step || 0) + 1, note }, ["waiting"])))
+      if (job.status === "proposed") {
+        const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });
+        if (workflow.grants.length) this.gate?.authorize(workflow.grants);
+      }
+      const fields = job.status === "proposed" ? { status: "queued", note } : { status: "queued", step: (job.step || 0) + 1, note };
+      if (!(await this.store.patch(taskId, fields, ["waiting", "proposed"])))
         throw new AppError("只有等待确认的任务可以继续。", 409);
       await this.publish(threadId);
       await this.wake(threadId);
@@ -168,8 +192,8 @@ export class MessageService {
     return this.serial(threadId, async () => {
       const job = await this.job(taskId);
       if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
-      if (!(await this.store.patch(taskId, { status: "cancelled" }, ["queued", "waiting"])))
-        throw new AppError("只有排队中或等待确认的任务可以结束。", 409);
+      if (!(await this.store.patch(taskId, { status: "cancelled" }, ["queued", "waiting", "proposed"])))
+        throw new AppError("只有排队中、等待确认或提议中的任务可以结束。", 409);
       await this.publish(threadId);
       return this.publicJob(await this.job(taskId));
     });
@@ -217,7 +241,8 @@ export class MessageService {
       const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
       const step = stepOf(workflow, job.step || 0);
       // 第二步起不重发原文：会话历史里已有原始要求，这里只说明用户已确认，并带上补充说明。
-      let input = step.index ? `用户已确认上一步，请继续。${job.note ? `\n用户补充：${job.note}` : ""}` : job.text;
+      const extra = job.note ? `\n用户补充：${job.note}` : "";
+      let input = step.index ? `用户已确认上一步，请继续。${extra}` : `${job.text}${extra}`;
       if (job.mode === "append") {
         const original = this.sessions
           .getTurn(threadId, job.targetTurnId)

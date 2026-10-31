@@ -2,7 +2,7 @@ import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
-const columns = `$2::uuid AS "userId",t.workflow,t.params,t.checks,t.step,t.note,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
+const columns = `$2::uuid AS "userId",t.workflow,t.params,t.checks,t.step,t.note,t.reason,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
   t.turn_id AS "turnId",t.agent_hash AS "agentHash",t.status,t.error,t.created_at::float8 AS "createdAt"`;
 const owned = `t.instance_id=$1 AND EXISTS(SELECT 1 FROM agent_data.conversations c
   WHERE c.instance_id=t.instance_id AND c.id=t.thread_id AND c.owner_id=$2)`;
@@ -61,8 +61,8 @@ export class PostgresJobs extends Repository {
       if (count.rows[0].n >= 100)
         throw new AppError("本会话最多保留 100 条待执行消息。", 429);
       await this.query(
-        `INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error,workflow,params)
-        SELECT $1,$3,$4,$5,$6,$7,NULL,$8,'queued',$9,NULL,$10,$11 WHERE $2::uuid IS NOT NULL`,
+        `INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error,workflow,params,reason)
+        SELECT $1,$3,$4,$5,$6,$7,NULL,$8,$12,$9,NULL,$10,$11,$13 WHERE $2::uuid IS NOT NULL`,
         [
           job.id,
           job.threadId,
@@ -73,10 +73,13 @@ export class PostgresJobs extends Repository {
           job.createdAt,
           job.workflow || "chat",
           job.params ? JSON.stringify(job.params) : null,
+          job.status === "proposed" ? "proposed" : "queued",
+          job.reason || null,
         ],
         client,
       );
-      await this.wake(job.threadId, client);
+      // 提议的任务等用户确认，不唤醒调度。
+      if (job.status !== "proposed") await this.wake(job.threadId, client);
       await this.query(
         `UPDATE agent_data.conversations SET name=CASE WHEN name='' THEN $4 ELSE name END,updated_at=now()
         WHERE instance_id=$1 AND owner_id=$2 AND id=$3`,

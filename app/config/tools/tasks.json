@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "module": "server/modules/tools/tasks.mjs",
+  "tools": [
+    {
+      "name": "propose_task",
+      "label": "提议任务",
+      "description": "当用户的请求需要某个工作流（见资源规则里的 workflows），而当前任务没有相应授权时，向用户提议创建该任务。提议不会自动执行，也不授予任何权限；只有用户确认后才会排队执行。text 写清要做什么，reason 说明为什么需要这个工作流。",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$" },
+          "params": { "type": "object", "maxProperties": 10, "additionalProperties": { "type": "string", "maxLength": 200 } },
+          "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        },
+        "required": ["workflow", "text", "reason"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -20,7 +20,7 @@ export class TestJobs {
     this.state.jobs.push({
       ...job,
       turnId: null,
-      status: "queued",
+      status: job.status === "proposed" ? "proposed" : "queued",
       error: null,
     });
   }

@@ -68,7 +68,9 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
         return result;
       }])) } : localFiles;
     const boundary = new ExecutionBoundary();
-    const tools = new ToolManager({ config, runtime, files, agent, gate, knowledge, boundary, log: safeLog, redact });
+    // 提议任务的工具在消息服务就绪后才可用；之前调用会明确报错。
+    const tasks = { propose: (context, args) => { if (!messages) throw new Error("任务服务尚未就绪。"); return messages.propose(context, args); } };
+    const tools = new ToolManager({ config, runtime, files, agent, gate, knowledge, tasks, boundary, log: safeLog, redact });
     lifecycle.defer(() => tools.close());
     await tools.open();
     installSkills(agent, prepareCodexConfig(config, tools.configuration()).home);

@@ -1,6 +1,6 @@
 # Skill 与 Workflow 设计
 
-**状态：** 设计确认，按第 8 节的 PR 顺序实施；第 0 步验证与第 1–4 个 PR 已完成。
+**状态：** 设计确认，按第 8 节的 PR 顺序实施；第 0 步验证与第 1–5 个 PR 已完成。
 **日期：** 2026-10-31
 **锁定版本：** Codex 0.154.0
 
@@ -164,12 +164,17 @@ POST /messages { threadId, text, workflow, params }
 
 ### 5.5 让模型自己决定"该启动哪个 workflow"
 
-新增工具 `propose_task({ workflow, params, reason })`：模型可以提议，但不能自己批准。调用后生成一条状态为 `proposed` 的任务并推送给客户端；用户确认后才按 workflow 授权排队执行。普通对话里需要维护知识库时，模型不必再让用户自己去找入口。
+新增工具 `propose_task({ workflow, params, text, reason })`：模型可以提议，但不能自己批准。调用后生成一条状态为 `proposed` 的任务并推送给客户端；用户确认后才在**用户身份**下核对授权并排队执行，可以附补充说明。普通对话里需要维护知识库时，模型不必再让用户自己去找入口。
+
+- 资源规则里列出 Agent 启用的 workflow（id、名称、参数名、步数），模型据此提议。
+- 提议工具需要权限门提供的会话身份（数据层模式）；每个会话最多 3 个待确认提议。
+- Agent 必须在 `tools.allow` 里显式允许 `propose_task`。
 
 ### 5.6 任务记录与兼容
 
 - 迁移 `003-workflows.sql`：`tasks` 新增 `workflow`（默认 `chat`）、`params`、`checks`，状态增加 `needs-review`，把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
-- 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。`proposed` 随 `propose_task` 加入。
+- 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。
+- 迁移 `005-task-proposals.sql`：新增 `reason`（提议理由），状态增加 `proposed`。
 - 消息里旧的 `knowledge` 字段兼容一个版本，映射为 `knowledge-maintain`。
 - workflow 纳入 Agent 描述符，`CONTRACTS.agent` 升为 3。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
 

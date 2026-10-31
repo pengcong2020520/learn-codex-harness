@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineWorkflows, describe, runChecks } from "../server/modules/workflows/index.mjs";
 import { PermissionGate } from "../server/modules/permissions/index.mjs";
+import { createTools as createTaskTools } from "../server/modules/tools/tasks.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { loadServerConfig, createLogRedactor } from "../server/modules/config/index.mjs";
 import { prepareRun } from "../server/modules/codex/runtime.mjs";
@@ -227,4 +228,46 @@ test("多步 workflow：确认点停在 waiting，期间可以普通对话；确
   assert.equal((await r.messages.cancel({ threadId: r.session.id, taskId: "a2" })).status, "cancelled");
   await assert.rejects(r.messages.confirm({ threadId: r.session.id, taskId: "a2" }), error => error.status === 409);
   await assert.rejects(r.messages.confirm({ threadId: r.session.id, taskId: "a2", extra: 1 }), error => error.status === 400);
+});
+
+test("提议任务：只记录为 proposed，不排队、不授权；用户确认时在用户身份下授权，补充说明进入输入；可以忽略；有上限", async t => {
+  const authorized = [];
+  const gate = { submission: () => null, run: (principal, operation) => operation(), end() {}, start() {},
+    authorize: grants => { authorized.push(grants); return grants; } };
+  const r = await messageRig(t, [{ id: "knowledge-maintain" }, report], gate);
+  const context = { threadId: r.session.id, userId: undefined };
+  const proposed = await r.messages.propose(context, { workflow: "knowledge-maintain", params: { kbId: "general" }, text: "把新资料整理进 Wiki", reason: "用户要求更新知识库，普通对话没有维护权限" });
+  assert.equal(proposed.status, "proposed");
+  const job = r.store.get(proposed.taskId);
+  assert.deepEqual([job.status, job.workflow, job.params, job.reason], ["proposed", "knowledge-maintain", { kbId: "general" }, "用户要求更新知识库，普通对话没有维护权限"]);
+  assert.deepEqual(authorized, [], "提议时不授权");
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(r.rpc.calls.filter(call => call.method === "turn/start").length, 0, "提议不会自动执行");
+  for (const [args, status] of [[{ workflow: "chat", text: "x", reason: "y" }, 400], [{ workflow: "missing", text: "x", reason: "y" }, 403],
+    [{ workflow: "knowledge-maintain", params: { kbId: "docs" }, text: "x", reason: "y" }, 403], [{ workflow: "report", text: "x" }, 400],
+    [{ workflow: "report", text: "x", reason: "y", status: "queued" }, 400]])
+    await assert.rejects(r.messages.propose(context, args), error => error.status === status, JSON.stringify(args));
+  await r.messages.confirm({ threadId: r.session.id, taskId: proposed.taskId, text: "只整理 inputs/general/new.md" });
+  assert.deepEqual(authorized, [[{ type: "knowledge.update", kbId: "general" }]], "确认时在用户身份下核对授权");
+  const input = await r.started(1);
+  assert.match(input[0].text, /【工作流】知识库维护/);
+  assert.equal(input[1].text, "把新资料整理进 Wiki\n用户补充：只整理 inputs/general/new.md");
+  r.rpc.finish(r.session.id);
+  const ignored = await r.messages.propose(context, { workflow: "report", text: "写周报", reason: "用户提到要汇报" });
+  assert.equal((await r.messages.cancel({ threadId: r.session.id, taskId: ignored.taskId })).status, "cancelled");
+  for (let i = 0; i < 3; i++) await r.messages.propose(context, { workflow: "report", text: `报告 ${i}`, reason: "测试上限" });
+  await assert.rejects(r.messages.propose(context, { workflow: "report", text: "再来", reason: "测试上限" }), error => error.status === 429);
+  await assert.rejects(createTaskTools({ tasks: r.messages }).propose_task({ workflow: "report", text: "x", reason: "y" }, {}), /会话身份/,
+    "没有权限门提供的会话身份时不能提议");
+});
+
+test("资源规则列出可提议的 workflow；没有允许 propose_task 时不提示提议", t => {
+  const root = installToolFixture(tempRoot(t), { knowledge: true, article: true });
+  const file = path.join(root, "agents/writing/agent.json"), original = fs.readFileSync(file, "utf8");
+  const agent = new AgentDefinition(root);
+  assert.match(agent.instructions, /"workflows":\[\{"id":"knowledge-maintain","label":"知识库维护","params":\["kbId"\],"steps":1\},\{"id":"write-article","label":"写文章","params":\[\],"steps":2\}\]/);
+  assert.match(agent.instructions, /用 propose_task 向用户提议/);
+  const value = JSON.parse(original); value.agent.tools.allow = value.agent.tools.allow.filter(name => name !== "propose_task");
+  fs.writeFileSync(file, JSON.stringify(value));
+  assert.doesNotMatch(new AgentDefinition(root).instructions, /propose_task/);
 });

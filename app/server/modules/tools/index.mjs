@@ -13,8 +13,8 @@ const MCP_NAME = "project_tools";
 
 // 刷新会影响多个 Thread；全项目共用一个更新边界，不在任务中途换工具。
 export class ToolManager {
-  constructor({ config, runtime, log, redact, files, agent, gate, knowledge, boundary = new ExecutionBoundary() }) {
-    Object.assign(this, { config, runtime, log, redact, files, agent, gate, knowledge, boundary });
+  constructor({ config, runtime, log, redact, files, agent, gate, knowledge, tasks, boundary = new ExecutionBoundary() }) {
+    Object.assign(this, { config, runtime, log, redact, files, agent, gate, knowledge, tasks, boundary });
     this.configFile = codexPaths(config.root).configFile;
     this.token = randomBytes(32).toString("hex");
     this.status = "loading"; this.error = null;
@@ -35,7 +35,7 @@ export class ToolManager {
   dynamicTools() { return this.gate ? this.registry.specs.map(({ name, description, inputSchema }) => ({ type: 'function', name, description, inputSchema })) : undefined; }
   async build(source) {
     const snapshotDir = fs.mkdtempSync(path.join(this.runtime.runDir, "tools-"));
-    return createToolService(this.config.root, { source, snapshotDir, files: this.files, agent: this.agent, gate: this.gate, knowledge: this.knowledge,
+    return createToolService(this.config.root, { source, snapshotDir, files: this.files, agent: this.agent, gate: this.gate, knowledge: this.knowledge, tasks: this.tasks,
       workspaceDir: this.runtime.workspaceDir, nodeEnv: this.config.launch.env.NODE_ENV || "development" });
   }
   connection(registry) {

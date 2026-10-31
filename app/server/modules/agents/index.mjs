@@ -132,7 +132,12 @@ export class AgentDefinition {
     if (agent.workflows && definition.schemaVersion !== "1.2") throw new Error("workflows 需要 schemaVersion 1.2。");
     this.workflows = defineWorkflows(agent, { writable: [this.outputs.directory, ...this.sources.filter(source => source.actions.includes("create")).map(source => source.locator)] });
     this.expected = this.sourceHash();
-    this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs })}`;
+    // 模型需要知道有哪些 workflow 才能提议；它们的额外授权只在用户确认后的任务里生效。
+    const workflows = this.workflows.list().filter(item => item.id !== "chat")
+      .map(({ id, label, params, steps }) => ({ id, label, params: params ? Object.keys(params.properties) : [], steps: steps ? steps.length : 1 }));
+    const proposing = agent.tools.allow.includes("propose_task") && workflows.length
+      ? "\n需要上面的 workflow 而当前任务没有相应授权时，用 propose_task 向用户提议；用户确认前不会执行。" : "";
+    this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs, ...(workflows.length ? { workflows } : {}) })}${proposing}`;
     freeze(this.sources); freeze(this.skills);
   }
   sourceHash() {
