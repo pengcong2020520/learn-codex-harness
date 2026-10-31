@@ -1,0 +1,114 @@
+{
+  "codexVersion": "0.154.0",
+  "node": "v24.17.0",
+  "at": "2026-10-08T05:12:50.964Z",
+  "tests": {
+    "s6_multi_connection": {
+      "bResumeSameThread": "ok",
+      "turnStatus": "completed",
+      "toolCallDeliveredToA": [
+        {
+          "requestId": 0,
+          "callId": "c6d60a99-5763-4068-8c6c-ff2a370df6ab"
+        }
+      ],
+      "toolCallDeliveredToB": [
+        {
+          "requestId": 0,
+          "callId": "c6d60a99-5763-4068-8c6c-ff2a370df6ab"
+        }
+      ],
+      "sameRequestIdBroadcast": true,
+      "modelGotOutput": "reply-from-B",
+      "bReceivedNotifications": [
+        "thread/tokenUsage/updated",
+        "thread/goal/cleared",
+        "thread/status/changed",
+        "turn/started",
+        "item/started",
+        "item/completed",
+        "account/rateLimits/updated",
+        "item/agentMessage/delta",
+        "turn/completed"
+      ],
+      "secondTurnAfterBDisconnect": "completed",
+      "otherUserC_receivedEventsOfAThread": [
+        "thread/status/changed",
+        "thread/status/changed"
+      ],
+      "otherUserC_threadListContainsA": true,
+      "otherUserC_threadRead": "可以读取 A 的 Thread",
+      "otherUserC_threadResume": "可以订阅 A 的 Thread"
+    },
+    "s7_process_per_user_cost": {
+      "processes": 4,
+      "each": [
+        {
+          "openMs": 84,
+          "threadStartMs": 10,
+          "rssMb": 112
+        },
+        {
+          "openMs": 71,
+          "threadStartMs": 10,
+          "rssMb": 112
+        },
+        {
+          "openMs": 74,
+          "threadStartMs": 9,
+          "rssMb": 112
+        },
+        {
+          "openMs": 70,
+          "threadStartMs": 10,
+          "rssMb": 112
+        }
+      ],
+      "cpuCount": 10,
+      "totalMemMb": 24576
+    },
+    "s8_mcp_hot_reload": {
+      "turn1_initial": {
+        "status": "completed",
+        "hubTools": [
+          "mcp__hubhub_alpha"
+        ],
+        "modelRequests": 1
+      },
+      "turn2_fileChanged_noReload": {
+        "status": "completed",
+        "hubTools": [
+          "mcp__hubhub_alpha"
+        ],
+        "modelRequests": 1
+      },
+      "reload": "ok",
+      "turn3_sameThread_afterReload": {
+        "status": "completed",
+        "hubTools": [
+          "mcp__hubhub_alpha"
+        ],
+        "modelRequests": 1
+      },
+      "configChangedReload": "ok",
+      "turn3b_sameThread_afterConfigChange": {
+        "status": "completed",
+        "hubTools": [
+          "mcp__hubhub_beta"
+        ],
+        "modelRequests": 1
+      },
+      "newThread_afterReload": {
+        "status": "completed",
+        "hubTools": [
+          "mcp__hubhub_beta"
+        ],
+        "modelRequests": 1
+      },
+      "sameThread_callRemovedTool": {
+        "status": "completed",
+        "modelSawOutput": "unsupported call: mcp__hubhub_alpha"
+      }
+    }
+  }
+}

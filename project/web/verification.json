@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-08",
+  "scope": "HTML course and local Web workbench",
+  "automated": {
+    "project": {
+      "passed": 141
+    },
+    "demo3": {
+      "passed": 140
+    },
+    "demo4": {
+      "passed": 139
+    },
+    "demo5": {
+      "passed": 141
+    },
+    "web_bridge": {
+      "passed": 6
+    },
+    "real_data_integration": {
+      "passed": 13,
+      "skipped": 1,
+      "skip_reason": "Optional Chroma integration not enabled; RAG backend not changed"
+    }
+  },
+  "passed_total": 580,
+  "browser": {
+    "course_questions": 15,
+    "all_correct_path": "passed",
+    "incorrect_unanswered_reset": "passed",
+    "group_chat_reset": "passed",
+    "data_flow_step": "passed",
+    "workbench": [
+      "submit task and view IDs/output",
+      "import UTF-8 md source",
+      "maintain Wiki task",
+      "search and read Wiki",
+      "read file and resource/version",
+      "render script text without execution",
+      "submit index and query status",
+      "explicit offline and teaching preview states",
+      "Demo4 knowledge unavailable; Demo5 knowledge controls available"
+    ],
+    "model": "UI mock upstream for browser tests; real Codex + PG + Redis and local mock Responses provider for end-to-end API tests",
+    "viewports_observed": [
+      1280,
+      1440
+    ],
+    "console_errors": 0
+  },
+  "limitations": [
+    "No remote model or semantic embedding quality evaluation",
+    "No public multiuser auth or deployment",
+    "Demo1/2 remain CLI; workbench provides protocol teaching only"
+  ],
+  "artifacts": [
+    "public/course/index.html",
+    "public/app/index.html"
+  ]
+}

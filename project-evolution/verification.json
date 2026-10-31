@@ -1,0 +1,89 @@
+{
+  "verifiedAt": "2026-10-03T17:18:20.873Z",
+  "modelProvider": "local simulated Responses",
+  "embeddingProvider": "local deterministic 3D fixture",
+  "semanticQualityVerified": false,
+  "docs": [
+    "README.md",
+    "demo1/README.md",
+    "demo2/README.md",
+    "demo3/README.md",
+    "demo4/README.md",
+    "demo5/README.md",
+    "demo4/docs/data-layer.md",
+    "demo3/docs/tools.md",
+    "demo5/docs/knowledge-implementation.md"
+  ],
+  "checks": [
+    {
+      "directory": "demo1",
+      "command": "npm test",
+      "passed": true,
+      "tests": 6,
+      "skipped": 0
+    },
+    {
+      "directory": "demo2",
+      "command": "npm test",
+      "passed": true,
+      "tests": 45,
+      "skipped": 0
+    },
+    {
+      "directory": "demo3",
+      "command": "npm test",
+      "passed": true,
+      "tests": 140,
+      "skipped": 0
+    },
+    {
+      "directory": "demo4",
+      "command": "npm test",
+      "passed": true,
+      "tests": 139,
+      "skipped": 0
+    },
+    {
+      "directory": "demo5",
+      "command": "npm test",
+      "passed": true,
+      "tests": 141,
+      "skipped": 0
+    },
+    {
+      "directory": ".",
+      "command": "/usr/local/bin/node --test tests/evolution.integration.mjs",
+      "passed": true,
+      "tests": 2,
+      "skipped": 0
+    },
+    {
+      "directory": "demo3",
+      "command": "npm run test:codex-tools",
+      "passed": true,
+      "tests": 2,
+      "skipped": 0
+    },
+    {
+      "directory": "demo3",
+      "command": "npm run test:codex-memory",
+      "passed": true,
+      "tests": 2,
+      "skipped": 0
+    },
+    {
+      "directory": "demo4",
+      "command": "npm run test:data",
+      "passed": true,
+      "tests": 9,
+      "skipped": 0
+    },
+    {
+      "directory": "demo5",
+      "command": "npm run test:rag",
+      "passed": true,
+      "tests": 13,
+      "skipped": 0
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1.1",
+  "agent": {
+    "id": "writing-assistant",
+    "version": "1.1.0",
+    "instructions": "roles/writing-assistant.md",
+    "skills": [],
+    "tools": {
+      "allow": [
+        "list_files",
+        "read_file",
+        "write_file",
+        "search_web",
+        "read_webpage",
+        "kb_list",
+        "kb_read",
+        "kb_search",
+        "kb_submit_revision"
+      ]
+    },
+    "dataBindings": [
+      {
+        "sourceRef": "originals",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "research",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "drafts",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "articles",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      }
+    ],
+    "executionRef": "restricted-local",
+    "memory": {
+      "use": false,
+      "contribute": false
+    },
+    "outputs": {
+      "directory": "outputs",
+      "formats": [
+        "md",
+        "txt"
+      ],
+      "writeMode": "create-only",
+      "requiredChecks": [
+        "file-exists",
+        "format"
+      ]
+    },
+    "knowledge": [
+      {
+        "kbId": "general",
+        "mode": "wiki",
+        "actions": [
+          "read",
+          "update",
+          "index"
+        ]
+      }
+    ]
+  },
+  "bindings": {
+    "workspaceDir": "workspace",
+    "skills": {},
+    "sources": {
+      "originals": {
+        "type": "files",
+        "root": "inputs",
+        "readOnly": true
+      },
+      "research": {
+        "type": "files",
+        "root": "research"
+      },
+      "drafts": {
+        "type": "files",
+        "root": "drafts"
+      },
+      "articles": {
+        "type": "files",
+        "root": "outputs"
+      }
+    },
+    "executions": {
+      "restricted-local": {
+        "sandbox": "read-only",
+        "approvalPolicy": "never",
+        "nativeShell": false,
+        "nativeFileWrite": false
+      }
+    },
+    "knowledgeBases": {
+      "general": {
+        "sourceRoot": "inputs/general",
+        "wikiRoot": "research/general/wiki"
+      }
+    }
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "date": "2026-10-08T02:24:16.886Z",
+  "model": "deepseek-flash",
+  "engine": "0.154.0",
+  "realModel": true,
+  "isolated": true,
+  "examples": [
+    {
+      "example": "writing",
+      "passed": true,
+      "checks": [
+        "config + real PG/Redis + Codex readiness",
+        "real model read → write → PG artifact provenance",
+        "implementation comment → restart → resume same Thread → new Turn with verified answer",
+        "scoped maintenance → real Wiki submission → authorized read",
+        "client identity spoof rejected",
+        "every tool call carries trusted user/thread/turn"
+      ],
+      "calls": [
+        {
+          "tool": "read_file",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-63a2-72f2-8337-cd608b640699"
+        },
+        {
+          "tool": "write_file",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-63a2-72f2-8337-cd608b640699"
+        },
+        {
+          "tool": "read_file",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-91c4-7562-a20f-e5fbc623cdbd"
+        },
+        {
+          "tool": "read_file",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-ac70-7eb0-a33d-711f457e1d3e"
+        },
+        {
+          "tool": "kb_list",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-ac70-7eb0-a33d-711f457e1d3e"
+        },
+        {
+          "tool": "kb_submit_revision",
+          "userId": "9ebe3c4d-2957-4093-8218-0055b62e70bb",
+          "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+          "turnId": "01a11953-ac70-7eb0-a33d-711f457e1d3e"
+        }
+      ],
+      "threadId": "01a11953-615b-7f20-b5cc-8df454f50532",
+      "turnIds": [
+        "01a11953-63a2-72f2-8337-cd608b640699",
+        "01a11953-91c4-7562-a20f-e5fbc623cdbd",
+        "01a11953-ac70-7eb0-a33d-711f457e1d3e"
+      ],
+      "artifactHash": "52e802423171e472a6166a019ff31b847b35466f42f943c3b8cfeefc638a6c28"
+    },
+    {
+      "example": "customer-support",
+      "passed": true,
+      "checks": [
+        "config + real PG/Redis + Codex readiness",
+        "real model read → write → PG artifact provenance",
+        "implementation comment → restart → resume same Thread → new Turn with verified answer",
+        "scoped maintenance → real Wiki submission → authorized read",
+        "client identity spoof rejected",
+        "every tool call carries trusted user/thread/turn"
+      ],
+      "calls": [
+        {
+          "tool": "read_file",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-08c4-7880-9073-289f509a0636"
+        },
+        {
+          "tool": "write_file",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-08c4-7880-9073-289f509a0636"
+        },
+        {
+          "tool": "read_file",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-33a9-7e42-95c9-7a678ce59268"
+        },
+        {
+          "tool": "read_file",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-4e48-75e0-b946-1f13a67736c7"
+        },
+        {
+          "tool": "kb_list",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-4e48-75e0-b946-1f13a67736c7"
+        },
+        {
+          "tool": "kb_submit_revision",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-4e48-75e0-b946-1f13a67736c7"
+        },
+        {
+          "tool": "kb_read",
+          "userId": "eaa41c23-cef1-40b2-9021-b35b7d86e787",
+          "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+          "turnId": "01a11954-4e48-75e0-b946-1f13a67736c7"
+        }
+      ],
+      "threadId": "01a11954-065b-76a3-9004-d01bc6011f13",
+      "turnIds": [
+        "01a11954-08c4-7880-9073-289f509a0636",
+        "01a11954-33a9-7e42-95c9-7a678ce59268",
+        "01a11954-4e48-75e0-b946-1f13a67736c7"
+      ],
+      "artifactHash": "fbdc03ef4d7e6a00864d70d91893cd086490c50e12af237cc7ef968265cb9ab5"
+    }
+  ]
+}

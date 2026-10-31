@@ -1,0 +1,21 @@
+{
+  "stage": 5,
+  "name": "知识层与统一权限门禁",
+  "snapshotDate": "2026-10-04",
+  "source": "../../project",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".DS_Store",
+    ".data",
+    ".env",
+    ".git",
+    ".runs",
+    "node_modules",
+    "output",
+    "workspace"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  }
+}

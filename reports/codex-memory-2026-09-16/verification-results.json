@@ -1,0 +1,209 @@
+{
+  "scope": "Read-only static source assertions and schema exported by installed binary; no LLM memory execution, no Rust test execution, no personal memory access.",
+  "releaseCommit": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+  "currentCommit": "4701aa4b4239c70063ab6f2fcb835324f9c109f4",
+  "passed": 50,
+  "total": 50,
+  "checks": [
+    {
+      "name": "release: default MAX_ROLLOUTS_PER_STARTUP=2",
+      "passed": true
+    },
+    {
+      "name": "release: default MAX_ROLLOUT_AGE_DAYS=10",
+      "passed": true
+    },
+    {
+      "name": "release: default MIN_ROLLOUT_IDLE_HOURS=6",
+      "passed": true
+    },
+    {
+      "name": "release: default MIN_RATE_LIMIT_REMAINING_PERCENT=25",
+      "passed": true
+    },
+    {
+      "name": "release: default MAX_RAW_MEMORIES_FOR_CONSOLIDATION=256",
+      "passed": true
+    },
+    {
+      "name": "release: default MAX_UNUSED_DAYS=30",
+      "passed": true
+    },
+    {
+      "name": "release: memory feature defaults off",
+      "passed": true
+    },
+    {
+      "name": "release: read/write on but dedicated tools off after feature enabled",
+      "passed": true
+    },
+    {
+      "name": "release: automatic candidates exclude Exec source",
+      "passed": true
+    },
+    {
+      "name": "release: exec uses Exec source",
+      "passed": true
+    },
+    {
+      "name": "release: memory reading has feature/use gate",
+      "passed": true
+    },
+    {
+      "name": "release: dedicated tools are separately gated",
+      "passed": true
+    },
+    {
+      "name": "release: startup excludes ephemeral and subagents",
+      "passed": true
+    },
+    {
+      "name": "release: summary injection token cap 2500",
+      "passed": true
+    },
+    {
+      "name": "release: database selection requires enabled memory mode",
+      "passed": true
+    },
+    {
+      "name": "release: dedicated search uses text contains",
+      "passed": true
+    },
+    {
+      "name": "release: ad-hoc note creates new file without overwrite",
+      "passed": true
+    },
+    {
+      "name": "release: actual caller triggers on newly started nonempty turn",
+      "passed": true
+    },
+    {
+      "name": "release: TUI settings persist use/generate config",
+      "passed": true
+    },
+    {
+      "name": "release: TUI generation setting also updates current thread",
+      "passed": true
+    },
+    {
+      "name": "current: default MAX_ROLLOUTS_PER_STARTUP=2",
+      "passed": true
+    },
+    {
+      "name": "current: default MAX_ROLLOUT_AGE_DAYS=10",
+      "passed": true
+    },
+    {
+      "name": "current: default MIN_ROLLOUT_IDLE_HOURS=6",
+      "passed": true
+    },
+    {
+      "name": "current: default MIN_RATE_LIMIT_REMAINING_PERCENT=25",
+      "passed": true
+    },
+    {
+      "name": "current: default MAX_RAW_MEMORIES_FOR_CONSOLIDATION=256",
+      "passed": true
+    },
+    {
+      "name": "current: default MAX_UNUSED_DAYS=30",
+      "passed": true
+    },
+    {
+      "name": "current: memory feature defaults off",
+      "passed": true
+    },
+    {
+      "name": "current: read/write on but dedicated tools off after feature enabled",
+      "passed": true
+    },
+    {
+      "name": "current: automatic candidates exclude Exec source",
+      "passed": true
+    },
+    {
+      "name": "current: exec uses Exec source",
+      "passed": true
+    },
+    {
+      "name": "current: memory reading has feature/use gate",
+      "passed": true
+    },
+    {
+      "name": "current: dedicated tools are separately gated",
+      "passed": true
+    },
+    {
+      "name": "current: startup excludes ephemeral and subagents",
+      "passed": true
+    },
+    {
+      "name": "current: summary injection token cap 2500",
+      "passed": true
+    },
+    {
+      "name": "current: database selection requires enabled memory mode",
+      "passed": true
+    },
+    {
+      "name": "current: dedicated search uses text contains",
+      "passed": true
+    },
+    {
+      "name": "current: ad-hoc note creates new file without overwrite",
+      "passed": true
+    },
+    {
+      "name": "current: actual caller triggers on newly started nonempty turn",
+      "passed": true
+    },
+    {
+      "name": "current: TUI settings persist use/generate config",
+      "passed": true
+    },
+    {
+      "name": "current: TUI generation setting also updates current thread",
+      "passed": true
+    },
+    {
+      "name": "release: no memory version config",
+      "passed": true
+    },
+    {
+      "name": "current: memory version defaults V1",
+      "passed": true
+    },
+    {
+      "name": "current: V2 directory is memories_v2",
+      "passed": true
+    },
+    {
+      "name": "current: V2 summary still uses v1 format marker",
+      "passed": true
+    },
+    {
+      "name": "current: memory/status is experimental",
+      "passed": true
+    },
+    {
+      "name": "installed binary schema: thread/memoryMode/set present",
+      "passed": true
+    },
+    {
+      "name": "installed binary schema: memory/reset present",
+      "passed": true
+    },
+    {
+      "name": "installed binary schema: memory/status absent",
+      "passed": true
+    },
+    {
+      "name": "project: CLI and TS SDK pinned 0.154.0",
+      "passed": true
+    },
+    {
+      "name": "installed TS SDK invokes exec",
+      "passed": true
+    }
+  ]
+}

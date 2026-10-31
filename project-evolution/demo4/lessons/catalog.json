@@ -1,0 +1,68 @@
+[
+  {
+    "id": "d4-persistence",
+    "demo": 4,
+    "title": "把产品状态落进事务",
+    "question": "服务重启后，凭什么确定排队项和会话归属仍然可信？",
+    "command": "npm run lesson -- d4-persistence",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "observations": [
+      "迁移重复执行保持幂等，事务失败回滚",
+      "归属约束与单实例执行器锁受到真实 PG 断言",
+      "真实服务链路重启后仍能检查持久任务状态"
+    ],
+    "why": "PostgreSQL 保存产品元数据和任务原文；它不替代 Codex 的完整 Thread 历史。",
+    "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+    "args": [
+      "scripts/test-data.mjs"
+    ],
+    "requiredFlag": "--integration",
+    "integrationCommand": "npm run lesson -- d4-persistence --integration",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+  },
+  {
+    "id": "d4-dispatch",
+    "demo": 4,
+    "title": "提交与唤醒分开负责",
+    "question": "Redis 丢失一次唤醒，会不会连任务本身也丢失？",
+    "command": "npm run lesson -- d4-dispatch",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "observations": [
+      "任务提交与 outbox 同事务",
+      "重复投递只成功领取一次",
+      "Redis 失败后 outbox 可补投"
+    ],
+    "why": "PG 是任务事实来源，Redis Set 中的 Thread ID 负责唤醒；测试不宣称端到端 exactly-once。",
+    "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+    "args": [
+      "scripts/test-data.mjs"
+    ],
+    "requiredFlag": "--integration",
+    "integrationCommand": "npm run lesson -- d4-dispatch --integration",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+  },
+  {
+    "id": "d4-versions",
+    "demo": 4,
+    "title": "稳定资料 ID 与变化的版本",
+    "question": "资料正文变了，旧引用为何不能继续当有效证据？",
+    "command": "npm run lesson -- d4-versions",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "observations": [
+      "更新版本保留稳定资源 ID",
+      "移动不改变资料 ID，旧版本引用被拒绝",
+      "外部改写或删除来源会使派生内容失效"
+    ],
+    "why": "路径、资料身份和内容版本分别解决定位、追踪与证据有效性。",
+    "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+    "args": [
+      "scripts/test-data.mjs"
+    ],
+    "requiredFlag": "--integration",
+    "integrationCommand": "npm run lesson -- d4-versions --integration",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+  }
+]

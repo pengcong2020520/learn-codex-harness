@@ -1,0 +1,66 @@
+{
+  "verifiedAt": "2026-10-08T05:17:06.647365+00:00",
+  "codex": "0.154.0",
+  "suites": [
+    {
+      "name": "unit",
+      "command": "npm test",
+      "tests": 148,
+      "pass": 148,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "data-rag",
+      "command": "CHROMA_TEST_BIN=<chroma> npm run test:rag",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "codex-tools",
+      "command": "npm run test:codex-tools",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "codex-memory",
+      "command": "npm run test:codex-memory",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "name": "protocol",
+      "command": "npm run test:protocol",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0
+    }
+  ],
+  "totalUniqueTests": 168,
+  "realModel": {
+    "model": "deepseek-flash",
+    "examples": 2,
+    "turns": 6,
+    "toolCalls": 13,
+    "report": "real-model-smoke.json"
+  },
+  "limits": [
+    "No existing production conversation was migrated.",
+    "No cross-version Codex upgrade was claimed; only 0.154.0 is approved.",
+    "Multi-user authentication and isolation remain future work.",
+    "Real-model smoke retains its original execution time; this follow-up used simulated Responses with real Codex."
+  ],
+  "researchProtocol": {
+    "passed": true,
+    "assertions": 12,
+    "report": "research-protocol/summary.json",
+    "includesKnownRiskReproduction": true
+  }
+}

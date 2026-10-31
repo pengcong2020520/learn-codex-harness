@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "1. 调试最小调用",
+      "program": "${workspaceFolder}/examples/01-hello.mjs",
+      "cwd": "${workspaceFolder}",
+      "runtimeArgs": ["--env-file-if-exists=.env"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "2. 调试自动修复与事件",
+      "program": "${workspaceFolder}/examples/02-fix.mjs",
+      "cwd": "${workspaceFolder}",
+      "runtimeArgs": ["--env-file-if-exists=.env"],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

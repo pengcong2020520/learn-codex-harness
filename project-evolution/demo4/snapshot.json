@@ -1,0 +1,19 @@
+{
+  "stage": 4,
+  "name": "PostgreSQL + Redis 数据层",
+  "snapshotDate": "2026-10-04",
+  "source": "../../project",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".env",
+    ".data",
+    ".runs",
+    "workspace",
+    "node_modules",
+    "output"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  }
+}

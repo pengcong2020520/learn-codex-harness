@@ -1,0 +1,36 @@
+{
+  "name": "codex-harness-demo4",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node client/main.mjs",
+    "chat": "node client/main.mjs",
+    "server": "node server/main.mjs",
+    "app-server": "node server/main.mjs",
+    "demo": "node 05-app-server.mjs",
+    "check": "node server/check.mjs",
+    "check:server": "node server/check.mjs --codex",
+    "smoke": "node scripts/smoke.mjs",
+    "tools": "node server/modules/tools/web-cli.mjs",
+    "test:codex-tools": "node --test tests/codex-tools.integration.mjs",
+    "test:codex-memory": "node --test tests/codex-memory.integration.mjs",
+    "data:migrate": "node scripts/data.mjs migrate",
+    "data:import": "node scripts/data.mjs import",
+    "data:check": "node scripts/data.mjs check",
+    "test:data": "node scripts/test-data.mjs",
+    "test": "node --test 05-app-server.test.mjs tests/*.test.mjs",
+    "lesson": "node lessons/run.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@openai/codex": "0.154.0",
+    "ajv": "8.20.0",
+    "htmlparser2": "12.0.0",
+    "pg": "8.23.1",
+    "redis": "6.3.0"
+  }
+}

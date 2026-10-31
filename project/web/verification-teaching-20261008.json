@@ -1,0 +1,304 @@
+{
+  "date": "2026-10-08",
+  "scope": "教学 HTML 与五版 Demo 逐课实验入口；无产品执行循环替换",
+  "reference": {
+    "repository": "https://github.com/shareAI-lab/learn-claude-code",
+    "commit": "ce8f9f186058939da54c9d6fead78dfb5d0fd6c3",
+    "method": "每节一个机制：问题、结构、源码、推演、实验、增量。基于本项目重新编写，不搬运其执行循环。"
+  },
+  "content": {
+    "lessons": 17,
+    "scenarios": 34,
+    "steps": 126,
+    "architectureSVGs": 5,
+    "quizzes": 17,
+    "sourceAnchors": "17 unique exact anchors; course:check passed"
+  },
+  "experiments": {
+    "offlineEntries": 12,
+    "assertionsPassed": 27,
+    "integrationNotRun": [
+      "d4-persistence",
+      "d4-dispatch",
+      "d4-versions",
+      "d5-wiki",
+      "d5-rag"
+    ],
+    "results": [
+      {
+        "id": "d1-transport",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 2,
+        "notRun": false
+      },
+      {
+        "id": "d1-lifecycle",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 2,
+        "notRun": false
+      },
+      {
+        "id": "d2-fifo",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 2,
+        "notRun": false
+      },
+      {
+        "id": "d2-resume",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 2,
+        "notRun": false
+      },
+      {
+        "id": "d3-agent-config",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 3,
+        "notRun": false
+      },
+      {
+        "id": "d3-skills",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 2,
+        "notRun": false
+      },
+      {
+        "id": "d3-tool-registry",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 3,
+        "notRun": false
+      },
+      {
+        "id": "d3-mcp",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 3,
+        "notRun": false
+      },
+      {
+        "id": "d3-workspace",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 3,
+        "notRun": false
+      },
+      {
+        "id": "d4-persistence",
+        "mode": "integration",
+        "exit": 0,
+        "passed": 0,
+        "notRun": true
+      },
+      {
+        "id": "d4-dispatch",
+        "mode": "integration",
+        "exit": 0,
+        "passed": 0,
+        "notRun": true
+      },
+      {
+        "id": "d4-versions",
+        "mode": "integration",
+        "exit": 0,
+        "passed": 0,
+        "notRun": true
+      },
+      {
+        "id": "d5-gate",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 1,
+        "notRun": false
+      },
+      {
+        "id": "d5-mounts",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 1,
+        "notRun": false
+      },
+      {
+        "id": "d5-wiki",
+        "mode": "integration",
+        "exit": 0,
+        "passed": 0,
+        "notRun": true
+      },
+      {
+        "id": "d5-rag",
+        "mode": "integration",
+        "exit": 0,
+        "passed": 0,
+        "notRun": true
+      },
+      {
+        "id": "d5-modes",
+        "mode": "offline",
+        "exit": 0,
+        "passed": 3,
+        "notRun": false
+      }
+    ]
+  },
+  "webTests": {
+    "command": "npm run test:web",
+    "passed": 6,
+    "failed": 0
+  },
+  "browser": {
+    "method": "Codex in-app browser via cua_repl",
+    "lessons": [
+      {
+        "id": "d1-transport",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d1-lifecycle",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d2-fifo",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d2-resume",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d3-agent-config",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d3-skills",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d3-tool-registry",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d3-mcp",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d3-workspace",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d4-persistence",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d4-dispatch",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d4-versions",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d5-gate",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d5-mounts",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d5-wiki",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d5-rag",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      },
+      {
+        "id": "d5-modes",
+        "scenarios": 2,
+        "views": 4,
+        "quiz": true
+      }
+    ],
+    "workbench": [
+      {
+        "id": "demo1",
+        "count": 2,
+        "title": "先建立通信，再派发任务"
+      },
+      {
+        "id": "demo2",
+        "count": 2,
+        "title": "连续输入如何不丢、不抢跑"
+      },
+      {
+        "id": "demo3",
+        "count": 5,
+        "title": "配置是装配合同，不是临时提示词"
+      },
+      {
+        "id": "demo4",
+        "count": 3,
+        "title": "消息收到了，为什么还需要一条 outbox？"
+      },
+      {
+        "id": "demo5",
+        "count": 5,
+        "title": "工具参数里的“我是管理员”为什么不算身份？"
+      }
+    ],
+    "additional": [
+      "Demo 1 seven-step protocol explanation and initialize content",
+      "Previous/next/reset state changes",
+      "Legacy chapter hash opens corresponding course",
+      "Detailed handbook still readable",
+      "390px course: no page overflow; code pane scrolls independently",
+      "1280px course: no page overflow",
+      "No JavaScript error logs in course verification",
+      "Final flow SVG shows actual step titles and actors"
+    ],
+    "screenshot": "screenshots/mechanism-course-20261008.jpg"
+  },
+  "limitations": [
+    "本轮没有重跑 PG / Redis / Chroma 集成实验",
+    "未调用真实远端模型；不证明回答质量或 embedding 语义质量",
+    "内置推演是教学场景，不冒充服务运行结果"
+  ]
+}

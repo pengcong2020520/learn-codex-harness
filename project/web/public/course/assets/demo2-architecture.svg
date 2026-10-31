@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="810" viewBox="0 0 1080 810" role="img" aria-labelledby="title desc">
+<title id="title">Demo 2 总体架构</title><desc id="desc">产品侧组织任务，独立 Codex 子进程负责模型与原生上下文。红色为本版新增职责。</desc>
+<defs><marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0 0L7 3.5L0 7" fill="#8b9b80"/></marker></defs><rect width="1080" height="810" fill="#fafbf6"/>
+<text x="34" y="48" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="27" fill="#31482f" font-weight="600">DEMO 2 / 多轮会话：顺序与恢复</text>
+<text x="34" y="83" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="17" fill="#67775d" font-weight="400">红色：本版新增职责  ·  箭头：通信或调用关系  ·  只展示本版已实现能力</text>
+<rect x="34" y="117" width="604" height="123" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
+<text x="55" y="150" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#395735" font-weight="600">01  CLI 多轮入口</text>
+<text x="55" y="184" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">readline 持续接收用户输入</text>
+<text x="55" y="212" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">普通文本 / 恢复既有 Thread</text>
+<path d="M335 240L335 267" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" />
+<rect x="34" y="270" width="604" height="123" rx="12" fill="#fff5ee" stroke="#bd7155"/>
+<text x="55" y="303" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#a54f33" font-weight="600">02  FIFO 输入缓冲</text>
+<text x="55" y="337" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">提前输入保留在队列中，按顺序消费</text>
+<text x="55" y="365" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">同一会话逐轮执行，旧 Turn 事件不能串入新轮</text>
+<path d="M335 393L335 420" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" />
+<rect x="34" y="423" width="604" height="123" rx="12" fill="#fff5ee" stroke="#bd7155"/>
+<text x="55" y="456" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#a54f33" font-weight="600">03  原生会话控制</text>
+<text x="55" y="490" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">新建：thread/start；继续：thread/resume</text>
+<text x="55" y="518" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">每一轮都有独立 turn/start 与完成事件</text>
+<path d="M335 546L335 573" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" />
+<rect x="34" y="576" width="604" height="123" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
+<text x="55" y="609" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#395735" font-weight="600">04  本地状态与日志</text>
+<text x="55" y="643" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">保存恢复所需的 threadId；原生历史交给 Codex</text>
+<text x="55" y="671" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">业务恢复索引不等于完整会话历史或长期记忆</text>
+<rect x="729" y="117" width="317" height="100" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
+<text x="750" y="151" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="23" fill="#385334" font-weight="600">模型 API</text>
+<text x="750" y="187" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="17" fill="#67775d" font-weight="400">由 Codex 发起推理请求</text>
+<rect x="729" y="270" width="317" height="276" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
+<text x="750" y="307" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="24" fill="#385334" font-weight="600">Codex app-server</text>
+<text x="750" y="339" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">本机独立子进程</text>
+<text x="750" y="384" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">模型执行循环</text>
+<text x="750" y="420" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">原生 Thread / Turn</text>
+<text x="750" y="456" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">上下文与历史</text>
+<text x="750" y="492" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">本版关闭工具与原生记忆</text>
+<path d="M884 270L884 217" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+<path d="M638 306L729 306" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="644" y="285" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="15" fill="#67775d" font-weight="400">stdio</text>
+<rect x="729" y="589" width="317" height="110" rx="12" fill="#f0f4e9" stroke="#cdd8c1"/>
+<text x="750" y="623" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="21" fill="#385334" font-weight="600">Codex 原生存储</text>
+<text x="750" y="661" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="17" fill="#67775d" font-weight="400">不由产品侧复制对话历史</text>
+<path d="M884 546L884 589" stroke="#8b9b80" stroke-width="2" marker-end="url(#a)" />
+<text x="34" y="771" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="18" fill="#67775d" font-weight="400">职责边界：脚手架负责接入、配置与校验；Codex 负责原生执行与上下文。</text>
+</svg>

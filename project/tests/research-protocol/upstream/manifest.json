@@ -1,0 +1,11 @@
+{
+  "archive": "codex-harness-协议回归.tar.gz",
+  "archiveSha256": "8ebe94a1ea128d6f8b5f3aee0e6d7a9260d30b9cd9bac480cdb06ff4756423c5",
+  "files": {
+    "probe.mjs": "516e1aba1108c022bd063266761c88ee128ff299ecab4bd17ea714d0f4d72168",
+    "probe-ext.mjs": "3f7013818b188e018df74c04e187219ba02a11ab11a82e7f595726bb55e52dd1",
+    "probe-multi.mjs": "a3e21f4d6e953a16c93ce0cb878e3cdfd979f29e88373373fa62b3252bba0487",
+    "hub-mcp.mjs": "0cc0d491efdaedc621772a73de799ef06bdc28272ace207ff595dfc52884982d",
+    "run-all.sh": "71248ed0bdfe94527fa0add86e60fdd220bd23855e7d379dcadc9c3032623335"
+  }
+}

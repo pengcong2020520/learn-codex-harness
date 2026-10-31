@@ -1,0 +1,41 @@
+{
+  "version": "0.154.0",
+  "at": "2026-10-08T05:12:13.507Z",
+  "passed": true,
+  "phases": [
+    {
+      "name": "base",
+      "completed": true
+    },
+    {
+      "name": "multi",
+      "completed": true
+    },
+    {
+      "name": "extensions",
+      "completed": true
+    },
+    {
+      "name": "hardened",
+      "completed": true
+    },
+    {
+      "name": "skills-off",
+      "completed": true
+    }
+  ],
+  "checks": [
+    "registered dynamic tools; no native execution/image bypass",
+    "20 turns: identity gate, ordering and unique call IDs",
+    "30-second cooperative timeout returns to model",
+    "uncooperative handler timeout and late rejection stay bounded",
+    "interrupt suppresses late result; connection can continue",
+    "0.154 dynamicTools remain immutable on resume; deleted tool is rejected",
+    "raw shared-process probe reproduces broadcast and missing user isolation",
+    "process-cost observations are complete, without asserting hardware-specific limits",
+    "MCP configuration reload changes old Thread tools; removed tool is rejected",
+    "extension isolation production defaults",
+    "extension isolation -hardened",
+    "extension isolation -hardened-skills-off"
+  ]
+}

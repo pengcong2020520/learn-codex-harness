@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "lessons": [
+    {
+      "id": "d1-transport",
+      "demo": 1,
+      "title": "用消息 ID 连接请求与事件",
+      "question": "为何 stdout 中的一个 JSON 消息不一定是这次调用的答案？",
+      "command": "npm run lesson -- d1-transport",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "success 与 early 两种顺序均执行断言",
+        "仅一次 thread/start 和一次 turn/start；输入和最终答案正确"
+      ],
+      "why": "请求回包与 turn 通知可以乱序；真实入口必须按协议关联它们。",
+      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^单轮闭环",
+        "tests/single-turn.test.mjs"
+      ]
+    },
+    {
+      "id": "d1-lifecycle",
+      "demo": 1,
+      "title": "结束状态决定成功与失败",
+      "question": "有文字输出却没有 turn/completed，可以显示成功吗？",
+      "command": "npm run lesson -- d1-lifecycle",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "failed 被拒绝并保留错误",
+        "hang 触发测试设置的 150ms 超时"
+      ],
+      "why": "文字增量不是完成凭据；只有明确终态才允许交付成功。",
+      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^单轮错误不冒充成功",
+        "tests/single-turn.test.mjs"
+      ]
+    },
+    {
+      "id": "d2-fifo",
+      "demo": 2,
+      "title": "终端提前输入也不能丢",
+      "question": "用户一次输入两行时，第二行会不会丢失或抢跑？",
+      "command": "npm run lesson -- d2-fifo",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "提前输入的 first / second 按顺序取出",
+        "同一 Thread 产生两个 turn；旧轮 STALE 事件不会串入新答案"
+      ],
+      "why": "输入队列保留 readline 先到的行；聊天循环按轮次消费，Codex 维护 Thread 上下文。",
+      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(命令行输入保留提前输入|循环聊天同一 thread)",
+        "05-app-server.test.mjs"
+      ]
+    },
+    {
+      "id": "d2-resume",
+      "demo": 2,
+      "title": "恢复 Thread 而非重放聊天",
+      "question": "恢复失败时，是否应该悄悄创建另一个 Thread？",
+      "command": "npm run lesson -- d2-resume",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "选中 saved-thread 后沿用该 ID 和只读权限",
+        "取消、无结果、失败时保留原会话"
+      ],
+      "why": "产品只保存选择与切换规则，历史仍由 Codex Thread 承担。",
+      "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(resume 搜索|resume 取消)",
+        "05-app-server.test.mjs"
+      ]
+    },
+    {
+      "id": "d3-agent-config",
+      "demo": 3,
+      "title": "把 Agent 定义变成有效约束",
+      "question": "角色说“可以执行 shell”，是否就获得了 shell 权限？",
+      "command": "npm run lesson -- d3-agent-config",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "未知字段、缺失引用、权限提升被 schema 拒绝",
+        "Agent 改动立即撤销旧工具权限；恢复旧文件也不能免重启",
+        "不兼容 Thread 版本被拒绝"
+      ],
+      "why": "装配定义同时决定工具、来源和版本；自然语言不能扩大代码授权。",
+      "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(Agent schema|工具双重范围检查|描述符不复制)",
+        "tests/agent-core.test.mjs"
+      ]
+    },
+    {
+      "id": "d3-skills",
+      "demo": 3,
+      "title": "发现 Skill 不等于授权 Skill",
+      "question": "工作区出现一个新 Skill，能否自动让当前 Agent 使用？",
+      "command": "npm run lesson -- d3-skills",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "范围外发现结果被禁用",
+        "授权 Skill 生成显式 skill 输入；未授权名称被拒绝",
+        "必需缺失会报错，可选缺失明确降级"
+      ],
+      "why": "发现接口与产品允许清单分别负责“存在”和“可使用”。",
+      "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(原生 Skill|必需 Skill)",
+        "tests/agent-core.test.mjs"
+      ]
+    },
+    {
+      "id": "d3-tool-registry",
+      "demo": 3,
+      "title": "从配置装配可调用工具",
+      "question": "新增工具为何不需要在主程序再加一个 if 分支？",
+      "command": "npm run lesson -- d3-tool-registry",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "echo_note 真正经 registry.call 返回输入",
+        "重复名、缺实现、坏 schema、越界模块被拒绝",
+        "两份代码快照分别返回 v1 / v2"
+      ],
+      "why": "注册表将 schema 与实现配对；版本快照使旧调用和新实现分开。",
+      "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(配置驱动新工具|拒绝重名|工具代码和相对依赖)",
+        "tests/tool-loading.test.mjs"
+      ]
+    },
+    {
+      "id": "d3-mcp",
+      "demo": 3,
+      "title": "工具通道也要有刷新边界",
+      "question": "工具正在运行时切换 MCP 注册表，会留下什么不一致？",
+      "command": "npm run lesson -- d3-mcp",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "活动 Thread 存在时不发布新 registry",
+        "刷新失败回滚旧配置",
+        "真实回环 HTTP 入口拒绝无令牌和跨源请求"
+      ],
+      "why": "空闲边界将工具切换与新轮开始串行化；HTTP 入口继续执行认证。",
+      "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。 MCP HTTP 服务是真实本地监听；Codex config RPC 是模拟。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(全部 Thread 空闲|RPC 刷新失败|MCP 入口)",
+        "tests/tool-loading.test.mjs"
+      ]
+    },
+    {
+      "id": "d3-workspace",
+      "demo": 3,
+      "title": "稳定工作区与受限文件入口",
+      "question": "把每次 runDir 当工作区，为什么会丢失上次产物？",
+      "command": "npm run lesson -- d3-workspace",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "两次运行共用 workspaceDir，但 runDir 不同",
+        "来源过滤同时约束 list/read；产物不能覆盖",
+        "父路径、遍历和符号链接绕过被拒绝"
+      ],
+      "why": "工作资料需要稳定位置；允许写 outputs 不代表所有路径都能读写。",
+      "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(稳定工作区|来源范围收窄|工作区内的窄来源)",
+        "tests/agent-core.test.mjs"
+      ]
+    },
+    {
+      "id": "d4-persistence",
+      "demo": 4,
+      "title": "把产品状态落进事务",
+      "question": "服务重启后，凭什么确定排队项和会话归属仍然可信？",
+      "command": "npm run lesson -- d4-persistence",
+      "mode": "integration",
+      "offlineOrIntegration": "integration",
+      "observations": [
+        "迁移重复执行保持幂等，事务失败回滚",
+        "归属约束与单实例执行器锁受到真实 PG 断言",
+        "真实服务链路重启后仍能检查持久任务状态"
+      ],
+      "why": "PostgreSQL 保存产品元数据和任务原文；它不替代 Codex 的完整 Thread 历史。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "args": [
+        "scripts/test-data.mjs"
+      ],
+      "requiredFlag": "--integration",
+      "integrationCommand": "npm run lesson -- d4-persistence --integration",
+      "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+    },
+    {
+      "id": "d4-dispatch",
+      "demo": 4,
+      "title": "提交与唤醒分开负责",
+      "question": "Redis 丢失一次唤醒，会不会连任务本身也丢失？",
+      "command": "npm run lesson -- d4-dispatch",
+      "mode": "integration",
+      "offlineOrIntegration": "integration",
+      "observations": [
+        "任务提交与 outbox 同事务",
+        "重复投递只成功领取一次",
+        "Redis 失败后 outbox 可补投"
+      ],
+      "why": "PG 是任务事实来源，Redis Set 中的 Thread ID 负责唤醒；测试不宣称端到端 exactly-once。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "args": [
+        "scripts/test-data.mjs"
+      ],
+      "requiredFlag": "--integration",
+      "integrationCommand": "npm run lesson -- d4-dispatch --integration",
+      "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+    },
+    {
+      "id": "d4-versions",
+      "demo": 4,
+      "title": "稳定资料 ID 与变化的版本",
+      "question": "资料正文变了，旧引用为何不能继续当有效证据？",
+      "command": "npm run lesson -- d4-versions",
+      "mode": "integration",
+      "offlineOrIntegration": "integration",
+      "observations": [
+        "更新版本保留稳定资源 ID",
+        "移动不改变资料 ID，旧版本引用被拒绝",
+        "外部改写或删除来源会使派生内容失效"
+      ],
+      "why": "路径、资料身份和内容版本分别解决定位、追踪与证据有效性。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行本 Demo 现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。D4 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+      "args": [
+        "scripts/test-data.mjs"
+      ],
+      "requiredFlag": "--integration",
+      "integrationCommand": "npm run lesson -- d4-versions --integration",
+      "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+    },
+    {
+      "id": "d5-gate",
+      "demo": 5,
+      "title": "让工具只接受可信任务身份",
+      "question": "模型自己补一个 ownerId，能否获得维护权限？",
+      "command": "npm run lesson -- d5-gate",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "伪造上下文与外部 owner 被拒绝",
+        "普通任务不能更新 Wiki；合法维护任务可以",
+        "旧 turn 结束后上下文失效"
+      ],
+      "why": "PermissionGate 使用服务端建立的任务上下文与活动轮次，参数不能制造身份。",
+      "boundary": "离线真实 PermissionGate；Agent / task 为夹具，无 PG，无模型，不等于完整用户登录认证。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^统一门禁",
+        "tests/knowledge.test.mjs"
+      ]
+    },
+    {
+      "id": "d5-mounts",
+      "demo": 5,
+      "title": "知识库存在不等于挂载",
+      "question": "Agent 没有挂载的 KB，能否通过宽泛 inputs 路径绕过？",
+      "command": "npm run lesson -- d5-mounts",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "当前 KB 的读取通过；另一 KB 的直接路径读取被拒绝",
+        "未挂载 KB 与错误 owner 被拒绝",
+        "Wiki 路径不能通过普通 write_file 创建"
+      ],
+      "why": "门禁同时识别 KB 身份与其底层目录，避免读文件成为知识库隔离旁路。",
+      "boundary": "离线真实 PermissionGate，已注册 KB 列表和 Agent 为夹具；不证明数据库注册过程。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^挂载边界",
+        "lessons/knowledge-fixture.test.mjs"
+      ]
+    },
+    {
+      "id": "d5-wiki",
+      "demo": 5,
+      "title": "知识页由证据和版本约束",
+      "question": "两次维护同时提交，为什么只能有一个新版本生效？",
+      "command": "npm run lesson -- d5-wiki",
+      "mode": "integration",
+      "offlineOrIntegration": "integration",
+      "observations": [
+        "Wiki 提交后可读取，两个并发 expectedVersion 只成功一个",
+        "来源改写后不能继续返回旧正文",
+        "真实本地 Codex 维护任务带服务端知识权限并调用知识工具"
+      ],
+      "why": "Wiki 正文在文件/blob，PG 保存版本和依赖；维护是受限的普通 Agent 任务。",
+      "boundary": "集成门禁：默认未运行。显式开启后运行现有 test:data 小组（data.integration + knowledge.integration）；真实临时 PG/Redis、本地 Codex 与假 Responses 服务。RAG 用例无 Chroma 时明确跳过；不代表 RAG 已通过。",
+      "args": [
+        "scripts/test-data.mjs"
+      ],
+      "requiredFlag": "--integration",
+      "integrationCommand": "npm run lesson -- d5-wiki --integration",
+      "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+    },
+    {
+      "id": "d5-rag",
+      "demo": 5,
+      "title": "来源分块进入混合召回",
+      "question": "向量索引完成，为什么还不能证明知识回答准确？",
+      "command": "npm run lesson -- d5-rag",
+      "mode": "integration",
+      "offlineOrIntegration": "integration",
+      "observations": [
+        "真实 Chroma 与 BM25 双索引提交",
+        "中文查询经混合召回返回对应来源",
+        "失败保留旧索引，源版本变化拒绝陈旧结果"
+      ],
+      "why": "RRF 合并两路排名，来源版本限制证据有效性；fixture 向量只验证管线，不能证明语义质量。",
+      "boundary": "RAG 集成门禁：仅 --rag 显式执行现有完整 test:rag 小组。真实临时 Chroma/PG/Redis，embedding 为本地确定性假服务，无外部 embedding 或模型。",
+      "args": [
+        "scripts/test-data.mjs",
+        "--rag"
+      ],
+      "requiredFlag": "--rag",
+      "integrationCommand": "npm run lesson -- d5-rag --rag",
+      "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server / chroma，以及可用的 chromadb npm 包；测试使用临时本地服务，不读取项目 .env。"
+    },
+    {
+      "id": "d5-modes",
+      "demo": 5,
+      "title": "期望模式与实际模式分开",
+      "question": "首次选择 RAG 但索引未就绪，与已启用 RAG 后故障，应当同样回退吗？",
+      "command": "npm run lesson -- d5-modes",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "首次期望 RAG、未就绪时实际仍 Wiki",
+        "索引就绪后当前实例不自行切换；重新 open 才选择 RAG",
+        "已是 RAG 后不可用则报 RAG_NOT_READY，不静默回退"
+      ],
+      "why": "启动时固化有效模式让 Thread 版本保持一致；上线后的失效要显式暴露。",
+      "boundary": "离线调用真实 KnowledgeService.open；数据库响应与 rag.ready 为固定夹具，不验证 SQL、Chroma、embedding 或检索质量。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^模式边界",
+        "lessons/knowledge-fixture.test.mjs"
+      ]
+    }
+  ]
+}

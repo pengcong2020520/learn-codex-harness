@@ -1,0 +1,46 @@
+[
+  {
+    "id": "d1-transport",
+    "demo": 1,
+    "title": "用消息 ID 连接请求与事件",
+    "question": "为何 stdout 中的一个 JSON 消息不一定是这次调用的答案？",
+    "command": "npm run lesson -- d1-transport",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "success 与 early 两种顺序均执行断言",
+      "仅一次 thread/start 和一次 turn/start；输入和最终答案正确"
+    ],
+    "why": "请求回包与 turn 通知可以乱序；真实入口必须按协议关联它们。",
+    "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^单轮闭环",
+      "tests/single-turn.test.mjs"
+    ]
+  },
+  {
+    "id": "d1-lifecycle",
+    "demo": 1,
+    "title": "结束状态决定成功与失败",
+    "question": "有文字输出却没有 turn/completed，可以显示成功吗？",
+    "command": "npm run lesson -- d1-lifecycle",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "failed 被拒绝并保留错误",
+      "hang 触发测试设置的 150ms 超时"
+    ],
+    "why": "文字增量不是完成凭据；只有明确终态才允许交付成功。",
+    "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^单轮错误不冒充成功",
+      "tests/single-turn.test.mjs"
+    ]
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "d2-fifo",
+    "demo": 2,
+    "title": "终端提前输入也不能丢",
+    "question": "用户一次输入两行时，第二行会不会丢失或抢跑？",
+    "command": "npm run lesson -- d2-fifo",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "提前输入的 first / second 按顺序取出",
+      "同一 Thread 产生两个 turn；旧轮 STALE 事件不会串入新答案"
+    ],
+    "why": "输入队列保留 readline 先到的行；聊天循环按轮次消费，Codex 维护 Thread 上下文。",
+    "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。 本课是终端缓冲，不是 HTTP 服务消息队列。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(命令行输入保留提前输入|循环聊天同一 thread)",
+      "05-app-server.test.mjs"
+    ]
+  },
+  {
+    "id": "d2-resume",
+    "demo": 2,
+    "title": "恢复 Thread 而非重放聊天",
+    "question": "恢复失败时，是否应该悄悄创建另一个 Thread？",
+    "command": "npm run lesson -- d2-resume",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "选中 saved-thread 后沿用该 ID 和只读权限",
+      "取消、无结果、失败时保留原会话"
+    ],
+    "why": "产品只保存选择与切换规则，历史仍由 Codex Thread 承担。",
+    "boundary": "离线协议夹具：执行本 Demo 的真实入口，使用本地假 App Server；不调用模型，不证明模型回答质量。临时文件结束后删除。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(resume 搜索|resume 取消)",
+      "05-app-server.test.mjs"
+    ]
+  }
+]

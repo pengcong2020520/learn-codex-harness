@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "agent": {
+    "id": "writing-assistant",
+    "version": "1.0.0",
+    "instructions": "roles/writing-assistant.md",
+    "skills": [],
+    "tools": { "allow": ["list_files", "read_file", "write_file", "search_web", "read_webpage"] },
+    "dataBindings": [
+      { "sourceRef": "originals", "actions": ["read"], "methods": ["files"], "required": true },
+      { "sourceRef": "research", "actions": ["read", "create"], "methods": ["files"], "required": true },
+      { "sourceRef": "drafts", "actions": ["read", "create"], "methods": ["files"], "required": true },
+      { "sourceRef": "articles", "actions": ["read"], "methods": ["files"], "required": true }
+    ],
+    "executionRef": "restricted-local",
+    "memory": { "use": false, "contribute": false },
+    "outputs": { "directory": "outputs", "formats": ["md", "txt"], "writeMode": "create-only", "requiredChecks": ["file-exists", "format"] }
+  },
+  "bindings": {
+    "workspaceDir": "../workspace",
+    "skills": {},
+    "sources": {
+      "originals": { "type": "files", "root": "inputs" },
+      "research": { "type": "files", "root": "research" },
+      "drafts": { "type": "files", "root": "drafts" },
+      "articles": { "type": "files", "root": "outputs" }
+    },
+    "executions": { "restricted-local": { "sandbox": "read-only", "approvalPolicy": "never", "nativeShell": false, "nativeFileWrite": false } }
+  }
+}

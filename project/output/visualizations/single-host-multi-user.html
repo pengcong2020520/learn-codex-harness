@@ -1,0 +1,90 @@
+<div id="single-host-multi-user">
+  <h3>单机多用户 Agent 架构</h3>
+  <svg role="img" aria-label="多个用户通过统一认证和权限检查进入业务服务，共享 PostgreSQL，运行环境管理器为每个活跃用户管理独立的 Codex 进程、工具权限、文件和记忆。" style="display:block;width:100%;overflow:visible"></svg>
+</div>
+<style>
+  #single-host-multi-user { color:var(--foreground); }
+  #single-host-multi-user svg text { fill:var(--foreground); font-family:inherit; font-size:var(--font-size-base); font-weight:400; }
+  #single-host-multi-user .heading { font-weight:500; }
+  #single-host-multi-user .edge { stroke:var(--muted-foreground); stroke-width:1.3; fill:none; }
+  #single-host-multi-user .node { fill:var(--background); stroke:var(--border); stroke-width:1; }
+  #single-host-multi-user .group { fill:none; stroke:var(--border); stroke-width:1; }
+  #single-host-multi-user .lane { fill:color-mix(in srgb,var(--viz-series-1) 7%,var(--background)); stroke:var(--border); stroke-width:1; }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('single-host-multi-user');
+  const svg = root.querySelector('svg');
+  const ns = 'http://www.w3.org/2000/svg';
+  let previousWidth = 0;
+  function make(tag, attributes, text) {
+    const element = document.createElementNS(ns, tag);
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+    if (text !== undefined) element.textContent = text;
+    svg.appendChild(element);
+    return element;
+  }
+  function label(x, y, text, heading = false) {
+    return make('text', { x, y, 'text-anchor':'middle', class:heading ? 'heading' : '' }, text);
+  }
+  function box(x, y, w, h, lines, cls = 'node') {
+    make('rect', { x, y, width:w, height:h, rx:8, class:cls });
+    lines.forEach((line, i) => label(x+w/2, y+h/2-(lines.length-1)*11+i*22+5, line, i===0));
+  }
+  function arrow(x1,y1,x2,y2) {
+    make('path',{d:`M${x1},${y1} L${x2},${y2}`,class:'edge','marker-end':'url(#single-host-arrow)'});
+  }
+  function draw() {
+    const w = Math.floor(root.getBoundingClientRect().width);
+    if (!w || w===previousWidth) return;
+    previousWidth=w;
+    const narrow=w<560, h=narrow?1010:752;
+    svg.replaceChildren();
+    svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+    svg.style.height=`${h}px`;
+    const defs=make('defs',{});
+    const marker=document.createElementNS(ns,'marker');
+    for (const [k,v] of Object.entries({id:'single-host-arrow',viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'})) marker.setAttribute(k,v);
+    const tip=document.createElementNS(ns,'path');
+    tip.setAttribute('d','M0 0 L8 4 L0 8 Z');tip.setAttribute('fill','var(--muted-foreground)');marker.appendChild(tip);defs.appendChild(marker);
+    const cx=w/2, full=w-48;
+    box(24,4,full,58,['多个用户 · Web / App / CLI']);
+    arrow(cx,62,cx,112);
+    label(cx,91,'HTTPS 请求 / SSE 状态返回');
+    make('rect',{x:8,y:108,width:w-16,height:narrow?800:544,rx:12,class:'group'});
+    label(cx,135,'同一台服务器',true);
+    box(24,153,full,60,['统一 API','身份认证 · 资源权限检查']);
+    arrow(cx,213,cx,237);
+    box(24,237,full,62,['业务服务','会话管理 · 消息调度 · 配额与审计']);
+    make('path',{d:`M${cx},299 V323`,class:'edge','marker-start':'url(#single-host-arrow)','marker-end':'url(#single-host-arrow)'});
+    box(24,323,full,60,['PostgreSQL · 共享业务状态','用户归属 · 会话映射 · 任务与权限']);
+    box(24,411,full,60,['运行环境管理器','按用户启动 · 复用 · 空闲回收']);
+    make('path',{d:`M${w-24},268 H${w-15} V434 H${w-24}`,class:'edge','marker-end':'url(#single-host-arrow)'});
+    function lane(x,y,width,name) {
+      box(x,y,width,142,[], 'lane');
+      label(x+width/2,y+26,`用户 ${name} · 独立运行环境`,true);
+      label(x+width/2,y+57,`Codex 进程 ${name}`);
+      label(x+width/2,y+83,'绑定用户身份的工具入口');
+      label(x+width/2,y+113,'专属历史 · 文件 · 记忆');
+    }
+    if (!narrow) {
+      const lw=(w-64)/2, left=24+lw/2, right=w-24-lw/2;
+      make('path',{d:`M${cx},471 V489 H${left} V503 M${cx},489 H${right} V503`,class:'edge'});
+      lane(24,503,lw,'A');lane(40+lw,503,lw,'B');
+      arrow(left,645,left,677);arrow(right,645,right,677);
+      box(24,681,full,58,['模型 API · 外部服务']);
+    } else {
+      arrow(cx,471,cx,499);
+      lane(24,499,full,'A');
+      make('path',{d:`M${w-24},455 H${w-16} V729 H${w-25}`,class:'edge','marker-end':'url(#single-host-arrow)'});
+      lane(24,658,full,'B');
+      label(cx,839,'每个活跃用户一个 Codex 进程');
+      label(cx,864,'每个进程可承载该用户多个会话');
+      arrow(cx,908,cx,942);
+      box(24,947,full,58,['模型 API · 外部服务']);
+    }
+  }
+  new ResizeObserver(draw).observe(root);
+  draw();
+})();
+</script>

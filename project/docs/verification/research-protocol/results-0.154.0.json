@@ -1,0 +1,73 @@
+{
+  "codexVersion": "0.154.0",
+  "node": "v24.17.0",
+  "at": "2026-10-08T05:12:13.587Z",
+  "tests": {
+    "s1_s5_registered_tools": {
+      "turnStatus": "completed",
+      "toolCount": 6,
+      "tools": [
+        "create_goal",
+        "get_goal",
+        "legacy_tool",
+        "probe_echo",
+        "request_user_input",
+        "update_goal"
+      ],
+      "dynamicToolsVisible": true,
+      "nativeExecOrPatch": []
+    },
+    "s2_ordering_gate": {
+      "turns": 20,
+      "statuses": [
+        "completed"
+      ],
+      "gateAllowed": 20,
+      "gateDenied": 0,
+      "toolCallBeforeTurnStarted": 0,
+      "toolCallBeforeTurnStartResponse": 0,
+      "turnStartedBeforeResponse": 0,
+      "duplicateCallIdDeliveries": 0
+    },
+    "s3a_tool_timeout_respects_signal": {
+      "abortedAfterMs": 30002,
+      "turnStatus": "completed",
+      "turnMs": 30048,
+      "modelSawOutput": "{\"error\":\"工具调用超时。\"}"
+    },
+    "s3c_timeout_ignores_signal": {
+      "turnStatus": "completed",
+      "elapsedMs": 180,
+      "modelSawOutput": "{\"error\":\"工具调用超时。\"}",
+      "connectionFailure": null
+    },
+    "s3b_interrupt_with_hung_tool": {
+      "interruptResult": "ok",
+      "turnStatus": "interrupted",
+      "handlerCalls": 1,
+      "modelRequestsDuringTurn": 1,
+      "lateReplyProtocolTail": [],
+      "modelRequestsAfterLateReply": 0,
+      "connectionFailure": null,
+      "nextTurnOnSameThread": "completed"
+    },
+    "s4_deleted_tool_on_resumed_thread": {
+      "resumeWithNewDynamicToolsError": null,
+      "modelSawTools": [
+        "create_goal",
+        "get_goal",
+        "legacy_tool",
+        "probe_echo",
+        "request_user_input",
+        "update_goal"
+      ],
+      "legacyStillVisible": true,
+      "newToolVisibleAfterResume": false,
+      "handlerSaw": [
+        "legacy_tool"
+      ],
+      "modelSawToolOutput": "{\"error\":\"工具已不在允许范围\"}",
+      "turnStatus": "completed"
+    }
+  }
+}

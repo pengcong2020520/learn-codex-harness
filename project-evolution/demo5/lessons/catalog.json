@@ -1,0 +1,116 @@
+[
+  {
+    "id": "d5-gate",
+    "demo": 5,
+    "title": "让工具只接受可信任务身份",
+    "question": "模型自己补一个 ownerId，能否获得维护权限？",
+    "command": "npm run lesson -- d5-gate",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "伪造上下文与外部 owner 被拒绝",
+      "普通任务不能更新 Wiki；合法维护任务可以",
+      "旧 turn 结束后上下文失效"
+    ],
+    "why": "PermissionGate 使用服务端建立的任务上下文与活动轮次，参数不能制造身份。",
+    "boundary": "离线真实 PermissionGate；Agent / task 为夹具，无 PG，无模型，不等于完整用户登录认证。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^统一门禁",
+      "tests/knowledge.test.mjs"
+    ]
+  },
+  {
+    "id": "d5-mounts",
+    "demo": 5,
+    "title": "知识库存在不等于挂载",
+    "question": "Agent 没有挂载的 KB，能否通过宽泛 inputs 路径绕过？",
+    "command": "npm run lesson -- d5-mounts",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "当前 KB 的读取通过；另一 KB 的直接路径读取被拒绝",
+      "未挂载 KB 与错误 owner 被拒绝",
+      "Wiki 路径不能通过普通 write_file 创建"
+    ],
+    "why": "门禁同时识别 KB 身份与其底层目录，避免读文件成为知识库隔离旁路。",
+    "boundary": "离线真实 PermissionGate，已注册 KB 列表和 Agent 为夹具；不证明数据库注册过程。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^挂载边界",
+      "lessons/knowledge-fixture.test.mjs"
+    ]
+  },
+  {
+    "id": "d5-wiki",
+    "demo": 5,
+    "title": "知识页由证据和版本约束",
+    "question": "两次维护同时提交，为什么只能有一个新版本生效？",
+    "command": "npm run lesson -- d5-wiki",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "observations": [
+      "Wiki 提交后可读取，两个并发 expectedVersion 只成功一个",
+      "来源改写后不能继续返回旧正文",
+      "真实本地 Codex 维护任务带服务端知识权限并调用知识工具"
+    ],
+    "why": "Wiki 正文在文件/blob，PG 保存版本和依赖；维护是受限的普通 Agent 任务。",
+    "boundary": "集成门禁：默认未运行。显式开启后运行现有 test:data 小组（data.integration + knowledge.integration）；真实临时 PG/Redis、本地 Codex 与假 Responses 服务。RAG 用例无 Chroma 时明确跳过；不代表 RAG 已通过。",
+    "args": [
+      "scripts/test-data.mjs"
+    ],
+    "requiredFlag": "--integration",
+    "integrationCommand": "npm run lesson -- d5-wiki --integration",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server；测试使用临时本地服务，不读取项目 .env。"
+  },
+  {
+    "id": "d5-rag",
+    "demo": 5,
+    "title": "来源分块进入混合召回",
+    "question": "向量索引完成，为什么还不能证明知识回答准确？",
+    "command": "npm run lesson -- d5-rag",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "observations": [
+      "真实 Chroma 与 BM25 双索引提交",
+      "中文查询经混合召回返回对应来源",
+      "失败保留旧索引，源版本变化拒绝陈旧结果"
+    ],
+    "why": "RRF 合并两路排名，来源版本限制证据有效性；fixture 向量只验证管线，不能证明语义质量。",
+    "boundary": "RAG 集成门禁：仅 --rag 显式执行现有完整 test:rag 小组。真实临时 Chroma/PG/Redis，embedding 为本地确定性假服务，无外部 embedding 或模型。",
+    "args": [
+      "scripts/test-data.mjs",
+      "--rag"
+    ],
+    "requiredFlag": "--rag",
+    "integrationCommand": "npm run lesson -- d5-rag --rag",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、PATH 中可用的 initdb / pg_ctl / redis-server / chroma，以及可用的 chromadb npm 包；测试使用临时本地服务，不读取项目 .env。"
+  },
+  {
+    "id": "d5-modes",
+    "demo": 5,
+    "title": "期望模式与实际模式分开",
+    "question": "首次选择 RAG 但索引未就绪，与已启用 RAG 后故障，应当同样回退吗？",
+    "command": "npm run lesson -- d5-modes",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "首次期望 RAG、未就绪时实际仍 Wiki",
+      "索引就绪后当前实例不自行切换；重新 open 才选择 RAG",
+      "已是 RAG 后不可用则报 RAG_NOT_READY，不静默回退"
+    ],
+    "why": "启动时固化有效模式让 Thread 版本保持一致；上线后的失效要显式暴露。",
+    "boundary": "离线调用真实 KnowledgeService.open；数据库响应与 rag.ready 为固定夹具，不验证 SQL、Chroma、embedding 或检索质量。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^模式边界",
+      "lessons/knowledge-fixture.test.mjs"
+    ]
+  }
+]

@@ -1,0 +1,1637 @@
+[
+  {
+    "id": "d1-transport",
+    "demo": 1,
+    "title": "先建立通信，再派发任务",
+    "principle": "本地握手只证明 Node 能与 Codex 通信，不证明远端模型已经可用。",
+    "problem": "终端打印了“握手成功”，用户便认为密钥和模型都验证通过；直到发送真实问题才失败。需要把本地连接与远端生成分成两项可观察的事实。",
+    "change": {
+      "before": "普通脚本能启动另一个程序，但尚不知道如何给执行引擎下指令、接收响应。",
+      "added": "通过 stdio 传输带请求 ID 的消息，按 initialize 响应 → initialized 通知的顺序完成握手。",
+      "kept": "远端模型调用、原生推理与工具循环继续由 Codex App Server 执行。"
+    },
+    "ownership": {
+      "codex": "接受初始化和后续 Thread/Turn 请求，内部对接远端模型服务。",
+      "product": "启动子进程、读写行消息、匹配请求 ID、记录脱敏日志、处理连接失败并释放资源。"
+    },
+    "concepts": [
+      {
+        "term": "stdio",
+        "meaning": "进程的标准输入与输出。Node 写 child.stdin，读取 child.stdout，每行是一条结构化消息；stderr 单独用于错误输出。"
+      },
+      {
+        "term": "请求与通知",
+        "meaning": "请求有 id，客户端要等待对应响应；initialized 是单向通知，不再等待一条同名响应。"
+      },
+      {
+        "term": "initialize / initialized",
+        "meaning": "先发初始化请求并等待成功，再通知对方客户端已就绪；它发生在用户任务之前。"
+      }
+    ],
+    "mechanism": "spawn 创建本机 Codex 子进程后，Node 建立输入输出管道。request() 先把等待者放入 pending，再把带 id 的消息写入 stdin；stdout 返回相同 id 时，找到并结束对应等待者。因此 await initialize 结束后才能发送 initialized。握手模式接着只请求 model/list，没有 turn/start，根本没有进入远端生成链路；不能据此承诺 API Key 有效。",
+    "design": {
+      "decision": "本地调用采用子进程管道，并把握手检查与真实任务分开。",
+      "reason": "无需为最小 Demo 另开 HTTP 服务；可以先定位协议或启动问题，再检查模型服务问题。",
+      "alternative": "Node 直接调用模型 API 会让产品层承担模型协议与执行循环，也失去本例复用 Codex 的边界。",
+      "cost": "子进程退出、消息解析失败或请求超时都需要显式收敛；本地就绪仍不能替代远端生成验收。"
+    },
+    "source": {
+      "file": "project-evolution/demo1/05-app-server.mjs",
+      "needle": "    await request(\"initialize\", {",
+      "before": 1,
+      "after": 12,
+      "explanation": "先看 await 与后面的 send：初始化响应未完成时不会发送 initialized。再看 check-server 分支：只调用 model/list 并返回，日志明确说没有 turn/start。管道建立和 pending 匹配位于同文件上方。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "握手检查成功，尚未生成",
+        "steps": [
+          {
+            "title": "拉起本机执行引擎",
+            "actor": "Node",
+            "event": "教学模拟 · spawn(..., { stdio: [\"pipe\", \"pipe\", \"pipe\"] })",
+            "explain": "子进程拥有独立执行职责；现在只是管道可用，还没有完成协议初始化。",
+            "state": {
+              "connection": "管道已建立",
+              "pending": "无",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "等待 initialize 响应",
+            "actor": "Node → Codex",
+            "event": "教学模拟 · request(\"initialize\", { clientInfo, capabilities: null })",
+            "explain": "请求 ID 进入 pending；即使进程已经启动，也必须等对应响应回来。",
+            "state": {
+              "connection": "初始化中",
+              "pending": "initialize 请求",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认客户端就绪",
+            "actor": "Node",
+            "event": "教学模拟 · send({ method: \"initialized\", params: {} })",
+            "explain": "initialize 的等待者已完成，才发不需要响应的通知。就绪范围仍然只有本地协议。",
+            "state": {
+              "connection": "握手成功",
+              "pending": "无",
+              "initialized": "是",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "列出目录并结束检查",
+            "actor": "Node",
+            "event": "教学模拟 · request(\"model/list\", {}) → return → finally",
+            "explain": "能够读取本地模型目录，随后关闭子进程；这次执行没有提交生成任务。",
+            "state": {
+              "connection": "检查结束并清理",
+              "pending": "无",
+              "initialized": "是",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "initialize 一直没有响应",
+        "steps": [
+          {
+            "title": "已发送但仍在等待",
+            "actor": "Node",
+            "event": "教学模拟 · pending.set(id, { resolve, reject, timer })",
+            "explain": "写入管道不等于收到响应。等待者仍占着这个请求 ID，后续初始化步骤不能越过 await。",
+            "state": {
+              "connection": "初始化中",
+              "pending": "initialize 请求",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "请求超时成为连接失败",
+            "actor": "Node",
+            "event": "教学模拟 · setTimeout(() => fail(new Error(...)), launch.timeoutMs)",
+            "explain": "fail 拒绝 pending 中的等待者并记录 fatalError；不会为了继续演示而伪造握手成功。",
+            "state": {
+              "connection": "失败",
+              "pending": "已拒绝并清空",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "统一释放子进程",
+            "actor": "Node",
+            "event": "教学模拟 · finally → child.stdin.end() → child.kill(\"SIGTERM\")",
+            "explain": "初始化失败也经过外层 finally；没有后续 thread/start 或 turn/start。",
+            "state": {
+              "connection": "关闭",
+              "pending": "无",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm start -- --handshake-only",
+      "action": "在 demo1 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
+      "observe": [
+        "成功时先显示握手成功，再显示已加载模型目录。",
+        "日志明确显示没有发送 turn/start、没有发起模型生成；随后输出协议日志位置。",
+        "若本地配置或 Codex 启动有问题，检查会失败；这与模型是否能回答仍是两层问题。"
+      ],
+      "boundary": "此命令运行本机 Codex 并可能创建 .runs 与本 Demo 状态目录，不提交模型生成。这里给出实验入口，不声称已用用户真实配置运行。"
+    },
+    "quiz": {
+      "question": "连接检查通过，但第一次提问报远端认证失败。应如何解释之前的“成功”？",
+      "options": [
+        "initialize 成功说明远端密钥已通过，所以应自动重发问题。",
+        "它只验证本地协议与目录可用；要单独检查远端认证，不能把任务自动重发当修复。",
+        "stdio 只能用于离线模型，因此远端失败是必然的。"
+      ],
+      "answer": 1,
+      "explanation": "正确的是本地与远端分层定位。A 把未发生的生成调用当成认证验证，还引入重复提交；C 混淆了 Node↔Codex 的本地管道与 Codex↔模型服务的远端连接。"
+    },
+    "reference": {
+      "session": "s01",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s01_agent_loop",
+      "adaptation": "借用“从一个具体请求追到实际执行者”的教学方式；参考直接写 Anthropic agent_loop，我们通过 App Server 协议复用 Codex，不能照搬 while 循环。"
+    }
+  },
+  {
+    "id": "d1-lifecycle",
+    "demo": 1,
+    "title": "收到请求，不等于完成任务",
+    "principle": "用 Thread 定位会话、Turn 定位任务，并等待该 Turn 的成功终态后才输出答案。",
+    "problem": "turn/start 已返回，界面却没有答案；另一次完成事件来得太早，程序又一直等待。若把请求响应当结果，或等拿到 turnId 才开始收事件，两种时序都会出错。",
+    "change": {
+      "before": "只有请求 ID 的收发匹配，尚不能判断一轮任务何时真正结束。",
+      "added": "建立本轮状态和早到事件缓冲，拿到 turnId 后重放匹配通知，再等待 turn/completed。",
+      "kept": "Thread 上下文和一个 Turn 内部的模型执行仍归 Codex；Node 不重写推理循环。"
+    },
+    "ownership": {
+      "codex": "分配 Thread/Turn ID，执行任务并发出 delta、item/completed、turn/completed 等通知。",
+      "product": "匹配 Thread 与 Turn、聚合回答、区分受理和成功终态、处理超时，并在两层 finally 中清理。"
+    },
+    "concepts": [
+      {
+        "term": "Thread / Turn",
+        "meaning": "Thread 是持续会话；Turn 是其中的一次用户任务。ID 由服务端产生，不能用第几轮的序号推算。"
+      },
+      {
+        "term": "早到事件缓冲",
+        "meaning": "尚未知道本轮 ID 时，先保存本 Thread 的通知，得到 ID 后按轮次检查，防止漏收或串轮。"
+      },
+      {
+        "term": "finally",
+        "meaning": "无论成功还是失败都执行的收尾：本轮清计时器，外层关闭连接与子进程。"
+      }
+    ],
+    "mechanism": "runTurn 先设置 activeTurn，才请求 turn/start。事件处理器先校验 Thread；若 turn.id 仍为空就暂存，拿到 ID 后重放并排除其他 Turn。请求响应只给出受理信息，await turn.completed.promise 才等待结果；事件处理器只有看到 status=completed 才 resolve，否则 reject。回答完成后按 item 聚合打印；异常不冒充成功，超时也不自动重发。",
+    "design": {
+      "decision": "将请求等待与任务完成等待分成两个独立的 Promise，并提前注册本轮状态。",
+      "reason": "响应和通知走同一条异步通道，先后顺序不能靠直觉保证；两个等待点分别表达“已受理”和“已完成”。",
+      "alternative": "收到 turn/start 响应就打印成功会过早结案；请求结束后才建监听则可能遗漏早到通知。",
+      "cost": "客户端必须维护 buffer、answers、activeTurn 和两个生命周期。断连后的真实执行结果仍可能未知，不能承诺恰好执行一次。"
+    },
+    "source": {
+      "file": "project-evolution/demo1/05-app-server.mjs",
+      "needle": "      turn.id = result.turn.id;",
+      "before": 4,
+      "after": 12,
+      "explanation": "request 返回后只绑定 ID；接着重放 buffer，清空缓存，再 await completed。末尾 finally 清本轮计时器与 activeTurn。成功/失败状态判断在同文件 handleTurnEvent，外层 finally 另负责关闭进程，不能混为一处。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "完成通知早于受理响应",
+        "steps": [
+          {
+            "title": "先建立本轮状态",
+            "actor": "Node",
+            "event": "教学模拟 · activeTurn = turn; request(\"turn/start\", ...)",
+            "explain": "此时知道 Thread，但还不知道服务端生成的 Turn ID；已具备暂存通知的位置。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "未绑定",
+              "buffer": "0 条",
+              "result": "等待受理与完成",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "先到的通知被暂存",
+            "actor": "Node",
+            "event": "教学模拟 · if (!turn.id) { turn.buffer.push(message); return; }",
+            "explain": "本 Thread 的完成通知先到也不会丢失；尚未绑定 ID，所以此时还不能直接认定本轮完成。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "未绑定",
+              "buffer": "包含 U-A 的完成通知",
+              "result": "仍未确认",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "绑定 ID 并重放",
+            "actor": "Node",
+            "event": "教学模拟 · turn.id = result.turn.id; for (const message of turn.buffer) handleTurnEvent(message)",
+            "explain": "受理响应给出 U-A；重放时严格核对 ID，status=completed 才满足本轮完成等待。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "重放后清空",
+              "result": "已收到成功终态",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "输出后收尾",
+            "actor": "Node",
+            "event": "教学模拟 · await turn.completed.promise → console.log → finally",
+            "explain": "现在才输出聚合答案。本轮状态清空后，单轮入口结束，外层 finally 再关闭进程。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "整段答案已输出",
+              "process": "关闭"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "已受理，但后续轮次失败",
+        "steps": [
+          {
+            "title": "受理响应只给出 ID",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · turn/start response: turn.id = U-A",
+            "explain": "pending 请求完成，任务完成等待仍未结束；两者不能共用一个“成功”标签。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "已受理，尚未完成",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "失败终态拒绝完成等待",
+            "actor": "Node",
+            "event": "教学模拟 · turn/completed with status=\"failed\" → turn.completed.reject(...)",
+            "explain": "方法名含 completed 表示轮次结束，不保证成功；必须读取其中的 status。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "failed，不输出成功答案",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "失败也释放资源",
+            "actor": "Node",
+            "event": "教学模拟 · runTurn finally → outer finally",
+            "explain": "清理不会改变失败结论，也不会自动再提交同一问题。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "错误向上传播",
+              "process": "关闭"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='单轮闭环|单轮错误' tests/single-turn.test.mjs",
+      "action": "在 demo1 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
+      "observe": [
+        "success 与 early 都只创建一个 Thread、一个 Turn，并得到同一条模拟回复。",
+        "failed 与 hang 由测试确认 reject，不会显示为 completed。",
+        "这组测试没有真实服务商请求；夹具故意让事件先于响应或让任务挂起。"
+      ],
+      "boundary": "需要 Node 24+ 和项目依赖；只验证本地协议编排与清理，不验证真实模型质量。"
+    },
+    "quiz": {
+      "question": "日志已经出现 turn/completed，但 UI 显示失败。哪项排查最有价值？",
+      "options": [
+        "检查该事件的 threadId、turn.id 和 status；completed 是事件名，不等于成功状态。",
+        "把所有 turn/completed 都当成功，避免用户看到失败。",
+        "去掉早到事件缓存，因为任何异步事件都应在响应之后出现。"
+      ],
+      "answer": 0,
+      "explanation": "A 同时检查事件归属与终态，能区分其他轮次、失败终态和真实成功。B 会伪报成功；C 建立在不存在的消息顺序保证上，会重新引入漏事件。"
+    },
+    "reference": {
+      "session": "s01",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s01_agent_loop",
+      "adaptation": "借用“循环何时继续、何时结束”的问题。参考靠 tool_use 内容块控制自写循环；本项目的可见判据是本 Turn 的服务端终态，不是应用端读取 stop_reason。"
+    }
+  },
+  {
+    "id": "d2-fifo",
+    "demo": 2,
+    "title": "连续输入如何不丢、不抢跑",
+    "principle": "输入队列只安排下一条用户消息何时提交，不控制当前 Turn 如何推理。",
+    "problem": "用户在模型回答前连续输入 first、second。若只在等待输入时监听一行，second 会丢；若两行一到就同时启动任务，会让会话推进难以解释。",
+    "change": {
+      "before": "Demo1 执行一次问题后退出，没有持续读取用户输入的需求。",
+      "added": "readline 始终收行，提前到达的行进入 FIFO；交互循环 await 当前 runTurn 后才取下一行。",
+      "kept": "每一轮仍使用 Demo1 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
+    },
+    "ownership": {
+      "codex": "执行单个 Turn 内的模型任务，并维护该会话上下文。",
+      "product": "保存提前输入的行、按顺序取出、解析本地命令，并决定何时提交下一轮。"
+    },
+    "concepts": [
+      {
+        "term": "FIFO",
+        "meaning": "先进先出：先输入的行先被 question() 取走，使用 queue.push 与 queue.shift。"
+      },
+      {
+        "term": "等待输入 / 等待完成",
+        "meaning": "question() 等用户行；runTurn() 等任务终态。模型忙时前者并没有占用一个正在等行的回调，所以新行进入队列。"
+      },
+      {
+        "term": "ReAct / 内部循环",
+        "meaning": "模型在一个任务中推理、调用工具、读取结果的往返。本项目把该循环交给 Codex，不由 FIFO 重写。"
+      }
+    ],
+    "mechanism": "createChatInput 的 line 事件一直存在：有 waiting 回调就直接交付，没有就 queue.push。question 先 queue.shift，再考虑 EOF，最后才创建等待者。因此管道提前写入多行也能保留。外层 while 对普通消息 await runTurn(prompt)，本轮结束前不会再次 question。它解决的是输入交付与会话推进的顺序，不是给模型加一个执行循环；队列仅在内存里，关闭输入时会清空。",
+    "design": {
+      "decision": "持续接收输入，但串行提交用户任务。",
+      "reason": "让输入速度与模型速度解耦：用户先打完也不丢行，同时保持每条消息对应一次清晰的会话推进。",
+      "alternative": "阻止用户输入只能掩盖节奏差异；不排队直接并发提交需要额外定义同一会话的并发语义。",
+      "cost": "后面的消息要等待前面的任务；当前 CLI 队列不持久化，连接致命失败后不会把剩余输入自动重发。"
+    },
+    "source": {
+      "file": "project-evolution/demo2/05-app-server.mjs",
+      "needle": "  terminal.on(\"line\", line => {",
+      "before": 3,
+      "after": 15,
+      "explanation": "上半段在“直接交给 waiting”和“存入 queue”之间选择；下半段 question 先取 queue，再判断 ended。真正保证逐轮等待的是同文件交互 while 中的 await runTurn(prompt)，不是 queue 数组自己在执行模型。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "两条输入比模型更快",
+        "steps": [
+          {
+            "title": "第一行被交给等待者",
+            "actor": "终端 → Node",
+            "event": "教学模拟 · line(\"first\") → waiting.resolve(first)",
+            "explain": "交互循环拿到 first 后启动当前轮次，等待其结果；第二次 question 尚未开始。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "空",
+              "input": "打开",
+              "nextSubmission": "暂不允许"
+            },
+            "lines": []
+          },
+          {
+            "title": "第二行进入缓冲",
+            "actor": "Node",
+            "event": "教学模拟 · line(\"second\") → queue.push(second)",
+            "explain": "因为 waiting 已清空，second 被保存，而不是丢弃或立即 turn/start。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "等待 U-1"
+            },
+            "lines": []
+          },
+          {
+            "title": "当前轮次成功结束",
+            "actor": "Node",
+            "event": "教学模拟 · await runTurn(first) returns → question()",
+            "explain": "只有 runTurn 返回，外层循环才开始取下一行。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "无",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "可取队首"
+            },
+            "lines": []
+          },
+          {
+            "title": "队首成为下一轮",
+            "actor": "Node",
+            "event": "教学模拟 · queue.shift() → turn/start(threadId=T-A)",
+            "explain": "复用同一 Thread，获得不同的 Turn ID；队列顺序转化为实际提交顺序。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-2（示意）",
+              "queue": "空",
+              "input": "打开",
+              "nextSubmission": "等待 U-2"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "连接中断时，不偷偷重发排队输入",
+        "steps": [
+          {
+            "title": "任务运行中还有待处理行",
+            "actor": "Node",
+            "event": "教学模拟 · activeTurn=U-1; queue=[second]",
+            "explain": "second 只是尚未提交的输入；不能把队列中的一行说成已经在 Codex 执行。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "等待 U-1"
+            },
+            "lines": []
+          },
+          {
+            "title": "子进程提前退出",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · child close → fail(...) → chatInput.close()",
+            "explain": "致命连接错误拒绝当前等待，并关闭输入；close 清空队列，停止继续提交。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1 失败收敛中",
+              "queue": "已清空",
+              "input": "关闭",
+              "nextSubmission": "禁止"
+            },
+            "lines": []
+          },
+          {
+            "title": "退出而非自动补发",
+            "actor": "Node",
+            "event": "教学模拟 · fatalError → outer finally",
+            "explain": "原会话历史可用于之后手动恢复，但内存排队不等于持久任务系统；未确认工作需要用户检查。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "无",
+              "queue": "空",
+              "input": "关闭",
+              "nextSubmission": "不会自动重发"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='命令行输入|循环聊天' 05-app-server.test.mjs",
+      "action": "在 demo2 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
+      "observe": [
+        "提前输入的 first、second 依次被 question() 取出，EOF 后返回 null。",
+        "协议中只有一个 thread/start，两个 turn/start 共用同一 Thread ID。",
+        "模拟器插入上一轮的 STALE 事件，但答案不包含 STALE；/help、/exit 等命令不发给模型。"
+      ],
+      "boundary": "测试使用本地 Node 假 App Server；验证排队、命令路由与轮次隔离，不代表模型理解上下文的质量。"
+    },
+    "quiz": {
+      "question": "用户建议把 FIFO 长度改成 1，以限制模型一次任务只能调用一个工具。应如何回应？",
+      "options": [
+        "可行，队列长度就是内部工具调用次数。",
+        "应该把每个工具调用拆成一个新 Thread。",
+        "两者属于不同层；FIFO 排用户消息，工具往返发生在 Codex 的单个 Turn 内。"
+      ],
+      "answer": 2,
+      "explanation": "C 区分外部提交节奏与内部执行。A 会改变用户输入缓冲，却无法限制模型内部调用；B 会破坏一次任务的上下文，也不是当前架构的调度方式。"
+    },
+    "reference": {
+      "session": "s05",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s05_todo_write",
+      "adaptation": "借用“同样叫任务状态，究竟改变规划还是执行”的分层辨析。参考 todo_write 记录模型计划；我们的 FIFO 是用户输入缓冲，没有引入 TodoManager 或其三轮提醒。"
+    }
+  },
+  {
+    "id": "d2-resume",
+    "demo": 2,
+    "title": "恢复会话，为何不是重新拼历史",
+    "principle": "恢复成功后才切换当前 Thread；检索元数据与保存原生正文是两份不同职责。",
+    "problem": "用户想接着昨天的问题聊。客户端能查到标题，却没有完整历史数组；有人因此准备把聊天正文复制进 Node，再每次重新发送。",
+    "change": {
+      "before": "Demo1 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
+      "added": "按本项目范围检索 Thread 元数据，数字选择后调用 thread/resume，并在响应成功后更新 threadId。",
+      "kept": "历史正文、上下文装配与原生持久化仍由 Codex 管理，Node 不实现摘要压缩。"
+    },
+    "ownership": {
+      "codex": "列出并恢复原生 Thread，管理该 Thread 的历史上下文。",
+      "product": "限制搜索范围、展示编号、校验选择与目录，等待恢复成功后才切换当前会话。"
+    },
+    "concepts": [
+      {
+        "term": "元数据索引",
+        "meaning": "用于查找会话的 ID、名称、预览、目录等信息，不是一份完整消息正文副本。"
+      },
+      {
+        "term": "thread/resume",
+        "meaning": "重新接入指定原生会话；后续 turn/start 使用恢复后的 Thread ID。"
+      },
+      {
+        "term": "恢复与记忆",
+        "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。Demo2 关闭后者，不能用恢复成功证明记忆开启。"
+      }
+    ],
+    "mechanism": "listProjectThreads 从本项目的运行目录和索引限定范围，分页读取 thread/list，再按名称、开场预览、ID 过滤。用户选数字后先检查项目目录，再 await thread/resume；selectThread 只在成功响应之后执行。于是取消、无结果、无效选择或恢复失败都不会提前覆盖当前 threadId。excludeTurns=true 仅是不在响应里带回完整 Turn 列表，不是删除原生历史。",
+    "design": {
+      "decision": "客户端保存检索线索，把完整历史交给同一个原生引擎恢复。",
+      "reason": "避免应用与执行引擎维护两份不一致的历史，同时让切换会话成为“成功才提交”的状态变更。",
+      "alternative": "先改 threadId 再发恢复请求，会在失败后留下错误的当前会话；自行拼接历史还要承担排序、工具消息配对与压缩。",
+      "cost": "检索不是任意消息全文搜索；历史、目录或引擎状态不可用时恢复仍可能失败，且使用当前配置的模型。"
+    },
+    "source": {
+      "file": "project-evolution/demo2/05-app-server.mjs",
+      "needle": "      const result = await request(\"thread/resume\", {",
+      "before": 4,
+      "after": 6,
+      "explanation": "先看数字选择和 ensureThreadDirectory，再看 await 后才执行 selectThread(result)。错误发生时不会走到这个赋值点。excludeTurns 影响响应载荷，不代表清空历史。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "选择旧会话并继续提问",
+        "steps": [
+          {
+            "title": "搜索尚不切换当前会话",
+            "actor": "Node",
+            "event": "教学模拟 · listProjectThreads(request, root, keyword)",
+            "explain": "搜索只建立候选列表；当前 Thread A 保持不变，也没有模型生成。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "无",
+              "phase": "搜索候选",
+              "history": "由 Codex 保管",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "编号落到一个候选",
+            "actor": "用户 → Node",
+            "event": "教学模拟 · selected = threads[Number(value) - 1]",
+            "explain": "编号指向 Thread B；必须先验证它确实来自本项目候选和目录。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "选择已校验",
+              "history": "由 Codex 保管",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复成功才换引用",
+            "actor": "Node ↔ Codex",
+            "event": "教学模拟 · await thread/resume → selectThread(result)",
+            "explain": "成功响应返回 B，才把当前 threadId 从 A 改为 B。",
+            "state": {
+              "currentThread": "B（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复成功",
+              "history": "继续 B 的原生历史",
+              "generation": "尚未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "新问题进入恢复的会话",
+            "actor": "Node",
+            "event": "教学模拟 · turn/start({ threadId: B, input: [...] })",
+            "explain": "用户的新输入触发新的 Turn，沿用 B 的上下文；无需 Node 重发旧消息数组。",
+            "state": {
+              "currentThread": "B（示意）",
+              "selected": "B（示意）",
+              "phase": "新轮次已提交",
+              "history": "继续 B 的原生历史",
+              "generation": "此时才发起"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "恢复 B 失败，继续留在 A",
+        "steps": [
+          {
+            "title": "选择 B 但暂不提交切换",
+            "actor": "Node",
+            "event": "教学模拟 · await request(\"thread/resume\", { threadId: B, ... })",
+            "explain": "await 期间当前 threadId 仍是 A。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复等待中",
+              "history": "A、B 原生历史未改",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复请求报错",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · request rejects; selectThread(result) is skipped",
+            "explain": "没有成功结果就没有切换；交互循环捕获操作错误并允许继续输入。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复失败",
+              "history": "A、B 原生历史未改",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "下一条普通消息仍发给 A",
+            "actor": "Node",
+            "event": "教学模拟 · turn/start({ threadId: A, ... })",
+            "explain": "这是保留原状态的直接结果，不是失败后另外创建一个空会话。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "无",
+              "phase": "继续原会话",
+              "history": "沿用 A",
+              "generation": "用户下一次提问才发起"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='resume 搜索|resume 取消' 05-app-server.test.mjs",
+      "action": "在 demo2 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
+      "observe": [
+        "成功路径不调用 thread/start；后续问题沿用 selected Thread ID 和只读权限。",
+        "取消、无结果或恢复错误后，后续问题仍发给原 Thread。",
+        "模拟测试会覆盖无效编号，但不会向真实模型发送内容。"
+      ],
+      "boundary": "这些夹具验证的是会话引用和错误恢复。真实对话连贯性需在有模型配置时另做提问检查，不能由离线测试预先保证。"
+    },
+    "quiz": {
+      "question": "恢复接口设置 excludeTurns:true，产品经理担心旧聊天被清空。正确解释是什么？",
+      "options": [
+        "它减少恢复响应中的历史列表，原生历史仍由 Codex 管理；后续继续同一 Thread。",
+        "它会永久删除旧 Turn，所以每次恢复都应从业务库复制正文。",
+        "只要使用 /resume，就同时打开了跨会话长期记忆。"
+      ],
+      "answer": 0,
+      "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，Demo2 明确关闭 memories。"
+    },
+    "reference": {
+      "session": "s08",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s08_context_compact",
+      "adaptation": "借用“当前请求、历史记录、摘要分别保存什么”的边界分析。参考自行裁剪 messages 并写 transcript；我们不移植其字符阈值或摘要器，恢复和上下文管理继续由 Codex 负责。"
+    }
+  },
+  {
+    "id": "d3-agent-config",
+    "demo": 3,
+    "title": "配置是装配合同，不是临时提示词",
+    "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
+    "problem": "运营修改了角色文件，旧会话仍按旧工具和资料边界执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
+    "change": {
+      "before": "Demo2 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
+      "added": "AgentDefinition 校验装配配置，记录文件指纹，生成描述符并让 Thread 绑定版本。",
+      "kept": "仍是一实例一套 Agent 配置、多个 Thread；Codex 执行任务，产品层不改写模型循环。"
+    },
+    "ownership": {
+      "codex": "接收装配后的角色和原生执行参数，管理原生 Thread/Turn。",
+      "product": "校验定义、解析资源引用、限定有效权限、检查变更，并决定旧 Thread 是否兼容。"
+    },
+    "concepts": [
+      {
+        "term": "Schema",
+        "meaning": "配置的结构规则：本例拒绝未知字段与缺失必填项，并固定原生 shell/写文件关闭等执行约束。"
+      },
+      {
+        "term": "描述符",
+        "meaning": "启动核验后的能力快照，记录角色指纹、工具版本、有效资源与执行策略等，而非复制角色正文或完整聊天。"
+      },
+      {
+        "term": "Hash / 指纹",
+        "meaning": "由内容计算的标识，用来判断规则是否变化；修改角色正文但不改显示版本号也会被发现。"
+      }
+    ],
+    "mechanism": "配置被读取后先经过 validateDefinition，再解析角色、资料、Skill 与 executionRef。sourceHash 将定义、角色、所选 Skill 内容纳入指纹；assertCurrent 每次受控入口核对它，一旦发现变化就把 revoked 置为真并撤销后续调用。启动核验生成的描述符另含工具与资源版本，Thread 绑定其 hash。重启只能建立新运行版本，不能让旧 Thread 自动获得新规则：恢复时仍要比对绑定，失配就要求新会话。",
+    "design": {
+      "decision": "配置只在受控装配时生效；变更检测后停止调用，而不是无声热替换角色。",
+      "reason": "同一个 Thread 与排队任务需要可解释的权限版本，避免一次工作前半段、后半段使用不同规则。",
+      "alternative": "每次临时读取最新角色看似方便，但旧上下文与新权限可能不一致，也难追踪某次结果依据哪套配置。",
+      "cost": "修改配置、角色或 Skill 后需要重启，并可能新建 Thread；不会自动迁移或覆盖旧历史。工具实现刷新另有边界锁，不能与任意 Agent 配置热更混为一谈。"
+    },
+    "source": {
+      "file": "project-evolution/demo3/server/modules/agents/index.mjs",
+      "needle": "  assertCurrent() {",
+      "before": 4,
+      "after": 10,
+      "explanation": "sourceHash 同时读取定义、角色和已配置 Skill；assertCurrent 把变化转成持续 revoked 状态，并 abort。allowsTool 也先调用此检查，所以把文件改回去不能让已经撤销的实例自行恢复。描述符与 Thread 兼容检查位于同文件 activate / checkBinding。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "启动后使用同一份有效规则",
+        "steps": [
+          {
+            "title": "校验定义并解析引用",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · validateDefinition(JSON.parse(this.raw))",
+            "explain": "未知字段或不支持的执行策略在运行前被拒绝；通过后才形成有效角色与资源集合。",
+            "state": {
+              "definition": "A（示意指纹）",
+              "descriptor": "未激活",
+              "binding": "无",
+              "revoked": "否",
+              "admission": "等待启动核验"
+            },
+            "lines": []
+          },
+          {
+            "title": "核验能力后生成描述符",
+            "actor": "Node",
+            "event": "教学模拟 · agent.activate(toolVersion, skills)",
+            "explain": "描述符把实际核验后的能力与资源规则固定下来，不只相信显示的版本名称。",
+            "state": {
+              "definition": "A（示意指纹）",
+              "descriptor": "D-A（示意）",
+              "binding": "无",
+              "revoked": "否",
+              "admission": "可新建会话"
+            },
+            "lines": []
+          },
+          {
+            "title": "Thread 绑定当前描述符",
+            "actor": "Node",
+            "event": "教学模拟 · agent.bind(threadId) → assertCompatible(threadId)",
+            "explain": "绑定记录写入本地 JSON；后续受控调用先检查定义仍未变化，再检查会话版本。",
+            "state": {
+              "definition": "A（示意指纹）",
+              "descriptor": "D-A（示意）",
+              "binding": "T-A → D-A（示意）",
+              "revoked": "否",
+              "admission": "允许"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "角色变更后，旧会话不能混用新权限",
+        "steps": [
+          {
+            "title": "旧 Thread 使用版本 A",
+            "actor": "Node",
+            "event": "教学模拟 · assertCompatible(T-A)",
+            "explain": "当前绑定与运行描述符一致，此时可执行。",
+            "state": {
+              "definition": "A（示意指纹）",
+              "descriptor": "D-A（示意）",
+              "binding": "T-A → D-A（示意）",
+              "revoked": "否",
+              "admission": "允许"
+            },
+            "lines": []
+          },
+          {
+            "title": "磁盘角色内容改变",
+            "actor": "部署者 → 文件",
+            "event": "教学模拟 · role file content changes",
+            "explain": "文件已保存只代表磁盘改变；运行中的快照还没有合法切换到新版本。",
+            "state": {
+              "definition": "B（示意指纹）",
+              "descriptor": "D-A（示意）",
+              "binding": "T-A → D-A（示意）",
+              "revoked": "否，尚待检查",
+              "admission": "下一入口待核验"
+            },
+            "lines": []
+          },
+          {
+            "title": "入口检查发现差异",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · assertCurrent() → AGENT_CHANGED",
+            "explain": "检测到差异后撤销该实例，后续调用停止；不能带着旧版本继续或自动迁移。",
+            "state": {
+              "definition": "B（示意指纹）",
+              "descriptor": "D-A（示意）",
+              "binding": "T-A → D-A（示意）",
+              "revoked": "是",
+              "admission": "拒绝，需受控重启"
+            },
+            "lines": []
+          },
+          {
+            "title": "重启后旧绑定仍失配",
+            "actor": "新服务实例",
+            "event": "教学模拟 · checkBinding(previous) → AGENT_INCOMPATIBLE",
+            "explain": "新实例可形成 D-B，但旧 T-A 仍绑定 D-A；需新会话，旧原生历史保留。",
+            "state": {
+              "definition": "B（示意指纹）",
+              "descriptor": "D-B（示意）",
+              "binding": "T-A → D-A（示意）",
+              "revoked": "新实例未撤销",
+              "admission": "旧 Thread 拒绝；可新建"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='Agent schema|描述符不复制|工具双重' tests/agent-core.test.mjs",
+      "action": "在 demo3 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+      "observe": [
+        "未知字段、缺失引用、nativeShell=true 等定义被拒绝。",
+        "无版本绑定的旧 Thread、不同描述符或排队消息版本不匹配会报错。",
+        "工具白名单改动被检测后，即使把配置改回，旧实例的调用仍失败；描述符不复制角色正文和密钥。"
+      ],
+      "boundary": "测试在临时项目副本装配 Agent，不修改实际运行配置，不连接模型。它验证版本与权限机制，不验证角色执行质量。"
+    },
+    "quiz": {
+      "question": "把角色文件改回原内容后，已撤销的服务仍拒绝调用。这是需要清除的误报吗？",
+      "options": [
+        "是，直接把 revoked 改成 false 即可，无需重新核验。",
+        "不是；该实例已发生撤销，需受控重启，旧会话还要按新描述符检查兼容性。",
+        "只要 Thread ID 没变，任何角色和权限都可以热替换。"
+      ],
+      "answer": 1,
+      "explanation": "B 符合撤销状态的单向收敛：检测变化后不能通过磁盘回滚绕开重新核验。A 跳过装配验证；C 把会话标识误当成权限版本，无法解释规则变化。"
+    },
+    "reference": {
+      "session": "s03",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
+      "adaptation": "借用“在执行之前用代码形成边界”的推理方式。参考用 deny/rule/ask 三道门展示位置；本项目采用受限配置、版本检查和资源服务，不移植字符串黑名单或交互审批流程。"
+    }
+  },
+  {
+    "id": "d3-skills",
+    "demo": 3,
+    "title": "Skill 给方法，权限仍要单独核验",
+    "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
+    "problem": "把一个 SKILL.md 放进工作区后，用户以为其中提到的命令就自动可执行；另一个意外被原生引擎发现的 Skill 也可能超出这个 Agent 的装配范围。",
+    "change": {
+      "before": "通用角色难以携带按任务选择的方法说明，而任意发现目录又可能引入未声明的能力描述。",
+      "added": "对声明的 Skill 路径与原生发现结果求有效集合，关闭范围外 Skill，按名称显式生成 type:skill 输入。",
+      "kept": "SKILL.md 的解析、发现与正文注入由 Codex 原生实现；应用不新增 load_skill 工具，也不重写模型循环。"
+    },
+    "ownership": {
+      "codex": "提供 skills/list 与 skills/config/write，并处理原生 Skill 输入和正文。",
+      "product": "核验配置绑定、依赖与文件版本，收紧启用集合，并把已核验名称和路径传给原生引擎。"
+    },
+    "concepts": [
+      {
+        "term": "原生 Skill",
+        "meaning": "提供任务方法的说明文件；本 Demo 只验证文本指令型 Skill，带 shell、fileWrite、assets 依赖的工作流不自动放行。"
+      },
+      {
+        "term": "发现与授权",
+        "meaning": "引擎发现文件，不等于 Agent 允许使用；有效集合还要与配置中的路径匹配并重新确认。"
+      },
+      {
+        "term": "显式 Skill 输入",
+        "meaning": "用户提及已核验的 $名称时，输入除原始 text 外增加 {type:\"skill\",name,path}，由引擎读取正文。"
+      }
+    ],
+    "mechanism": "默认 writing-agent.json 的 skills 是空数组，因此默认并没有启用一套额外 Skill。配置测试夹具声明 Skill 后，verifySkills 先读取原生清单，按规范化路径启用声明项、禁用范围外项，再读一次确认生效；必需项缺失或额外工具依赖会失败。AgentDefinition.input 只为有效集合中的精确名称添加原生 Skill 项，已知未授权名称报错；普通 $HOME 文字不会一概被当成非法 Skill。工具能否执行仍由 tools.allow 和资源边界决定。",
+    "design": {
+      "decision": "复用原生发现与注入，在产品层收紧集合并验证依赖。",
+      "reason": "避免写两套 SKILL.md 解析器，也防止“碰巧在磁盘上”演变成该 Agent 的授权。",
+      "alternative": "把全部 Skill 正文塞进角色会增加无关上下文；只依靠文件存在或模型自行判断则无法保证实际启用集合。",
+      "cost": "只支持已验证的文本指令路径；必需项不可用会阻止启动，可选项缺失可降级。文件变更需受控重启与会话版本检查。"
+    },
+    "source": {
+      "file": "project-evolution/demo3/server/modules/codex/skills.mjs",
+      "needle": "  const requested = new Map(agent.skills.map(skill => [skill.path, skill]));",
+      "before": 1,
+      "after": 13,
+      "explanation": "requested 是配置路径集合；遍历 discovered 时按这个集合写 enabled。changed 后重新 list，并拒绝仍启用的范围外项。后面的 available 还要核验必需项和依赖；显式输入映射在 agents/index.mjs 的 input()。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "测试夹具：声明 allowed，原生清单也发现它",
+        "steps": [
+          {
+            "title": "配置声明目标路径",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · agent.skills = [{id, path, required, version}]",
+            "explain": "这是用于教学与测试的已配置 Skill 场景；默认配置 skills=[]，不要把示例当成默认安装。",
+            "state": {
+              "declared": "allowed 路径（测试夹具）",
+              "discovered": "尚未读取",
+              "enabled": "尚未核验",
+              "inputTypes": "尚无输入",
+              "decision": "等待发现"
+            },
+            "lines": []
+          },
+          {
+            "title": "原生发现与集合收紧",
+            "actor": "Node ↔ Codex",
+            "event": "教学模拟 · skills/list → skills/config/write",
+            "explain": "夹具中 allowed 初始关闭、other 初始开启；应用只启用前者并关闭后者。",
+            "state": {
+              "declared": "allowed 路径（测试夹具）",
+              "discovered": "allowed、other",
+              "enabled": "allowed 开；other 关",
+              "inputTypes": "尚无输入",
+              "decision": "等待复核"
+            },
+            "lines": []
+          },
+          {
+            "title": "重新核验有效集合",
+            "actor": "Node",
+            "event": "教学模拟 · skills/list(forceReload=true) → available",
+            "explain": "复核确认没有范围外启用项，且所需 Skill 存在。可用名称以引擎发现结果为准。",
+            "state": {
+              "declared": "allowed 路径（测试夹具）",
+              "discovered": "allowed、other",
+              "enabled": "仅 allowed",
+              "inputTypes": "尚无输入",
+              "decision": "有效集合已确认"
+            },
+            "lines": []
+          },
+          {
+            "title": "显式提及后交给原生引擎",
+            "actor": "Node",
+            "event": "教学模拟 · agent.input(\"$allowed 提炼观点\")",
+            "explain": "返回原始 text 与一个 type:skill 项。此步只交付方法，不增加 tools.allow。",
+            "state": {
+              "declared": "allowed 路径（测试夹具）",
+              "discovered": "allowed、other",
+              "enabled": "仅 allowed",
+              "inputTypes": "text + skill",
+              "decision": "允许原生注入"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "已知范围外 Skill 被点名",
+        "steps": [
+          {
+            "title": "范围外 Skill 已被记录",
+            "actor": "Node",
+            "event": "教学模拟 · agent.deniedSkillNames = new Set(...)",
+            "explain": "other 虽然被引擎发现，但不在声明范围，已禁用并进入已知拒绝集合。",
+            "state": {
+              "declared": "仅 allowed 路径",
+              "discovered": "allowed、other",
+              "enabled": "仅 allowed",
+              "inputTypes": "尚无输入",
+              "decision": "other 未授权"
+            },
+            "lines": []
+          },
+          {
+            "title": "用户输入精确提及 other",
+            "actor": "Node",
+            "event": "教学模拟 · mentions contains other",
+            "explain": "input() 对可用名称与已知拒绝集合分别检查，不把所有美元符号都当技能指令。",
+            "state": {
+              "declared": "仅 allowed 路径",
+              "discovered": "allowed、other",
+              "enabled": "仅 allowed",
+              "inputTypes": "等待校验",
+              "decision": "命中已知未授权项"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝 Skill 输入",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · throw AppError(..., \"SKILL_UNAVAILABLE\")",
+            "explain": "不会传一个未核验路径给引擎，也不会因为文本里要求执行而悄悄开启 Skill。",
+            "state": {
+              "declared": "仅 allowed 路径",
+              "discovered": "allowed、other",
+              "enabled": "仅 allowed",
+              "inputTypes": "未生成 skill 项",
+              "decision": "拒绝"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='原生 Skill|必需 Skill' tests/agent-core.test.mjs",
+      "action": "在 demo3 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+      "observe": [
+        "接口夹具中的范围外 other 从 enabled=true 变成 false。",
+        "$allowed 生成 type:skill；$other 被拒绝，而普通 $HOME 和前缀相近名称不误匹配。",
+        "必需 Skill 缺失或需要 shell 的配置失败；可选缺失项给出降级 warning。"
+      ],
+      "boundary": "本测试使用 skills/list 的接口夹具，不证明原生解析器或模型会正确遵循 Skill。真实引擎核验与任务质量需要另外验证。"
+    },
+    "quiz": {
+      "question": "Skill 正文写着“使用 write_file”，但 tools.allow 中没有 write_file。应怎样解决？",
+      "options": [
+        "只把正文重复三遍，模型就会得到工具权限。",
+        "把 Skill 标为 required=true，它就能自动扩权。",
+        "先确认业务确需写入，再按装配规则实现和授权工具及资源；Skill 本身只提供方法。"
+      ],
+      "answer": 2,
+      "explanation": "C 区分方法说明、工具登记和资源授权。A 不会改变执行层校验；B 的 required 只决定缺失时是否阻止装配，不授予工具权限。"
+    },
+    "reference": {
+      "session": "s07",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
+      "adaptation": "借用“目录与正文分开、需要时加载”的认知顺序。参考自己解析 YAML 并用 load_skill 返回 tool_result；这里原生 Codex 负责解析与注入，我们教的是发现核验、显式输入与权限边界。"
+    }
+  },
+  {
+    "id": "d3-tool-registry",
+    "demo": 3,
+    "title": "工具名、参数合同和实现怎样接在一起",
+    "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
+    "problem": "模型输出了一个看似正确的工具名，却夹带了额外参数；如果程序只按名称查函数，错误输入就可能直接进入文件或网络操作。",
+    "change": {
+      "before": "Demo2 没有本项目外部工具装配；仅描述“可以读取资料”不能产生真实执行能力。",
+      "added": "从受信配置加载工具规格与工厂实现，编译 inputSchema，形成带版本的 Registry，list 与 call 都执行授权。",
+      "kept": "模型何时选择工具、如何利用结果仍由 Codex 决定；产品只提供可调用合同与实现。"
+    },
+    "ownership": {
+      "codex": "读取工具规格、选择调用并把执行结果用于当前 Turn。",
+      "product": "加载受信模块、拒绝重名和缺失实现、校验参数与授权、执行 handler，并返回明确成功或失败。"
+    },
+    "concepts": [
+      {
+        "term": "Registry",
+        "meaning": "工具注册表：把名称、说明、参数校验器和执行函数连接起来，并标记这一版工具集合。"
+      },
+      {
+        "term": "inputSchema",
+        "meaning": "模型可见的参数结构，也是运行时校验依据；描述字段不会替代真实校验。"
+      },
+      {
+        "term": "Handler / 工厂",
+        "meaning": "handler 执行具体工具；受信模块的工厂返回这些函数，模型不能借工具名加载任意代码。"
+      }
+    ],
+    "mechanism": "readToolSources 只从部署者控制的 config/tools 与 server/modules/tools 收集定义和代码。createToolService 检查名称、模块位置、重复项与实现，将每项 inputSchema 编译为校验器，再按 tools.allow 暴露 specs。call 并不信任“模型刚看过列表”：它再次检查名称、授权、当前撤销状态和参数，通过后才 entry.execute。参数或权限失败会返回 success:false，handler 不执行。",
+    "design": {
+      "decision": "同一份 Schema 同时用于对外描述与调用校验，并在 list 和 call 两处检查范围。",
+      "reason": "模型可能生成错误参数或猜到隐藏工具名，调用端必须独立验证，不能把工具列表当作权限闸门。",
+      "alternative": "只在提示词里说明格式容易漂移；只过滤列表仍可被直接构造名称绕过；把每个名称写成 main 中的分支不利于扩展。",
+      "cost": "新增能力需要实现、规格、授权都齐全，只改配置不会产生新能力。工具版本与撤销还需边界协调，不能在任务中途任意替换。"
+    },
+    "source": {
+      "file": "project-evolution/demo3/server/modules/tools/loader.mjs",
+      "needle": "    validate(name, args) {",
+      "before": 0,
+      "after": 18,
+      "explanation": "validate 先找 entry 并检查授权，再运行 entry.validate(args)。call 在 execute 前调用 validate，catch 则返回 success:false；这解释了“参数失败但没有文件副作用”。Schema 编译与工厂加载位于此函数上方。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "合法的 write_file 请求",
+        "steps": [
+          {
+            "title": "模型看到已授权规格",
+            "actor": "Registry",
+            "event": "教学模拟 · registry.specs → inputSchema",
+            "explain": "可见列表是配置与 Agent 授权筛选的结果；列出并不代表调用可以跳过校验。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "尚未检查",
+              "executions": "0",
+              "result": "尚无结果"
+            },
+            "lines": []
+          },
+          {
+            "title": "调用时重新核验",
+            "actor": "Registry",
+            "event": "教学模拟 · validate(\"write_file\", {path, content})",
+            "explain": "确认名称仍有效、权限未撤销，path/content 符合 Schema，才拿到执行入口。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "通过",
+              "executions": "0",
+              "result": "可执行"
+            },
+            "lines": []
+          },
+          {
+            "title": "执行受限实现",
+            "actor": "文件工具",
+            "event": "教学模拟 · entry.execute(args, { signal })",
+            "explain": "handler 还要执行文件服务的范围、大小与新建规则；Schema 只证明参数形状合法。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "通过",
+              "executions": "1",
+              "result": "文件服务检查与执行"
+            },
+            "lines": []
+          },
+          {
+            "title": "返回结构化结果",
+            "actor": "Registry",
+            "event": "教学模拟 · return { success: true, contentItems: [...] }",
+            "explain": "这里只表示工具操作成功；文章质量仍不能由一次写入成功证明。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "通过",
+              "executions": "1",
+              "result": "success:true"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "工具允许，但 content 的类型错误",
+        "steps": [
+          {
+            "title": "请求工具名合法",
+            "actor": "Codex → Registry",
+            "event": "教学模拟 · call({tool:\"write_file\", arguments:{path:\"drafts/a.md\",content:null}})",
+            "explain": "该工具确实已授权，故障在参数合同；不要把所有失败笼统归为权限错误。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "待检查：content=null",
+              "executions": "0",
+              "result": "收到调用"
+            },
+            "lines": []
+          },
+          {
+            "title": "Schema 拒绝 null",
+            "actor": "Registry",
+            "event": "教学模拟 · entry.validate(args) === false",
+            "explain": "content 必须是字符串，校验失败就抛错，执行函数尚未运行。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "失败：必须为字符串",
+              "executions": "0",
+              "result": "工具参数不合法"
+            },
+            "lines": []
+          },
+          {
+            "title": "返回失败而非虚构写入",
+            "actor": "Registry",
+            "event": "教学模拟 · catch → { success:false, contentItems:[...] }",
+            "explain": "把错误交回调用方修正，保留零次执行的事实；不能为了连贯的答案伪报文件已保存。",
+            "state": {
+              "tool": "write_file",
+              "listed": "是",
+              "authorized": "是",
+              "argsValid": "失败",
+              "executions": "0",
+              "result": "success:false，无写入"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='schema 与运行时' tests/tools.test.mjs",
+      "action": "在 demo3 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+      "observe": [
+        "每项 specs 都使用 inputSchema，并禁止未声明的额外参数。",
+        "read_file 缺 path、write_file 的 content=null、未知 bash 等输入被拒绝。",
+        "未知 namespace 调用返回 success:false；不存在文件返回明确错误，不泄露绝对工作区路径。"
+      ],
+      "boundary": "使用临时工具夹具与本地校验器；不发网络搜索或模型调用，不证明模型必然生成合法参数。"
+    },
+    "quiz": {
+      "question": "工具列表已经隐藏 write_file，但有人直接构造 call(write_file)。只过滤列表是否足够？",
+      "options": [
+        "足够，模型看不到就不可能调用。",
+        "不够，call 还必须重新检查白名单和参数，再进入实现。",
+        "应该把所有工具暴露出来，让模型自己遵守角色。"
+      ],
+      "answer": 1,
+      "explanation": "B 才把发现与执行两道入口分别保护。A 假定调用方无法猜名称；C 把执行边界交给文本约束，不能替代代码校验。"
+    },
+    "reference": {
+      "session": "s02",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
+      "adaptation": "借用“增加工具时稳定执行骨架，只扩展合同和分发”的教学对比。参考 TOOLS+TOOL_HANDLERS 是小字典；本项目增加受信配置、Schema 编译、白名单与版本快照，而不修改 Codex loop。"
+    }
+  },
+  {
+    "id": "d3-mcp",
+    "demo": 3,
+    "title": "MCP 是调用边界，不是一工具一服务",
+    "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
+    "problem": "开发者准备给五个工具开五个端口；另一个同事把产品网页直接指向 MCP URL，却收到 403。他们把工具数量、传输入口和调用身份混在了一起。",
+    "change": {
+      "before": "Registry 已有工具合同与实现，但 Codex 需要一个标准入口来发现和调用它们。",
+      "added": "建立回环 HTTP MCP 服务，以版本 URL 选择 Registry，用请求令牌保护入口，再由官方 SDK 分发 tools/list 与 tools/call。",
+      "kept": "Registry 的参数校验、文件服务边界与 Codex 原生循环不变；MCP 只连接这些职责。"
+    },
+    "ownership": {
+      "codex": "作为 MCP 客户端发现工具并提交调用；继续负责模型执行。",
+      "product": "启动本地服务、管理 Registry 版本与令牌、处理调用信号，并将工具结果映射为 MCP 内容。"
+    },
+    "concepts": [
+      {
+        "term": "MCP",
+        "meaning": "模型执行引擎发现与调用外部工具的一套协议；它不是单个工具的实现，也不规定必须一工具一进程。"
+      },
+      {
+        "term": "版本 URL",
+        "meaning": "入口路径包含 Registry 版本，收到调用后用路径查这一版实现，避免旧调用突然指向新实现。"
+      },
+      {
+        "term": "Bearer 令牌 / 回环",
+        "meaning": "令牌核验调用方是否获得凭据；127.0.0.1 把监听限制在本机。两者都不构成多用户登录系统。"
+      }
+    ],
+    "mechanism": "ToolManager 创建 Registry 和本地 MCP 服务，把 Registry 放进版本 Map，并把令牌通过子进程环境传给 Codex。HTTP 入口先拒绝 Origin 请求或错误令牌，再按 URL 查版本，且仅接受 POST。官方 SDK 将 tools/list 映射到 registry.specs，将 tools/call 映射到 registry.call；返回时把 success:false 转成 isError:true。一个入口即可承载多个工具，入口保护与工具/文件权限仍是不同层。",
+    "design": {
+      "decision": "本地集中提供版本化 MCP 入口，凭据不直接写入连接配置文件。",
+      "reason": "统一传输与发现，复用同一套 Registry 校验；版本路径让调用归属可解释，令牌与 Origin 检查阻止不受信的直接访问。",
+      "alternative": "一工具一服务可以实现，但在本项目会重复端口与连接管理；直接绕过 MCP 调 handler 则不能验证 Codex 的工具发现链路。",
+      "cost": "多了一层本地协议、版本与连接生命周期。它用于本机单 owner 开发，没有实现公网多用户授权，也不是浏览器业务 API。"
+    },
+    "source": {
+      "file": "project-evolution/demo3/server/modules/tools/mcp-server.mjs",
+      "needle": "    const registry = registries.get(request.url?.slice(1));",
+      "before": 2,
+      "after": 15,
+      "explanation": "按顺序阅读三层：Origin/令牌拒绝、版本与 POST 检查、SDK 的 list/call handler。list 返回 Registry specs，call 复用 Registry.call；isError 由实际 success 反向映射，不会因为 HTTP 请求已到达就显示工具成功。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "Codex 经一个入口调用某个已授权工具",
+        "steps": [
+          {
+            "title": "入口核验调用身份",
+            "actor": "MCP HTTP 服务",
+            "event": "教学模拟 · authorization matches; request.headers.origin is absent",
+            "explain": "只有正确凭据且没有 Origin 的请求才继续；此时还没有查工具名或执行。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "无",
+              "version": "待查找",
+              "handler": "未进入",
+              "response": "未返回"
+            },
+            "lines": []
+          },
+          {
+            "title": "路径选择工具版本",
+            "actor": "MCP HTTP 服务",
+            "event": "教学模拟 · registries.get(request.url.slice(1))",
+            "explain": "找到当前请求指向的 Registry；端口不因工具数量而增加。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "无",
+              "version": "V-A（示意）",
+              "handler": "Registry 已选定",
+              "response": "未返回"
+            },
+            "lines": []
+          },
+          {
+            "title": "SDK 分发到 Registry",
+            "actor": "MCP SDK",
+            "event": "教学模拟 · CallToolRequestSchema → registry.call({tool:params.name,...})",
+            "explain": "工具名和参数仍由 Registry 核验，再调用受限实现；MCP 不授予额外文件范围。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "无",
+              "version": "V-A（示意）",
+              "handler": "已调用 Registry 校验与执行",
+              "response": "等待工具结果"
+            },
+            "lines": []
+          },
+          {
+            "title": "映射回真实工具结果",
+            "actor": "MCP HTTP 服务",
+            "event": "教学模拟 · isError: !result.success",
+            "explain": "教学正常路径中工具成功，所以返回 isError:false；失败路径会保留明确错误。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "无",
+              "version": "V-A（示意）",
+              "handler": "完成一次工具调用",
+              "response": "MCP isError:false"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "带 Origin 的请求在工具层之前被拒绝",
+        "steps": [
+          {
+            "title": "请求带了正确令牌但也有 Origin",
+            "actor": "调用方 → MCP",
+            "event": "教学模拟 · POST with authorization and origin header",
+            "explain": "有令牌仍不意味着这个入口接受浏览器来源请求；本项目主动拒绝带 Origin 的访问。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "存在",
+              "version": "尚未查找",
+              "handler": "未进入",
+              "response": "未返回"
+            },
+            "lines": []
+          },
+          {
+            "title": "入口返回 403",
+            "actor": "MCP HTTP 服务",
+            "event": "教学模拟 · if (request.headers.origin || ...) → response.writeHead(403)",
+            "explain": "判断发生在 Registry 查询之前，因此工具 Schema、handler 和文件服务都还没执行。",
+            "state": {
+              "transport": "本机 HTTP POST",
+              "credential": "匹配",
+              "origin": "存在",
+              "version": "未查找",
+              "handler": "未进入",
+              "response": "403"
+            },
+            "lines": []
+          },
+          {
+            "title": "保持零工具副作用",
+            "actor": "MCP HTTP 服务",
+            "event": "教学模拟 · response.end(); return",
+            "explain": "修正调用边界应使用产品业务接口或合法 MCP 客户端；不是放宽文件工具授权来解决这个错误。",
+            "state": {
+              "transport": "请求结束",
+              "credential": "匹配",
+              "origin": "存在",
+              "version": "未查找",
+              "handler": "0 次调用",
+              "response": "403，无工具结果"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='MCP 入口' tests/tool-loading.test.mjs",
+      "action": "在 demo3 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+      "observe": [
+        "连接 URL 使用 http://127.0.0.1: 加临时端口。",
+        "没有令牌的 POST 返回 403；带正确令牌但有 Origin 的 POST 仍返回 403。",
+        "生成的配置文件不包含实际 MCP 令牌或模型密钥。"
+      ],
+      "boundary": "这是本地 HTTP 入口测试，不调用远端模型。通过只证明这些入口边界，不能宣称完整原生 MCP 发现和模型工具使用质量均已验证。"
+    },
+    "quiz": {
+      "question": "新增第六个工具后，是否必须再启动一个 MCP 服务？",
+      "options": [
+        "必须，每个 MCP 服务只能拥有一个工具。",
+        "不用登记或实现，只在角色里补一个名字即可。",
+        "本项目无需另开服务；把实现、规格和授权接入 Registry，再按版本边界让 Codex 发现它。"
+      ],
+      "answer": 2,
+      "explanation": "C 遵循本项目一个入口承载工具集合的实现。A 不是协议要求；B 缺少 handler、Schema 和授权，不会产生真实能力。"
+    },
+    "reference": {
+      "session": "s02",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
+      "adaptation": "沿用参考“稳定骨架、统一分发”的可视化方式，将模型名义调用追到真正 handler；本项目中间多了 MCP 传输与入口核验。参考 s02 的直接字典调用不能冒充本项目的跨进程协议。"
+    }
+  },
+  {
+    "id": "d3-workspace",
+    "demo": 3,
+    "title": "在工作区里，也不等于有权读写",
+    "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
+    "problem": "Agent 被允许 write_file，也成功在 outputs 创建了文件，于是用户以为它一定能读取所有 outputs；但在收窄资料绑定的配置中，读回仍被拒绝。",
+    "change": {
+      "before": "仅设定 cwd 或只允许某个工具名，仍没有回答该工具具体能读哪些资料、写哪些产物。",
+      "added": "独立文件服务以 sources.actions 和 outputs 规则判断读写范围，再执行路径、类型、大小与不可覆盖检查。",
+      "kept": "工具仍通过 Registry/MCP 调用，Codex 负责提出工具请求；文件权限不交给模型自行决定。"
+    },
+    "ownership": {
+      "codex": "依据任务提出文件工具调用，读取工具返回的内容与错误。",
+      "product": "检查授权范围、路径和实际文件属性；执行新建或读取，返回内容溯源或产物元数据。"
+    },
+    "concepts": [
+      {
+        "term": "cwd / workspace",
+        "meaning": "工作目录提供相对路径的起点；仅把 cwd 设在工作区内，不等于该目录所有内容都获准访问。"
+      },
+      {
+        "term": "资料绑定与产物规则",
+        "meaning": "sources.actions 中的 read/create 分别授权资料范围；outputs 可允许创建产物，但不自动授予读取权。"
+      },
+      {
+        "term": "create-only",
+        "meaning": "以 wx 独占新建文件，已有同名文件时失败，不覆盖原版本。"
+      }
+    ],
+    "mechanism": "readable 只接受声明 read 的来源；writable 接受声明 create 的来源或 outputs 范围，所以写入与读取可分开授权。随后 resolve 限制相对路径、目录区域与扩展名，并拒绝链接等绕过方式。默认文本只支持 .md/.txt，读写上限为 256 KiB，写入按 UTF-8 字节数检查；wx 保证现有文件不被覆盖。read 返回 sourceId、revision 等溯源，写入的文件存在与格式检查不证明文章语义或引用正确。",
+    "design": {
+      "decision": "由文件服务独立执行资源规则，将资料读取与产物创建分开。",
+      "reason": "同一工具可用于不同资料范围；独立边界能解释“能写输出但不能读取未授权资料”，不把所有路径都交给 cwd。",
+      "alternative": "只依赖角色文字或 cwd 会漏掉同一工作区里的私有子目录；把写权限自动等同读权限会扩大已明确收窄的范围。",
+      "cost": "默认格式、大小和新建限制牺牲部分通用编辑能力；这是受限文件服务，不是隔离同机恶意进程的操作系统沙箱。"
+    },
+    "source": {
+      "file": "project-evolution/demo3/server/modules/data/files.mjs",
+      "needle": "  const readable = (relative) =>",
+      "before": 2,
+      "after": 23,
+      "explanation": "covers 判断路径是否位于指定范围；readable 必须命中 read 来源，而 writable 还可命中 outputs。两套谓词正是“可创建不等于可读取”的原因。resolve、MAX_BYTES 与 wx 的具体检查在同文件后续读写函数中。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "收窄资料绑定的夹具仍允许创建产物",
+        "steps": [
+          {
+            "title": "分别计算读写授权",
+            "actor": "文件服务",
+            "event": "教学模拟 · sources=[inputs:read]; outputs.directory=\"outputs\"",
+            "explain": "这是收窄后的教学夹具，区别于默认还有 articles→outputs 的读绑定。产物可创建，但读取范围仍只有 inputs。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "不存在",
+              "operation": "准备创建",
+              "result": "尚未执行"
+            },
+            "lines": []
+          },
+          {
+            "title": "校验路径、格式与字节数",
+            "actor": "文件服务",
+            "event": "教学模拟 · writable(relative) → resolve(..., {createParents:true})",
+            "explain": "满足产物范围后仍检查相对路径、文本后缀与 256 KiB 上限；工具白名单不能跳过这些约束。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "不存在",
+              "operation": "校验通过",
+              "result": "尚未执行"
+            },
+            "lines": []
+          },
+          {
+            "title": "独占新建并返回产物记录",
+            "actor": "文件服务",
+            "event": "教学模拟 · fs.writeFileSync(file, content, { flag:\"wx\", ... })",
+            "explain": "创建成功返回路径、字节数与存在/格式检查。读取授权不会因为文件刚刚由自己创建而变化。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "已创建",
+              "operation": "创建完成",
+              "result": "created:true；不证明正文质量"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "同一夹具试图读回刚创建的文件",
+        "steps": [
+          {
+            "title": "模型发起读回请求",
+            "actor": "Codex → 文件服务",
+            "event": "教学模拟 · read_file({path:\"outputs/new.md\"})",
+            "explain": "文件已经存在，read_file 工具也可被调用；现在需要单独判断这条路径的读取许可。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "已创建",
+              "operation": "请求读取",
+              "result": "待授权检查"
+            },
+            "lines": []
+          },
+          {
+            "title": "readable 没有命中来源",
+            "actor": "文件服务",
+            "event": "教学模拟 · if (!readable(relative)) throw new Error(...)",
+            "explain": "输出创建规则没有参与 readable；缺少 articles 读绑定时，应在打开文件前拒绝。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "已创建且未修改",
+              "operation": "读取被拒",
+              "result": "未授权读取这个资料范围"
+            },
+            "lines": []
+          },
+          {
+            "title": "保留文件与原权限",
+            "actor": "Registry → Codex",
+            "event": "教学模拟 · call returns success:false",
+            "explain": "故障不是文件丢失，也不是需要再创建一次。若业务确需读回，应由部署者调整绑定并按版本规则重启。",
+            "state": {
+              "path": "outputs/new.md",
+              "readPermission": "否（夹具移除了 articles）",
+              "createPermission": "是",
+              "fileState": "保留原文件",
+              "operation": "未读取正文",
+              "result": "失败明确返回"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='来源范围|工作区内的窄来源' tests/agent-core.test.mjs",
+      "action": "在 demo3 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+      "observe": [
+        "移除 articles 读绑定后，outputs/new.md 仍能创建，但不能通过 read_file 读回。",
+        "同名产物再次创建失败，原文件内容保留。",
+        "窄来源不能通过父目录、.. 或符号链接访问其他资料；允许读取的结果带 sourceId、revision、locator。"
+      ],
+      "boundary": "验证文件访问规则和本地副作用；没有真实模型调用，不把文件存在或扩展名通过当成内容正确的证据。"
+    },
+    "quiz": {
+      "question": "outputs 中的文件创建成功却无法读回，且测试夹具移除了 articles 绑定。优先检查什么？",
+      "options": [
+        "检查读取来源绑定；创建权限不自动包含读取权，不能用重复写入修复。",
+        "修改 cwd 到 outputs 就能跳过来源授权。",
+        "关闭 Schema 校验，read_file 就会得到读权限。"
+      ],
+      "answer": 0,
+      "explanation": "A 对应 readable 与 writable 的独立判断。B 改的是路径起点，不是授权；C 的参数形状校验也不能改变文件服务中的资源范围。"
+    },
+    "reference": {
+      "session": "s03",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
+      "adaptation": "借用“在实际副作用之前画出判断闸门”的教学方式。参考通过规则与人工确认示意权限位置；本项目用明确来源/动作、文件属性和不可覆盖规则执行边界，不把示例黑名单当强沙箱。"
+    }
+  }
+]

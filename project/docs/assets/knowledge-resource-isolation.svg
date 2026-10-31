@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1210" viewBox="0 0 1440 1210" role="img" aria-labelledby="title desc"><title id="title">资源权限与职责边界：门禁不接管业务流程</title><desc id="desc">v1.2 · 整库授权、私有默认；用户 / Agent / 运行任务是可信上下文，Skill 仅提供执行方法。</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#82929d"/></marker></defs><style>text{font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#203542}.title{font-size:32px;font-weight:700}.sub{font-size:18px;fill:#5b6d77}.ct{font-size:23px;font-weight:650}.body{font-size:19px}.small{font-size:17px;fill:#5b6d77}.tag{font-size:14px;font-weight:700}.section{font-size:20px;font-weight:650}.line{fill:none;stroke:#82929d;stroke-width:2;marker-end:url(#arrow)}</style><rect width="1440" height="1210" fill="#ffffff"/><rect x="0" y="0" width="12" height="1210" fill="#991b1b"/>
+<text x="48" y="56" class="title">02  资源权限与职责边界：门禁不接管业务流程</text>
+<text x="48" y="91" class="sub">v1.2 · 整库授权、私有默认；用户 / Agent / 运行任务是可信上下文，Skill 仅提供执行方法。</text>
+<rect x="48" y="114" width="16" height="16" rx="3" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="73" y="128" class="small">新增 / 新能力</text>
+<rect x="260" y="114" width="16" height="16" rx="3" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="285" y="128" class="small">改造 / 扩展现有</text>
+<rect x="470" y="114" width="16" height="16" rx="3" fill="#fffafb" stroke="#be7180" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="495" y="128" class="small">预留 / 尚未启用</text>
+<rect x="696" y="114" width="16" height="16" rx="3" fill="#f4f8fa" stroke="#55758a" stroke-width="2"/>
+<text x="721" y="128" class="small">复用 / 现有基础</text>
+<text x="1130" y="128" class="small">目标设计 · 尚未实施</text>
+<rect x="48" y="170" width="646" height="335" rx="18" fill="#fff5f4" stroke="#991b1b" stroke-width="1.5"/>
+<text x="70" y="204" class="section" style="fill:#991b1b">用户 A · 私有空间 A</text>
+<rect data-card="研究 Agent" x="70" y="228" width="290" height="126" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="92" y="265" class="ct" style="fill:#db5b53">研究 Agent</text>
+<rect x="294" y="244" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="304" y="261" class="tag" style="fill:#fff">改造</text>
+<text x="92" y="299" class="body">挂载 KB A1 + KB A2</text>
+<text x="92" y="328" class="body">可读，不自动获得修改权</text>
+<rect data-card="写作 Agent" x="384" y="228" width="288" height="126" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="406" y="265" class="ct" style="fill:#db5b53">写作 Agent</text>
+<rect x="606" y="244" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="616" y="261" class="tag" style="fill:#fff">改造</text>
+<text x="406" y="299" class="body">仅挂载 KB A1</text>
+<text x="406" y="328" class="body">即使有搜索工具也不能查 A2</text>
+<rect data-card="KB A1 · 产品资料" x="70" y="399" width="290" height="82" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="92" y="436" class="ct" style="fill:#991b1b">KB A1 · 产品资料</text>
+<rect x="294" y="415" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="304" y="432" class="tag" style="fill:#fff">新增</text>
+<rect data-card="KB A2 · 内部研究" x="384" y="399" width="288" height="82" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="406" y="436" class="ct" style="fill:#991b1b">KB A2 · 内部研究</text>
+<rect x="606" y="415" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="616" y="432" class="tag" style="fill:#fff">新增</text>
+<path class="line" d="M168,354 L168,399"/>
+<path class="line" d="M270,354 L270,379 L492,379 L492,399"/>
+<path class="line" d="M525,354 L525,367 L324,367 L324,399"/>
+<rect x="722" y="170" width="670" height="189" rx="18" fill="#fff5f4" stroke="#991b1b" stroke-width="1.5"/>
+<text x="744" y="204" class="section" style="fill:#991b1b">用户 B · 私有空间 B</text>
+<rect data-card="用户 B 的 Agent → 仅挂载 KB B1" x="744" y="227" width="626" height="109" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="766" y="264" class="ct" style="fill:#db5b53">用户 B 的 Agent → 仅挂载 KB B1</text>
+<rect x="1304" y="243" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="1314" y="260" class="tag" style="fill:#fff">改造</text>
+<text x="766" y="298" class="body">猜中 A 的资源 ID，也不能访问 A 的知识</text>
+<rect data-card="共享知识 · 仅预留" x="722" y="393" width="670" height="112" rx="14" fill="#fffafb" stroke="#be7180" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="744" y="430" class="ct" style="fill:#be7180">共享知识 · 仅预留</text>
+<rect x="1326" y="409" width="48" height="23" rx="5" fill="#be7180"/>
+<text x="1336" y="426" class="tag" style="fill:#fff">预留</text>
+<text x="744" y="464" class="body">共享规则未定，默认关闭；未来需显式授权</text>
+<path class="line" d="M367,505 L367,542 L531,542 L531,582"/>
+<path class="line" d="M1392,260 L1410,260 L1410,542 L970,542 L970,582"/>
+<rect data-card="通用门禁 · 一套规则覆盖全部操作入口" x="180" y="582" width="1080" height="151" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="202" y="619" class="ct" style="fill:#991b1b">通用门禁 · 一套规则覆盖全部操作入口</text>
+<rect x="1194" y="598" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="1204" y="615" class="tag" style="fill:#fff">新增</text>
+<text x="202" y="653" class="body">可信身份 + 动作 + 资源属性 + 有效策略 → 允许 / 拒绝 + 有效范围</text>
+<text x="202" y="682" class="body">先判断工具是否可用，再判断目标资源与动作；不能只做工具名白名单。</text>
+<text x="202" y="711" class="body">旧工具、新工具、RAG、缓存命中均受约束；后台任务同样不能绕过。</text>
+<path class="line" d="M720,733 L720,764 L370,764 L370,802"/>
+<path class="line" d="M720,764 L1060,764 L1060,802"/>
+<rect data-card="权限检查 · 有没有资格做" x="48" y="802" width="644" height="204" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="70" y="839" class="ct" style="fill:#991b1b">权限检查 · 有没有资格做</text>
+<rect x="626" y="818" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="636" y="835" class="tag" style="fill:#fff">新增</text>
+<text x="70" y="873" class="body">由通用门禁负责</text>
+<text x="70" y="902" class="body">资源是否归属 / 已授权？Agent 是否挂载？</text>
+<text x="70" y="931" class="body">当前任务是否允许 read / update / execute？</text>
+<text x="70" y="960" class="body">拒绝原因示例：forbidden / scope_denied</text>
+<rect data-card="正确性检查 · 这次操作能否完成" x="732" y="802" width="660" height="204" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="754" y="839" class="ct" style="fill:#db5b53">正确性检查 · 这次操作能否完成</text>
+<rect x="1326" y="818" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="1336" y="835" class="tag" style="fill:#fff">改造</text>
+<text x="754" y="873" class="body">由能力与资源模块负责</text>
+<text x="754" y="902" class="body">expectedVersion 匹配？格式正确？来源有效？</text>
+<text x="754" y="931" class="body">符合规则后保存新版本并自动生效</text>
+<text x="754" y="960" class="body">失败原因示例：version_conflict / source_stale</text>
+<text x="48" y="1050" class="small">首期本地固定 owner 也走同一门禁；接入登录后，身份来自服务端认证，不信任客户端自报 userId / taskId。</text>
+<text x="48" y="1084" class="small">撤销授权：门禁立即阻断新访问与缓存返回；来源失效：资源管理使依赖它的 Wiki / 索引失效。两者分别处理。</text>
+<text x="48" y="1118" class="small">已读入旧对话的内容无法撤回；权限收窄后使用干净的新 Thread，阻断共享 memory 再次注入越权内容。</text>
+<text x="48" y="1152" class="small">资源元数据可供门禁作判断，但版本冲突不属于权限拒绝。目录名、collection 名与不同 Thread 都不等于隔离。</text>
+<text x="48" y="1186" class="small">目标方案，未实施多用户运行隔离；无默认人工审核流程，审核策略由具体产品按需扩展。</text>
+</svg>
