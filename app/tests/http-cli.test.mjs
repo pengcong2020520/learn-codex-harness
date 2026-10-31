@@ -144,7 +144,7 @@ test("重复启动同项目会明确拒绝，不出现两个调度器", async t 
 test("工具状态接口只返回名称和状态，不泄露 MCP 令牌、模块路径或密钥", async t => {
   const { app, api } = await appFixture(t);
   const state = await api.request("/tools");
-  assert.equal(state.status, "ready"); assert.equal(state.tools.length, 6);
+  assert.equal(state.status, "ready"); assert.equal(state.tools.length, 7);
   assert.ok(state.tools.some(tool => tool.name === "write_file"));
   const text = JSON.stringify(state);
   assert.ok(!text.includes(app.tools.token)); assert.ok(!text.includes(fixture.CODEX_API_KEY));

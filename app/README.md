@@ -178,9 +178,10 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 1. **准备文件**：在 Agent 包的 `skills/<id>/` 下放符合原生规范的 `SKILL.md`，可带 `references/` 下的 `.md`/`.txt`；不能有脚本、链接或其他文件，单文件不超过 128 KiB。
 2. **安装**：服务启动时同步到 `.data/codex/skills/<id>/`（Codex 的 user 范围），只清理本服务装过的旧副本，不覆盖其他目录。
 3. **发现与收紧**：通过 `skills/list` 发现，用 `skills/config/write` 只启用 Agent 声明的 Skill；工作区、`~/.agents/skills` 与 Codex 自带的 Skill 一律关闭；每轮前复查。
-4. **显式调用**：显式 `$skill-name` 会将 `{type: skill, name, path}` 传入，由 Codex 注入正文，不自建解析器。
-5. **权限声明**：`requires` 中声明 `shell / fileWrite / assets` 意味着本版不支持的依赖——必需项直接报错，可选项降级；额外工具依赖一律拒绝。
-6. **限制**：只支持文本 Skill。需要执行能力时写成工具（`server/modules/tools` + `config/tools/*.json`），Skill 里只写工具名。
+4. **显式调用**：显式 `$skill-name` 或 Workflow 指定的 Skill，会将 `{type: skill, name, path}` 传入，由 Codex 注入正文，不自建解析器。
+5. **隐式调用**：已启用 Skill 的名称和描述会出现在 Codex 的技能清单里。Agent 允许 `skill_read` 时，模型可以自行决定按名称读取 `SKILL.md` 或 `references/` 下的文件；只能读已启用 Skill 的白名单文件，读取不授予任何权限。
+6. **权限声明**：`requires` 中声明 `shell / fileWrite / assets` 意味着本版不支持的依赖——必需项直接报错，可选项降级；额外工具依赖一律拒绝。
+7. **限制**：只支持文本 Skill。需要执行能力时写成工具（`server/modules/tools` + `config/tools/*.json`），Skill 里只写工具名。
 
 ## 记忆边界
 

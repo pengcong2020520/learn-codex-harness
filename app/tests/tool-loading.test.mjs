@@ -20,10 +20,10 @@ test("配置驱动新工具，不修改主程序或分发分支；禁用配置�
   const root = installToolFixture(tempRoot(t));
   addTool(root);
   const registry = await createToolService(root);
-  assert.equal(registry.specs.length, 7);
+  assert.equal(registry.specs.length, 8);
   assert.deepEqual(JSON.parse((await registry.call({ tool: "echo_note", arguments: { text: "你好" } })).contentItems[0].text), { text: "你好" });
   fs.writeFileSync(path.join(root, "config/tools/extra.json"), JSON.stringify({ enabled: false, module: "does-not-exist.mjs" }));
-  assert.equal((await createToolService(root)).specs.length, 6);
+  assert.equal((await createToolService(root)).specs.length, 7);
 });
 
 test("拒绝重名、缺少实现、无效 schema、越界模块和配置符号链接", async t => {

@@ -201,3 +201,43 @@ test("真实 Codex：两步写文章——大纲后等待确认，确认后带�
   assert.equal(app.sessions.snapshot(session.id).turns.length, 2, "每一步是同一会话里的一轮");
   assert.deepEqual(provider.errors, []);
 });
+
+test("真实 Codex：模型按技能清单自行读取 Skill 与参考文件（隐式触发）；未启用的 Skill 读不到", { timeout: 60000 }, async t => {
+  const root = installToolFixture(tempRoot(t));
+  const write = (dir, name, extra = {}) => {
+    fs.mkdirSync(path.join(root, dir, "references"), { recursive: true });
+    fs.writeFileSync(path.join(root, dir, "SKILL.md"), `---\nname: ${name}\ndescription: DESC_${name} 写作检查方法\n---\nBODY_${name}\n`);
+    for (const [file, body] of Object.entries(extra)) fs.writeFileSync(path.join(root, dir, file), body);
+  };
+  write("agents/writing/skills/method", "core-method", { "references/check.md": "CHECKLIST_FIXTURE" });
+  write("workspace/.agents/skills/core-denied", "core-denied");
+  definition(root, v => {
+    v.agent.tools.allow = ["list_files", "read_file", "write_file", "skill_read"];
+    v.agent.skills = [{ id: "method", required: true }];
+    v.bindings.skills = { method: { path: "skills/method/SKILL.md" } };
+  });
+  let step = 0;
+  const seen = [];
+  const provider = await responsesFixture(root, body => {
+    const json = JSON.stringify(body), read = args => toolCall(toolSpecs(body).find(spec => spec.name?.endsWith("skill_read")), args);
+    seen.push(json);
+    if (step === 0) {
+      assert.ok(json.includes("DESC_core-method"), "已启用 Skill 的描述应出现在技能清单里");
+      assert.ok(!json.includes("BODY_core-method"), "没有显式调用时不应预先注入正文");
+      assert.ok(!json.includes("DESC_core-denied"), "未启用的 Skill 不出现在技能清单里");
+    }
+    return [() => read({ name: "core-method" }), () => read({ name: "core-method", file: "references/check.md" }),
+      () => read({ name: "core-denied" }), () => answer("已按方法检查。")][step++]();
+  });
+  const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  cleanup(root, () => app.close());
+  const session = await app.sessions.create();
+  await app.messages.submit({ threadId: session.id, clientMessageId: "implicit", text: "帮我检查这段文字的写法" });
+  await done(app, "implicit");
+  assert.deepEqual(provider.errors, []);
+  assert.ok(seen[1].includes("BODY_core-method"), "skill_read 应返回 SKILL.md 正文");
+  assert.ok(seen[2].includes("CHECKLIST_FIXTURE"), "skill_read 应能读取 references");
+  assert.match(seen[3], /Skill 未启用或不存在：core-denied/);
+  const tools = Object.values(app.sessions.snapshot(session.id).turns.at(-1).tools);
+  assert.deepEqual(tools.map(tool => tool.status), ["completed", "completed", "failed"]);
+});

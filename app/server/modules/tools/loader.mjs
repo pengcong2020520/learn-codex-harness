@@ -31,7 +31,7 @@ export function readToolSources(root) {
   return { files, version: hash.digest("hex") };
 }
 
-export async function createToolService(root, { source = readToolSources(root), snapshotDir, nodeEnv = "development", runWeb, files, agent, gate, knowledge, tasks, workspaceDir } = {}) {
+export async function createToolService(root, { source = readToolSources(root), snapshotDir, nodeEnv = "development", runWeb, files, agent, gate, knowledge, tasks, skills, workspaceDir } = {}) {
   const policy = files ? null : agent || new AgentDefinition(root);
   const fileService = files || createFileTools(root, { workspaceDir: workspaceDir || policy.workspacePath, sources: policy.sources, outputs: policy.outputs });
   const ajv = new Ajv({ strict: true, allErrors: false, validateFormats: false });
@@ -85,7 +85,7 @@ export async function createToolService(root, { source = readToolSources(root), 
     const module = await import(pathToFileURL(path.join(moduleRoot, group.module)).href);
     const factory = module[group.factory || "createTools"];
     if (typeof factory !== "function") throw new Error(`工具模块没有工厂函数：${group.module}`);
-    const handlers = await factory({ root, nodeEnv, runWeb, files: fileService, knowledge, tasks });
+    const handlers = await factory({ root, nodeEnv, runWeb, files: fileService, knowledge, tasks, skills });
     for (const { name } of group.tools) {
       if (!Object.hasOwn(handlers, name) || typeof handlers[name] !== "function") throw new Error(`缺少工具执行函数：${name}`);
       entries.get(name).execute = handlers[name];

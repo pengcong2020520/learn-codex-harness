@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "module": "server/modules/tools/skills.mjs",
+  "tools": [
+    {
+      "name": "skill_read",
+      "label": "读取 Skill",
+      "description": "读取已启用 Skill 的说明。技能清单里列出的 Skill 不能用 read_file 打开，请用本工具按名称读取；需要时自行决定是否参考。file 可选，默认 SKILL.md，也可以是该 Skill 目录内 references/ 下的文件。Skill 只提供方法，不授予任何权限。",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$", "description": "技能清单里的 Skill 名称" },
+          "file": { "type": "string", "minLength": 1, "maxLength": 200, "description": "例如 references/checklist.md" }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

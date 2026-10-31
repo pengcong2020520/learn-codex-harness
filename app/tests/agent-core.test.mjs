@@ -232,3 +232,17 @@ test("Skill 安装：同步到 CODEX_HOME/skills，清理本服务装过的旧�
   installSkills(new AgentDefinition(root), home);
   assert.ok(fs.existsSync(path.join(root, "agents/writing/agent.json")), "清单里的非法 id 不能删到 skills 目录之外");
 });
+
+test("skill_read：只读已启用 Skill 的白名单文件；未启用、越界路径与白名单外的文件一律拒绝", t => {
+  const root = installToolFixture(tempRoot(t));
+  packageSkill(root, "outline", { "SKILL.md": "---\nname: outline\n---\n提纲方法\n", "references/a.md": "参考A" });
+  const agent = new AgentDefinition(root);
+  const installed = installSkills(agent, path.join(root, ".data/codex"));
+  agent.availableSkills = agent.skills.map(skill => ({ ...skill, name: skill.id, path: installed.get(skill.id) }));
+  assert.match(agent.readSkill("outline").content, /提纲方法/);
+  assert.deepEqual(agent.readSkill("outline", "references/a.md"), { name: "outline", file: "references/a.md", files: ["SKILL.md", "references/a.md"], content: "参考A" });
+  for (const [name, file] of [["missing", undefined], ["outline", "../../../../agents/writing/agent.json"], ["outline", "references/../SKILL.md"], ["outline", "role.md"]])
+    assert.throws(() => agent.readSkill(name, file), /未启用|没有这个文件/, `${name} ${file}`);
+  agent.availableSkills = [];
+  assert.throws(() => agent.readSkill("outline"), /未启用/, "核验后未启用的 Skill 读不到");
+});

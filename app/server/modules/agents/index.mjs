@@ -193,6 +193,17 @@ export class AgentDefinition {
     const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash;
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
+  // skill_read 的实现：只读已核验启用的 Skill；文件限于打包时的白名单（SKILL.md 与 references/ 下的文本）。
+  readSkill(name, file = "SKILL.md") {
+    this.assertCurrent();
+    const skill = (this.availableSkills || []).find(item => item.name === name);
+    if (!skill) throw new AppError(`Skill 未启用或不存在：${name}`, 404, "SKILL_UNAVAILABLE");
+    const files = skill.files || ["SKILL.md"];
+    if (!files.includes(file)) throw new AppError(`Skill ${name} 没有这个文件：${file}。可读文件：${files.join("、")}`, 404);
+    const target = path.join(path.dirname(skill.path), file), info = fs.lstatSync(target);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new AppError(`Skill 文件无效：${name}/${file}`, 409);
+    return { name, file, files, content: fs.readFileSync(target, "utf8") };
+  }
   // workflow 指定的 Skill 按 id 注入；任务说明（目标、授权、验收）放在用户原文之前。
   input(text, workflow = null, step = 0) {
     this.assertCurrent();

@@ -25,7 +25,8 @@
         "kb_read",
         "kb_search",
         "kb_submit_revision",
-        "propose_task"
+        "propose_task",
+        "skill_read"
       ]
     },
     "dataBindings": [
