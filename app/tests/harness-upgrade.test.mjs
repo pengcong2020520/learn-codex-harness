@@ -55,7 +55,7 @@ test("内核注释、工具实现注释、JSON 排版和版本标签不使会话
     path.join(root, "server/modules/data/files.mjs"),
     "\n// comment\n",
   );
-  const file = path.join(root, "agents/writing-agent.json");
+  const file = path.join(root, "agents/writing/agent.json");
   edit(file, (v) => (v.agent.version = "2.0.0"));
   fs.writeFileSync(
     file,
@@ -92,7 +92,7 @@ test("客服示例可独立选择和运行；自定义目录没有四目录依�
   });
   fs.writeFileSync(
     path.join(root, "config/runtime/project.json"),
-    JSON.stringify({ agentDefinition: "example/agent.json" }),
+    JSON.stringify({ agentDefinition: "example/agent/agent.json" }),
   );
   fs.rmSync(path.join(root, "agents"), { recursive: true });
   fs.rmSync(path.join(root, "workspace"), { recursive: true });
@@ -127,7 +127,7 @@ test("客服示例可独立选择和运行；自定义目录没有四目录依�
     fs.existsSync(path.join(root, "example/workspace/inputs")),
     false,
   );
-  const file = path.join(root, "example/agent.json"),
+  const file = path.join(root, "example/agent/agent.json"),
     original = fs.readFileSync(file);
   for (const change of [
     (v) => (v.agent.knowledge[0].kbId = "missing"),
@@ -166,7 +166,7 @@ test("工具执行函数收到冻结的可信三元组；并行会话隔离，�
     }),
   );
   edit(
-    path.join(root, "agents/writing-agent.json"),
+    path.join(root, "agents/writing/agent.json"),
     (v) => (v.agent.tools.allow = ["inspect_context"]),
   );
   const agent = new AgentDefinition(root),

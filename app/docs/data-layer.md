@@ -471,7 +471,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 - `.data/identity.json`
 - `.data/files/`（不可变 blob）
 - `.data/codex/`（Codex 原生存储）
-- 权威配置：`agents/`（含 `agents/roles/`）、`config/tools/`、配置绑定的实际 Skill 文件
+- 权威配置：`agents/`（Agent 包：`agent.json`、`role.md`、`skills/`）、`config/tools/`
 
 可从 PG 重建或按既有规则清理：
 

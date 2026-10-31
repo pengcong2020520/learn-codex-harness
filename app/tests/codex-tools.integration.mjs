@@ -12,7 +12,7 @@ import { tempRoot, cleanup, until, installToolFixture } from "./helpers.mjs";
 import { responsesFixture, answer, toolCall, toolSpecs } from "./responses-fixture.mjs";
 
 function definition(root, change) {
-  const file = path.join(root, "agents/writing-agent.json");
+  const file = path.join(root, "agents/writing/agent.json");
   const value = JSON.parse(fs.readFileSync(file)); change(value);
   fs.writeFileSync(file, JSON.stringify(value));
 }
@@ -30,7 +30,7 @@ async function done(app, id) {
 test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重启恢复与清理", { timeout: 60000 }, async t => {
   const root = installToolFixture(tempRoot(t));
   definition(root, v => v.agent.tools.allow = ["list_files", "read_file", "write_file"]);
-  fs.appendFileSync(path.join(root, "agents/roles/writing-assistant.md"), "\nROLE_ASSEMBLY_FIXTURE\n");
+  fs.appendFileSync(path.join(root, "agents/writing/role.md"), "\nROLE_ASSEMBLY_FIXTURE\n");
   let step = 0;
   const provider = await responsesFixture(root, body => {
     const specs = toolSpecs(body), names = specs.map(tool => tool.name);
@@ -82,21 +82,22 @@ test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重�
   await done(app, "second"); assert.deepEqual(provider.errors, []);
   assert.equal(step, 5);
   assert.equal(app.sessions.sessions.get(session.id).cwd, workspaceDir);
-  fs.appendFileSync(path.join(root, "agents/roles/writing-assistant.md"), "\nROLE_CHANGED\n");
+  fs.appendFileSync(path.join(root, "agents/writing/role.md"), "\nROLE_CHANGED\n");
   await assert.rejects(app.messages.submit({ threadId: session.id, clientMessageId: "blocked", text: "不能静默切换角色。" }), /已变更/);
   assert.equal((await app.tools.registry.call({ tool: "read_file", arguments: { path: "outputs/article.md" } })).success, false);
 });
 
-test("真实 Codex：原生 Skill 发现、显式正文注入与范围外拒绝", { timeout: 60000 }, async t => {
+test("真实 Codex：Agent 包 Skill 同步到 CODEX_HOME 后显式注入；工作区里的 Skill 不启用", { timeout: 60000 }, async t => {
   const root = installToolFixture(tempRoot(t));
-  for (const name of ["core-allowed", "core-denied"]) {
-    const dir = path.join(root, "workspace/.agents/skills", name);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "SKILL.md"), "---\nname: " + name + "\ndescription: Integration fixture skill.\n---\n" + name.toUpperCase().replaceAll("-", "_") + "_INSTRUCTIONS\n");
+  // 授权的 Skill 放在 Agent 包里；工作区里的同类文件属于用户数据，必须被关闭。
+  for (const [name, dir] of [["core-allowed", "agents/writing/skills/core-allowed"], ["core-denied", "workspace/.agents/skills/core-denied"]]) {
+    fs.mkdirSync(path.join(root, dir, "references"), { recursive: true });
+    fs.writeFileSync(path.join(root, dir, "SKILL.md"), "---\nname: " + name + "\ndescription: Integration fixture skill.\n---\n" + name.toUpperCase().replaceAll("-", "_") + "_INSTRUCTIONS\n");
+    fs.writeFileSync(path.join(root, dir, "references/notes.md"), "参考资料\n");
   }
   definition(root, v => {
     v.agent.skills = [{ id: "outline", required: true }];
-    v.bindings.skills = { outline: { path: ".agents/skills/core-allowed/SKILL.md" } };
+    v.bindings.skills = { outline: { path: "skills/core-allowed/SKILL.md" } };
   });
   const provider = await responsesFixture(root, body => {
     assert.ok(JSON.stringify(body).includes("CORE_ALLOWED_INSTRUCTIONS"), "完整 Skill 没有注入原生请求");
@@ -106,6 +107,9 @@ test("真实 Codex：原生 Skill 发现、显式正文注入与范围外拒绝"
   const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
   cleanup(root, () => app.close());
   assert.equal(app.agent.availableSkills[0].name, "core-allowed");
+  const installed = fs.realpathSync(path.join(root, ".data/codex/skills/outline/SKILL.md"));
+  assert.equal(app.agent.availableSkills[0].path, installed);
+  assert.ok(fs.existsSync(path.join(root, ".data/codex/skills/outline/references/notes.md")), "references 应随 Skill 同步");
   const session = await app.sessions.create();
   await app.messages.submit({ threadId: session.id, clientMessageId: "skill", text: "$core-allowed 提取观点。" });
   await done(app, "skill");
@@ -115,6 +119,8 @@ test("真实 Codex：原生 Skill 发现、显式正文注入与范围外拒绝"
   await app.messages.submit({ threadId: session.id, clientMessageId: "denied", text: "$core-denied 不允许。" });
   await until(() => app.messages.job("denied").status === "failed");
   assert.equal(provider.requests.length, 1, "不允许的显式 Skill 请求不能发给模型");
+  fs.appendFileSync(path.join(root, "agents/writing/skills/core-allowed/references/notes.md"), "改动\n");
+  await assert.rejects(app.messages.submit({ threadId: session.id, clientMessageId: "changed", text: "继续" }), /已变更/, "Agent 包里的 Skill 被修改后应撤销");
 });
 
 test("真实 Codex：workspace 及上级目录的 AGENTS.md 不进入模型上下文，原生目标工具不可见", { timeout: 60000 }, async t => {

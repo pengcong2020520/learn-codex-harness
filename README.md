@@ -92,7 +92,7 @@ learn-codex-harness/
 │   ├── server/                 #   Agent 服务：会话、任务、工具、门禁、知识、HTTP/SSE
 │   ├── client/                 #   终端客户端
 │   ├── web/                    #   Web 工作台 + 互动课程（public/course）
-│   ├── agents/ config/ skills/ #   Agent 定义、工具目录、原生 Skill
+│   ├── agents/ config/         #   Agent 包（定义、角色、Skill）、工具目录
 │   ├── examples/               #   可复制的场景（写作、客服）
 │   ├── docs/                   #   设计与实现文档、验证记录
 │   └── tests/ scripts/         #   测试与运维脚本

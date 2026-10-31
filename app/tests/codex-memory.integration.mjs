@@ -10,7 +10,7 @@ import { tempRoot, installToolFixture, cleanup, until } from "./helpers.mjs";
 import { responsesFixture, answer, toolSpecs } from "./responses-fixture.mjs";
 
 function memoryPolicy(root, contribute) {
-  const file = path.join(root, "agents/writing-agent.json"), value = JSON.parse(fs.readFileSync(file));
+  const file = path.join(root, "agents/writing/agent.json"), value = JSON.parse(fs.readFileSync(file));
   value.agent.memory = { use: true, contribute }; fs.writeFileSync(file, JSON.stringify(value));
 }
 

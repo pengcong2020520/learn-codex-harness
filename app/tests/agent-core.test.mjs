@@ -6,12 +6,12 @@ import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { prepareRun, resolveWorkspace } from "../server/modules/codex/runtime.mjs";
 import { createFileTools } from "../server/modules/data/files.mjs";
 import { createToolService } from "../server/modules/tools/loader.mjs";
-import { verifySkills } from "../server/modules/codex/skills.mjs";
+import { installSkills, verifySkills } from "../server/modules/codex/skills.mjs";
 import { fixture, installToolFixture, tempRoot, rig, until } from "./helpers.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 
 function edit(root, change) {
-  const file = path.join(root, "agents/writing-agent.json"), value = JSON.parse(fs.readFileSync(file));
+  const file = path.join(root, "agents/writing/agent.json"), value = JSON.parse(fs.readFileSync(file));
   change(value); fs.writeFileSync(file, JSON.stringify(value));
 }
 async function assemble(t, change = () => {}) {
@@ -36,12 +36,12 @@ test("稳定工作区与 runDir 分离；缺失外部工作区和服务状态目
 });
 
 test("Agent schema 拒绝未知字段、缺失必需引用、原生权限提升和不支持的来源方法", t => {
-  const root = installToolFixture(tempRoot(t)), original = fs.readFileSync(path.join(root, "agents/writing-agent.json"));
+  const root = installToolFixture(tempRoot(t)), original = fs.readFileSync(path.join(root, "agents/writing/agent.json"));
   for (const change of [v => v.extra = true, v => v.agent.executionRef = "missing", v => delete v.bindings.sources.originals,
     v => v.bindings.executions["restricted-local"].nativeShell = true, v => v.agent.dataBindings[0].methods = ["sql"],
     v => v.agent.outputs.directory = "inputs", v => v.agent.dataBindings[0].actions = ["create"],
     v => v.bindings.sources.originals.root = "inputs/../drafts", v => v.agent.instructions = "../.env"]) {
-    fs.writeFileSync(path.join(root, "agents/writing-agent.json"), original); edit(root, change);
+    fs.writeFileSync(path.join(root, "agents/writing/agent.json"), original); edit(root, change);
     assert.throws(() => new AgentDefinition(root));
   }
 });
@@ -161,4 +161,74 @@ test("必需 Skill 缺失或有未满足依赖启动报错；可选引用明确�
   assert.match(new AgentDefinition(root).warnings[0], /可选 Skill/);
   edit(root, v => { v.agent.skills[0].required = true; v.bindings.skills.missing = { path: "not-installed", requires: ["shell"] }; });
   assert.throws(() => new AgentDefinition(root), /依赖尚未支持/);
+});
+
+function packageSkill(root, id, files = { "SKILL.md": `---\nname: ${id}\ndescription: test\n---\nBODY\n` }) {
+  for (const [name, body] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, "agents/writing/skills", id, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, "agents/writing/skills", id, name), body);
+  }
+  edit(root, v => { v.agent.skills = [{ id, required: true }]; v.bindings.skills = { [id]: { path: `skills/${id}/SKILL.md` } }; });
+}
+
+test("Agent 包：Skill 只能在包内、工作区外，目录只含 SKILL.md 与 references 文本；1.1 定义仍相对工作区", t => {
+  const root = installToolFixture(tempRoot(t));
+  packageSkill(root, "outline", { "SKILL.md": "---\nname: outline\n---\n", "references/a.md": "A", ".DS_Store": "x" });
+  const agent = new AgentDefinition(root);
+  assert.deepEqual(agent.skills[0].files, ["SKILL.md", "references/a.md"], "隐藏文件不同步");
+  const before = agent.sourceHash();
+  fs.writeFileSync(path.join(root, "agents/writing/skills/outline/references/b.md"), "B");
+  assert.notEqual(agent.sourceHash(), before, "新增参考文件也要触发撤销");
+  for (const [files, pattern] of [[{ "run.sh": "echo" }, /只能包含/], [{ "references/tool.py": "x" }, /只能包含/]]) {
+    const other = installToolFixture(tempRoot(t));
+    packageSkill(other, "outline");
+    for (const [name, body] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(other, "agents/writing/skills/outline", name)), { recursive: true });
+      fs.writeFileSync(path.join(other, "agents/writing/skills/outline", name), body);
+    }
+    assert.throws(() => new AgentDefinition(other), pattern);
+  }
+  const linked = installToolFixture(tempRoot(t));
+  packageSkill(linked, "outline");
+  fs.symlinkSync(path.join(linked, "agents/writing/role.md"), path.join(linked, "agents/writing/skills/outline/references.md"));
+  assert.throws(() => new AgentDefinition(linked), /符号链接/);
+  assert.throws(() => { edit(linked, v => { v.agent.skills = [{ id: "Bad_ID", required: true }]; v.bindings.skills = { Bad_ID: { path: "skills/outline/SKILL.md" } }; }); new AgentDefinition(linked); }, /小写字母/);
+  // 工作区放在 Agent 包里时，角色和 Skill 都不能落进工作区。
+  const nested = installToolFixture(tempRoot(t));
+  fs.mkdirSync(path.join(nested, "agents/writing/ws/.agents/skills/inner"), { recursive: true });
+  fs.writeFileSync(path.join(nested, "agents/writing/ws/role.md"), "角色");
+  fs.writeFileSync(path.join(nested, "agents/writing/ws/.agents/skills/inner/SKILL.md"), "---\nname: inner\n---\n");
+  edit(nested, v => { v.bindings.workspaceDir = "ws"; v.agent.instructions = "ws/role.md"; });
+  assert.throws(() => new AgentDefinition(nested), /角色文件不能放在工作区里/);
+  edit(nested, v => { v.agent.instructions = "role.md"; v.agent.skills = [{ id: "inner", required: true }]; v.bindings.skills = { inner: { path: "ws/.agents/skills/inner/SKILL.md" } }; });
+  assert.throws(() => new AgentDefinition(nested), /工作区外/);
+  // 1.1：Skill 路径相对工作区，不同步，沿用 Codex 的 repo 范围发现。
+  const legacy = installToolFixture(tempRoot(t));
+  fs.mkdirSync(path.join(legacy, "workspace/.agents/skills/old"), { recursive: true });
+  fs.writeFileSync(path.join(legacy, "workspace/.agents/skills/old/SKILL.md"), "---\nname: old\n---\n");
+  edit(legacy, v => { v.schemaVersion = "1.1"; v.agent.skills = [{ id: "old", required: true }]; v.bindings.skills = { old: { path: ".agents/skills/old/SKILL.md" } }; });
+  const old = new AgentDefinition(legacy);
+  assert.equal(old.skills[0].source, undefined);
+  assert.equal(old.skills[0].path, fs.realpathSync(path.join(legacy, "workspace/.agents/skills/old/SKILL.md")));
+});
+
+test("Skill 安装：同步到 CODEX_HOME/skills，清理本服务装过的旧副本，不覆盖别人的目录、不碰 .system", t => {
+  const root = installToolFixture(tempRoot(t)), home = path.join(root, ".data/codex");
+  fs.mkdirSync(path.join(home, "skills/.system/builtin"), { recursive: true });
+  packageSkill(root, "outline", { "SKILL.md": "---\nname: outline\n---\n", "references/a.md": "A" });
+  const agent = new AgentDefinition(root);
+  const installed = installSkills(agent, home);
+  assert.equal(installed.get("outline"), fs.realpathSync(path.join(home, "skills/outline/SKILL.md")));
+  assert.equal(fs.readFileSync(path.join(home, "skills/outline/references/a.md"), "utf8"), "A");
+  packageSkill(root, "review");
+  installSkills(new AgentDefinition(root), home);
+  assert.ok(!fs.existsSync(path.join(home, "skills/outline")), "已移除的 Skill 要清理");
+  assert.ok(fs.existsSync(path.join(home, "skills/review/SKILL.md")) && fs.existsSync(path.join(home, "skills/.system/builtin")));
+  fs.mkdirSync(path.join(home, "skills/manual"));
+  packageSkill(root, "manual");
+  assert.throws(() => installSkills(new AgentDefinition(root), home), /不是本服务安装的/);
+  fs.writeFileSync(path.join(home, "skills/.harness-skills.json"), JSON.stringify({ skills: ["review", "../../agents"] }));
+  packageSkill(root, "review");
+  installSkills(new AgentDefinition(root), home);
+  assert.ok(fs.existsSync(path.join(root, "agents/writing/agent.json")), "清单里的非法 id 不能删到 skills 目录之外");
 });

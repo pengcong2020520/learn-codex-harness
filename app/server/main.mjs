@@ -16,7 +16,7 @@ import { MemoryService } from "./modules/memory/index.mjs";
 import { AgentDefinition } from "./modules/agents/index.mjs";
 import { ExecutionBoundary } from "./modules/agents/boundary.mjs";
 import { createFileTools } from "./modules/data/files.mjs";
-import { verifySkills } from "./modules/codex/skills.mjs";
+import { installSkills, verifySkills } from "./modules/codex/skills.mjs";
 import path from 'node:path';
 import { PermissionGate } from './modules/permissions/index.mjs';
 import { KnowledgeService } from './modules/knowledge/index.mjs';
@@ -71,7 +71,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const tools = new ToolManager({ config, runtime, files, agent, gate, knowledge, boundary, log: safeLog, redact });
     lifecycle.defer(() => tools.close());
     await tools.open();
-    prepareCodexConfig(config, tools.configuration());
+    installSkills(agent, prepareCodexConfig(config, tools.configuration()).home);
     const rpc = new CodexConnection({ launch: config.launch, runtime, redact, cli, log: safeLog });
     engine = rpc;
     lifecycle.defer(() => rpc.close());

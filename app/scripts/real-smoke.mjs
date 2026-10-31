@@ -43,7 +43,7 @@ for (const example of ["writing", "customer-support"]) {
       { recursive: true },
     );
     const definition = JSON.parse(
-        fs.readFileSync(path.join(root, "example/agent.json")),
+        fs.readFileSync(path.join(root, "example/agent/agent.json")),
       ),
       kb = definition.agent.knowledge[0].kbId;
     const binding = definition.bindings.knowledgeBases[kb],
@@ -64,7 +64,7 @@ for (const example of ["writing", "customer-support"]) {
     );
     const config = loadServerConfig(root, {
       ...credentials,
-      AGENT_DEFINITION: "example/agent.json",
+      AGENT_DEFINITION: "example/agent/agent.json",
       AGENT_MEMORY_ENABLED: "false",
       DATABASE_URL: process.env.DATA_TEST_DATABASE_URL,
       REDIS_URL: process.env.DATA_TEST_REDIS_URL,

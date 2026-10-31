@@ -77,7 +77,6 @@ test('知识 Web 接口底层：原文导入、不可覆盖、目录隔离、任
 
 test('真实 Codex + PG + Redis：动态工具任务身份、维护范围持久化、Wiki 生成与读取闭环', {timeout:60000}, async t=>{
   const root=installToolFixture(tempRoot(t),{knowledge:true});
-  fs.cpSync(new URL('../skills/knowledge',import.meta.url),path.join(root,'workspace/.agents/skills/knowledge'),{recursive:true});
   fs.mkdirSync(path.join(root,'workspace/inputs/general'),{recursive:true});
   fs.writeFileSync(path.join(root,'workspace/inputs/general/source.md'),'# 原始事实\n门店有三种服务。');
   const pool=await openDatabase(databaseUrl); await migrate(pool); await pool.end();

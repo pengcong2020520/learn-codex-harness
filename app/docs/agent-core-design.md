@@ -151,23 +151,21 @@
 
 ### 3.3 目录结构参考（示意）
 
-工作区布局不是框架强制要求；以下为写作场景的参考示例。Agent 定义可以是单一 JSON 文件（如 `agents/writing-agent.json`），角色指令位于配置目录下的 `roles/writing-assistant.md`，路径均相对于配置目录解析，无需强制 `definitions/` 与 `bindings/` 拆分。工作区内可选放置 `AGENTS.md` 和 `.agents/skills` 作为原生发现的输入。
+工作区布局不是框架强制要求；以下为写作场景的参考示例。一个 Agent 一个目录（Agent 包），角色、Skill 路径均相对 `agent.json` 解析，无需强制 `definitions/` 与 `bindings/` 拆分。工作区是用户数据，**不放** `AGENTS.md` 或 Skill：受限启动关闭了 `AGENTS.md` 加载，Skill 由 Agent 包同步到 `CODEX_HOME`（见 [skill-workflow-design.md](skill-workflow-design.md)）。
 
 ```
 serviceRoot/
-├── agents/
-│   ├── writing-agent.json      # Agent 定义（含绑定）
-│   └── roles/
-│       └── writing-assistant.md # 相对配置目录解析的角色指令
+├── agents/writing/             # Agent 包
+│   ├── agent.json              # Agent 定义（含绑定）
+│   ├── role.md                 # 角色指令
+│   └── skills/<id>/SKILL.md    # 本 Agent 的 Skill
 ├── workspace/                  # workspaceDir（稳定绝对路径，可外部挂载）
-│   ├── AGENTS.md               # 可选，原生发现输入
-│   ├── .agents/skills/         # 可选，原生 Skill 发现路径
 │   ├── inputs/                 # 只读源文档（当前写作模板，首阶段保留）
 │   ├── research/
 │   ├── drafts/
 │   └── outputs/
 ├── .runs/app-server-*/         # runDir（实际路径形如此，非整个 .runs）
-└── .data/codex/                # codexHome：原生 SQLite/JSONL，不手工编辑
+└── .data/codex/                # codexHome：原生 SQLite/JSONL，不手工编辑；skills/ 下是启动时同步的 Skill
 ```
 
 ---

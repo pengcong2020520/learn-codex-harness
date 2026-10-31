@@ -1,17 +1,15 @@
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "agent": {
-    "id": "writing-assistant",
-    "version": "1.1.0",
-    "instructions": "roles/writing-assistant.md",
+    "id": "customer-support",
+    "version": "1.0.0",
+    "instructions": "role.md",
     "skills": [],
     "tools": {
       "allow": [
         "list_files",
         "read_file",
         "write_file",
-        "search_web",
-        "read_webpage",
         "kb_list",
         "kb_read",
         "kb_search",
@@ -20,7 +18,7 @@
     },
     "dataBindings": [
       {
-        "sourceRef": "originals",
+        "sourceRef": "policies",
         "actions": [
           "read"
         ],
@@ -30,31 +28,10 @@
         "required": true
       },
       {
-        "sourceRef": "research",
+        "sourceRef": "replies",
         "actions": [
           "read",
           "create"
-        ],
-        "methods": [
-          "files"
-        ],
-        "required": true
-      },
-      {
-        "sourceRef": "drafts",
-        "actions": [
-          "read",
-          "create"
-        ],
-        "methods": [
-          "files"
-        ],
-        "required": true
-      },
-      {
-        "sourceRef": "articles",
-        "actions": [
-          "read"
         ],
         "methods": [
           "files"
@@ -68,7 +45,7 @@
       "contribute": false
     },
     "outputs": {
-      "directory": "outputs",
+      "directory": "work/replies",
       "formats": [
         "md",
         "txt"
@@ -81,36 +58,27 @@
     },
     "knowledge": [
       {
-        "kbId": "general",
+        "kbId": "support",
         "mode": "wiki",
         "actions": [
           "read",
-          "update",
-          "index"
+          "update"
         ]
       }
     ]
   },
   "bindings": {
-    "workspaceDir": "workspace",
+    "workspaceDir": "../workspace",
     "skills": {},
     "sources": {
-      "originals": {
+      "policies": {
         "type": "files",
-        "root": "inputs",
+        "root": "handbook/policies",
         "readOnly": true
       },
-      "research": {
+      "replies": {
         "type": "files",
-        "root": "research"
-      },
-      "drafts": {
-        "type": "files",
-        "root": "drafts"
-      },
-      "articles": {
-        "type": "files",
-        "root": "outputs"
+        "root": "work/replies"
       }
     },
     "executions": {
@@ -122,9 +90,9 @@
       }
     },
     "knowledgeBases": {
-      "general": {
-        "sourceRoot": "inputs/general",
-        "wikiRoot": "research/general/wiki"
+      "support": {
+        "sourceRoot": "handbook/policies",
+        "wikiRoot": "knowledge/wiki"
       }
     }
   }

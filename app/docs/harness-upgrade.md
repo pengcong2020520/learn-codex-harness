@@ -15,13 +15,13 @@ config/runtime/project.json 或 AGENT_DEFINITION
 
 默认定义由 `config/runtime/project.json` 的 `agentDefinition` 指定，环境变量 `AGENT_DEFINITION` 优先。工作区相对 Agent JSON 所在目录解析；资源路径相对工作区解析。必需资料目录不存在会报错，可以先运行 `npm run agent:init` 创建配置声明的空目录，不覆盖已有文件。
 
-两份可复制示例位于 `examples/writing` 和 `examples/customer-support`。客服示例使用 `handbook/policies`、`work/replies`、`knowledge/wiki`，没有 inputs/research/drafts/outputs 依赖。新增同类场景只需修改定义和角色；新增工具实现仍需编写执行函数。
+两份可复制示例位于 `examples/writing` 和 `examples/customer-support`，各自分成 `agent/`（Agent 包）与 `workspace/`（工作区模板）。客服示例使用 `handbook/policies`、`work/replies`、`knowledge/wiki`，没有 inputs/research/drafts/outputs 依赖。新增同类场景只需修改定义和角色；新增工具实现仍需编写执行函数。
 
 ```bash
-AGENT_DEFINITION=examples/customer-support/agent.json npm run agent:init
-AGENT_DEFINITION=examples/customer-support/agent.json npm run check
+AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run agent:init
+AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run check
 # DATABASE_URL / REDIS_URL 已配置并完成 data:migrate 后：
-AGENT_DEFINITION=examples/customer-support/agent.json npm run server
+AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run server
 ```
 
 同一个服务根目录一次运行一个 Agent，切换示例前停止原服务。切换到不同 Agent 不会继承原 Agent 的会话权限；原会话仍保留。

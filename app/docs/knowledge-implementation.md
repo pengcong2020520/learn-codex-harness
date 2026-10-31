@@ -115,12 +115,10 @@ Agent knowledge[].mode 声明期望模式，持久为 desired_mode；运行中 `
 npm run knowledge:init
 ```
 
-- 创建工作区目录结构。
-- 将 `skills/knowledge/SKILL.md`（原生 instructions-only Skill）复制到 `workspace/.agents/skills/knowledge/SKILL.md`。
-- 已有不同文件时不覆盖。
-- 不导入样例事实，不自动写 Wiki；只建目录和部署可信 Skill。
+- 创建工作区与知识库目录结构。
+- 不导入样例事实，不自动写 Wiki；只建目录。
 
-默认 Agent 可选绑定 knowledge Skill，缺失时服务启动会输出警告。
+knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，服务启动时同步到 `.data/codex/skills/knowledge/`，不再复制进工作区。默认 Agent 可选绑定它，缺失时服务启动会输出警告。
 
 ## knowledge CLI 命令
 

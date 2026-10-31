@@ -1,15 +1,10 @@
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "agent": {
     "id": "writing-assistant",
     "version": "1.1.0",
-    "instructions": "roles/writing-assistant.md",
-    "skills": [
-      {
-        "id": "knowledge",
-        "required": false
-      }
-    ],
+    "instructions": "role.md",
+    "skills": [],
     "tools": {
       "allow": [
         "list_files",
@@ -98,11 +93,7 @@
   },
   "bindings": {
     "workspaceDir": "../workspace",
-    "skills": {
-      "knowledge": {
-        "path": ".agents/skills/knowledge/SKILL.md"
-      }
-    },
+    "skills": {},
     "sources": {
       "originals": {
         "type": "files",

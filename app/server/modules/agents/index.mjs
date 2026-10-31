@@ -14,6 +14,29 @@ export { digest } from "./contracts.mjs";
 const inside = (root, file) => file === root || file.startsWith(root + path.sep);
 const freeze = value => { if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
 
+// Skill 目录只同步文本：SKILL.md 与 references/ 下的 .md/.txt。不跟随链接；需要执行能力的部分应写成工具。
+export function skillFiles(directory) {
+  const files = [];
+  const walk = relative => {
+    for (const entry of fs.readdirSync(path.join(directory, relative), { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      // 按码点排序：Skill 指纹不能随系统语言环境变化。
+      if (entry.name.startsWith(".")) continue;
+      const name = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new Error(`Skill 不能包含符号链接：${name}`);
+      if (entry.isDirectory() && (name === "references" || relative.startsWith("references"))) { walk(name); continue; }
+      if (!entry.isFile() || !(name === "SKILL.md" || (relative.startsWith("references") && /\.(md|txt)$/.test(entry.name))))
+        throw new Error(`Skill 只能包含 SKILL.md 与 references/ 下的 .md/.txt：${name}`);
+      const size = fs.lstatSync(path.join(directory, name)).size;
+      if (size > 128 * 1024) throw new Error(`Skill 文件超过 128 KiB：${name}`);
+      files.push(name);
+    }
+  };
+  walk("");
+  if (files.length > 50) throw new Error("Skill 文件过多。");
+  return files;
+}
+const skillDigest = (directory, files) => digest(files.map(name => [name, digest(fs.readFileSync(path.join(directory, name)))]));
+
 function trustedFile(file, root) {
   if (!inside(root, file)) throw new Error("角色路径必须位于 Agent 配置目录内。");
   let current = root;
@@ -42,8 +65,12 @@ export class AgentDefinition {
       mounted.add(mount.kbId);
     }
     this.roleFile = trustedFile(path.resolve(directory, agent.instructions), directory);
-    this.role = loadRole(this.roleFile);
     this.workspacePath = path.resolve(directory, bindings.workspaceDir);
+    // 角色与 Skill 是受信配置，不能放在用户和模型可写的工作区里。
+    if (inside(this.workspacePath, this.roleFile)) throw new Error("角色文件不能放在工作区里。");
+    this.role = loadRole(this.roleFile);
+    // 1.2 起 Skill 放在 Agent 包里（相对 agent.json），启动时同步到 CODEX_HOME；1.1 及以前仍相对工作区。
+    const packaged = definition.schemaVersion === "1.2";
     this.execution = Object.hasOwn(bindings.executions, agent.executionRef) ? bindings.executions[agent.executionRef] : null;
     if (!this.execution) throw new Error(`缺少执行策略：${agent.executionRef}`);
     this.warnings = []; this.skills = []; this.sources = [];
@@ -81,14 +108,25 @@ export class AgentDefinition {
         if (skill.required) throw new Error(`Skill ${skill.id} 的依赖尚未支持：${binding.requires.join(", ")}`);
         this.warnings.push(`可选 Skill 依赖未满足：${skill.id}`); continue;
       }
-      const skillPath = path.resolve(this.workspacePath, binding.path);
+      const skillPath = path.resolve(packaged ? directory : this.workspacePath, binding.path);
+      if (packaged) {
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(skill.id)) throw new Error(`Skill id 只能使用小写字母、数字和连字符：${skill.id}`);
+        if (path.basename(skillPath) !== "SKILL.md" || !inside(directory, skillPath) || inside(this.workspacePath, skillPath))
+          throw new Error(`Skill 必须是 Agent 包内、工作区外的 SKILL.md：${skill.id}`);
+      }
       if (!fs.existsSync(skillPath)) {
         if (skill.required) throw new Error(`必需 Skill 文件不存在：${skill.id}`);
         this.warnings.push(`可选 Skill 不存在：${skill.id}`); continue;
       }
+      if (packaged) trustedFile(skillPath, directory);
       const info = fs.lstatSync(skillPath);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);
-      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+      if (!packaged) {
+        this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+        continue;
+      }
+      const source = path.dirname(fs.realpathSync(skillPath)), files = skillFiles(source);
+      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });
     }
     this.expected = this.sourceHash();
     this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs })}`;
@@ -96,7 +134,7 @@ export class AgentDefinition {
   }
   sourceHash() {
     return digest([JSON.parse(fs.readFileSync(this.file, "utf8")), fs.readFileSync(this.roleFile, "utf8"),
-      ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);
+      ...this.skills.map(skill => skill.source ? skillDigest(skill.source, skillFiles(skill.source)) : digest(fs.readFileSync(skill.path)))]);
   }
   assertCurrent() {
     try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }

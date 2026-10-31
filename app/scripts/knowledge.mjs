@@ -24,13 +24,8 @@ try {
     for (const [id, binding] of Object.entries(validateKnowledgeBindings(definition.bindings.knowledgeBases || {}))) {
       directory(path.join(workspace, binding.sourceRoot)); directory(path.join(workspace, binding.wikiRoot));
     }
-    const target = path.join(workspace,'.agents/skills/knowledge/SKILL.md'), source = fs.readFileSync(path.join(root,'skills/knowledge/SKILL.md'));
-    directory(path.dirname(target));
-    if (fs.existsSync(target)) {
-      const stat = fs.lstatSync(target);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || !fs.readFileSync(target).equals(source)) throw new Error('已有不同的 knowledge Skill，请核对后手工合并；未覆盖。');
-    } else fs.writeFileSync(target, source, { flag:'wx',mode:0o600 });
-    console.log('知识目录与原生 Skill 已准备。把原始 .md/.txt 放入所配置的 sourceRoot，然后启动服务。');
+    // Skill 属于 Agent 包，服务启动时同步到 CODEX_HOME，不再复制进工作区。
+    console.log('知识目录已准备。把原始 .md/.txt 放入所配置的 sourceRoot，然后启动服务；Agent 包里的 Skill 会在启动时自动安装。');
   } else {
     const client = new AgentClient(loadClientConnection());
     let result;

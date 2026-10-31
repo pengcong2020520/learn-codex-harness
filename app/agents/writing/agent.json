@@ -1,15 +1,22 @@
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "agent": {
-    "id": "customer-support",
-    "version": "1.0.0",
-    "instructions": "roles/support.md",
-    "skills": [],
+    "id": "writing-assistant",
+    "version": "1.1.0",
+    "instructions": "role.md",
+    "skills": [
+      {
+        "id": "knowledge",
+        "required": false
+      }
+    ],
     "tools": {
       "allow": [
         "list_files",
         "read_file",
         "write_file",
+        "search_web",
+        "read_webpage",
         "kb_list",
         "kb_read",
         "kb_search",
@@ -18,7 +25,7 @@
     },
     "dataBindings": [
       {
-        "sourceRef": "policies",
+        "sourceRef": "originals",
         "actions": [
           "read"
         ],
@@ -28,10 +35,31 @@
         "required": true
       },
       {
-        "sourceRef": "replies",
+        "sourceRef": "research",
         "actions": [
           "read",
           "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "drafts",
+        "actions": [
+          "read",
+          "create"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "articles",
+        "actions": [
+          "read"
         ],
         "methods": [
           "files"
@@ -45,7 +73,7 @@
       "contribute": false
     },
     "outputs": {
-      "directory": "work/replies",
+      "directory": "outputs",
       "formats": [
         "md",
         "txt"
@@ -58,27 +86,40 @@
     },
     "knowledge": [
       {
-        "kbId": "support",
+        "kbId": "general",
         "mode": "wiki",
         "actions": [
           "read",
-          "update"
+          "update",
+          "index"
         ]
       }
     ]
   },
   "bindings": {
-    "workspaceDir": "workspace",
-    "skills": {},
+    "workspaceDir": "../../workspace",
+    "skills": {
+      "knowledge": {
+        "path": "skills/knowledge/SKILL.md"
+      }
+    },
     "sources": {
-      "policies": {
+      "originals": {
         "type": "files",
-        "root": "handbook/policies",
+        "root": "inputs",
         "readOnly": true
       },
-      "replies": {
+      "research": {
         "type": "files",
-        "root": "work/replies"
+        "root": "research"
+      },
+      "drafts": {
+        "type": "files",
+        "root": "drafts"
+      },
+      "articles": {
+        "type": "files",
+        "root": "outputs"
       }
     },
     "executions": {
@@ -90,9 +131,9 @@
       }
     },
     "knowledgeBases": {
-      "support": {
-        "sourceRoot": "handbook/policies",
-        "wikiRoot": "knowledge/wiki"
+      "general": {
+        "sourceRoot": "inputs/general",
+        "wikiRoot": "research/general/wiki"
       }
     }
   }

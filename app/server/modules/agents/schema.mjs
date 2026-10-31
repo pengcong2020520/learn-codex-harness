@@ -6,7 +6,7 @@ const array = items => ({ type: "array", items, uniqueItems: true });
 const choices = values => ({ type: "string", enum: values });
 const dictionary = value => ({ type: "object", additionalProperties: value });
 const schema = object({
-  schemaVersion: { enum: ["1.0", "1.1"] },
+  schemaVersion: { enum: ["1.0", "1.1", "1.2"] },
   agent: object({
     id: { type: "string", pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$" }, version: text, instructions: text,
     skills: array(object({ id: text, required: { type: "boolean" } })),

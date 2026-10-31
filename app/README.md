@@ -33,7 +33,7 @@ npm run data:check
 npm run data:import
 # 确认预检后执行 npm run data:import -- --apply
 
-# 3. 准备知识目录和原生 Skill，然后启动服务
+# 3. 准备工作区与知识目录，然后启动服务（Agent 包里的 Skill 在启动时自动安装）
 npm run agent:init
 npm run knowledge:init
 # 默认端口 4317，监听 127.0.0.1
@@ -60,16 +60,25 @@ npm run chat
 
 > `.env` 不被 Git 追踪；`.env.example` 保留全部可用变量及注释。模板中 `CODEX_BASE_URL` 预设 DeepSeek 兼容端点，但 DeepSeek 对 Responses 协议的完整兼容性需自行核实。
 
-## Agent 配置：`agents/writing-agent.json`
+## Agent 配置：Agent 包 `agents/writing/`
 
-所有角色、工具、资料绑定集中在 [`agents/writing-agent.json`](agents/writing-agent.json)，遵循 `schemaVersion: "1.1"`（兼容 1.0），未知字段和不支持的方法直接拒绝。
+一个 Agent 一个目录（Agent 包），由 `config/runtime/project.json` 或环境变量 `AGENT_DEFINITION` 选择：
+
+```
+agents/writing/
+├── agent.json                 # 角色、工具、资料绑定、Skill，schemaVersion "1.2"
+├── role.md                    # 角色指令
+└── skills/knowledge/SKILL.md  # 本 Agent 的 Skill，启动时同步到 .data/codex/skills/
+```
+
+Agent 包是受信配置，workspace 是用户和模型读写的数据：角色和 Skill 不能放进 workspace，workspace 也不能包含服务目录。新建 Agent = 复制一个 Agent 包、改配置、绑定一个 workspace。定义遵循 `schemaVersion: "1.2"`（兼容 1.0、1.1），未知字段和不支持的方法直接拒绝。设计见 [skill-workflow-design.md](docs/skill-workflow-design.md)。
 
 **六项核心字段**：
 
 | 字段 | 作用 |
 |---|---|
-| `agent.instructions` | 角色指令文件路径，相对 JSON 所在目录，实际正文在 [`agents/roles/writing-assistant.md`](agents/roles/writing-assistant.md) |
-| `agent.skills` | 原生 Skill 启用列表，格式 `[{"id": "outline", "required": true}]`；**默认空数组** |
+| `agent.instructions` | 角色指令文件路径，相对 JSON 所在目录，实际正文在 [`agents/writing/role.md`](agents/writing/role.md) |
+| `agent.skills` | 原生 Skill 启用列表，格式 `[{"id": "outline", "required": true}]`；默认启用可选的 `knowledge` |
 | `agent.tools.allow` | 工具白名单，仅此列表内的工具可被模型调用 |
 | `agent.dataBindings` | 资料绑定，控制配置声明的任意资料目录及读写权限 |
 | `agent.outputs` | 产物规则，声明允许创建的输出格式与路径 |
@@ -77,24 +86,24 @@ npm run chat
 
 **`bindings` 块**：
 
-- `bindings.workspaceDir`：工作区根目录，相对 JSON 所在目录解析，默认 `../workspace`。仅默认工作区自动创建；外部工作区不存在时明确报错。
+- `bindings.workspaceDir`：工作区根目录，相对 JSON 所在目录解析，默认 `../../workspace`。仅默认工作区自动创建；外部工作区不存在时明确报错。
 - `bindings.sources`：资料源映射；用 `readOnly: true` 声明只读，不依赖目录名字。
 - `bindings.executions`：执行策略表（不是执行目录）。
-- `bindings.skills`：Skill 路径映射。
+- `bindings.skills`：Skill 路径映射，指向 Agent 包内的 `SKILL.md`（1.1 及以前相对工作区）。
 - `agent.executionRef`：执行环境引用字段，指向 `bindings.executions` 中的策略条目。
 
-> 修改此文件或角色 MD 后，服务检测到变更会拒绝后续请求，需重启。
+> 修改此文件、角色或 Skill 后，服务检测到变更会拒绝后续请求，需重启。
 
 **最小修改示例**（只需调整以下片段）：
 
 ```jsonc
-// 启用 Skill（需先提供合规的 SKILL.md 文件）
+// 启用 Skill：先在 Agent 包里放 skills/outline/SKILL.md
 "agent": {
   "skills": [{"id": "outline", "required": true}]
 },
 "bindings": {
   "skills": {
-    "outline": {"path": ".agents/skills/outline/SKILL.md"}
+    "outline": {"path": "skills/outline/SKILL.md"}
   }
 }
 ```
@@ -108,7 +117,7 @@ npm run chat
 
 | 目录 | 说明 |
 |---|---|
-| `agents/` | Agent 配置 JSON 与角色 MD |
+| `agents/` | Agent 包：`agent.json`、`role.md`、`skills/` |
 | `workspace/` | 默认工作区，含 inputs / research / drafts / outputs |
 | `.data/` | 实例身份 `identity.json`、不可变正文 `files/`、Codex 原生存储 `codex/`、本机连接与兼容索引；旧 JSON 原件保留但不再作为正常服务权威 |
 | `.runs/` | 运行目录，格式 `app-server-*`，保留最近 5 次和 7 天内记录 |
@@ -138,12 +147,12 @@ npm run chat
 
 ## Skill 使用说明
 
-1. **发现**：通过 `skills/list` 发现可用 Skill；用 `skills/config/write` 收紧启用集合；每轮前复查。
-2. **准备文件**：用户自行提供符合原生规范的 `SKILL.md`，路径相对工作区或为受信绝对路径，并须位于原生可发现位置；不会自动安装。
-3. **修改配置**：在 `agent.skills` 添加条目，在 `bindings.skills` 声明路径，受控重启。
+1. **准备文件**：在 Agent 包的 `skills/<id>/` 下放符合原生规范的 `SKILL.md`，可带 `references/` 下的 `.md`/`.txt`；不能有脚本、链接或其他文件，单文件不超过 128 KiB。
+2. **安装**：服务启动时同步到 `.data/codex/skills/<id>/`（Codex 的 user 范围），只清理本服务装过的旧副本，不覆盖其他目录。
+3. **发现与收紧**：通过 `skills/list` 发现，用 `skills/config/write` 只启用 Agent 声明的 Skill；工作区、`~/.agents/skills` 与 Codex 自带的 Skill 一律关闭；每轮前复查。
 4. **显式调用**：显式 `$skill-name` 会将 `{type: skill, name, path}` 传入，由 Codex 注入正文，不自建解析器。
 5. **权限声明**：`requires` 中声明 `shell / fileWrite / assets` 意味着本版不支持的依赖——必需项直接报错，可选项降级；额外工具依赖一律拒绝。
-6. **首版限制**：仅验证原生文本指令型 Skill；带脚本/附件的完整 Skill 工作流不保证正常运行。
+6. **限制**：只支持文本 Skill。需要执行能力时写成工具（`server/modules/tools` + `config/tools/*.json`），Skill 里只写工具名。
 
 ## 记忆边界
 

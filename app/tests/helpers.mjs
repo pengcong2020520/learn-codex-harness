@@ -28,7 +28,7 @@ export function installToolFixture(root, { knowledge = false } = {}) {
   cpSync(path.join(project, "agents"), path.join(root, "agents"), { recursive: true });
   if (!knowledge) {
     remove(path.join(root, 'config/tools/knowledge.json'), { force: true });
-    const file = path.join(root, 'agents/writing-agent.json');
+    const file = path.join(root, 'agents/writing/agent.json');
     const definition = JSON.parse(readFileSync(file));
     definition.agent.tools.allow = definition.agent.tools.allow.filter(n => !n.startsWith('kb_'));
     delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
@@ -43,7 +43,7 @@ export function cleanup(root, action) { cleanups.get(root).push(action); }
 export function tempRoot(t) {
   const root = mkdtempSync(path.join(tmpdir(), "agent-project-test-"));
   mkdirSync(path.join(root, "config/runtime"), { recursive: true });
-  writeFileSync(path.join(root, "config/runtime/project.json"), JSON.stringify({ agentDefinition: "agents/writing-agent.json" }));
+  writeFileSync(path.join(root, "config/runtime/project.json"), JSON.stringify({ agentDefinition: "agents/writing/agent.json" }));
   cleanups.set(root, []);
   t.after(async () => {
     try { for (const action of cleanups.get(root).reverse()) await action(); }
