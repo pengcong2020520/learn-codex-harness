@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { applySessionEvent, isSessionEvent } from "../../../shared/session-events.mjs";
 
 const HELP = `普通文字：提交普通队列；可连续输入，不必等待模型回复。
 /append 内容        显式追加当前或刚结束的任务（等价于追加按钮）
@@ -76,12 +77,14 @@ export async function runChat(api, terminal) {
     renderingTurnId = null;
     terminal.write(`Thread id: ${session.id}\n模型：${session.model || "服务端配置"}`);
     renderSession(session);
-    subscription = api.subscribe(session.id, event => {
+    const stream = api.subscribe(session.id, event => {
       if (event.threadId && event.threadId !== current?.id) return;
-      if (event.type === "snapshot") {
-        renderSession(event.data.session);
+      if (isSessionEvent(event)) {
+        const next = applySessionEvent(current, event);
+        // 增量接不上本地文字：放弃断点，重新从快照同步。
+        if (!next) return stream.resync();
+        renderSession(next);
       }
-      if (event.type === "session") renderSession(event.data);
       const queue = event.type === "snapshot" ? event.data.queue : event.type === "queue" ? event.data : null;
       if (queue) {
         if (queue.paused && !queuePaused) terminal.write("队列已暂停，查看 /queue 后可用 /continue 明确继续。");
@@ -90,6 +93,7 @@ export async function runChat(api, terminal) {
       if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
       if (event.type === "tools") terminal.write(toolStatus(event.data));
     }, (status, message) => { if (status === "reconnecting") terminal.write(`${message} 正在重连；不会自动重发消息。`); });
+    subscription = stream;
   }
 
   async function handle(line) {

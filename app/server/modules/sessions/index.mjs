@@ -1,6 +1,10 @@
 import { EventEmitter } from "node:events";
 import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from "./history.mjs";
 import { AppError, requireId } from "../../../shared/errors.mjs";
+import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
+
+const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { ...turn.artifacts },
+  tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] });
 
 export class SessionService extends EventEmitter {
   constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval = 100 }) {
@@ -8,6 +12,8 @@ export class SessionService extends EventEmitter {
     Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval });
     this.sessions = new Map();
     this.timers = new Map();
+    // 每个会话尚未推送的回复增量：同一条回复在一个推送周期内合并成一段。
+    this.deltas = new Map();
     // 每条回复各自的流式脱敏窗口；不挂在 turn 上，避免未脱敏的尾部进入快照。
     this.streams = new WeakMap();
     this.loading = new Map();
@@ -152,28 +158,45 @@ export class SessionService extends EventEmitter {
     const turnId = params.turnId || params.turn?.id;
     if (!turnId) return;
     let turn = this.getTurn(threadId, turnId);
+    const known = Boolean(turn);
+    let rewritten = false;
     if (message.method === "turn/started" || message.method === "turn/completed") {
       turn = this.recordTurn(threadId, params.turn);
     } else {
       turn ||= this.recordTurn(threadId, { id: turnId, status: "inProgress" });
-      if (message.method === "item/agentMessage/delta") this.appendDelta(turn, params.itemId, params.delta);
+      if (message.method === "item/agentMessage/delta") rewritten = this.appendDelta(threadId, turn, params.itemId, params.delta);
       if (["item/started", "item/completed"].includes(message.method) && params.item) this.applyItem(turn, params.item);
     }
     if (message.method === "turn/completed") this.flushStreams(turn);
-    // 增量只改动一条回复的文字，合并到下一个推送周期；其他状态变化立即推送。
-    if (message.method === "item/agentMessage/delta") this.schedule(threadId);
-    else this.publish(threadId);
+    // 增量只追加一条回复的文字，合并到下一个推送周期；其他状态变化立即推送这一轮。
+    if (message.method === "item/agentMessage/delta" && known && !rewritten) this.schedule(threadId);
+    else this.publish(threadId, turn);
     if (message.method === "turn/completed") this.emit("turnCompleted", { threadId, turn });
   }
 
-  // 每段增量只脱敏新到的文字，不再对整条回复反复脱敏。
-  appendDelta(turn, itemId, delta) {
-    if (!this.redact.stream) { turn.answers[itemId] = this.redact((turn.answers[itemId] || "") + delta); return; }
-    let streams = this.streams.get(turn);
-    if (!streams) this.streams.set(turn, streams = new Map());
-    if (!streams.has(itemId)) streams.set(itemId, this.redact.stream());
-    const released = streams.get(itemId).push(delta);
-    if (released) turn.answers[itemId] = (turn.answers[itemId] || "") + released;
+  // 每段增量只脱敏新到的文字，不再对整条回复反复脱敏。放行的文字记为待推送增量；
+  // 返回 true 表示回复被整段改写，不能用增量表达，需要推送整轮。
+  appendDelta(threadId, turn, itemId, delta) {
+    const before = turn.answers[itemId] || "";
+    let released;
+    if (this.redact.stream) {
+      let streams = this.streams.get(turn);
+      if (!streams) this.streams.set(turn, streams = new Map());
+      if (!streams.has(itemId)) streams.set(itemId, this.redact.stream());
+      released = streams.get(itemId).push(delta);
+    } else {
+      const text = this.redact(before + delta);
+      if (!text.startsWith(before)) { turn.answers[itemId] = text; return true; }
+      released = text.slice(before.length);
+    }
+    if (!released) return false;
+    turn.answers[itemId] = before + released;
+    let pending = this.deltas.get(threadId);
+    if (!pending) this.deltas.set(threadId, pending = new Map());
+    const key = `${turn.id}\n${itemId}`;
+    if (pending.has(key)) pending.get(key).text += released;
+    else pending.set(key, { turnId: turn.id, itemId, offset: before.length, text: released });
+    return false;
   }
 
   // 轮次结束时，放行没有等到 item/completed 的回复仍被扣住的尾部。
@@ -189,16 +212,27 @@ export class SessionService extends EventEmitter {
     if (this.timers.has(threadId)) return;
     const timer = setTimeout(() => {
       this.timers.delete(threadId);
-      if (this.sessions.has(threadId)) this.publish(threadId);
+      this.flushDeltas(threadId);
     }, this.publishInterval);
     timer.unref?.();
     this.timers.set(threadId, timer);
   }
 
-  publish(threadId) {
+  flushDeltas(threadId, exceptTurnId) {
+    const pending = this.deltas.get(threadId);
+    this.deltas.delete(threadId);
+    for (const delta of pending?.values() || []) if (delta.turnId !== exceptTurnId) this.hub.publish("delta", delta, threadId);
+  }
+
+  // 给出 turn 时只推这一轮的完整状态，否则推整个会话。完整状态已含待推送的文字，对应增量不再单独推；
+  // 其他轮次的增量先推出，保持发生顺序。
+  publish(threadId, turn) {
     clearTimeout(this.timers.get(threadId));
     this.timers.delete(threadId);
-    this.hub.publish("session", this.snapshot(threadId), threadId);
+    if (!turn) { this.deltas.delete(threadId); return this.hub.publish("session", this.snapshot(threadId), threadId); }
+    this.flushDeltas(threadId, turn.id);
+    const session = this.sessions.get(threadId);
+    this.hub.publish("turn", { name: session.name, activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, turn: copyTurn(turn) }, threadId);
   }
 
   snapshot(threadId) {
@@ -206,13 +240,13 @@ export class SessionService extends EventEmitter {
     if (!session) throw new AppError("会话尚未载入。", 404);
     return { id: session.id, name: session.name, model: session.model, modelProvider: session.modelProvider,
       activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId,
-      turns: [...session.turns.values()].slice(-30).map(turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { ...turn.artifacts },
-        tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] })) };
+      turns: [...session.turns.values()].slice(-SESSION_TURN_LIMIT).map(copyTurn) };
   }
 
   close() {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    this.deltas.clear();
     this.rpc.off("notification", this.onNotification);
   }
 }

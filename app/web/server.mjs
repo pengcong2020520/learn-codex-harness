@@ -6,6 +6,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
+// CLI 与工作台共用的浏览器可用模块，从 shared/ 直接提供，不复制一份。
+const sharedModules = { '/app/session-events.js': fileURLToPath(new URL('../shared/session-events.mjs', import.meta.url)) };
 // Demo N 的源码快照位于仓库 stages/ 下；课程构建也从这里取目录，避免两处各写一份。
 export const stageDirs = ['s01-single-turn','s02-multi-turn','s03-agent-core','s04-data-layer','s05-knowledge-layer'].map(name => `stages/${name}`);
 export const defaultTargets = [
@@ -71,7 +73,7 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
         const controller=new AbortController();const timer=route==='/events'?null:setTimeout(()=>controller.abort(),20000);
         res.once('close',()=>{controller.abort();clearTimeout(timer);});
         let upstream;
-        try{upstream=await fetch(c.url+route+url.search,{method:req.method,headers:{authorization:`Bearer ${c.token}`,...(body?{'content-type':'application/json'}:{})},body,signal:controller.signal,redirect:'error'});}
+        try{upstream=await fetch(c.url+route+url.search,{method:req.method,headers:{authorization:`Bearer ${c.token}`,...(body?{'content-type':'application/json'}:{}),...(route==='/events'&&req.headers['last-event-id']?{'last-event-id':req.headers['last-event-id']}:{})},body,signal:controller.signal,redirect:'error'});}
         catch{clearTimeout(timer);throw fail(502,req.method==='POST'?'请求结果未确认。请刷新任务状态核对，不要盲目重复提交。':'暂时无法连接 Agent，请检查服务端。');}
         if(route==='/events'&&upstream.ok){
           res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache, no-transform',connection:'keep-alive'});res.flushHeaders();streams.add(res);
@@ -83,11 +85,11 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
       if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'不支持此方法。');
       let requested=decodeURIComponent(url.pathname);if(requested==='/')requested='/app/index.html';if(requested==='/course'||requested==='/course/')requested='/course/index.html';
       if(!/^\/(app|course)\//.test(requested)||requested.includes('/briefs/')||requested.includes('/modules/')||requested.includes('/_')||!mime[path.extname(requested)])throw fail(404,'文件不存在。');
-      const base=realpathSync(staticRoot),file=realpathSync(path.resolve(base,'.'+requested));
-      if(!file.startsWith(base+path.sep)||!statSync(file).isFile())throw fail(404,'文件不存在。');
+      const base=realpathSync(staticRoot),shared=sharedModules[requested],file=shared||realpathSync(path.resolve(base,'.'+requested));
+      if(!shared&&(!file.startsWith(base+path.sep)||!statSync(file).isFile()))throw fail(404,'文件不存在。');
       // Course uses trusted inline quiz handlers from the selected teaching Skill.
       res.setHeader('content-security-policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-      res.writeHead(200,{'content-type':mime[path.extname(file)],'cache-control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(file));
+      res.writeHead(200,{'content-type':mime[path.extname(requested)],'cache-control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(file));
     }catch(error){if(!res.headersSent)send(error.status||(error.code==='ENOENT'?404:500),{error:{message:error.status?error.message:'页面或服务暂不可用。'}});else res.end();}
   });
   return {server,async listen(){await new Promise((ok,no)=>{server.once('error',no);server.listen(port,'127.0.0.1',ok);});origin=`http://127.0.0.1:${server.address().port}`;return origin;},async close(){for(const stream of streams)stream.end();await new Promise(ok=>{server.close(ok);server.closeAllConnections();});}};

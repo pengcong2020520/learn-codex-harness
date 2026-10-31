@@ -171,9 +171,9 @@ export class MessageService {
           clientUserMessageId: job.id,
           input: prepared,
         });
-        this.sessions.recordTurn(threadId, result.turn);
+        const turn = this.sessions.recordTurn(threadId, result.turn);
         await this.bind(job.id, result.turn.id);
-        this.sessions.publish(threadId);
+        this.sessions.publish(threadId, turn);
       });
     } catch (error) {
       await this.executionError(job, error, sent);

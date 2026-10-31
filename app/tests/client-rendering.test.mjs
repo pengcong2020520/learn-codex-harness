@@ -158,11 +158,12 @@ async function chatFixture(t) {
       if (route.startsWith("/sessions?q=")) return { sessions: [{ ...structuredClone(session), preview: "历史会话" }] };
       throw new Error(`未模拟 ${route}`);
     },
-    subscribe(id, callback) { listener = callback; return { close() { listener = null; }, done: Promise.resolve() }; }
+    subscribe(id, callback) { listener = callback; return { close() { listener = null; }, resync() { resyncs.push(id); }, done: Promise.resolve() }; }
   };
+  const resyncs = [];
   const done = runChat(api, f.terminal);
   t.after(async () => { f.terminal.close(); await done; });
-  return { ...f, calls, session, done,
+  return { ...f, calls, session, done, resyncs,
     event(type, data) { listener({ type, threadId: session.id, data: structuredClone(data) }); },
     async send(line) { f.input.write(line + "\n"); await new Promise(resolve => setImmediate(resolve)); },
     async start() { f.input.write("你好\n"); await until(() => calls.some(call => call.route === "/messages")); }
@@ -263,4 +264,20 @@ test("工具状态变化只显示一次，不泄露工具 callId，不拆碎流�
   assert.equal(f.text().split("工具：网页搜索 · 失败").length - 1, 1);
   assert.match(f.text(), /Agent：请提供文章链接。\n$/);
   assert.doesNotMatch(f.text(), /secretCallId/);
+});
+
+test("协议 v2：turn / delta 事件与完整快照渲染一致，增量接不上时重新同步", async t => {
+  const f = await chatFixture(t);
+  await f.start();
+  const delta = (offset, text) => f.event("delta", { turnId: TURN_ID, itemId: "a", offset, text });
+  f.event("turn", { activeTurnId: TURN_ID, turn: { id: TURN_ID, status: "inProgress", answers: {}, tools: {} } });
+  delta(0, "你好"); delta(2, "！\n\n- 第一"); delta(2, "！"); delta(9, "条");
+  assert.match(f.text(), /Agent：你好！\n\n- 第一条$/, "增量到达即输出，重叠部分不重复");
+  f.event("turn", { activeTurnId: null, turn: { id: TURN_ID, status: "completed", answers: { a: "你好！\n\n- 第一条" }, tools: {} } });
+  assert.match(f.text(), /Agent：你好！\n\n- 第一条\n$/);
+  assert.equal(f.text().split("Agent：").length - 1, 1, "重叠的补发增量不能重复输出");
+  assert.deepEqual(f.resyncs, []);
+  delta(99, "跳号");
+  assert.deepEqual(f.resyncs, [THREAD_ID]);
+  assert.doesNotMatch(f.text(), /跳号/);
 });

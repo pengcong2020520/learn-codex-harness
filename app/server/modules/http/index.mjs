@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { AppError } from "../../../shared/errors.mjs";
+import { SESSION_EVENT_TYPES } from "../../../shared/session-events.mjs";
 
 const BODY_LIMIT = 512 * 1024;
 async function readBody(request) {
@@ -107,7 +108,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         const id = url.searchParams.get("threadId");
         await sessions.ensure(id);
         const buffered = [];
-        let snapshotSent = false;
+        let ready = false;
         let heartbeat;
         response.writeHead(200, {
           "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform",
@@ -115,22 +116,29 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         });
         response.flushHeaders();
         streams.add(response);
-        const write = event => {
+        // 带编号的帧会更新客户端的 Last-Event-ID；不带编号的帧不影响断点。
+        const write = (event, sequence) => {
           if (response.destroyed) return;
           if (response.writableLength > 1024 * 1024) { response.destroy(); return; }
-          response.write(`data: ${encode(event)}\n\n`);
+          response.write(`${sequence != null ? `id: ${hub.eventId(sequence)}\n` : ""}data: ${encode(event)}\n\n`);
         };
         const listener = event => { if (!event.threadId || event.threadId === id) {
-          if (snapshotSent) write(event);
+          if (ready) write(event, event.sequence);
           else if (buffered.length < 1000) buffered.push(event);
           else response.destroy();
         } };
         hub.on("event", listener);
         response.once('close', () => { clearInterval(heartbeat); hub.off('event', listener); streams.delete(response); });
-        const queue = await messages.snapshot(id);
-        write({ type: "snapshot", threadId: id, data: { session: sessions.snapshot(id), queue } });
-        snapshotSent = true;
-        for (const event of buffered) write(event);
+        // 断线重连且缓冲还覆盖得到：只补发错过的事件；否则从快照开始。
+        const missed = hub.since(request.headers["last-event-id"], id);
+        if (missed) for (const event of missed) write(event, event.sequence);
+        else {
+          const queue = await messages.snapshot(id);
+          write({ type: "snapshot", threadId: id, protocol: 2, data: { session: sessions.snapshot(id), queue } }, hub.sequence);
+          // 等待队列快照期间缓冲的会话事件已包含在会话快照里；其余事件照常补发，但不带编号，避免断点倒退。
+          for (const event of buffered) if (!SESSION_EVENT_TYPES.has(event.type)) write(event, null);
+        }
+        ready = true;
         if (!response.destroyed) heartbeat = setInterval(() => { if (!response.destroyed) response.write(": heartbeat\n\n"); }, 15000);
         return;
       }

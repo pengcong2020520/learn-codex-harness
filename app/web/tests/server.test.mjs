@@ -7,7 +7,7 @@ import path from 'node:path';
 import {createWorkbench} from '../server.mjs';
 async function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'workbench-test-'));fs.mkdirSync(path.join(root,'.data'));const received=[];
- const upstream=createServer(async(req,res)=>{const parts=[];for await(const c of req)parts.push(c);received.push({url:req.url,authorization:req.headers.authorization,origin:req.headers.origin,body:Buffer.concat(parts).toString()});
+ const upstream=createServer(async(req,res)=>{const parts=[];for await(const c of req)parts.push(c);received.push({url:req.url,authorization:req.headers.authorization,origin:req.headers.origin,lastEventId:req.headers['last-event-id'],body:Buffer.concat(parts).toString()});
   if(req.url.startsWith('/events')){res.writeHead(200,{'content-type':'text/event-stream'});res.end('data: {"type":"snapshot","threadId":"t"}\n\n');return;}
   res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/health'?{status:'ready',model:'test-provider'}:{ok:true,route:req.url}));});
  await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
@@ -33,8 +33,9 @@ test('只代理固定目标和白名单接口，服务端附加令牌且不透�
  const f=await fixture(t);assert.equal((await f.request('/api/agent/unknown/messages',{})).status,404);assert.equal((await f.request('/api/agent/s05/admin/delete',{})).status,404);
  const r=await f.request('/api/agent/s05/messages',{threadId:'t',clientMessageId:'id',text:'hello'});assert.equal(r.status,200);assert.equal(f.received[0].origin,undefined);assert.equal(JSON.parse(f.received[0].body).clientMessageId,'id');
 });
-test('SSE保持事件帧；读取参数编码不被改写',async t=>{
- const f=await fixture(t);const r=await f.request('/api/agent/s05/events?threadId=t');assert.match(r.headers.get('content-type'),/text\/event-stream/);assert.match(await r.text(),/"snapshot"/);
+test('SSE保持事件帧；读取参数编码不被改写；断点编号只转发给事件流',async t=>{
+ const f=await fixture(t);const r=await f.request('/api/agent/s05/events?threadId=t',undefined,{'last-event-id':'abcd1234-7'});assert.match(r.headers.get('content-type'),/text\/event-stream/);assert.match(await r.text(),/"snapshot"/);
+ assert.equal(f.received.at(-1).lastEventId,'abcd1234-7');await f.request('/api/agent/s05/sessions',undefined,{'last-event-id':'abcd1234-7'});assert.equal(f.received.at(-1).lastEventId,undefined);
  await f.request('/api/agent/s05/workspace/read?path=inputs%2Fhello.md');assert.equal(f.received.at(-1).url,'/workspace/read?path=inputs%2Fhello.md');
 });
 test('服务离线明确返回503；连接文件不能把代理指向远端',async t=>{
@@ -44,4 +45,5 @@ test('服务离线明确返回503；连接文件不能把代理指向远端',asy
 test('静态服务不暴露状态、环境和课程brief；课程及工作台可读取',async t=>{
  const f=await fixture(t);for(const p of ['/.env','/.data/connection.json','/course/briefs/01.md','/app/%2e%2e/%2e%2e/package.json'])assert.equal((await fetch(f.url+p)).status,404,p);
  const r=await fetch(f.url+'/');assert.equal(r.status,200);assert.match(await r.text(),/Agent Atelier/);
+ const shared=await fetch(f.url+'/app/session-events.js');assert.equal(shared.status,200);assert.match(shared.headers.get('content-type'),/javascript/);assert.match(await shared.text(),/export function applySessionEvent/);
 });

@@ -116,6 +116,18 @@ npm run chat
 
 > PostgreSQL `tasks` 保存用户输入；旧 `.data/messages.json` 和 `.runs` 日志仍可能含私密内容，不要对外公开。数据库、正文、实例身份和原生历史都需备份，不属于缓存。
 
+## 实时事件（`GET /events`，协议 v2）
+
+| 事件 | 何时推送 | 客户端处理 |
+|---|---|---|
+| `snapshot` | 建立连接，或断点无法补发时 | `data.session` 替换本地会话，`data.queue` 替换队列 |
+| `session` | 新建、恢复会话 | 整体替换会话 |
+| `turn` | 轮次开始与结束、工具和回复条目变化 | 按 `turn.id` 替换这一轮 |
+| `delta` | 回复文字增量，100 ms 合并一次 | 按 `offset` 追加；接不上本地文字就放弃断点，重新同步快照 |
+| `queue` / `tools` / `fatal` | 队列、工具目录、服务异常 | 与之前相同 |
+
+每帧带 `id: <进程前缀>-<序号>`。客户端重连时把最后收到的编号放进 `Last-Event-ID` 请求头；服务端缓冲最近 500 个事件，覆盖得到就只补发错过的事件，否则重新发快照。事件归并逻辑在 [`shared/session-events.mjs`](shared/session-events.mjs)，CLI 与 Web 工作台共用。`stages/` 下的冻结快照仍是协议 v1（只有 `snapshot` 与 `session`），工作台两种都能处理。
+
 ## 文件工具权限边界
 
 - 默认只允许 `.md`、`.txt`，单文件上限 256 KiB，create-only，不跟随链接，拒绝目录遍历。

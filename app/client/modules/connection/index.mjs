@@ -37,14 +37,19 @@ export class AgentClient {
     return result;
   }
 
+  // 重连时带上最后收到的事件 ID，服务端能补发就只补发错过的事件；resync() 放弃断点，重新从快照开始。
   subscribe(threadId, onEvent, onStatus = () => {}) {
     const controller = new AbortController();
     const { signal } = controller;
+    let lastEventId = null;
+    let attempt = null;
     const done = (async () => {
       while (!signal.aborted) {
+        attempt = new AbortController();
         try {
           const response = await fetch(`${this.connection.url}/events?threadId=${encodeURIComponent(threadId)}`, {
-            headers: { authorization: `Bearer ${this.connection.token}` }, signal
+            headers: { authorization: `Bearer ${this.connection.token}`, ...(lastEventId ? { "last-event-id": lastEventId } : {}) },
+            signal: AbortSignal.any([signal, attempt.signal])
           });
           if (!response.ok) throw new Error(`事件连接失败：HTTP ${response.status}`);
           onStatus("connected");
@@ -53,16 +58,20 @@ export class AgentClient {
           for await (const chunk of response.body) {
             buffer += decoder.decode(chunk, { stream: true });
             let boundary;
-            while ((boundary = buffer.indexOf("\n\n")) !== -1) {
-              const frame = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
-              const data = frame.split("\n").filter(line => line.startsWith("data: ")).map(line => line.slice(6)).join("\n");
+            while ((boundary = buffer.indexOf("\n\n")) !== -1 && !attempt.signal.aborted) {
+              const lines = buffer.slice(0, boundary).split("\n"); buffer = buffer.slice(boundary + 2);
+              const id = lines.find(line => line.startsWith("id: "))?.slice(4);
+              const data = lines.filter(line => line.startsWith("data: ")).map(line => line.slice(6)).join("\n");
+              if (id) lastEventId = id;
               if (data) onEvent(JSON.parse(data));
             }
+            if (attempt.signal.aborted) throw new Error("重新同步。");
             if (buffer.length > 4 * 1024 * 1024) throw new Error("事件帧过大。");
           }
           if (!signal.aborted) throw new Error("事件连接中断。");
         } catch (error) {
           if (signal.aborted) break;
+          if (attempt.signal.aborted) continue;
           onStatus("reconnecting", error.message);
           await new Promise(resolve => {
             const finish = () => { clearTimeout(timer); signal.removeEventListener("abort", finish); resolve(); };
@@ -72,6 +81,6 @@ export class AgentClient {
         }
       }
     })();
-    return { close: () => controller.abort(), done };
+    return { close: () => controller.abort(), resync: () => { lastEventId = null; attempt?.abort(); }, done };
   }
 }
