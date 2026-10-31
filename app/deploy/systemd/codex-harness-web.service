@@ -1,0 +1,21 @@
+# Web 工作台与互动课程：只监听 127.0.0.1:14320。端口与本机隧道端口一致，因为工作台会校验 Host。
+[Unit]
+Description=learn-codex-harness Web 工作台
+After=codex-harness.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+User=codex
+Group=codex
+WorkingDirectory=/opt/learn-codex-harness/app
+Environment=WORKBENCH_PORT=14320
+ExecStart=/usr/bin/node web/server.mjs
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

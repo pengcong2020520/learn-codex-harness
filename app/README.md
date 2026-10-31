@@ -44,6 +44,16 @@ npm run server
 npm run chat
 ```
 
+## 部署到服务器
+
+把服务常驻部署到 Linux 服务器（systemd 管理、Docker 运行数据服务、只监听 127.0.0.1、SSH 隧道访问）见 [deploy/README.md](deploy/README.md)：
+
+```bash
+export DEPLOY_HOST=root@<服务器地址>
+app/deploy/remote.sh init-env && app/deploy/remote.sh deploy   # 首次部署
+app/deploy/remote.sh tunnel                                     # 浏览器打开 http://127.0.0.1:14320/
+```
+
 ## 环境变量（`.env`）
 
 | 变量 | 说明 | 默认值 |

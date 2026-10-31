@@ -1,0 +1,26 @@
+# Agent 服务：只监听 127.0.0.1:AGENT_PORT（默认 4317），通过 SSH 隧道访问。
+[Unit]
+Description=learn-codex-harness Agent 服务
+Requires=codex-harness-db.service
+After=codex-harness-db.service
+# 5 分钟内失败 5 次就不再重启，避免启动即崩溃时无限重启、占满 CPU。
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+User=codex
+Group=codex
+WorkingDirectory=/opt/learn-codex-harness/app
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server/main.mjs
+Restart=on-failure
+RestartSec=10
+# 关闭时让服务把未确认的任务标记清楚，再结束 Codex 子进程。
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

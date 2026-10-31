@@ -1,0 +1,16 @@
+# PostgreSQL 与 Redis 容器（compose.yaml）。只绑定 127.0.0.1；数据在 Docker 数据卷里，停止服务不会删除数据。
+[Unit]
+Description=learn-codex-harness 数据服务（PostgreSQL / Redis）
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/learn-codex-harness/app
+ExecStart=/usr/bin/docker compose up -d --wait postgres redis
+ExecStop=/usr/bin/docker compose stop postgres redis
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
