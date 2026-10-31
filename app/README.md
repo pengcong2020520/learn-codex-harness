@@ -26,7 +26,8 @@ npm ci
 # 2. 准备环境变量（已有 .env 则跳过，不覆盖）
 test -f .env || cp .env.example .env
 # 编辑 .env，填写模型配置，以及 DATABASE_URL、REDIS_URL
-# 先按 docs/data-layer.md 启动 PostgreSQL / Redis，再初始化：
+# 启动 PostgreSQL / Redis（Docker，详见 docs/data-layer.md），再初始化：
+npm run db:up
 npm run data:migrate
 npm run data:check
 # 有旧 JSON 状态时先停服备份，预检并显式导入：

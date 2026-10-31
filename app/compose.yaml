@@ -1,11 +1,14 @@
+# 项目名固定，避免与其他同名目录（如另一个 app/）共用数据卷。
+# 端口可在 .env 或终端里改：本机 5432 / 6379 已被其他服务占用时，设置 AGENT_PG_PORT / AGENT_REDIS_PORT。
+name: codex-harness-app
 services:
   postgres:
     image: postgres:16
     environment:
       POSTGRES_USER: agent
-      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD in the terminal}
+      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD in .env or the terminal}
       POSTGRES_DB: agent
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["127.0.0.1:${AGENT_PG_PORT:-5432}:5432"]
     volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
@@ -15,12 +18,12 @@ services:
   redis:
     image: redis:7.4
     command: ["redis-server", "--appendonly", "yes"]
-    ports: ["127.0.0.1:6379:6379"]
+    ports: ["127.0.0.1:${AGENT_REDIS_PORT:-6379}:6379"]
     volumes: ["redis-data:/data"]
   chroma:
     image: chromadb/chroma:1.5.0
     profiles: ["rag"]
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:${AGENT_CHROMA_PORT:-8000}:8000"]
     volumes: ["chroma-data:/data"]
 volumes:
   postgres-data:

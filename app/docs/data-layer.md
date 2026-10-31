@@ -344,25 +344,31 @@ REDIS_URL=redis://127.0.0.1:6379/1
 
 只想跑数据层集成测试时不需要这些配置：`npm run test:data` 会用本机的 `initdb` / `pg_ctl` / `redis-server` 新建临时集群，不读 `.env`，测试结束即删除。
 
-### 方案 B：Docker Compose（开发用）
+### 方案 B：Docker Compose（推荐）
 
-需先自行启动 Docker Desktop 或 Colima，当前环境中 Docker 守护进程未在线，文档不替你启动系统服务。
+先启动 Docker Desktop 或 Colima（`colima start`）。`compose.yaml` 的项目名固定为 `codex-harness-app`，数据卷为 `codex-harness-app_postgres-data` 等，不会和其他同名目录混用。
 
-```bash
-export AGENT_DB_PASSWORD='你自己设置的强密码'
-docker compose up -d
-```
+> Homebrew 安装的 `docker` 默认不带 `docker compose` 插件。若提示 `unknown command: docker compose`，在 `~/.docker/config.json` 里加 `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`。
 
-编辑 `.env` 文件，**手动添加以下两行**（尖括号内容为占位说明，不要直接粘贴运行）：
+`docker compose` 会自动读取本目录的 `.env` 做变量替换，所以容器密码和端口都写在 `.env` 里（尖括号内容为占位说明）：
 
 ```dotenv
-DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:5432/agent
-REDIS_URL=redis://127.0.0.1:6379/0
+AGENT_DB_PASSWORD=<你自己设置的强密码>
+# 本机 5432 / 6379 已被其他服务占用时改端口；不设置就用默认值
+AGENT_PG_PORT=55432
+AGENT_REDIS_PORT=56379
+DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:55432/agent
+REDIS_URL=redis://127.0.0.1:56379/0
 ```
 
-> 如果密码含特殊字符，需对密码部分做 percent-encoding（如 `@` → `%40`）。
+> 如果密码含特殊字符，需对密码部分做 percent-encoding（如 `@` → `%40`）。`AGENT_DB_PASSWORD` 只在数据卷第一次初始化时生效，之后改它不会改变已有数据库的密码。
 
-不要运行 `docker compose down -v`，这会删除数据库 volume。安全停止用 `docker compose down`（保留 named volumes）。
+```bash
+npm run db:up      # docker compose up -d --wait postgres redis，等到健康检查通过
+npm run db:down    # 只停止容器，保留数据卷
+```
+
+不要运行 `docker compose down -v`，这会删除数据库 volume。容器没有设置自动重启：重启电脑或 `colima stop` 之后，先 `colima start` 再 `npm run db:up`。
 
 ```bash
 # 建表与校验（app 目录）
@@ -382,7 +388,7 @@ npm start              # 在另一个终端执行：CLI 客户端
 
 ## 数据迁移
 
-2026-10-31 本机切换记录：使用本机 Homebrew PostgreSQL 16 与 Redis，按方案 A 建立 `agent` 角色和库并完成迁移。旧 JSON 中的 23 条任务全部已完成，7 个会话里只有 1 个有 Agent 绑定，严格导入拒绝继续；按下文"无法导入时"的做法归档到 `.data/legacy-json-2026-10-31/`，没有导入、没有删除。
+2026-10-31 本机切换记录：最初按方案 A 用了本机 Homebrew PostgreSQL 16 与 Redis，随后改用方案 B——容器映射到 55432 / 56379，因为 5432 / 6379 被本机其他项目的 Homebrew 服务占用；Homebrew 里为此建的 `agent` 库和角色已删除。迁移在 Docker 数据库上完成。旧 JSON 中的 23 条任务全部已完成，7 个会话里只有 1 个有 Agent 绑定，严格导入拒绝继续；按下文"无法导入时"的做法归档到 `.data/legacy-json-2026-10-31/`，没有导入、没有删除。
 
 ### 从旧 JSON 迁移
 

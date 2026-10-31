@@ -34,7 +34,9 @@
     "test:protocol": "node --test tests/protocol.integration.mjs",
     "smoke:real": "node scripts/test-data.mjs --real-smoke",
     "sessions:upgrade": "node scripts/upgrade-sessions.mjs",
-    "test:protocol:research": "node scripts/test-research-protocol.mjs"
+    "test:protocol:research": "node scripts/test-research-protocol.mjs",
+    "db:up": "docker compose up -d --wait postgres redis",
+    "db:down": "docker compose stop postgres redis"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
