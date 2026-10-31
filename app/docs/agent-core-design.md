@@ -487,6 +487,7 @@ Skill 目录允许控制**启用与调用**，不等于无法以文本模拟工�
 |---|---|---|
 | [server/main.mjs](../server/main.mjs) 等本地模块 | 现有代码 | 能力归属的直接证据 |
 | [workspace-design.md](workspace-design.md) | 已有设计文档 | 工作区权威规范 |
+| [skill-workflow-design.md](skill-workflow-design.md) | 设计文档（2026-10-31） | Agent 包、Skill 安装与触发、第 9 个配置维度 `workflows` |
 | [package.json](../package.json) | 现有配置 | 锁定 `@openai/codex` 0.154.0 |
 | [Codex App Server 文档](https://learn.chatgpt.com/docs/app-server) | 官方文档 | 原生协议参考 |
 | [Build Skills 文档](https://learn.chatgpt.com/docs/build-skills) | 官方文档 | Skill 生命周期参考 |
