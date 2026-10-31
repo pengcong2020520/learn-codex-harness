@@ -1,8 +1,8 @@
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
-import { runChecks } from "../workflows/index.mjs";
+import { runChecks, stepOf } from "../workflows/index.mjs";
 
-const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]) });
+const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]), steps: null });
 
 // Product input scheduling only. Codex continues to own its Agent loop and context.
 export class MessageService {
@@ -100,6 +100,7 @@ export class MessageService {
           targetTurnId,
           workflow: workflow.id,
           params: workflow.params,
+          step: 0,
           agentHash: this.config.agent?.descriptor?.hash,
           createdAt: Date.now(),
         });
@@ -131,14 +132,47 @@ export class MessageService {
     }
     return workflows.resolve(id, params);
   }
-  // 验收只在轮次正常完成时运行；不通过记为 needs-review，不暂停队列、不自动重试。
+  // 一步结束后的去向：验收不通过 → needs-review（不暂停队列、不自动重试）；还有下一步 → 需要确认就 waiting，
+  // 否则直接排队进入下一步；最后一步 → completed。
   outcome(job, turn) {
     if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
     let workflow;
     try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
-    if (!workflow.checks.length) return { status: "completed", checks: null };
-    const checks = runChecks(workflow.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats });
-    return { status: checks.every(check => check.passed) ? "completed" : "needs-review", checks };
+    const step = stepOf(workflow, job.step || 0);
+    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+    if (checks && !checks.every(check => check.passed)) return { status: "needs-review", checks };
+    if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+    return { status: "completed", checks };
+  }
+  // 用户确认等待中的任务，进入下一步；text 是可选的补充说明，作为下一步的输入。
+  async confirm({ threadId, taskId, text, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("确认只接受 threadId、taskId 与 text。", 400);
+    requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    const note = text == null || text === "" ? null : requireText(text);
+    await this.sessions.ensure(threadId);
+    return this.serial(threadId, async () => {
+      const job = await this.job(taskId);
+      if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
+      if (!(await this.store.patch(taskId, { status: "queued", step: (job.step || 0) + 1, note }, ["waiting"])))
+        throw new AppError("只有等待确认的任务可以继续。", 409);
+      await this.publish(threadId);
+      await this.wake(threadId);
+      return this.publicJob(await this.job(taskId));
+    });
+  }
+  // 结束等待确认或尚未开始的任务；正在执行的轮次不受影响。
+  async cancel({ threadId, taskId, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("结束任务只接受 threadId 与 taskId。", 400);
+    requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    await this.sessions.ensure(threadId);
+    return this.serial(threadId, async () => {
+      const job = await this.job(taskId);
+      if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
+      if (!(await this.store.patch(taskId, { status: "cancelled" }, ["queued", "waiting"])))
+        throw new AppError("只有排队中或等待确认的任务可以结束。", 409);
+      await this.publish(threadId);
+      return this.publicJob(await this.job(taskId));
+    });
   }
   schedule(threadId) {
     if (this.closed || this.failure || this.scheduled.has(threadId)) return;
@@ -181,7 +215,9 @@ export class MessageService {
     let sent = false;
     try {
       const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
-      let input = job.text;
+      const step = stepOf(workflow, job.step || 0);
+      // 第二步起不重发原文：会话历史里已有原始要求，这里只说明用户已确认，并带上补充说明。
+      let input = step.index ? `用户已确认上一步，请继续。${job.note ? `\n用户补充：${job.note}` : ""}` : job.text;
       if (job.mode === "append") {
         const original = this.sessions
           .getTurn(threadId, job.targetTurnId)
@@ -198,8 +234,9 @@ export class MessageService {
           input,
           job.agentHash,
           workflow.id === "chat" ? null : workflow,
+          step.index,
         );
-        this.gate?.start(job, workflow.grants);
+        this.gate?.start(job, workflow.grants, step.writes);
         sent = true;
         const result = await this.rpc.request("turn/start", {
           threadId,
@@ -261,11 +298,11 @@ export class MessageService {
       turn = this.sessions.getTurn(job.threadId, turnId);
     const ended = terminal.includes(turn?.status);
     if (ended) await this.sessions.persistTurn?.(job.threadId, turn);
-    const { status, checks } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
+    const { status, checks, step: next } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
     if (
       !(await this.store.patch(
         id,
-        { turnId, status, error: turn?.error || null, ...(checks ? { checks } : {}) },
+        { turnId, status, error: turn?.error || null, ...(checks ? { checks } : {}), ...(next !== undefined ? { step: next } : {}) },
         executing,
       ))
     )
@@ -299,10 +336,10 @@ export class MessageService {
     await this.sessions.persistTurn?.(threadId, turn);
     for (const job of await this.store.list(threadId))
       if (job.turnId === turn.id && executing.includes(job.status)) {
-        const { status, checks } = this.outcome(job, turn);
+        const { status, checks, step } = this.outcome(job, turn);
         await this.store.patch(
           job.id,
-          { status, error: turn.error || null, ...(checks ? { checks } : {}) },
+          { status, error: turn.error || null, ...(checks ? { checks } : {}), ...(step !== undefined ? { step } : {}) },
           executing,
         );
       }
@@ -342,7 +379,9 @@ export class MessageService {
     });
   }
   publicJob(job) {
-    return { ...job, text: job.text.slice(0, 1000) };
+    let steps = null;
+    try { steps = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }).steps; } catch { /* workflow 已不可用时只返回原始记录。 */ }
+    return { ...job, text: job.text.slice(0, 1000), ...(steps ? { stepId: steps[job.step || 0]?.id, steps: steps.length } : {}) };
   }
   async snapshot(threadId) {
     const all = await this.store.list(threadId),

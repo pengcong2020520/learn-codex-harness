@@ -12,10 +12,13 @@ const workflowParams = object({
   type: { const: "object" }, additionalProperties: { const: false }, required: array(text),
   properties: dictionary(object({ type: { const: "string" }, description: text, pattern: text, enum: array(text), maxLength: { type: "integer", minimum: 1, maximum: 10000 } }, ["type"]))
 }, ["type", "additionalProperties", "properties"]);
+// 步骤只在权限要变或需要人拍板的地方切：writes 收窄本步可新建文件的位置，confirm 表示本步完成后等用户确认。
+const step = object({ id: slug, goal: text, writes: array(text), confirm: { type: "boolean" }, checks: array(choices(CHECKS)) }, ["id", "goal"]);
 const workflow = object({
   id: slug, label: text, skill: text, params: workflowParams,
   grants: array(object({ type: choices(GRANT_TYPES), kbId: { anyOf: [slug, object({ param: text })] } })),
-  checks: array(choices(CHECKS))
+  checks: array(choices(CHECKS)),
+  steps: { type: "array", items: step, minItems: 2, maxItems: 5 }
 }, ["id"]);
 const schema = object({
   schemaVersion: { enum: ["1.0", "1.1", "1.2"] },

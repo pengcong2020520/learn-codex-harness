@@ -1,6 +1,6 @@
 # Skill 与 Workflow 设计
 
-**状态：** 设计确认，按第 8 节的 PR 顺序实施；第 0 步验证与第 1–3 个 PR 已完成。
+**状态：** 设计确认，按第 8 节的 PR 顺序实施；第 0 步验证与第 1–4 个 PR 已完成。
 **日期：** 2026-10-31
 **锁定版本：** Codex 0.154.0
 
@@ -168,7 +168,8 @@ POST /messages { threadId, text, workflow, params }
 
 ### 5.6 任务记录与兼容
 
-- `tasks` 表新增 `workflow`（默认 `chat`）、`params`、`step`、`checks` 四列；状态增加 `proposed`、`waiting`、`needs-review`。迁移 `003-workflows.sql` 把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
+- 迁移 `003-workflows.sql`：`tasks` 新增 `workflow`（默认 `chat`）、`params`、`checks`，状态增加 `needs-review`，把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
+- 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。`proposed` 随 `propose_task` 加入。
 - 消息里旧的 `knowledge` 字段兼容一个版本，映射为 `knowledge-maintain`。
 - workflow 纳入 Agent 描述符，`CONTRACTS.agent` 升为 3。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
 
@@ -211,11 +212,13 @@ POST /messages { threadId, text, workflow, params }
 | 1 | `fix/restricted-native-context` | 关闭 `goals`、禁止加载 `AGENTS.md`、workspace 不能是服务目录的上级；第 0 步验证转为集成测试 | 安全修补 |
 | 2 | `refactor/agent-package` | Agent 包、Skill 移出 workspace 并同步到 `CODEX_HOME`、示例拆分、通用 init | 不变 |
 | 3 | `feat/workflow-registry` | Workflow 层、`chat` 与 `knowledge-maintain`、授权改造、验收检查、迁移 003、CLI 与工作台入口 | 知识维护行为不变，新增 workflow 接口 |
-| 4 | `feat/workflow-steps` | 多步与确认点、`writes` 收窄、`write-article`、角色提示词瘦身 | 新能力 |
+| 4 | `feat/workflow-steps` | 多步与确认点、`writes` 收窄、`write-article` | 新能力 |
 | 5 | `feat/propose-task` | `propose_task` 工具与 `proposed` 状态 | 新能力 |
-| 6 | `feat/skill-read-tool` | 隐式触发与多文件 Skill | 新能力 |
+| 6 | `feat/skill-read-tool` | 隐式触发与多文件 Skill；角色提示词瘦身 | 新能力 |
 | 7 | `docs/s06` | 冻结 `stages/s06`、章节 README、改写 s05 的"接下来" | 课程 |
 | 后续 | `feat/workflow-goals` | 原生目标接入任务与权限门 | 待定 |
+
+角色提示词瘦身从第 4 个 PR 移到第 6 个：Skill 能被隐式触发之前，把写作方法和保存规则移出角色，会让普通对话失去这些指引。第 4 个 PR 只把"写文章"的分步方法写进 `write-article` Skill，角色里保留原有说明并提示可以使用该工作流。
 
 每个 PR：根目录 `npm test`；涉及 Codex 行为时加 `test:protocol`、`test:codex-tools`；涉及权限、任务表或知识库时加 `test:data`。
 

@@ -15,7 +15,7 @@ export const defaultTargets = [
   {id:'project',name:'当前项目',root,live:true,port:4317}
 ];
 const readRoutes = new Set(['/health','/workbench','/sessions','/state','/events','/tools','/memory','/preferences','/workspace','/workspace/read','/resources/read','/knowledge','/knowledge/pages','/knowledge/read','/knowledge/job']);
-const writeRoutes = new Set(['/sessions','/sessions/resume','/messages','/queue/continue','/preferences','/knowledge/search','/knowledge/index','/knowledge/source']);
+const writeRoutes = new Set(['/sessions','/sessions/resume','/messages','/queue/continue','/tasks/confirm','/tasks/cancel','/preferences','/knowledge/search','/knowledge/index','/knowledge/source']);
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.json':'application/json; charset=utf-8'};
 function connection(target) {
   if (!target?.live) throw new Error('此版本使用 CLI，请查看教学操作。');

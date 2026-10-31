@@ -174,3 +174,30 @@ test("真实 Codex：自定义 workflow 注入任务说明与包内 Skill，按�
   const user = app.sessions.snapshot(session.id).turns.at(-1).messages[0].text;
   assert.match(user, /写一份周报/);
 });
+
+test("真实 Codex：两步写文章——大纲后等待确认，确认后带补充说明定稿并验收", { timeout: 60000 }, async t => {
+  const root = installToolFixture(tempRoot(t), { article: true });
+  let step = 0;
+  const bodies = [];
+  const provider = await responsesFixture(root, body => {
+    bodies.push(JSON.stringify(body));
+    const write = (file, content) => toolCall(toolSpecs(body).find(spec => spec.name?.endsWith("write_file")), { path: file, content });
+    return [() => write("drafts/outline.md", "大纲"), () => answer("大纲已保存，请确认。"),
+      () => write("outputs/article.md", "正文"), () => answer("定稿已保存。")][step++]();
+  });
+  const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  cleanup(root, () => app.close());
+  const session = await app.sessions.create();
+  await app.messages.submit({ threadId: session.id, clientMessageId: "article", text: "写一篇关于社区咖啡馆的文章", workflow: "write-article" });
+  await until(() => app.messages.job("article").status === "waiting", 15000);
+  assert.match(bodies[0], /第 1\/2 步：outline/);
+  assert.match(bodies[0], /立意与大纲/, "write-article Skill 应注入");
+  assert.ok(fs.existsSync(path.join(root, "workspace/drafts/outline.md")));
+  await app.messages.confirm({ threadId: session.id, taskId: "article", text: "第二部分多写案例" });
+  await done(app, "article");
+  assert.match(bodies[2], /第 2\/2 步：final/);
+  assert.match(bodies[2], /用户补充：第二部分多写案例/);
+  assert.deepEqual(app.messages.job("article").checks.map(check => [check.id, check.passed]), [["file-exists", true], ["format", true]]);
+  assert.equal(app.sessions.snapshot(session.id).turns.length, 2, "每一步是同一会话里的一轮");
+  assert.deepEqual(provider.errors, []);
+});

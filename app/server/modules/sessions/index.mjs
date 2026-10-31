@@ -43,10 +43,10 @@ export class SessionService extends EventEmitter {
   atBoundary(operation, options) { return this.boundary ? this.boundary.run(operation, options) : operation(); }
 
   assertCompatible(threadId, jobHash) { return this.config.agent?.assertCompatible(threadId, jobHash); }
-  async prepareInput(threadId, text, jobHash, workflow = null) {
+  async prepareInput(threadId, text, jobHash, workflow = null, step = 0) {
     await this.assertCompatible(threadId, jobHash);
     await this.beforeTurn?.();
-    return this.config.agent?.input(text, workflow) || [{ type: "text", text, text_elements: [] }];
+    return this.config.agent?.input(text, workflow, step) || [{ type: "text", text, text_elements: [] }];
   }
 
   register(result) {

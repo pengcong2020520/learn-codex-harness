@@ -100,6 +100,8 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         return json(200, { session: sessions.snapshot(id), queue: await messages.snapshot(id) });
       }
       if (route === "POST /messages") return json(202, await messages.submit(await readBody(request)));
+      if (route === "POST /tasks/confirm") return json(200, await messages.confirm(await readBody(request)));
+      if (route === "POST /tasks/cancel") return json(200, await messages.cancel(await readBody(request)));
       if (route === "POST /queue/continue") {
         const body = await readBody(request);
         return json(200, await messages.continue(body.threadId));

@@ -6,6 +6,8 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /append-to ID 内容  指定目标 turn，避免多窗口时目标含糊
 /workflow           列出当前 Agent 启用的 Workflow
 /workflow ID [键=值 ...] 内容  按 Workflow 提交新任务，如 /workflow knowledge-maintain kbId=general 整理新资料
+/confirm [补充说明]  确认等待中的 Workflow 步骤，进入下一步
+/reject             结束等待确认的 Workflow 任务
 /queue              查看队列
 /tools              查看已加载工具和更新状态
 /memory             查看记忆配置和产物状态（不触发模型）
@@ -32,6 +34,7 @@ export async function runChat(api, terminal) {
   let reported = new Set();
   const finished = Promise.withResolvers();
   const failedChecks = job => (job.checks || []).filter(check => !check.passed).map(check => `${check.label}（${check.detail}）`).join("；");
+  const progress = job => job.steps ? ` ${(job.step || 0) + 1}/${job.steps}` : "";
 
   function renderSession(session) {
     if (current?.id !== session.id) return;
@@ -96,10 +99,11 @@ export async function runChat(api, terminal) {
         queuePaused = queue.paused;
         // Workflow 任务结束后报告一次验收结果；快照里的历史任务只记下，不重复刷屏。
         for (const job of queue.jobs) {
-          if (!job.checks || !["completed", "needs-review"].includes(job.status) || reported.has(job.id)) continue;
-          reported.add(job.id);
-          if (event.type === "snapshot") continue;
-          terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
+          const key = `${job.id}:${job.status}:${job.step || 0}`;
+          if (reported.has(key) || !(job.status === "waiting" || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
+          reported.add(key);
+          if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/reject 结束。`);
+          else if (event.type !== "snapshot") terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
         }
       }
       if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
@@ -160,9 +164,22 @@ export async function runChat(api, terminal) {
       const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
       renderSession(state.session);
       terminal.write(`队列${state.queue.paused ? "（暂停）" : ""}：`);
-      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.workflow && job.workflow !== "chat" ? `[${job.workflow}] ` : ""}${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}${job.status === "needs-review" ? `；验收未通过：${failedChecks(job)}` : ""}`);
+      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.workflow && job.workflow !== "chat" ? `[${job.workflow}${progress(job)}] ` : ""}${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}${job.status === "needs-review" ? `；验收未通过：${failedChecks(job)}` : ""}`);
       if (!state.queue.jobs.length) terminal.write("暂无消息。");
       return;
+    }
+    if (/^\/(confirm|reject)(?:\s|$)/.test(text)) {
+      if (!current) return terminal.write("请先选择会话。");
+      const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
+      const job = state.queue.jobs.find(item => item.status === "waiting");
+      if (!job) return terminal.write("当前会话没有等待确认的 Workflow 任务。");
+      if (text.startsWith("/confirm")) {
+        const note = text.slice(8).trim();
+        await api.request("/tasks/confirm", { threadId: current.id, taskId: job.id, ...(note ? { text: note } : {}) });
+        return terminal.write(`已确认，工作流 ${job.workflow} 进入下一步。`);
+      }
+      await api.request("/tasks/cancel", { threadId: current.id, taskId: job.id });
+      return terminal.write(`已结束工作流 ${job.workflow}；已保存的文件不受影响。`);
     }
     if (text === "/continue") {
       if (!current) return terminal.write("请先选择会话。");

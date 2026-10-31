@@ -512,5 +512,23 @@ test("真实 PG：迁移 003 把旧的知识维护任务转换为 knowledge-main
     { id: "legacy-maintain", workflow: "knowledge-maintain", params: { kbId: "general" } },
   ]);
   await pool.query("UPDATE agent_data.tasks SET status='needs-review',checks=$2 WHERE id=$1", ["legacy-chat", JSON.stringify([{ id: "format", passed: false }])]);
+  assert.deepEqual((await pool.query("SELECT step,note FROM agent_data.tasks WHERE id='legacy-maintain'")).rows[0], { step: 0, note: null }, "迁移 004：旧任务停在第 0 步");
+  await pool.query("UPDATE agent_data.tasks SET status='waiting' WHERE id='legacy-maintain'");
+  await pool.query("UPDATE agent_data.tasks SET status='cancelled' WHERE id='legacy-maintain'");
   await assert.rejects(pool.query("UPDATE agent_data.tasks SET status='unknown' WHERE id='legacy-chat'"), /tasks_status_check/);
+});
+
+test("真实 PG：多步任务的 step、note、checks 读写；等待确认的任务不被恢复逻辑改写", async (t) => {
+  const r = await setup(t);
+  await r.jobs.create({ ...job("steps"), workflow: "article", params: null, step: 0 });
+  assert.equal((await r.jobs.get("steps")).step, 0);
+  assert.equal(await r.jobs.patch("steps", { status: "running" }, ["queued"]), true);
+  const checks = [{ id: "file-exists", passed: true }];
+  assert.equal(await r.jobs.patch("steps", { status: "waiting", checks }, ["running"]), true);
+  await r.jobs.recover("重启");
+  assert.equal((await r.jobs.get("steps")).status, "waiting", "等待确认不是执行中，重启后保持原样");
+  assert.equal(await r.jobs.patch("steps", { status: "queued", step: 1, note: "按第二版写" }, ["waiting"]), true);
+  const row = await r.jobs.get("steps");
+  assert.deepEqual([row.status, row.step, row.note, row.workflow, row.checks], ["queued", 1, "按第二版写", "article", checks]);
+  assert.equal(await r.jobs.patch("steps", { status: "queued", step: 2 }, ["waiting"]), false, "只有等待确认的任务能被确认");
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { defineWorkflows, describe, runChecks } from "../server/modules/workflows/index.mjs";
+import { PermissionGate } from "../server/modules/permissions/index.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { loadServerConfig, createLogRedactor } from "../server/modules/config/index.mjs";
 import { prepareRun } from "../server/modules/codex/runtime.mjs";
@@ -45,7 +46,7 @@ test("workflow 解析：参数按 schema 校验，授权落到具体知识库，
     ["missing", null, 403], ["chat", { x: "1" }, 400]]) {
     assert.throws(() => workflows.resolve(id, params), error => error.status === status, `${id} ${JSON.stringify(params)}`);
   }
-  assert.deepEqual({ ...workflows.resolve("report") }, { id: "report", label: "写报告", skill: "outline", params: null, grants: [], checks: report.checks });
+  assert.deepEqual({ ...workflows.resolve("report") }, { id: "report", label: "写报告", skill: "outline", params: null, grants: [], checks: report.checks, steps: null });
   assert.equal(workflows.resolve().id, "chat");
 });
 
@@ -68,7 +69,7 @@ test("任务说明只写目标、授权和验收；验收只看产物和生效�
   assert.deepEqual(check({}), { "file-exists": false, format: false, "sources-cited": false, "wiki-effective": false }, "没有产物不能算通过");
 });
 
-async function messageRig(t, workflows) {
+async function messageRig(t, workflows, gate) {
   const root = installToolFixture(tempRoot(t), { knowledge: true });
   fs.mkdirSync(path.join(root, "agents/writing/skills/outline"), { recursive: true });
   fs.writeFileSync(path.join(root, "agents/writing/skills/outline/SKILL.md"), "---\nname: outline\n---\n提纲方法\n");
@@ -84,7 +85,7 @@ async function messageRig(t, workflows) {
   agent.availableSkills = agent.skills.map(skill => ({ ...skill, name: skill.id }));
   const rpc = new FakeRpc(), hub = new EventHub(), store = new TestJobs();
   const sessions = new SessionService({ rpc, config, runtime, hub, redact: createLogRedactor(fixture.CODEX_API_KEY) });
-  const messages = await new MessageService({ rpc, config, sessions, hub, store }).open();
+  const messages = await new MessageService({ rpc, config, sessions, hub, store, gate }).open();
   const session = await sessions.create();
   cleanup(root, async () => { await messages.close(); sessions.close(); });
   const submit = (id, fields = {}) => messages.submit({ threadId: session.id, clientMessageId: id, text: `正文 ${id}`, ...fields });
@@ -150,4 +151,80 @@ test("workflows 需要 schemaVersion 1.2；参数 schema 只允许扁平字符�
   assert.throws(() => new AgentDefinition(root), /Agent 定义无效/);
   edit(v => { v.agent.workflows.push({ id: "bad-check", checks: ["model-says-done"] }); });
   assert.throws(() => new AgentDefinition(root), /Agent 定义无效/);
+});
+
+const article = { id: "article", label: "写文章", skill: "outline", steps: [
+  { id: "outline", goal: "确定立意与大纲，保存到 drafts/", writes: ["drafts"], confirm: true },
+  { id: "final", goal: "完成研究、写作与核查并定稿", writes: ["research", "drafts", "outputs"], checks: ["file-exists", "format"] }] };
+
+test("步骤声明：最后一步不能要求确认，写入范围不能超出基础权限，有 steps 时 checks 写在步骤上", () => {
+  const writable = ["research", "drafts", "outputs"];
+  const define = workflow => defineWorkflows({ ...base, workflows: [workflow] }, { writable });
+  assert.throws(() => define({ ...article, steps: [article.steps[0], { ...article.steps[1], confirm: true }] }), /最后一步不需要确认/);
+  assert.throws(() => define({ ...article, steps: [{ ...article.steps[0], writes: ["inputs"] }, article.steps[1]] }), /超出 Agent 可新建文件的范围/);
+  assert.throws(() => define({ ...article, checks: ["format"] }), /checks 写在步骤上/);
+  assert.throws(() => define({ ...article, steps: [article.steps[0], { ...article.steps[1], id: "outline" }] }), /步骤 id 重复/);
+  const resolved = define({ ...article, steps: [{ ...article.steps[0], writes: ["drafts/outlines"] }, article.steps[1]] }).resolve("article");
+  assert.deepEqual(resolved.steps.map(step => [step.id, step.confirm, step.writes]), [["outline", true, ["drafts/outlines"]], ["final", false, ["research", "drafts", "outputs"]]]);
+  const first = describe(resolved, 0), last = describe(resolved, 1);
+  assert.match(first, /第 1\/2 步：outline/);
+  assert.match(first, /只能在这些位置新建文件：drafts\/outlines/);
+  assert.match(first, /等待用户确认/);
+  assert.match(last, /第 2\/2 步：final/);
+  assert.match(last, /产物文件存在、产物格式合规/);
+  assert.doesNotMatch(last, /等待用户确认/);
+});
+
+test("权限门：步骤的 writes 只收窄新建文件的位置，不影响读取", async () => {
+  const agent = { assertCurrent() {}, allowsTool: () => true, outputs: { directory: "outputs" },
+    sources: [{ locator: "drafts", actions: ["read", "create"] }, { locator: "research", actions: ["read", "create"] }],
+    definition: { agent: { id: "a" }, bindings: {} } };
+  const gate = new PermissionGate({ scope: { ownerId: "owner" }, agent });
+  gate.start({ id: "task", threadId: "t" }, [], ["drafts"]); gate.started("t", "turn");
+  await gate.run(gate.forTurn("t", "turn"), async () => {
+    gate.check("create", { path: "drafts/outline.md" });
+    gate.check("read", { path: "research/notes.md" });
+    assert.throws(() => gate.check("create", { path: "outputs/article.md" }), /未授权/);
+    assert.throws(() => gate.check("create", { path: "research/notes.md" }), /未授权/);
+  });
+  gate.end("t", "turn"); gate.start({ id: "chat", threadId: "t" }); gate.started("t", "turn-2");
+  await gate.run(gate.forTurn("t", "turn-2"), async () => gate.check("create", { path: "outputs/article.md" }));
+});
+
+test("多步 workflow：确认点停在 waiting，期间可以普通对话；确认带补充说明进入下一步；可以结束等待的任务", async t => {
+  const starts = [];
+  const gate = { submission: () => null, run: (principal, operation) => operation(), authorize: grants => grants, end() {},
+    start: (job, grants, writes) => starts.push({ id: job.id, writes }) };
+  const r = await messageRig(t, [article], gate);
+  await r.submit("a1", { workflow: "article" });
+  const first = await r.started(1);
+  assert.match(first[0].text, /第 1\/2 步：outline/);
+  assert.equal(first[1].text, "正文 a1");
+  assert.deepEqual(starts.at(-1), { id: "a1", writes: ["drafts"] });
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("a1").status === "waiting");
+  assert.equal(r.store.get("a1").step, 0);
+  assert.deepEqual(r.messages.publicJob(r.store.get("a1")), { ...r.store.get("a1"), text: "正文 a1", stepId: "outline", steps: 2 });
+  await r.submit("chat-1");
+  await r.started(2);
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("chat-1").status === "completed");
+  assert.equal(r.store.get("a1").status, "waiting", "等待确认时，普通对话照常执行，不会推进 workflow");
+  await assert.rejects(r.messages.confirm({ threadId: r.session.id, taskId: "chat-1" }), error => error.status === 409);
+  const confirmed = await r.messages.confirm({ threadId: r.session.id, taskId: "a1", text: "按第二版大纲写" });
+  assert.equal(confirmed.step, 1);
+  const second = await r.started(3);
+  assert.match(second[0].text, /第 2\/2 步：final/);
+  assert.equal(second[1].text, "用户已确认上一步，请继续。\n用户补充：按第二版大纲写");
+  assert.deepEqual(starts.at(-1), { id: "a1", writes: ["research", "drafts", "outputs"] });
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("a1").status === "needs-review");
+  assert.deepEqual(r.store.get("a1").checks.map(check => check.id), ["file-exists", "format"], "只运行最后一步自己的验收");
+  await r.submit("a2", { workflow: "article" });
+  await r.started(4);
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("a2").status === "waiting");
+  assert.equal((await r.messages.cancel({ threadId: r.session.id, taskId: "a2" })).status, "cancelled");
+  await assert.rejects(r.messages.confirm({ threadId: r.session.id, taskId: "a2" }), error => error.status === 409);
+  await assert.rejects(r.messages.confirm({ threadId: r.session.id, taskId: "a2", extra: 1 }), error => error.status === 400);
 });

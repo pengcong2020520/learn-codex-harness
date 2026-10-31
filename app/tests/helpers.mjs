@@ -14,7 +14,7 @@ import { TestJobs } from './jobs-fixture.mjs';
 export { testDataFactory } from './jobs-fixture.mjs';
 
 export const fixture = { CODEX_API_KEY: "test-key-not-real", CODEX_BASE_URL: "https://provider.invalid/v1", CODEX_MODEL: "unit-model", DEMO_TIMEOUT_MS: "3000" };
-export function installToolFixture(root, { knowledge = false } = {}) {
+export function installToolFixture(root, { knowledge = false, article = false } = {}) {
   const project = fileURLToPath(new URL("../", import.meta.url));
   cpSync(path.join(project, "config/runtime"), path.join(root, "config/runtime"), { recursive: true });
   for (const area of ["inputs", "research", "drafts", "outputs"]) mkdirSync(path.join(root, "workspace", area), { recursive: true });
@@ -35,6 +35,15 @@ export function installToolFixture(root, { knowledge = false } = {}) {
     delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
     definition.agent.workflows = (definition.agent.workflows || []).filter(w => w.id !== 'knowledge-maintain');
     definition.agent.skills = definition.agent.skills.filter(s => s.id !== 'knowledge');
+    writeFileSync(file, JSON.stringify(definition));
+  }
+  if (!article) {
+    // 默认夹具只保留与被测机制相关的配置；需要"写文章"工作流的用例显式开启。
+    const file = path.join(root, 'agents/writing/agent.json');
+    const definition = JSON.parse(readFileSync(file));
+    definition.agent.skills = definition.agent.skills.filter(s => s.id !== 'write-article');
+    delete definition.bindings.skills['write-article'];
+    definition.agent.workflows = (definition.agent.workflows || []).filter(w => w.id !== 'write-article');
     writeFileSync(file, JSON.stringify(definition));
   }
   symlinkSync(path.join(project, "node_modules"), path.join(root, "node_modules"), "dir");

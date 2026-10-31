@@ -31,7 +31,8 @@ test('没有会话、跨Origin、缺少标识、错误Host均不能代理',async
 });
 test('只代理固定目标和白名单接口，服务端附加令牌且不透传Origin',async t=>{
  const f=await fixture(t);assert.equal((await f.request('/api/agent/unknown/messages',{})).status,404);assert.equal((await f.request('/api/agent/s05/admin/delete',{})).status,404);
- const r=await f.request('/api/agent/s05/messages',{threadId:'t',clientMessageId:'id',text:'hello'});assert.equal(r.status,200);assert.equal(f.received[0].origin,undefined);assert.equal(JSON.parse(f.received[0].body).clientMessageId,'id');
+ const r=await f.request('/api/agent/s05/messages',{threadId:'t',clientMessageId:'id',text:'hello'});assert.equal(r.status,200);
+ for(const route of ['/tasks/confirm','/tasks/cancel'])assert.equal((await f.request('/api/agent/s05'+route,{threadId:'t',taskId:'id'})).status,200,route);assert.equal(f.received[0].origin,undefined);assert.equal(JSON.parse(f.received[0].body).clientMessageId,'id');
 });
 test('SSE保持事件帧；读取参数编码不被改写；断点编号只转发给事件流',async t=>{
  const f=await fixture(t);const r=await f.request('/api/agent/s05/events?threadId=t',undefined,{'last-event-id':'abcd1234-7'});assert.match(r.headers.get('content-type'),/text\/event-stream/);assert.match(await r.text(),/"snapshot"/);

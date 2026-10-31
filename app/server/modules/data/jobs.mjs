@@ -2,13 +2,13 @@ import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
-const columns = `$2::uuid AS "userId",t.workflow,t.params,t.checks,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
+const columns = `$2::uuid AS "userId",t.workflow,t.params,t.checks,t.step,t.note,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
   t.turn_id AS "turnId",t.agent_hash AS "agentHash",t.status,t.error,t.created_at::float8 AS "createdAt"`;
 const owned = `t.instance_id=$1 AND EXISTS(SELECT 1 FROM agent_data.conversations c
   WHERE c.instance_id=t.instance_id AND c.id=t.thread_id AND c.owner_id=$2)`;
 export const executing = ["starting", "running", "steering"];
-// needs-review：轮次正常完成但 workflow 验收没通过，同样是终态。
-export const terminal = ["completed", "failed", "interrupted", "needs-review"];
+// needs-review：轮次正常完成但 workflow 验收没通过；cancelled：用户结束了等待确认或排队中的任务。
+export const terminal = ["completed", "failed", "interrupted", "needs-review", "cancelled"];
 
 export class PostgresJobs extends Repository {
   async get(id) {
@@ -86,7 +86,7 @@ export class PostgresJobs extends Repository {
     });
   }
   async patch(id, fields, expected) {
-    const mapping = { status: "status", turnId: "turn_id", error: "error", checks: "checks" };
+    const mapping = { status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note" };
     // checks 是数组：显式序列化，避免驱动把它当成 PostgreSQL 数组。
     const entries = Object.entries(fields).filter(([key]) => mapping[key])
       .map(([key, value]) => [key, key === "checks" && value != null ? JSON.stringify(value) : value]);

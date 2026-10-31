@@ -155,6 +155,8 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 | `chat` | 无 | 无 | 无 |
 | `knowledge-maintain` | `kbId` | 本任务可以更新该知识库 | 本轮至少一次 Wiki 修订生效 |
 
+默认写作 Agent 还声明了自定义的两步 Workflow `write-article`：第 1 步确定立意与大纲（只能写 `drafts/`），完成后等待确认；确认后第 2 步研究、写作、核查并定稿，检查产物存在且格式合规。每一步之内怎么做由模型决定。
+
 自定义 Workflow 只能组合代码里提供的积木：
 
 ```jsonc
@@ -167,7 +169,8 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 - **提交**：`POST /messages` 带 `workflow` 与 `params`；CLI 用 `/workflow 名称 键=值 内容`。旧的 `knowledge: { kbId, operation: "update" }` 字段兼容一个版本，等价于 `knowledge-maintain`。
 - **派发**：服务端在用户原文之前加一段任务说明（目标、授权、验收），注入 Workflow 指定的 Skill；权限门为本任务签发 `grants`，任务结束即失效。追加消息沿用当前任务的授权，不能更换 Workflow。
 - **验收**：只看结果——`file-exists`、`format`、`sources-cited`、`wiki-effective`。不通过的任务记为 `needs-review` 并推送给客户端，不暂停队列、不自动重试。
-- **升级**：任务表新增 `workflow`、`params`、`checks` 列（迁移 003），升级后先运行 `npm run data:migrate`。
+- **多步与确认点**：`steps` 只在权限要变或需要人拍板的地方切步骤，每步是同一会话里的一轮。`writes` 收窄本步可新建文件的位置（由权限门执行），`confirm` 表示本步完成后进入 `waiting`。确认用 `POST /tasks/confirm`（可带补充说明作为下一步输入）或 CLI `/confirm`；结束用 `POST /tasks/cancel` 或 `/reject`。等待期间普通对话照常执行。
+- **升级**：任务表新增 `workflow`、`params`、`checks`、`step`、`note` 列（迁移 003、004），升级后先运行 `npm run data:migrate`。
 
 ## Skill 使用说明
 
@@ -206,6 +209,8 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 | `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
 | `/workflow` | 列出当前 Agent 启用的 Workflow |
 | `/workflow <ID> [键=值 ...] 内容` | 按 Workflow 提交新任务，结束后报告验收结果 |
+| `/confirm [补充说明]` | 确认等待中的 Workflow 步骤，进入下一步 |
+| `/reject` | 结束等待确认的 Workflow 任务 |
 | `/queue` | 查看排队任务 |
 | `/continue` | 继续暂停的尚未执行队列，不重发未确认任务 |
 | `/tools` | 查看当前可用工具 |

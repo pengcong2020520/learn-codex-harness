@@ -8,6 +8,10 @@
       {
         "id": "knowledge",
         "required": false
+      },
+      {
+        "id": "write-article",
+        "required": false
       }
     ],
     "tools": {
@@ -98,6 +102,34 @@
     "workflows": [
       {
         "id": "knowledge-maintain"
+      },
+      {
+        "id": "write-article",
+        "label": "写文章",
+        "skill": "write-article",
+        "steps": [
+          {
+            "id": "outline",
+            "goal": "理解用户观点，确定立意与大纲，保存到 drafts/ 并请用户确认",
+            "writes": [
+              "drafts"
+            ],
+            "confirm": true
+          },
+          {
+            "id": "final",
+            "goal": "按确认的大纲完成研究、写作、事实核查和润色，定稿保存到 outputs/",
+            "writes": [
+              "research",
+              "drafts",
+              "outputs"
+            ],
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          }
+        ]
       }
     ]
   },
@@ -106,6 +138,9 @@
     "skills": {
       "knowledge": {
         "path": "skills/knowledge/SKILL.md"
+      },
+      "write-article": {
+        "path": "skills/write-article/SKILL.md"
       }
     },
     "sources": {

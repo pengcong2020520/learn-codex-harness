@@ -148,12 +148,14 @@ test("普通日志不黏到非 TTY 回复末尾，模型控制字符不能清屏
 async function chatFixture(t) {
   const f = terminalFixture(t);
   const session = { id: THREAD_ID, model: "unit-model", turns: [] };
-  const calls = [];
+  const calls = [], jobs = [];
   let listener;
   const api = {
     async request(route, body) {
       calls.push({ route, body });
       if (route === "/messages") return { status: "queued" };
+      if (route.startsWith("/state?")) return { session: structuredClone(session), queue: { paused: false, jobs: structuredClone(jobs) } };
+      if (route === "/tasks/confirm" || route === "/tasks/cancel") return { status: "queued" };
       if (route === "/sessions" || route === "/sessions/resume") return structuredClone(session);
       if (route.startsWith("/sessions?q=")) return { sessions: [{ ...structuredClone(session), preview: "历史会话" }] };
       if (route === "/workbench") return { agent: { workflows: [{ id: "chat", label: "普通对话", params: null, checks: [] },
@@ -165,7 +167,7 @@ async function chatFixture(t) {
   const resyncs = [];
   const done = runChat(api, f.terminal);
   t.after(async () => { f.terminal.close(); await done; });
-  return { ...f, calls, session, done, resyncs,
+  return { ...f, calls, session, done, resyncs, jobs,
     event(type, data) { listener({ type, threadId: session.id, data: structuredClone(data) }); },
     async send(line) { f.input.write(line + "\n"); await new Promise(resolve => setImmediate(resolve)); },
     async start() { f.input.write("你好\n"); await until(() => calls.some(call => call.route === "/messages")); }
@@ -299,4 +301,22 @@ test("/workflow 列出与提交：键=值作为参数，验收结果只报告一
   f.event("queue", { paused: false, jobs: [job] });
   f.event("queue", { paused: false, jobs: [job] });
   assert.equal(f.text().split("验收未通过（knowledge-maintain）：Wiki 修订已生效（本轮没有生效的 Wiki 修订。）").length - 1, 1);
+});
+
+test("多步 workflow：等待确认时提示一次，/confirm 带补充说明，/reject 结束", async t => {
+  const f = await chatFixture(t);
+  await f.start();
+  const job = { id: "w1", status: "waiting", workflow: "write-article", step: 0, steps: 2, stepId: "outline", text: "写文章" };
+  f.event("queue", { paused: false, jobs: [job] });
+  f.event("queue", { paused: false, jobs: [job] });
+  assert.equal(f.text().split("工作流 write-article 第 1/2 步（outline）已完成，等待确认").length - 1, 1);
+  f.jobs.push(job);
+  await f.send("/confirm 按第二版大纲写");
+  await until(() => f.calls.some(call => call.route === "/tasks/confirm"));
+  assert.deepEqual(f.calls.find(call => call.route === "/tasks/confirm").body, { threadId: THREAD_ID, taskId: "w1", text: "按第二版大纲写" });
+  await f.send("/reject");
+  await until(() => f.calls.some(call => call.route === "/tasks/cancel"));
+  f.jobs.length = 0;
+  await f.send("/confirm");
+  await until(() => /没有等待确认/.test(f.text()));
 });

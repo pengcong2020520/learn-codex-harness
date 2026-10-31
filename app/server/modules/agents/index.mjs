@@ -130,7 +130,7 @@ export class AgentDefinition {
       this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });
     }
     if (agent.workflows && definition.schemaVersion !== "1.2") throw new Error("workflows 需要 schemaVersion 1.2。");
-    this.workflows = defineWorkflows(agent);
+    this.workflows = defineWorkflows(agent, { writable: [this.outputs.directory, ...this.sources.filter(source => source.actions.includes("create")).map(source => source.locator)] });
     this.expected = this.sourceHash();
     this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs })}`;
     freeze(this.sources); freeze(this.skills);
@@ -189,7 +189,7 @@ export class AgentDefinition {
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
   // workflow 指定的 Skill 按 id 注入；任务说明（目标、授权、验收）放在用户原文之前。
-  input(text, workflow = null) {
+  input(text, workflow = null, step = 0) {
     this.assertCurrent();
     const available = new Set((this.availableSkills || []).map(skill => skill.name));
     const mentions = new Set([...text.matchAll(/\$([a-zA-Z][a-zA-Z0-9_-]*)/g)].map(match => match[1]));
@@ -198,7 +198,7 @@ export class AgentDefinition {
     }
     // 不解析 SKILL.md；原生引擎按已验证名称和路径注入正文。
     const selected = (this.availableSkills || []).filter(skill => mentions.has(skill.name) || (workflow?.skill && skill.id === workflow.skill));
-    const brief = workflow ? describe(workflow) : null;
+    const brief = workflow ? describe(workflow, step) : null;
     return [...(brief ? [{ type: "text", text: brief, text_elements: [] }] : []), { type: "text", text, text_elements: [] },
       ...selected.map(({ name, path }) => ({ type: "skill", name, path }))];
   }

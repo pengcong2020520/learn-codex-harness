@@ -30,12 +30,12 @@ export class PermissionGate {
     if (context.kind === 'task' && this.runs.get(context.threadId)?.context !== context) denied();
     return context;
   }
-  // grants 来自 workflow 解析结果，只在本任务的上下文里有效。
-  start(job, grants = []) {
+  // grants 与 writes 来自 workflow 解析结果，只在本任务（当前步骤）的上下文里有效；writes 为 null 表示不收窄。
+  start(job, grants = [], writes = null) {
     if (this.runs.has(job.threadId) || (job.userId && job.userId !== this.scope.ownerId)) denied();
     const controller = new AbortController();
     const context = this.issue({ kind: 'task', taskId: job.id, threadId: job.threadId,
-      grants: Object.freeze(grants.map(grant => Object.freeze({ ...grant }))), signal: controller.signal });
+      grants: Object.freeze(grants.map(grant => Object.freeze({ ...grant }))), writes: writes ? Object.freeze([...writes]) : null, signal: controller.signal });
     this.runs.set(job.threadId, { context, controller, turnId: null });
   }
   started(threadId, turnId) {
@@ -76,6 +76,7 @@ export class PermissionGate {
         if (covers(binding.wikiRoot, locator)) denied();
         if (covers(binding.sourceRoot, locator)) { if (!['read','list'].includes(action)) denied(); this.mount(kbId, 'read'); }
       }
+      if (action === 'create' && context.kind === 'task' && context.writes && !context.writes.some(root => covers(root, locator))) denied();
       const permission = action === 'list' ? 'read' : action;
       const found = this.agent.sources.some(s => s.actions.includes(permission) &&
         (covers(s.locator, locator) || (action === 'list' && (!locator || covers(locator, s.locator)))));

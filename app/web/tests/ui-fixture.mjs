@@ -16,7 +16,9 @@ const upstream=createServer(async(req,res)=>{
     case '/workbench':return send({agent:{id:'ui-fixture',version:'1.0',tools:{allow:['read_file','kb_read','kb_submit_revision']},memory:{use:false,contribute:false}},queueBackend:'postgres'});
     case '/sessions':if(req.method==='GET')return send({sessions:threads});{const t={id:'fixture-thread-'+(++id),name:'浏览器测试会话',turns:[]};threads.push(t);queues.set(t.id,{threadId:t.id,paused:false,jobs:[]});return send(t);}
     case '/sessions/resume':return send(session());
-    case '/messages':{const t=session();if(!t)return send({error:{message:'会话不存在'}},404);const knowledge=body.knowledge;const turn={id:'fixture-turn-'+(++id),status:'completed',messages:[{id:body.clientMessageId,text:body.text}],answers:{a:knowledge?'测试模型：Wiki 已整理为 services。':'测试模型：收到任务。'},tools:{}};t.turns.push(turn);queues.get(t.id).jobs.push({id:body.clientMessageId,text:body.text,status:'completed',turnId:turn.id});if(knowledge)pages.set('services',{slug:'services',content:'# 测试服务\n这是浏览器联调测试的 Wiki。',versionId:'fixture-wiki-v1',source_versions:[{resourceId:'fixture-resource',versionId:'fixture-source-v1'}]});return send({id:body.clientMessageId,status:'completed'});}
+    case '/messages':{const t=session();if(!t)return send({error:{message:'会话不存在'}},404);const knowledge=body.knowledge;const turn={id:'fixture-turn-'+(++id),status:'completed',messages:[{id:body.clientMessageId,text:body.text}],answers:{a:knowledge?'测试模型：Wiki 已整理为 services。':'测试模型：收到任务。'},tools:{}};t.turns.push(turn);const steps=body.workflow==='write-article';queues.get(t.id).jobs.push({id:body.clientMessageId,text:body.text,status:steps?'waiting':'completed',turnId:turn.id,workflow:body.workflow||'chat',...(steps?{step:0,steps:2,stepId:'outline'}:{})});if(knowledge)pages.set('services',{slug:'services',content:'# 测试服务\n这是浏览器联调测试的 Wiki。',versionId:'fixture-wiki-v1',source_versions:[{resourceId:'fixture-resource',versionId:'fixture-source-v1'}]});return send({id:body.clientMessageId,status:'completed'});}
+    // 多步 workflow：write-article 第 1 步后停在 waiting，确认后进入第 2 步并完成。
+    case '/tasks/confirm':case '/tasks/cancel':{const job=queues.get(session()?.id)?.jobs.find(j=>j.id===body.taskId);if(job?.status!=='waiting')return send({error:{message:'只有等待确认的任务可以继续。'}},409);Object.assign(job,url.pathname==='/tasks/confirm'?{status:'completed',step:1,stepId:'final',checks:[{id:'file-exists',label:'产物文件存在',passed:true}]}:{status:'cancelled'});return send(job);}
     case '/state':return send({session:session(),queue:queues.get(session()?.id)});
     case '/events':res.writeHead(200,{'content-type':'text/event-stream'});res.write(`data: ${JSON.stringify({type:'snapshot',data:{session:session(),queue:queues.get(session()?.id)}})}\n\n`);return;
     case '/knowledge':return send({knowledge:[{kbId:'general',desiredMode:'wiki',effectiveMode:'wiki',actions:['read','update','index']}]});
@@ -33,6 +35,6 @@ const upstream=createServer(async(req,res)=>{
 });
 await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
 fs.writeFileSync(path.join(root,'.data/connection.json'),JSON.stringify({url:`http://127.0.0.1:${upstream.address().port}`,token:'fixture-only-no-real-credentials'}));
-const bridge=createWorkbench({port:4321,targets:[{id:'s05',root,live:true,name:'UI fixture'}]});
+const bridge=createWorkbench({port:Number(process.env.UI_FIXTURE_PORT||4321),targets:[{id:'s05',root,live:true,name:'UI fixture'},{id:'project',root,live:true,name:'UI fixture project'}]});
 console.log(await bridge.listen());
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await bridge.close();upstream.closeAllConnections();await new Promise(r=>upstream.close(r));fs.rmSync(root,{recursive:true,force:true});process.exit(0);});
