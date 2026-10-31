@@ -126,3 +126,7 @@ npm test        # 全部离线测试 + 工作台测试 + 课程一致性 + 阶�
 
 - 课程「每节一个机制」的组织方式参考了 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，内容基于本项目重新编写。
 - 执行内核来自 [openai/codex](https://github.com/openai/codex)。
+
+## 许可证
+
+[MIT](LICENSE)。`stages/` 下各阶段与 `app/` 都按同一协议发布，单独复制某个阶段时请一并保留 LICENSE。执行内核 [openai/codex](https://github.com/openai/codex)（Apache-2.0）作为 npm 依赖安装，不包含在本仓库中。
