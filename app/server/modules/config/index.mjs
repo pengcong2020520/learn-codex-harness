@@ -30,13 +30,44 @@ export function createLogRedactor(apiKey = "", additional = []) {
   const secrets = [...new Set([apiKey, apiKey.trim(), ...additional].filter(Boolean))]
     .flatMap(value => [value, JSON.stringify(value).slice(1, -1)])
     .sort((a, b) => b.length - a.length);
-  return value => {
+  const redact = value => {
     let text = typeof value === "string" ? value : JSON.stringify(value, (key, entry) =>
       /^(api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)$/i.test(key) ? "[REDACTED]" : entry
     );
     for (const secret of secrets) text = text.split(secret).join("[REDACTED]");
     return text;
   };
+  // 流式文本逐段到达，密钥可能被切在两段之间。滑动窗口只扣住末尾「可能是某个密钥开头」的那一段，
+  // 跨越切点的完整密钥整段留到下一次；其余文字脱敏后立即放行。end() 放行全部剩余文字。
+  redact.stream = () => {
+    let pending = "";
+    const release = final => {
+      let cut = pending.length;
+      if (!final) {
+        for (const secret of secrets) cut = Math.min(cut, pending.length - partialSuffix(pending, secret));
+        for (let moved = true; moved;) {
+          moved = false;
+          for (const secret of secrets) {
+            const index = pending.indexOf(secret, Math.max(0, cut - secret.length + 1));
+            if (index !== -1 && index < cut) { cut = index; moved = true; }
+          }
+        }
+      }
+      const text = redact(pending.slice(0, cut));
+      pending = pending.slice(cut);
+      return text;
+    };
+    return { push: chunk => { pending += chunk; return release(false); }, end: () => release(true) };
+  };
+  return redact;
+}
+
+// text 末尾与 secret 开头重合的最长长度；完整出现的 secret 不算在内。
+function partialSuffix(text, secret) {
+  for (let size = Math.min(secret.length - 1, text.length); size > 0; size--) {
+    if (text.charCodeAt(text.length - size) === secret.charCodeAt(0) && text.endsWith(secret.slice(0, size))) return size;
+  }
+  return 0;
 }
 
 

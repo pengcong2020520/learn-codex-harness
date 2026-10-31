@@ -3,10 +3,13 @@ import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from ".
 import { AppError, requireId } from "../../../shared/errors.mjs";
 
 export class SessionService extends EventEmitter {
-  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository }) {
+  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval = 100 }) {
     super();
-    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository });
+    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval });
     this.sessions = new Map();
+    this.timers = new Map();
+    // 每条回复各自的流式脱敏窗口；不挂在 turn 上，避免未脱敏的尾部进入快照。
+    this.streams = new WeakMap();
     this.loading = new Map();
     this.options = {
       sandbox: config.agent?.execution.sandbox || "read-only",
@@ -131,7 +134,11 @@ export class SessionService extends EventEmitter {
         } catch { /* 不从模型回复中猜测文件，也不把工具错误当作产物。 */ }
       }
     }
-    if (item.type === "agentMessage" && typeof item.text === "string") turn.answers[item.id] = this.redact(item.text);
+    if (item.type === "agentMessage" && typeof item.text === "string") {
+      // 整段文本是权威结果，覆盖增量拼接的内容，并丢弃这条回复的流式窗口。
+      turn.answers[item.id] = this.redact(item.text);
+      this.streams.get(turn)?.delete(item.id);
+    }
     if (item.type === "userMessage" && !turn.messages.some(message => message.id === item.id)) {
       turn.messages.push({ id: item.id, clientId: item.clientId,
         text: this.redact((item.content || []).filter(part => part.type === "text").map(part => part.text).join("\n")) });
@@ -149,16 +156,48 @@ export class SessionService extends EventEmitter {
       turn = this.recordTurn(threadId, params.turn);
     } else {
       turn ||= this.recordTurn(threadId, { id: turnId, status: "inProgress" });
-      if (message.method === "item/agentMessage/delta") {
-        turn.answers[params.itemId] = this.redact((turn.answers[params.itemId] || "") + params.delta);
-      }
+      if (message.method === "item/agentMessage/delta") this.appendDelta(turn, params.itemId, params.delta);
       if (["item/started", "item/completed"].includes(message.method) && params.item) this.applyItem(turn, params.item);
     }
-    this.publish(threadId);
+    if (message.method === "turn/completed") this.flushStreams(turn);
+    // 增量只改动一条回复的文字，合并到下一个推送周期；其他状态变化立即推送。
+    if (message.method === "item/agentMessage/delta") this.schedule(threadId);
+    else this.publish(threadId);
     if (message.method === "turn/completed") this.emit("turnCompleted", { threadId, turn });
   }
 
+  // 每段增量只脱敏新到的文字，不再对整条回复反复脱敏。
+  appendDelta(turn, itemId, delta) {
+    if (!this.redact.stream) { turn.answers[itemId] = this.redact((turn.answers[itemId] || "") + delta); return; }
+    let streams = this.streams.get(turn);
+    if (!streams) this.streams.set(turn, streams = new Map());
+    if (!streams.has(itemId)) streams.set(itemId, this.redact.stream());
+    const released = streams.get(itemId).push(delta);
+    if (released) turn.answers[itemId] = (turn.answers[itemId] || "") + released;
+  }
+
+  // 轮次结束时，放行没有等到 item/completed 的回复仍被扣住的尾部。
+  flushStreams(turn) {
+    for (const [itemId, stream] of this.streams.get(turn) || []) {
+      const rest = stream.end();
+      if (rest) turn.answers[itemId] = (turn.answers[itemId] || "") + rest;
+    }
+    this.streams.delete(turn);
+  }
+
+  schedule(threadId) {
+    if (this.timers.has(threadId)) return;
+    const timer = setTimeout(() => {
+      this.timers.delete(threadId);
+      if (this.sessions.has(threadId)) this.publish(threadId);
+    }, this.publishInterval);
+    timer.unref?.();
+    this.timers.set(threadId, timer);
+  }
+
   publish(threadId) {
+    clearTimeout(this.timers.get(threadId));
+    this.timers.delete(threadId);
     this.hub.publish("session", this.snapshot(threadId), threadId);
   }
 
@@ -171,5 +210,9 @@ export class SessionService extends EventEmitter {
         tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] })) };
   }
 
-  close() { this.rpc.off("notification", this.onNotification); }
+  close() {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    this.rpc.off("notification", this.onNotification);
+  }
 }

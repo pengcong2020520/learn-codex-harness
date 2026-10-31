@@ -29,6 +29,13 @@ function authenticated(request, token) {
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
 export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files }) {
   const streams = new Set();
+  // 同一个事件推给多个 SSE 连接时，只序列化、脱敏一次。
+  const encoded = new WeakMap();
+  const encode = event => {
+    let text = encoded.get(event);
+    if (text === undefined) encoded.set(event, text = redact(event));
+    return text;
+  };
   const handle = async (request, response) => {
     const json = (status, data) => {
       response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -111,7 +118,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         const write = event => {
           if (response.destroyed) return;
           if (response.writableLength > 1024 * 1024) { response.destroy(); return; }
-          response.write(`data: ${redact(event)}\n\n`);
+          response.write(`data: ${encode(event)}\n\n`);
         };
         const listener = event => { if (!event.threadId || event.threadId === id) {
           if (snapshotSent) write(event);
