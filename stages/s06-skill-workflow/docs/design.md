@@ -1,6 +1,6 @@
 # s06 设计说明：Skill 与 Workflow
 
-> 本文是设计说明，供深入阅读。章节入门（问题 → 解决方案 → 工作原理 → 试一下）见 [README](../README.md)。完整设计、第 0 步验证记录与实施顺序见 [Skill 与 Workflow 设计](skill-workflow-design.md)。
+> 本文是设计说明，供深入阅读。章节入门（要回答的问题 → 核心概念 → 分工 → 跑起来看看 → 关键代码）见 [README](../README.md)。完整设计、第 0 步验证记录与实施顺序见 [Skill 与 Workflow 设计](skill-workflow-design.md)。
 
 在 s05 的知识层与通用门禁之上，把"一类任务"抽象成 Workflow，把 Skill 从工作区移进 Agent 包。服务监听 `127.0.0.1:4316`。本阶段快照取自 2026-10-31 的 `app/`，因此也包含 s05 之后陆续加入的配置选择、会话升级、协议兼容检查和流式推送协议 v2；本章只讲 Skill 与 Workflow。
 
