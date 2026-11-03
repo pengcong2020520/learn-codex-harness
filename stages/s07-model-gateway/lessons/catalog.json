@@ -125,21 +125,23 @@
   {
     "id": "s07-gateway",
     "title": "真实网关",
-    "question": "真正的 Bifrost 是否执行鉴权、备用链和 token 限流？",
+    "question": "真正的 Bifrost 是否执行鉴权、备用链、token 限流，以及生图、生视频的协议转换？",
     "observations": [
       "缺少或错误的访问密钥均被拒绝，主模型余额不足后请求改走备用服务",
       "Responses 转为 Claude 格式，输出上限取模型参数表",
-      "首个请求耗尽 token 额度后，第二个请求返回 429 且不到上游"
+      "首个请求耗尽 token 额度后，第二个请求返回 429 且不到上游",
+      "生图、生视频经真实网关的 byteplus 通道送达火山方舟格式的服务，图片和视频都保存进工作区并记账"
     ],
     "why": "配置生成的断言不能替代网关运行行为，必须通过锁定版本的真实 Bifrost 检验。",
-    "boundary": "集成门禁：默认未运行。真 Bifrost 容器与本机假模型服务；不包含角色评估，不验证真实模型质量或 Codex 工具闭环。",
+    "boundary": "集成门禁：默认未运行。真 Bifrost 容器与本机假模型服务；媒体上游是本机模拟的火山方舟，不验证真实生成质量、模型开通或实际计费；不包含角色评估，不验证真实模型质量或 Codex 工具闭环。",
     "args": [
       "--test",
       "--test-reporter=tap",
       "--test-timeout=240000",
       "--test-concurrency=1",
-      "--test-name-pattern=^(?:模型网关：没有访问密钥一律拒绝；主模型余额不足时自动改用备用；Responses 转 Claude 格式|模型网关：每日 token 限流使用真实 Bifrost，首个请求耗尽额度后第二个请求被拒绝)$",
-      "tests/gateway.integration.mjs"
+      "--test-name-pattern=^(?:模型网关：没有访问密钥一律拒绝；主模型余额不足时自动改用备用；Responses 转 Claude 格式|模型网关：每日 token 限流使用真实 Bifrost，首个请求耗尽额度后第二个请求被拒绝|模型网关：生图、生视频经 byteplus 通道转换为火山方舟格式，后台保存并记账)$",
+      "tests/gateway.integration.mjs",
+      "tests/media-gateway.integration.mjs"
     ],
     "demo": 7,
     "command": "npm run lesson -- s07-gateway",

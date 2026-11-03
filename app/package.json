@@ -45,7 +45,7 @@
     "ollama:up": "docker compose --profile embedding up -d --wait ollama",
     "ollama:pull": "node scripts/ollama-pull.mjs",
     "ollama:down": "docker compose --profile embedding stop ollama",
-    "test:gateway": "node --test --test-concurrency=1 tests/gateway.integration.mjs",
+    "test:gateway": "node --test --test-concurrency=1 tests/gateway.integration.mjs tests/media-gateway.integration.mjs",
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs"
   },
