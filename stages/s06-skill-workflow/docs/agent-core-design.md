@@ -342,7 +342,7 @@ Agent 定义描述角色与能力要求，部署绑定将资源引用解析到�
 ```
 
 **字段说明补充：**
-- `tools.allow` 中仅列出现有确切工具名；可选扩展（`search_web`、`read_webpage`）如需可添加
+- `tools.allow` 中仅列出现有确切工具名；网页读取使用 `read_webpage`。`search_web` 已移除：Google 要求执行 JS 后，抓取搜索结果页的实现已失效；需要联网搜索时，见 [s07 的模型自带搜索](../../s07-model-gateway/README.md)。本阶段继续使用 `web_search="disabled"`，网络工具仅保留网页读取。
 - `requiredChecks` 的 `format` 检查文件扩展名/格式合规性，不检查语义真实性；引用（`references`）可作为可选的手工审查扩展
 - `required: false` 的可选技能在语法已知时支持降级；未知字段或声明启用但不支持的操作须被拒绝
 - `memory.contribute: false` 仅关闭未来贡献资格，不停止已排队的异步生成，不禁用读取

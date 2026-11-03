@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "instructions": "roles/writing-assistant.md",
     "skills": [],
-    "tools": { "allow": ["list_files", "read_file", "write_file", "search_web", "read_webpage"] },
+    "tools": { "allow": ["list_files", "read_file", "write_file", "read_webpage"] },
     "dataBindings": [
       { "sourceRef": "originals", "actions": ["read"], "methods": ["files"], "required": true },
       { "sourceRef": "research", "actions": ["read", "create"], "methods": ["files"], "required": true },
