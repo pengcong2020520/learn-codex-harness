@@ -8,7 +8,7 @@
 
 知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s05 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
 
-运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。Codex 只认 Responses API；默认经本机**模型网关**（Bifrost）接模型，Kimi、DeepSeek、智谱 GLM、OpenAI、Claude、Gemini、Grok 填了密钥就能用，网关负责协议转换和失败时改用备用模型，见 [模型网关](docs/model-gateway.md)。
+运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。Codex 只认 Responses API；默认经本机**模型网关**（Bifrost）接模型，Kimi、DeepSeek、智谱 GLM、OpenAI、Claude、Gemini、Grok，以及 Hugging Face 推理服务上的开源模型，填了密钥就能用，网关负责协议转换和失败时改用备用模型，见 [模型网关](docs/model-gateway.md)。
 
 ## 五个阶段的教学与 Web 工作台
 
