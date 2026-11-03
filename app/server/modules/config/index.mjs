@@ -110,5 +110,8 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
     extractModel: memoryModel("AGENT_MEMORY_EXTRACT_MODEL"),
     consolidationModel: memoryModel("AGENT_MEMORY_CONSOLIDATION_MODEL"), minIdleHours
   };
-  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host: "127.0.0.1", turnTimeoutMs, launch, memory, data, rag };
+  // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
+  const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
+  if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
+  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag };
 }

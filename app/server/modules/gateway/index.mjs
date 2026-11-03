@@ -110,7 +110,10 @@ export function gatewayEndpoint(environment) {
   if (!key.startsWith("sk-bf-")) throw new Error("AGENT_GATEWAY_KEY 必须以 sk-bf- 开头；运行 npm run gateway:key 重新生成。");
   const port = Number(environment.AGENT_GATEWAY_PORT?.trim() || GATEWAY_DEFAULT_PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_GATEWAY_PORT 必须是 1 到 65535 的整数。");
-  return { baseUrl: `http://127.0.0.1:${port}/v1`, apiKey: key, port };
+  // 放进容器时网关不在本机回环上，用 AGENT_GATEWAY_URL 指到容器名（如 http://gateway:8080/v1）。
+  const override = environment.AGENT_GATEWAY_URL?.trim();
+  if (override) checkBaseUrl(override, "AGENT_GATEWAY_URL", message => { throw new Error(message); });
+  return { baseUrl: override || `http://127.0.0.1:${port}/v1`, apiKey: key, port };
 }
 
 // 模型接口的地址和密钥：网关模式取网关，直连模式取 CODEX_BASE_URL / CODEX_API_KEY。
