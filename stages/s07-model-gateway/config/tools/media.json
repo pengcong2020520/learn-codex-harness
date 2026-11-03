@@ -1,0 +1,99 @@
+{
+  "enabled": true,
+  "module": "server/modules/tools/media.mjs",
+  "tools": [
+    {
+      "name": "generate_image",
+      "label": "生成图片",
+      "description": "只在用户明确要求生成图片时调用，生成会产生费用。经网关生成 1–4 张图片，保存到 Agent outputs；默认 outputs/media/ 时间文件名，多张在文件名后加序号。",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": "\\S"
+          },
+          "size": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^(\\d{2,5}x\\d{2,5}|[124]K)$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "generate_video",
+      "label": "生成视频",
+      "description": "只在用户明确要求生成视频时调用，生成会产生费用。提交 2–15 秒视频任务后立即返回 ID，用 media_status 跟进；后台下载 MP4，默认保存到 outputs/media/。",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": "\\S"
+          },
+          "size": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^(\\d{2,5}x\\d{2,5}|[124]K)$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "seconds": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 15
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "media_status",
+      "label": "查看媒体任务",
+      "description": "跟进本服务返回的视频任务 ID，返回状态、完成路径或失败原因。查询本身不产生费用，预算超限时也可以查询。",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9-]{36}$"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

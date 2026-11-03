@@ -1,6 +1,6 @@
 # s05: 知识层与门禁 — Agent 依据什么，能碰什么
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → `s05` → [s06](../s06-skill-workflow/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → `s05` → [s06](../s06-skill-workflow/) → [s07](../s07-model-gateway/) → [app](../../app/)
 > *"身份来自服务端签发的上下文，不来自工具参数"* — 文件、知识、索引，所有工具共用一道门禁；知识分层管理，每次更新都有版本。
 >
 > **对应六个问题**：④ 依据什么资料？ ⑥ 谁说了算？

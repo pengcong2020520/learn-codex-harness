@@ -1,6 +1,6 @@
 # s03: 可配置 Agent — 角色、工具、记忆，装配成一个 Agent
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [s07](../s07-model-gateway/) → [app](../../app/)
 > *"改配置就能换 Agent，但模型不能自己给自己加权限"* — 角色、工具、记忆和资料边界写在同一份配置里，一起生效，一起失效。
 >
 > **对应六个问题**：① 我是谁？ ③ 之前聊过什么？ ⑤ 能用什么？ ⑥ 谁说了算？

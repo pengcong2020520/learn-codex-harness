@@ -1,6 +1,6 @@
 # s00: 先体验 — 让 Codex 替你干一件事
 
-[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
+[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [s07](../s07-model-gateway/) → [app](../../app/)
 > *"模型提出操作，harness 负责执行"* — 先不管协议，用官方 SDK 把一个真实任务交给 Codex，亲眼看看 harness 替你做了哪些事。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？

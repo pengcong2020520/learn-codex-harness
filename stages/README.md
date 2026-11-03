@@ -16,7 +16,8 @@
 | [s04-data-layer](s04-data-layer/README.md) | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
 | [s05-knowledge-layer](s05-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
 | [s06-skill-workflow](s06-skill-workflow/README.md) | Skill 与 Workflow | Agent 包、Skill 同步与隐式读取、Workflow（授权 / 步骤 / 验收）、任务提议 | 4316 |
-| [../app](../app/README.md) | 持续开发的完整项目 | 在 s06 之上继续演进 | 4317 |
+| [s07-model-gateway](s07-model-gateway/README.md) | 模型网关 | Bifrost 网关、模型清单（用途 / 能力 / 价格）、按用途与场景路由、备用链、模型自带的联网搜索、生图与生视频、用量账本与预算 | 4318 |
+| [../app](../app/README.md) | 持续开发的完整项目 | 在 s07 之上继续演进：Docker 部署、Web 工作台与互动课程 | 4317 |
 
 课程、Web 工作台、服务 API 与实验命令统一使用这套编号，例如 `/api/agent/s05`、`npm run lesson -- s01-transport`。旧书签里的 `?stage=demoN` 会自动对应到 `s0N`。
 
@@ -39,13 +40,15 @@
 - **s04** 让 Agent 靠得住：会话、任务、资源元数据存进 PostgreSQL，Redis 负责唤醒调度，文件正文存成不可变的版本对象。
 - **s05** 让 Agent 守得住：统一门禁按 Thread / Turn 绑定的可信上下文判定权限；工具改走 Codex 原生的 `dynamicTools`（保留 MCP 供兼容测试）；加上知识库（Wiki，可选 RAG）。
 - **s06** 让 Agent 会干活：Agent 包、Skill 同步到 `CODEX_HOME`；Workflow 规定本任务的授权、Skill、写入位置、验收和确认点；模型可以用 `propose_task` 提议任务、用 `skill_read` 读取 Skill，但不能批准自己的提议；受限启动关闭原生线程目标和工作区 `AGENTS.md` 的加载。
-- **app** 上云：在 s06 之上加了模型网关、Web 工作台与互动课程，全部服务放进 Docker 部署到服务器。
+- **s07** 让 Agent 管好模型：Codex 只连模型网关（Bifrost），各家密钥只在网关；一份模型清单登记用途、能力和价格，按用途、场景、能力挑模型，出错时走备用链；按模型实测开关自带的联网搜索；向量、生图、生视频也经网关；每一轮的用量记账，超预算就停派新任务，网关再按 token 限流兜底。
+- **之后（规划中）**：s08 上云部署（Docker、服务器、开机自启）→ s09 多用户（认证、按用户隔离运行环境、配额）→ s10 多 Agent 协作 → s11 多主机调度。
+- **app** 在 s07 之上持续开发，s08 的上云部署已经在里面实现，另有 Web 工作台与互动课程。
 
 ## 修改阶段快照的规则
 
 阶段是教学材料，默认冻结；持续开发发生在 [`../app`](../app/README.md)，不与任何阶段同步。缺陷先在 `app/` 修复；只有影响教学正确性的问题才回补到阶段目录，回补后在 `app` 下运行 `npm run course:build` 更新课程源码摘录，并运行下方验证。
 
-s06 的快照取自 `app`，所以代码里还带着配置选择、会话兼容检查和流式推送协议 v2 等章节没有讲的部分；s06 的章节只讲 Skill 与 Workflow。Web 工作台与互动课程只在 `app` 里。
+s06、s07 的快照取自 `app`，所以代码里还带着配置选择、会话兼容检查和流式推送协议 v2 等章节没有讲的部分；s06 的章节只讲 Skill 与 Workflow，s07 只讲模型网关。s07 的快照去掉了 Web 工作台、Docker 部署和角色评估工具，排除清单见 `s07-model-gateway/snapshot.json`。Web 工作台与互动课程只在 `app` 里。
 
 ## 验证
 

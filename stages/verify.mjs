@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
 // s01–s05 即课程里的 Demo 1–5；s06 起只有章节，暂未接入课程。s00 是 SDK 入门，只有章节文档，没有设计说明。
-const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-agent-core", 4: "s04-data-layer", 5: "s05-knowledge-layer", 6: "s06-skill-workflow" };
+const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-agent-core", 4: "s04-data-layer", 5: "s05-knowledge-layer", 6: "s06-skill-workflow", 7: "s07-model-gateway" };
 const CHAPTERS = ["s00-sdk-quickstart", ...Object.values(STAGES)];
 const options = new Set(process.argv.slice(2));
 if ([...options].some(option => !["--integration", "--docs-only", "--rag"].includes(option))) {
@@ -27,6 +27,7 @@ const docs = [
   ["s04-data-layer/docs/data-layer.md", "reference"],
   ["s05-knowledge-layer/docs/knowledge-implementation.md", "reference"],
   ["s06-skill-workflow/docs/skill-workflow-design.md", "reference"],
+  ["s07-model-gateway/docs/model-gateway.md", "reference"],
 ];
 function sourceLines(dir) {
   const walk = folder => fs.readdirSync(folder, { withFileTypes: true }).flatMap(entry => {
@@ -92,6 +93,14 @@ for (const stage of Object.keys(STAGES).map(Number)) {
   assert.equal(fs.existsSync(path.join(cwd, "agents/writing-agent.json")), stage >= 3 && stage < 6);
   assert.equal(fs.existsSync(path.join(cwd, "agents/writing/agent.json")), stage >= 6);
   assert.equal(fs.existsSync(path.join(cwd, "server/modules/workflows/index.mjs")), stage >= 6);
+  for (const file of ["config/models.json", "server/modules/gateway/index.mjs", "server/modules/gateway/router.mjs", "server/modules/usage/index.mjs"]) {
+    assert.equal(fs.existsSync(path.join(cwd, file)), stage >= 7, `${STAGES[stage]}: ${file}`);
+  }
+  if (stage >= 7) {
+    for (const file of ["snapshot.json", "lessons/catalog.json", "lessons/run.mjs", "lessons/README.md", "images/model-gateway.svg"]) {
+      assert.ok(fs.existsSync(path.join(cwd, file)), `${STAGES[stage]}: ${file}`);
+    }
+  }
 }
 assert.equal(fs.existsSync(path.join(root, 's03-agent-core/server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's04-data-layer/server/modules/knowledge/index.mjs')), false);
