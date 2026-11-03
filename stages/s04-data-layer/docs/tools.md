@@ -8,7 +8,7 @@ s03 的工具系统围绕一个核心问题展开：如何让远端语言模型�
 
 s03 把工具作为受版本管控的服务端能力：模型决定何时调用，程序负责检查权限并执行。当前范围是单机单用户、每服务实例一个 Agent 多 Thread，不是多租户安全隔离方案。
 
-数据层升级后，正常服务注入的是 `data/resources.mjs`，再复用 `data/files.mjs` 的底层路径检查。前者增加 PostgreSQL 归属、资料 ID、版本、来源失效检查及正文快照；下文底层文件伪代码不代表完整持久化流程，详见 [数据层说明](data-layer.md)。`read_file` 额外返回 `resourceId` / `versionId`；`write_file` 可选 `source_versions: [{resourceId, versionId}]` 登记引用，不增加自动分类工具。
+数据层升级后，正常服务注入的是 `data/resources.mjs`，再复用 `data/files.mjs` 的底层路径检查。前者增加 PostgreSQL 归属、资料 ID、版本、来源失效检查及正文快照；下文底层文件伪代码不代表完整持久化流程，详见 [数据层说明](data-layer.md)。`read_file` 额外返回 `resourceId` / `versionId`；`write_file` 推荐用 `source_versions: [{"path": "inputs/report.md"}]` 引用已读取路径的当前登记版本，也兼容 `{resourceId, versionId}`，可在数组中混用。两种方式都检查读权限与归属；错误注明第几项，并区分路径不存在、尚未登记、没有读权限、resourceId 不存在、versionId 不属于该资源及版本过期。号码错误提示可能抄错，过期才提示重新读取。需要固定到先前读取的版本时使用 ID；来源声明不增加自动分类工具。
 
 这意味着以下几点在设计上明确分离：
 
@@ -198,7 +198,7 @@ onIdleWindowOpen():
 
 权限检查统一由 `server/modules/data/files.mjs` 执行，按操作类型检查以下边界；列目录不会被当成读写文本文件：
 
-1. 路径格式合法：不含绝对路径、`..`、隐藏路径（`.`开头）、反斜杠
+1. 先将目录开头的 `./` 与末尾 `/` 去掉（例如 `./inputs/` → `inputs`），再校验及授权；不折叠内部空段或 `..`，仍拒绝绝对路径、上级目录、隐藏路径和反斜杠。报错说明具体原因，范围外目录列出当前可浏览范围
 2. 读写文件仅允许 `.md` 和 `.txt`；读取要求普通 UTF-8 文本文件
 3. 读写文件大小 ≤ 256 KiB；读取的 `max_chars` 还可能进一步截断返回文本
 4. 不通过符号链接访问；读写拒绝硬链接文件，目录列表中的链接不能据此读取

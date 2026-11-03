@@ -200,7 +200,7 @@ test("跨 owner / 收窄范围 / 越界 / 旧版本引用均拒绝；移动不�
         { resourceId: write.artifact.resourceId, versionId: randomUUID() },
       ],
     }),
-    /过期/,
+    /第 1 项：versionId 不属于这个资源.*号码抄错/,
   );
   fs.renameSync(
     path.join(r.files.workspace, "outputs/a.txt"),
@@ -465,3 +465,39 @@ test(
     assert.deepEqual(provider.errors, []);
   },
 );
+
+test("真实 PG：路径与 ID 混合引用保存当前版本，逐项区分错误并回滚", async t => {
+  const r = await setup(t);
+  fs.writeFileSync(path.join(r.files.workspace, "inputs/path-source.md"), "v1");
+  fs.writeFileSync(path.join(r.files.workspace, "inputs/other-source.md"), "other");
+  const first = await r.resources.read_file({ path: "inputs/path-source.md" });
+  const other = await r.resources.read_file({ path: "inputs/other-source.md" });
+  const output = await r.resources.write_file({ path: "outputs/mixed.md", content: "mixed", source_versions: [
+    { path: first.path }, { resourceId: other.resourceId, versionId: other.versionId }, { path: first.path },
+  ] });
+  const deps = (await r.repo.query("SELECT source_id,source_version FROM agent_data.dependencies WHERE instance_id=$1 AND derived_id=$3 AND $2::uuid IS NOT NULL", [output.artifact.resourceId])).rows;
+  assert.equal(deps.length, 2);
+  assert.ok(deps.some(dep => dep.source_id === first.resourceId && dep.source_version === first.versionId));
+  fs.writeFileSync(path.join(r.files.workspace, first.path), "v2");
+  const current = await r.resources.read_file({ path: first.path });
+  const updated = await r.resources.write_file({ path: "outputs/current.md", content: "current", source_versions: [{ path: first.path }] });
+  const latest = (await r.repo.query("SELECT source_version FROM agent_data.dependencies WHERE instance_id=$1 AND derived_id=$3 AND $2::uuid IS NOT NULL", [updated.artifact.resourceId])).rows[0];
+  assert.equal(latest.source_version, current.versionId);
+  for (const [reference, reason] of [
+    [{ path: "inputs/missing.md" }, /路径不存在/],
+    [{ path: "private/source.md" }, /没有读权限/],
+    [{ resourceId: randomUUID(), versionId: randomUUID() }, /resourceId 不存在.*号码抄错/],
+    [{ resourceId: first.resourceId, versionId: randomUUID() }, /versionId 不属于.*号码抄错/],
+    [{ resourceId: first.resourceId, versionId: other.versionId }, /versionId 不属于.*号码抄错/],
+    [{ resourceId: first.resourceId, versionId: first.versionId }, /版本已过期.*重新读取/],
+  ]) {
+    await assert.rejects(r.resources.write_file({ path: "outputs/rejected.md", content: "rejected", source_versions: [{ path: other.path }, reference] }), error => {
+      assert.match(error.message, /source_versions 第 2 项：/); assert.match(error.message, reason); return true;
+    });
+    assert.equal(await r.resources.row("outputs/rejected.md"), undefined);
+    assert.equal(fs.existsSync(path.join(r.files.workspace, "outputs/rejected.md")), false);
+  }
+  await r.resources.revoke(other.resourceId);
+  for (const directory of ["inputs", "inputs/", "./inputs", "./inputs/"])
+    assert.deepEqual((await r.resources.list_files({ path: directory })).entries.map(entry => entry.name), ["path-source.md"]);
+});

@@ -98,7 +98,12 @@ export async function createToolService(root, { source = readToolSources(root), 
     validate(name, args) {
       const entry = entries.get(name);
       if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
-      if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
+      if (!entry.validate(args)) {
+        const error = entry.validate.errors?.find(error => /^\/source_versions\/\d+\/(path|resourceId|versionId)$/.test(error.instancePath)) || entry.validate.errors?.[0];
+        const item = error?.instancePath.match(/^\/source_versions\/(\d+)(.*)$/);
+        const location = item ? `source_versions 第 ${Number(item[1]) + 1} 项${item[2]}：` : "";
+        throw new Error(`工具参数不合法：${location}${error?.message || "请检查参数"}`);
+      }
       return entry;
     },
     async call({ tool, namespace, arguments: args }, { signal, permissionContext } = {}) {
