@@ -269,6 +269,8 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
 
 ## 测试
 
+`npm run test:gateway` 还包含 `tests/media-gateway.integration.mjs`：验证真实 MediaService 经锁定版本 Bifrost 的内置 byteplus 通道，使用正式清单的模型名完成火山方舟格式转换、图片保存、视频后台轮询与下载，以及按张/秒记账；上游是本机模拟的火山方舟，只返回固定 PNG/MP4，不验证真实模型开通、生成质量或实际计费。
+
 - `npm test` 里的 `tests/gateway.test.mjs` 检查：
   - 清单与 `nativeTools` 校验；
   - 只启用有密钥的服务商；

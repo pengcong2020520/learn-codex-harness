@@ -17,7 +17,7 @@ npm run lesson -- s07-registry
 | s07-native-search | native-search | 默认模型开关、禁止按轮覆盖、内存假网关自检 |
 | s07-budget | usage | 去重、时区、预算停派与恢复、token 兜底配置 |
 | s07-media | media（复用 media-fixture） | 任务 ID、后台保存、重启恢复、收费前校验 |
-| s07-gateway | gateway.integration | 真 Bifrost 鉴权、备用切换、协议转换、token 限流 |
+| s07-gateway | gateway.integration、media-gateway.integration | 真 Bifrost 鉴权、备用切换、协议转换、token 限流；byteplus 生图/视频保存与记账 |
 
 表中离线测试文件均位于 `tests/`，后缀为 `.test.mjs`。运行方式为 `npm run lesson -- <课时 ID>`。前五课不监听端口，不读取项目 `.env`，不调用真实模型；临时目录、假 RPC、内存 fetch 和任务仓储夹具只替代外部设施，断言仍调用真实模块。
 
@@ -27,7 +27,7 @@ npm run lesson -- s07-registry
 npm run lesson -- s07-gateway --integration
 ```
 
-集成课也不读取项目 `.env`；使用临时生成的测试密钥与假模型服务。没有 Docker 导致的全跳过不能算成功，运行器会返回失败。
+集成课也不读取项目 `.env`；使用临时生成的测试密钥与假模型服务。新增媒体测试使用正式模型清单，验证 MediaService 经真实网关的内置 byteplus 通道送达火山方舟格式的服务，图片和视频都保存进工作区并按张/秒记账；视频提交先返回任务 ID，轮次结束后由后台轮询完成。媒体上游是本机模拟的火山方舟，返回固定 PNG/MP4，不验证真实生成质量、模型开通或实际计费。没有 Docker 导致的全跳过不能算成功，运行器会返回失败。
 
 `npm test` 仍包含原有本机 HTTP/SSE 测试。禁止监听端口的沙箱不能运行 `tests/http-cli.test.mjs`、`tests/media-http.test.mjs`、`tests/gateway-check.test.mjs` 中的 HTTP 用例，以及 `tests/streaming.test.mjs` 中的 SSE 与 CLI 订阅用例；这些用例需在允许监听本机端口的环境复跑。五节离线课不受此限制。
 
