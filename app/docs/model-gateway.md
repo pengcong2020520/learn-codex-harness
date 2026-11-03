@@ -69,6 +69,30 @@ npm run server
 
 改了模型或密钥后，重新运行 `npm run gateway:up`，再重启服务。服务器上运行 `remote.sh gateway`，它会重新生成配置、重建网关并重启服务。
 
+## 模型自带的能力
+
+对话模型可以在 `config/models.json` 中声明 `"nativeTools": ["web_search"]`。这是可选、不重复的字符串数组，目前只允许 `web_search`，仅用于 `purposes` 含 `chat` 的模型。声明以实测为准，不按服务商或协议类型猜测。2026-11-03 经本机网关实测：Kimi K2.7 Code 和 K2.6 会执行原生搜索（输出里有 `web_search_call`）；DeepSeek 快速版（网关转成对话接口）和 GLM-5.3 快速版（转成 Claude 格式）收到搜索工具时不报错，但会忽略它，所以没有声明。也就是说，Kimi 出故障时备用链切到 DeepSeek 不会失败，只是那一轮没有联网搜索。
+
+`AGENT_WEB_SEARCH=auto`（默认）时，网关模式按路由选中的默认对话模型决定开关，`CODEX_MODEL` 覆盖同样生效：声明了搜索就向 Codex 配置 `web_search="live"`，否则为 `"disabled"`。`AGENT_WEB_SEARCH=off` 强制关闭，适合省钱或排查问题；直连模式始终关闭，其他取值启动报错。启动日志会显示联网搜索状态。
+
+Codex 0.154 只通过 Responses API 请求模型；开启搜索后，每个请求的 tools 都会带 `{"type":"web_search","external_web_access":true}`。`thread/start`、`thread/resume` 支持配置覆盖，`turn/start` 不支持，所以只能按会话或整个服务开关，不能在同一会话里按轮切换。本项目在服务启动时统一确定开关；开启后，任何工作流步骤指定的模型（含场景解析出的模型）都必须声明搜索能力，否则启动报错。解决办法是换成支持搜索的模型，或设置 `AGENT_WEB_SEARCH=off`，重启服务并新建会话。
+
+网页读取仍由 `read_webpage` 提供，受 Agent 的 `tools.allow` 控制。失效的 Google 抓取搜索工具已移除；模型原生搜索不在这个工具目录中。搜索不可用时应如实说明并请用户提供链接。
+
+网关启动后，可通过统一协议实测已启用服务商的所有对话模型：
+
+```bash
+npm run gateway:check
+npm run gateway:check -- --search
+npm run gateway:check -- --model kimi/kimi-k2.7-code --search
+```
+
+脚本复用项目的 `.env` 读取方式（终端变量优先），地址与密钥取 `gatewayEndpoint()`。请求的输入写成与 Codex 完全相同的消息格式（`type: message` + `input_text`）：网关会把纯字符串输入改写成简写的 `{ role, content }`，而 Kimi 收到简写格式时不会触发搜索，用字符串测会得出错误结论。每个请求限时 60 秒，对话以返回文本为成功；`--search` 另发带 `tools: [{"type":"web_search"}]` 的请求，以 `output` 中出现 `web_search_call` 为成功，不能用“回答声称搜过”代替。表格列出对话、搜索、清单声明、总耗时和两次请求返回的输入/输出 token 合计；不输出密钥或上游正文。
+
+声明了搜索但实测失败会提示并返回非零退出码；实测成功但未声明会提示补充清单。对话失败同样返回非零退出码；未声明的搜索失败仅提示，未加 `--search` 则标为“未测”。自检会产生真实模型用量，`AGENT_WEB_SEARCH=off` 只控制服务启动，不阻止显式的 `--search` 自检。
+
+自检经过当前网关路由和备用链，证明的是该模型 ID 的调用链路；若触发备用，成功可能来自备用模型。修改声明前应结合网关观测确认实际响应模型，必要时暂时移除对应备用链再测。
+
 ## 按用途和场景挑模型
 
 模型路由（`server/modules/gateway/router.mjs`）根据三样东西挑模型：用途、场景或具体模型、需要的能力（要看图、要多长的上下文）。挑不到时报错说明每个候选为什么不行，例如“kimi/kimi-k2.7-code：服务商未启用（.env 里缺 KIMI_API_KEY）”。
@@ -150,12 +174,13 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 ## 测试
 
 - `npm test` 里的 `tests/gateway.test.mjs` 检查：
-  - 清单校验；
+  - 清单与 `nativeTools` 校验；
   - 只启用有密钥的服务商；
   - 配置文件不含密钥；
   - Codex 环境里没有各家密钥；
   - 模型目录取自清单；
   - 三处密钥变量列表一致。
+- `tests/native-search.test.mjs` 覆盖默认模型搜索开关、`off` 和工作流步骤的能力校验；`tests/gateway-check.test.mjs` 使用本地假 HTTP 网关覆盖对话、搜索、声明差异、超时和退出码，不访问真实模型。
 - `npm run test:gateway` 需要 Docker，用 compose 里锁定的真 Bifrost 镜像、两家模拟模型服务和真 Codex，检查：
   - 没有或错误的访问密钥会被拒绝；
   - 主模型返回 402 时改用备用；

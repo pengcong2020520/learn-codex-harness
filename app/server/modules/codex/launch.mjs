@@ -132,7 +132,11 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   const gateway = gatewayEndpoint(environment);
   // 网关模式下由模型路由决定默认的对话模型（CODEX_MODEL 可覆盖），工作流步骤再按需切换（见 messages）。
   const router = gateway && registry ? createModelRouter(registry, environment) : null;
-  if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey, ...(router ? { CODEX_MODEL: router.resolve().id } : {}) };
+  const searchMode = environment.AGENT_WEB_SEARCH?.trim() ?? "auto";
+  if (!["auto", "off"].includes(searchMode)) throw new Error("AGENT_WEB_SEARCH 必须为 auto 或 off。");
+  const chosen = router?.resolve();
+  const webSearch = searchMode === "auto" && chosen?.spec.nativeTools?.includes("web_search") ? "live" : "disabled";
+  if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey, ...(router ? { CODEX_MODEL: chosen.id } : {}) };
   const env = { ...environment };
   // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。
   for (const key of Object.keys(env)) {
@@ -145,11 +149,11 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
     throw new Error("DEMO_TIMEOUT_MS 必须是 1 到 2147483647 之间的整数。");
   }
   const catalog = buildModelCatalog(environment, instructions, registry, router ? router.chatModels() : []);
-  // 本示例不依赖服务商的内置联网搜索能力。
-  args.push("-c", 'web_search="disabled"');
+  // 搜索随默认模型能力在服务启动时确定，同一会话内不能按轮切换。
+  args.push("-c", `web_search=${JSON.stringify(webSearch)}`);
 
   const useApiKey = environment.CODEX_API_KEY !== undefined || environment.CODEX_BASE_URL !== undefined;
-  if (!useApiKey) return { args, env, model, catalog, timeoutMs, authMode: "existing" };
+  if (!useApiKey) return { args, env, model, catalog, timeoutMs, webSearch, authMode: "existing" };
 
   const values = Object.fromEntries(
     ["CODEX_API_KEY", "CODEX_BASE_URL", "CODEX_MODEL"].map(name => [name, environment[name]?.trim() || ""])
@@ -185,5 +189,5 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   );
   // 密钥只通过子进程环境传递，不进入启动参数。
   env.CODEX_API_KEY = values.CODEX_API_KEY;
-  return { args, env, model, catalog, timeoutMs, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway), router };
+  return { args, env, model, catalog, timeoutMs, webSearch, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway), router };
 }

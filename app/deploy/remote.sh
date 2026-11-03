@@ -42,7 +42,7 @@ case "${1:-}" in
     if remote "test -e '$APP_DIR/.env'"; then echo "服务器上已有 $APP_DIR/.env，未覆盖。"; exit 0; fi
     # 只带模型、各家密钥与 Agent 相关配置；密钥经 SSH 管道写入，不在终端显示。数据库密码与网关访问密钥在服务器上重新生成。
     # 容器里的项目路径与部署路径相同（CONTAINER_APP_DIR），迁移过来的 Codex 历史记录路径不变；本机启用了本地向量模型就一并带上。
-    { grep -E "^(CODEX_MODEL[A-Z_]*|${PROVIDER_KEYS}|OLLAMA_BASE_URL|AGENT_MEMORY_[A-Z_]+|AGENT_DEFINITION|AGENT_TURN_TIMEOUT_MS|DEMO_TIMEOUT_MS)=" "$APP/.env"
+    { grep -E "^(CODEX_MODEL[A-Z_]*|${PROVIDER_KEYS}|OLLAMA_BASE_URL|AGENT_MEMORY_[A-Z_]+|AGENT_DEFINITION|AGENT_WEB_SEARCH|AGENT_TURN_TIMEOUT_MS|DEMO_TIMEOUT_MS)=" "$APP/.env"
       printf 'CONTAINER_APP_DIR=%s\n' "$APP_DIR"
       if [ -n "${NPM_REGISTRY:-}" ]; then printf 'NPM_REGISTRY=%s\n' "$NPM_REGISTRY"; fi
       if [ -n "${APT_MIRROR:-}" ]; then printf 'APT_MIRROR=%s\n' "$APT_MIRROR"; fi; } |

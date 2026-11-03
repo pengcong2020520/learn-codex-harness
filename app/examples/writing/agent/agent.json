@@ -10,7 +10,6 @@
         "list_files",
         "read_file",
         "write_file",
-        "search_web",
         "read_webpage",
         "kb_list",
         "kb_read",

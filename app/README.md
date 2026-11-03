@@ -65,6 +65,7 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 | `AGENT_GATEWAY_KEY` | 访问本机模型网关的密钥（`sk-bf-` 开头，`npm run gateway:key` 生成）；设置后 Codex 只连网关 | — |
 | `KIMI_API_KEY` 等 | 各家模型的密钥，只交给网关；填了哪家就启用哪家（清单见 `config/models.json`） | — |
 | `CODEX_MODEL` | 默认的对话模型；网关模式写成“服务商/模型名”，不填时按 `config/models.json` 的 `routes.chat` 取第一个可用的 | 见 `.env.example` |
+| `AGENT_WEB_SEARCH` | `auto` 按网关默认模型的 nativeTools 开启联网搜索；`off` 强制关闭；直连始终关闭 | `auto` |
 | `AGENT_GATEWAY_PORT` | 网关在本机的端口 | `4330` |
 | `OLLAMA_BASE_URL` | 本地 Ollama 的地址（`npm run ollama:up` 启动后填 `http://ollama:11434`），填了才启用本地向量模型 | — |
 | `CODEX_API_KEY` / `CODEX_BASE_URL` | 不用网关、直连某一家时填写（接口须支持 Responses API）；与 `AGENT_GATEWAY_KEY` 二选一 | — |

@@ -257,15 +257,15 @@ test("队列暂停只提示一次，普通队列变化不再逐条刷日志", as
 test("工具状态变化只显示一次，不泄露工具 callId，不拆碎流式回复", async t => {
   const f = await chatFixture(t);
   await f.start();
-  const turn = { id: TURN_ID, status: "inProgress", answers: {}, tools: { secretCallId: { name: "search_web", label: "网页搜索", status: "inProgress" } } };
+  const turn = { id: TURN_ID, status: "inProgress", answers: {}, tools: { secretCallId: { name: "read_webpage", label: "读取网页", status: "inProgress" } } };
   f.session.turns.push(turn);
   f.event("session", f.session); f.event("session", f.session);
-  turn.tools.secretCallId.status = "failed"; turn.tools.secretCallId.error = "Google 暂时不可用";
+  turn.tools.secretCallId.status = "failed"; turn.tools.secretCallId.error = "网页暂时不可用";
   f.event("session", f.session); f.event("session", f.session);
   turn.answers.a = "请提供"; f.event("session", f.session);
   turn.answers.a += "文章链接。"; turn.status = "completed"; f.event("session", f.session);
-  assert.equal(f.text().split("工具：网页搜索 · 执行中").length - 1, 1);
-  assert.equal(f.text().split("工具：网页搜索 · 失败").length - 1, 1);
+  assert.equal(f.text().split("工具：读取网页 · 执行中").length - 1, 1);
+  assert.equal(f.text().split("工具：读取网页 · 失败").length - 1, 1);
   assert.match(f.text(), /Agent：请提供文章链接。\n$/);
   assert.doesNotMatch(f.text(), /secretCallId/);
 });

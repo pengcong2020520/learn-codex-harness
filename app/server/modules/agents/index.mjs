@@ -164,7 +164,12 @@ export class AgentDefinition {
     for (const workflow of this.workflows.list()) for (const step of workflow.steps || []) {
       if (!step.model) continue;
       if (!config.launch.router) throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id} 指定了模型 ${step.model}；按步骤切换模型需要启用模型网关（AGENT_GATEWAY_KEY）。`);
-      try { config.launch.router.resolve({ model: step.model }); }
+      try {
+        const chosen = config.launch.router.resolve({ model: step.model });
+        if (config.launch.webSearch === "live" && !chosen.spec.nativeTools?.includes("web_search")) {
+          throw new Error(`模型 ${chosen.id}（配置 ${step.model}）未声明 nativeTools: web_search；同一会话不能按轮切换联网搜索。请换成支持搜索的模型，或设置 AGENT_WEB_SEARCH=off。`);
+        }
+      }
       catch (error) { throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id}：${error.message}`); }
     }
   }

@@ -38,6 +38,7 @@
     "db:up": "docker compose up -d --wait postgres redis",
     "db:down": "docker compose stop postgres redis",
     "gateway:key": "node scripts/gateway-config.mjs --ensure-key",
+    "gateway:check": "node scripts/gateway-check.mjs",
     "gateway:config": "node scripts/gateway-config.mjs",
     "gateway:up": "node scripts/gateway-config.mjs && docker compose up -d --wait --force-recreate gateway",
     "gateway:down": "docker compose stop gateway",
