@@ -8,7 +8,8 @@ import { tempRoot, fixture, until, FakeRpc, installToolFixture } from "./helpers
 import { createFileTools } from "../server/modules/data/files.mjs";
 import { createToolService, runWebCommand } from "../server/modules/tools/index.mjs";
 import { publicUrl, publicTarget, isPublicAddress, fetchPublic } from "../server/modules/tools/public-web.mjs";
-import { searchWeb, readWebpage, parseSearch } from "../server/modules/tools/web.mjs";
+import { readWebpage } from "../server/modules/tools/web.mjs";
+import { createTools as createWebTools } from "../server/modules/tools/web-tools.mjs";
 import { CodexConnection } from "../server/modules/codex/connection.mjs";
 import { prepareRun } from "../server/modules/codex/runtime.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
@@ -58,11 +59,11 @@ test("拒绝目录/文件符号链接、硬链接及被替换的 workspace", t =
 
 test("schema 与运行时共用参数定义，未知工具/命名空间/额外参数不会执行", async t => {
   const tools = await createToolService(installToolFixture(tempRoot(t)));
-  assert.equal(tools.specs.length, 5);
+  assert.equal(tools.specs.length, 4);
   assert.ok(tools.specs.every(spec => !spec.inputSchema.additionalProperties));
-  for (const [tool, args] of [["bash", { command: "ls" }], ["search_web", { query: "x", command: "whoami" }],
+  for (const [tool, args] of [["bash", { command: "ls" }], ["read_webpage", { url: "https://example.com", command: "whoami" }],
     ["read_file", {}], ["list_files", { path: 1 }], ["write_file", { path: "drafts/a.md", content: null }],
-    ["search_web", { query: "x", limit: 11 }]]) assert.throws(() => tools.validate(tool, args));
+    ["read_webpage", { url: "https://example.com", max_chars: 40001 }]]) assert.throws(() => tools.validate(tool, args));
   const denied = await tools.call({ tool: "write_file", namespace: "unknown", arguments: { path: "drafts/a.md", content: "x" } });
   assert.equal(denied.success, false);
   const missing = await tools.call({ tool: "read_file", arguments: { path: "inputs/missing.txt" } });
@@ -159,26 +160,6 @@ test("HTTP 限制响应大小、格式、状态和重定向次数", async () => 
   await assert.rejects(fetchPublic("https://example.com", { resolve, request: fakeHttp(Array.from({ length: 4 }, () => ({ status: 302, headers: { location: "/again" } }))) }), /重定向次数/);
 });
 
-const searchHtml = '<html><body><div><a href="https://example.com/article"><h3>原始研究 &amp; 数据</h3></a><p>研究摘要</p></div><a href="/url?q=https%3A%2F%2Fother.example%2Fpaper"><h3>另一来源</h3></a><a href="http://127.0.0.1"><h3>内网链接</h3></a></body></html>';
-test("搜索语法原样作为 URL 参数传入，不作为 Shell 命令；提取标题链接并去重", async () => {
-  const query = 'site:example.com "人工智能" after:2025-01-01 $(echo NEVER_RUN);';
-  const result = await searchWeb({ query, limit: 5 }, async url => {
-    assert.equal(new URL(url).searchParams.get("q"), query);
-    return { text: searchHtml };
-  });
-  assert.equal(result.results.length, 2);
-  assert.equal(result.results[0].title, "原始研究 & 数据");
-  assert.equal(result.results[0].url, "https://example.com/article");
-  assert.equal(result.untrusted_content, true);
-  assert.equal(parseSearch(searchHtml, 1).length, 1);
-});
-
-test("验证码/JS 页/未知布局返回错误；只有明确无结果页才返回空列表", () => {
-  for (const html of ["<html>unusual traffic</html>", '<a href="/httpservice/retry/enablejs">Enable JavaScript</a>', "<h1>Before you continue to Google</h1>"]) assert.throws(() => parseSearch(html), /未取得搜索结果/);
-  assert.throws(() => parseSearch("<p>not a search page</p>"), /格式暂不支持/);
-  assert.deepEqual(parseSearch("<p>Your search did not match any documents.</p>"), []);
-});
-
 test("网页只读静态正文，剔除脚本导航并标记截断，纯文本不被当成 HTML", async () => {
   const result = await readWebpage({ url: "https://example.com", max_chars: 4 }, async () => ({ url: "https://example.com/article", contentType: "text/html", text: '<title>测试</title><nav>菜单</nav><article><h1>观点</h1><p>证据 &amp; 来源</p><script>DO NOT RUN</script></article>' }));
   assert.equal(result.title, "测试"); assert.equal(result.content, "观点\n证"); assert.equal(result.truncated, true);
@@ -187,21 +168,29 @@ test("网页只读静态正文，剔除脚本导航并标记截断，纯文本�
   assert.equal(plain.content, "a < b");
 });
 
-test("搜索缓存、限速与失败冷却不伪造成功；文件调用不受网络失败影响", async t => {
-  let count = 0;
-  const tools = await createToolService(installToolFixture(tempRoot(t)), { runWeb: async () => { count++; return { results: [{ url: "https://example.com" }] }; } });
-  const params = { tool: "search_web", arguments: { query: "one" } };
-  assert.equal((await tools.call(params)).success, true);
-  assert.equal((await tools.call(params)).success, true); assert.equal(count, 1);
-  assert.equal((await tools.call({ ...params, arguments: { query: "two" } })).success, false);
+test("搜索工具已移除；网页失败不缓存，文件调用不受网络失败影响", async t => {
   let failures = 0;
-  const broken = await createToolService(installToolFixture(tempRoot(t)), { runWeb: async () => { failures++; throw new Error("Google 验证码"); } });
-  assert.match(unpack(await broken.call(params)).error, /验证码/);
-  assert.match(unpack(await broken.call(params)).error, /60 秒/); assert.equal(failures, 1);
+  const broken = await createToolService(installToolFixture(tempRoot(t)), { runWeb: async () => { failures++; throw new Error("网页不可用"); } });
+  assert.ok(!broken.specs.some(spec => spec.name === "search_web"));
+  assert.equal((await broken.call({ tool: "search_web", arguments: { query: "旧搜索" } })).success, false);
+  const params = { tool: "read_webpage", arguments: { url: "https://example.com" } };
+  assert.match(unpack(await broken.call(params)).error, /网页不可用/);
+  assert.match(unpack(await broken.call(params)).error, /网页不可用/); assert.equal(failures, 2);
   assert.equal((await broken.call({ tool: "write_file", arguments: { path: "research/notes.md", content: "待核实" } })).success, true);
   const controller = new AbortController(); controller.abort();
   assert.equal((await broken.call({ tool: "write_file", arguments: { path: "drafts/cancelled.md", content: "x" } }, { signal: controller.signal })).success, false);
   assert.equal(fs.existsSync(path.join(broken.workspace, "drafts/cancelled.md")), false);
+});
+
+test("网页读取最多并行两个请求，完成后释放并发名额", async () => {
+  const pending = Promise.withResolvers();
+  const tools = createWebTools({ runWeb: async () => pending.promise });
+  const first = tools.read_webpage({ url: "https://example.com/one" });
+  const second = tools.read_webpage({ url: "https://example.com/two" });
+  await assert.rejects(tools.read_webpage({ url: "https://example.com/three" }), /已有两个网络任务/);
+  pending.resolve({ content: "正文" });
+  assert.deepEqual(await Promise.all([first, second]), [{ content: "正文" }, { content: "正文" }]);
+  assert.deepEqual(await tools.read_webpage({ url: "https://example.com/three" }), { content: "正文" });
 });
 
 test("固定命令入口拒绝任意工具名，并在子进程中拦截非公网 URL", async () => {

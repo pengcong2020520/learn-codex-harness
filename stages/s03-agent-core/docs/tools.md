@@ -224,9 +224,10 @@ onIdleWindowOpen():
 
 ### 工具清单
 
+`search_web` 已移除：Google 要求执行 JS 后，抓取搜索结果页的实现已失效；需要联网搜索时，见 [s07 的模型自带搜索](../../s07-model-gateway/README.md)。本阶段继续使用 `web_search="disabled"`，网络工具仅保留网页读取。
+
 | 工具 | 作用 | 限制 |
 |------|------|------|
-| `search_web` | 抓取 Google 公开结果 HTML | 非官方付费 API；Google 布局变化可能失效 |
 | `read_webpage` | 读取公开静态 HTML / 纯文本 | 不执行 JS，不登录，不解析 PDF/Word |
 
 ### 固定子进程调用
@@ -242,16 +243,14 @@ execFile(process.execPath, [固定 web-cli 路径, action, ...参数], {
 })
 ```
 
-`shell: false` 使搜索词作为参数传入，不会作为 Shell 命令执行；子进程 `env` 只传 `NODE_ENV`，不会继承模型 API Key。这不是操作系统级进程隔离，也不代表整个宿主环境已完成安全验收。
+`shell: false` 使网页地址作为参数传入，不会作为 Shell 命令执行；子进程 `env` 只传 `NODE_ENV`，不会继承模型 API Key。这不是操作系统级进程隔离，也不代表整个宿主环境已完成安全验收。
 
-### 速率限制与并发
+### 并发限制
 
-- 搜索结果缓存 10 分钟，最多 50 项（按参数，单工具实例内）
-- 非缓存搜索之间间隔 3 秒
-- 搜索失败后暂停搜索重试 60 秒
+- 网页读取不缓存结果或失败，不设置搜索限速与失败冷却
 - 每实例最多 2 个并发网络任务，超出返回错误，不排队等待
 
-这是进程内限速，不是持久化缓存或分布式限流。
+这是进程内并发限制，不是分布式限流。
 
 ### HTTP 访问规则
 
@@ -266,22 +265,15 @@ execFile(process.execPath, [固定 web-cli 路径, action, ...参数], {
 
 默认本机调试环境允许 HTTPS 域名经代理 Fake-IP 映射，`NODE_ENV=production` 时关闭此例外。这不是生产级 SSRF 隔离，不适合用于多租户安全评估。
 
-### search_web 参数说明
-
-`query` 最大 1000 字符，`limit` 范围 1–10，默认 5。`site:`、引号、`filetype:`、`after:` 等 Google 搜索语法可作为普通查询词原样传入 URL，但能否生效取决于 Google 当前的响应。
-
-搜索返回的是摘要（title / url / snippet / 时间），不等于读取了原文。`filetype:pdf` 能搜到 PDF 链接，但 `read_webpage` 不解析 PDF。这些是本项目网络工具的实现限制，不是 Codex 内置 `web_search` 的能力说明。
-
 ## 工具扩展与更新
 
-### 当前五个工具一览
+### 当前四个工具一览
 
 | 工具名 | 作用 | 关键参数 | 真实限制 |
 |--------|------|----------|----------|
 | `list_files` | 列出工作区目录内容 | `path?`（默认根目录） | 单层不递归，最多 200 项；read 权限过滤，不是全盘查找 |
 | `read_file` | 读取文件文本内容 | `path`, `max_chars?`（默认 20000，最大 40000） | 仅 .md/.txt，≤ 256 KiB；截断不等于全文已读；返回 sourceId、locator、revision 哈希及 updatedAt |
 | `write_file` | 新建文件 | `path`, `content` | 仅 .md/.txt，≤ 256 KiB；不覆盖已有文件（wx 模式）；无 category 参数 |
-| `search_web` | 抓取 Google 结果 | `query`, `limit?`（1–10，默认 5） | 非官方 API；可能失效；摘要非原文 |
 | `read_webpage` | 读取网页正文 | `url`, `max_chars?`（默认 16000，最大 40000） | 纯静态 HTML/text；不执行 JS；不解析 PDF/Word |
 
 ### 添加新工具的步骤
@@ -364,9 +356,9 @@ npm start
 
 预期：`read_file` 调用，返回文件内容、`revision` 哈希和 `updatedAt`。工具读取结果是事实依据，不能用模型回忆替代。
 
-> 请实际搜索 site:developer.mozilla.org Promise，找两条结果，再调用网页读取工具读取第一条实际链接，把来源和研究记录保存下来。搜索或读取失败就如实说明，不要编造。
+> 请读取 https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Promise，把来源和研究记录保存下来。读取失败就如实说明，不要编造。
 
-预期：先出现 `search_web`，再出现 `read_webpage`；在成功取得资料时，研究记录应保存到 `research/`。结果数量和内容取决于网站当时响应；摘要不能冒充正文。
+预期：调用 `read_webpage`；在成功取得资料时，研究记录应保存到 `research/`。内容取决于网站当时响应；读取失败不能冒充已取得正文。用户只要求搜索而未提供链接时，应说明没有搜索工具并请用户提供链接。
 
 > 基于刚才成功读取的研究资料写一份初稿，并保存为新文件；还没有资料时请先说明。
 
@@ -408,17 +400,14 @@ npm start
 
 ### 网络工具直连诊断
 
-以下命令直接调用本地网络 CLI，绕过模型、MCP 和 ToolManager 的缓存限速，仅用于诊断网络层是否可用，不是端到端测试或权限验证：
+以下命令直接调用本地网络 CLI，绕过模型、MCP 和 ToolManager 的并发限制，仅用于诊断网络层是否可用，不是端到端测试或权限验证：
 
 ```bash
-# 搜索（3 条结果）
-npm run tools -- search 'site:developer.mozilla.org Promise' 3
-
 # 读取网页（最多 2000 字符）
 npm run tools -- read 'https://example.com' 2000
 ```
 
-执行需要网络连通。Google 结果可访问性无保障，空结果可能是确实无匹配；报错需区分连通性、限流、验证码、HTML 布局变化和响应格式。直连诊断成功也不能证明 Agent 授权与 MCP 接入正常。
+执行需要网络连通。报错需区分连通性、访问限制、需要 JavaScript 的页面和响应格式。直连诊断成功也不能证明 Agent 授权与 MCP 接入正常。
 
 ### 测试套件
 
@@ -431,7 +420,7 @@ npm test
 npm run test:codex-tools
 ```
 
-集成测试使用本地 fake 响应，不调用真实 DeepSeek/Google，不验证语义分类正确性。`npm test` 包含 fixtures，测试通过不等于模型在实际对话中的分类行为完全正确。
+集成测试使用本地 fake 响应，不调用真实模型或外部网页，不验证语义分类正确性。`npm test` 包含 fixtures，测试通过不等于模型在实际对话中的分类行为完全正确。
 
 文档验证：在 s03 目录运行 `node ../verify.mjs --docs-only`，检查演进 README 的结构和链接；这个脚本不会递归检查本工具专题，本文的链接需另行检查。`--docs-only` 不更新 `verification.json`，单独运行 `npm test` 和集成测试也不更新该汇总记录。
 
@@ -447,7 +436,7 @@ npm run test:codex-tools
 | write_file 返回权限错误 | 路径越界 / 不支持扩展名 / inputs 只读 | 检查路径是否在 bindings 范围内 |
 | write_file 返回“文件已存在，未覆盖” | 尝试覆盖已有文件 | 使用不同文件名，工具不支持覆盖 |
 | 文件保存到了非预期目录 | 模型生成路径受旧角色规则影响 / 规则更新前旧 Thread | 核对实际工具路径和角色规则；修改过规则需重启并 `/new`，最新规则也不保证模型必然分类正确 |
-| search_web 返回空或失败 | 确无匹配 / Google 暂时不可访问 / 布局变化 | 用 `npm run tools -- search ...` 直连诊断 |
+| `search_web` 已移除 | Google 要求执行 JS 后失效 | 请用户提供链接并用 `read_webpage` 读取；需要联网搜索时，见 [s07 的模型自带搜索](../../s07-model-gateway/README.md) |
 | 模型只声称保存但无工具调用记录 | 可能未调用工具或提供商工具协议不兼容 | 检查 turn.artifacts 和会话事件，不以模型自述为准；检查模型/提供商的 Responses 工具调用兼容性 |
 | 旧 Thread 下一轮调用被拒 | 工具版本更新后描述符不匹配 | 执行 /new 开启新对话 |
 
@@ -466,9 +455,9 @@ npm run test:codex-tools
 | [../server/modules/tools/mcp-server.mjs](../server/modules/tools/mcp-server.mjs) | MCP loopback HTTP 服务，tools/list 与 tools/call 入口 |
 | [../server/modules/tools/files.mjs](../server/modules/tools/files.mjs) | 三个文件工具的工厂适配，直接返回注入的受限文件服务 |
 | [../server/modules/data/files.mjs](../server/modules/data/files.mjs) | 统一磁盘读写权限：扩展名 / 大小 / 路径 / 链接检查 |
-| [../server/modules/tools/web-tools.mjs](../server/modules/tools/web-tools.mjs) | 网络工具：固定子进程调用 / 缓存 / 限速 |
-| [../server/modules/tools/web-cli.mjs](../server/modules/tools/web-cli.mjs) | 固定 search / read 入口（子进程调用目标） |
-| [../server/modules/tools/web.mjs](../server/modules/tools/web.mjs) | Google 结果与静态正文解析 |
+| [../server/modules/tools/web-tools.mjs](../server/modules/tools/web-tools.mjs) | 网络工具：固定子进程调用 / 并发限制 |
+| [../server/modules/tools/web-cli.mjs](../server/modules/tools/web-cli.mjs) | 固定 read 入口（子进程调用目标） |
+| [../server/modules/tools/web.mjs](../server/modules/tools/web.mjs) | 静态网页正文解析 |
 | [../server/modules/tools/public-web.mjs](../server/modules/tools/public-web.mjs) | URL / DNS 校验与受限 HTTP 抓取 |
 | [../server/modules/codex/config.mjs](../server/modules/codex/config.mjs) | 生成项目独立 Codex 配置与 CODEX_HOME，配置引用 MCP 令牌变量名 |
 | [../server/modules/codex/connection.mjs](../server/modules/codex/connection.mjs) | 启动本机 Codex 子进程，维护 stdio 请求、响应与通知 |
