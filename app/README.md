@@ -67,6 +67,12 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 | `CODEX_MODEL` | 默认的对话模型；网关模式写成“服务商/模型名”，不填时按 `config/models.json` 的 `routes.chat` 取第一个可用的 | 见 `.env.example` |
 | `AGENT_WEB_SEARCH` | `auto` 按网关默认模型的 nativeTools 开启联网搜索；`off` 强制关闭；直连始终关闭 | `auto` |
 | `AGENT_GATEWAY_PORT` | 网关在本机的端口 | `4330` |
+| `AGENT_BUDGET_DAILY_TOKENS` | 当日全部来源 token 上限；达到后停止派新任务 | 不限 |
+| `AGENT_BUDGET_MONTHLY_TOKENS` | 当月全部来源 token 上限 | 不限 |
+| `AGENT_BUDGET_DAILY_COST` | 当日估算金额上限，按模型清单的 currency；未定价模型不计金额 | 不限 |
+| `AGENT_BUDGET_MONTHLY_COST` | 当月估算金额上限 | 不限 |
+| `AGENT_BUDGET_TIMEZONE` | 预算自然日/月的 IANA 时区，如 `Asia/Shanghai` | 系统时区 |
+| `AGENT_GATEWAY_DAILY_TOKENS` | 网关 token 兜底，优先于每日预算派生值；容器重启清零 | 每日 token 预算 × 1.5 向上取整；未设预算则不限 |
 | `OLLAMA_BASE_URL` | 本地 Ollama 的地址（`npm run ollama:up` 启动后填 `http://ollama:11434`），填了才启用本地向量模型 | — |
 | `CODEX_API_KEY` / `CODEX_BASE_URL` | 不用网关、直连某一家时填写（接口须支持 Responses API）；与 `AGENT_GATEWAY_KEY` 二选一 | — |
 | `AGENT_PORT` | HTTP 服务监听端口 | `4317` |
@@ -273,3 +279,6 @@ npm run check:server
 当前实现包含配置装配、结构化来源、Wiki、可选 RAG 和可信工具上下文；真实模型完整记忆生成及多用户认证/运行隔离仍后置。
 
 工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；Skill 与 Workflow 的设计和实施计划见 [skill-workflow-design.md](docs/skill-workflow-design.md)；独立教学版本见 [s03–s05 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
+
+
+用量与预算：首次升级先运行 `npm run data:migrate` 安装迁移 006，再启动服务。终端输入 `/usage` 查看今天，`/usage month` 查看本月；也可访问认证后的 `GET /usage?period=today|month`。价格表、计费边界和超预算行为见 [模型网关：用量与预算](docs/model-gateway.md#用量与预算)。

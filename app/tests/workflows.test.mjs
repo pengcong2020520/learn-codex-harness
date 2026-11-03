@@ -92,7 +92,7 @@ async function messageRig(t, workflows, gate, environment = fixture) {
   cleanup(root, async () => { await messages.close(); sessions.close(); });
   const submit = (id, fields = {}) => messages.submit({ threadId: session.id, clientMessageId: id, text: `正文 ${id}`, ...fields });
   const started = async count => { await until(() => rpc.calls.filter(call => call.method === "turn/start").length >= count); return rpc.calls.filter(call => call.method === "turn/start")[count - 1].params.input; };
-  return { root, rpc, store, messages, session, submit, started };
+  return { root, rpc, store, messages, sessions, session, submit, started };
 }
 
 test("按 workflow 入队与派发：注入任务说明和 Skill，旧 knowledge 字段等价于知识维护，追加不能换 workflow", async t => {
@@ -163,6 +163,14 @@ test("按步骤选模型：网关模式下每一轮都带上模型，写了场�
   const gateway = { AGENT_WEB_SEARCH: "off", DEMO_TIMEOUT_MS: "3000", AGENT_GATEWAY_KEY: "sk-bf-unit-test", KIMI_API_KEY: "k-unit", DEEPSEEK_API_KEY: "d-unit" };
   const staged = { ...article, steps: [{ ...article.steps[0], model: "fast" }, article.steps[1]] };
   const r = await messageRig(t, [staged], undefined, gateway);
+  const request = r.rpc.request.bind(r.rpc);
+  let total = 0;
+  r.rpc.request = async (method, params) => {
+    const result = await request(method, params);
+    if (method === "turn/start") r.rpc.notify("thread/tokenUsage/updated", { threadId: params.threadId, turnId: result.turn.id,
+      tokenUsage: { total: { totalTokens: total += 10 }, last: { totalTokens: 10, inputTokens: 8, outputTokens: 2 } } });
+    return result;
+  };
   assert.equal(r.rpc.calls.find(call => call.method === "thread/start").params.model, "kimi/kimi-k2.7-code", "新会话用默认模型（routes.chat 的第一个可用）");
   await r.submit("a1", { workflow: "article" });
   await r.started(1);
@@ -177,6 +185,11 @@ test("按步骤选模型：网关模式下每一轮都带上模型，写了场�
   // Codex 的 turn/start 指定的模型会沿用到后面的轮次，所以每一轮都要明确写上。
   assert.deepEqual(r.rpc.calls.filter(call => call.method === "turn/start").map(call => call.params.model),
     ["deepseek/deepseek-flash", "kimi/kimi-k2.7-code", "kimi/kimi-k2.7-code"], "大纲用 fast 场景；插进来的普通对话和定稿回到默认");
+
+  await r.sessions.usage.pending;
+  assert.deepEqual(r.sessions.usage.rows.map(row => [row.model, row.taskId]), [
+    ["deepseek/deepseek-flash", "a1"], ["kimi/kimi-k2.7-code", "chat-1"], ["kimi/kimi-k2.7-code", "a1"],
+  ], "早到的用量通知按每一步实际提交的模型记账，工作流各步骤仍绑定同一任务");
 
   await assert.rejects(messageRig(t, [{ ...article, steps: [{ ...article.steps[0], model: "fastest" }, article.steps[1]] }], undefined, gateway),
     /Workflow article 的步骤 outline：没有名为 fastest 的场景/);
@@ -266,9 +279,11 @@ test("提议任务：只记录为 proposed，不排队、不授权；用户确�
   const gate = { submission: () => null, run: (principal, operation) => operation(), end() {}, start() {},
     authorize: grants => { authorized.push(grants); return grants; } };
   const r = await messageRig(t, [{ id: "knowledge-maintain" }, report], gate);
+  r.sessions.usage.budget.dailyTokens = 0;
   const context = { threadId: r.session.id, userId: undefined };
   const proposed = await r.messages.propose(context, { workflow: "knowledge-maintain", params: { kbId: "general" }, text: "把新资料整理进 Wiki", reason: "用户要求更新知识库，普通对话没有维护权限" });
   assert.equal(proposed.status, "proposed");
+  assert.equal((await r.messages.snapshot(r.session.id)).budget.exceeded, true, "预算耗尽仍可记录提议");
   const job = r.store.get(proposed.taskId);
   assert.deepEqual([job.status, job.workflow, job.params, job.reason], ["proposed", "knowledge-maintain", { kbId: "general" }, "用户要求更新知识库，普通对话没有维护权限"]);
   assert.deepEqual(authorized, [], "提议时不授权");
@@ -278,6 +293,7 @@ test("提议任务：只记录为 proposed，不排队、不授权；用户确�
     [{ workflow: "knowledge-maintain", params: { kbId: "docs" }, text: "x", reason: "y" }, 403], [{ workflow: "report", text: "x" }, 400],
     [{ workflow: "report", text: "x", reason: "y", status: "queued" }, 400]])
     await assert.rejects(r.messages.propose(context, args), error => error.status === status, JSON.stringify(args));
+  r.sessions.usage.budget.dailyTokens = null;
   await r.messages.confirm({ threadId: r.session.id, taskId: proposed.taskId, text: "只整理 inputs/general/new.md" });
   assert.deepEqual(authorized, [[{ type: "knowledge.update", kbId: "general" }]], "确认时在用户身份下核对授权");
   const input = await r.started(1);

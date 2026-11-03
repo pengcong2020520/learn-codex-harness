@@ -22,6 +22,8 @@ import { PermissionGate } from './modules/permissions/index.mjs';
 import { KnowledgeService } from './modules/knowledge/index.mjs';
 import { createRag } from './modules/knowledge/rag.mjs';
 import { KnowledgeWorker } from './modules/knowledge/worker.mjs';
+import { UsageService } from "./modules/usage/index.mjs";
+import { pricingWarning } from "./modules/usage/config.mjs";
 import { openData } from "./modules/data/index.mjs";
 
 // 主流程只组装模块：配置 → 独占锁 → 数据服务 → Codex → 业务模块 → HTTP → 就绪。
@@ -37,6 +39,10 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     let engine;
     const data = await dataFactory(config, { onLost: error => { databaseFailure = error; void messages?.fail(error); void engine?.close(); } });
     lifecycle.defer(() => data.close());
+    const usage = new UsageService({ pool: data.pool, scope: data.scope, registry: config.registry, budget: config.budget });
+    lifecycle.defer(() => usage.pending);
+    const warning = pricingWarning(config.registry, config.launch.model, usage.budget);
+    if (warning) safeLog(warning);
 
     // 2. 准备运行目录，由自己的服务自动启动本机 Codex。
     const agent = new AgentDefinition(config.root, config.agentFile);
@@ -49,7 +55,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const gate = data.scope ? new PermissionGate({ scope: data.scope, agent }) : null;
     lifecycle.defer(() => gate?.close());
     const resources = data.resources?.({ files: localFiles, sources: agent.sources, outputs: agent.outputs, gate });
-    const rag = gate ? await createRag(config.rag, path.join(config.root, '.data/knowledge/bm25')) : null;
+    const rag = gate ? await createRag(config.rag, path.join(config.root, '.data/knowledge/bm25'), usage) : null;
     const knowledge = gate ? await new KnowledgeService(data.pool, data.scope, { agent, gate, resources, rag, redact }).open() : null;
     if (knowledge) agent.knowledgeModes = knowledge.modes;
     if (knowledge && rag && !validationOnly) {
@@ -83,7 +89,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     // 3. 组装业务模块。模块之间通过明确接口和事件协作。
     const hub = new EventHub();
     const skills = await verifySkills(rpc, agent, runtime.workspaceDir);
-    const sessions = new SessionService({ rpc, config, runtime, hub, redact, tools, boundary, repository: data.repository,
+    const sessions = new SessionService({ rpc, config, runtime, hub, redact, tools, boundary, usage, repository: data.repository,
       beforeTurn: async () => {
         const current = await verifySkills(rpc, agent, runtime.workspaceDir);
         if (JSON.stringify(current) !== JSON.stringify(agent.availableSkills)) throw new Error("Skill 有效集合已变化，请受控重启后新建会话。");
@@ -96,7 +102,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     await agent.activate(tools.registry.compatibilityVersion, skills);
     // Prepare the verified descriptor without consuming queues or publishing an HTTP endpoint.
     // Upgrade preflight must not fail queued legacy jobs before a compatibility mapping exists.
-    if (validationOnly) return { config, agent, runtime, rpc, sessions, tools, memory, data, resources, gate, knowledge, close: () => lifecycle.close() };
+    if (validationOnly) return { config, agent, runtime, rpc, sessions, tools, memory, data, resources, gate, knowledge, usage, close: () => lifecycle.close() };
     for (const warning of agent.warnings) safeLog(warning);
     safeLog(`记忆配置：${config.memory.enabled ? "已开启" : "关闭"}（不代表已生成）；状态目录：.data/codex/memories`);
     if (config.memory.enabled && memory.generationBlocked) safeLog(memory.snapshot().generationWarning);
@@ -110,7 +116,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       if (sessions.getTurn(params.threadId, params.turnId)?.status !== "inProgress") throw new Error("工具请求不属于本服务正在执行的轮次。");
       return tools.registry.call(params, { ...context, ...(gate ? { permissionContext: gate.forTurn(params.threadId, params.turnId) } : {}) });
     };
-    messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs, queue: data.queue, gate });
+    messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs, queue: data.queue, gate, usage });
     lifecycle.defer(async () => {
       await messages.fail(new Error('服务正在关闭，执行结果待核对。'));
       await rpc.close();
@@ -127,7 +133,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
 
     // 4. 启动客户端入口，只监听本机；连接令牌与模型 API Key 完全分开。
     const token = randomBytes(32).toString("hex");
-    const http = createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files });
+    const http = createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage });
     lifecycle.defer(() => http.close());
     const url = await http.listen();
     publishConnection(config.root, { url, token, pid: process.pid }, lifecycle);
@@ -136,7 +142,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     // 5. 就绪；客户端退出不触发这里的服务关闭。
     safeLog(`网络模式：${tools.registry.networkMode === "proxy-debug" ? "本地调试，信任 HTTPS 域名的代理 Fake-IP 映射；生产部署请设置 NODE_ENV=production" : "严格公网地址检查"}`);
     safeLog(`Agent 服务已就绪：${url}\nAgent：${agent.definition.agent.id}\n模型：${config.launch.model || "Codex 默认"}${config.launch.gateway ? "（经本机模型网关）" : ""}\n联网搜索：${config.launch.webSearch === "live" ? "开启（模型自带）" : "关闭"}\n资料目录：${runtime.workspaceDir}\n工具：允许范围已核验；数据层运行使用原生动态工具 + 任务门禁\n工具目录：config/tools/（空闲边界更新；权限契约变化后需新建会话）\n协议日志：${runtime.runDir}/protocol.jsonl\n另开终端运行 npm run chat；此终端 Ctrl+C 停止服务。`);
-    return { config, agent, runtime, rpc, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, url, token, close: () => lifecycle.close() };
+    return { config, agent, runtime, rpc, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, usage, url, token, close: () => lifecycle.close() };
   } catch (error) {
     await lifecycle.close().catch(() => {});
     throw new Error(redact(error.message));

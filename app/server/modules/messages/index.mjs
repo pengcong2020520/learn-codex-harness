@@ -7,13 +7,14 @@ const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, par
 
 // Product input scheduling only. Codex continues to own its Agent loop and context.
 export class MessageService {
-  constructor({ rpc, sessions, hub, config, store, queue, gate }) {
-    Object.assign(this, { rpc, sessions, hub, config, store, queue, gate });
+  constructor({ rpc, sessions, hub, config, store, queue, gate, usage = sessions.usage }) {
+    Object.assign(this, { rpc, sessions, hub, config, store, queue, gate, usage });
     if (!store) throw new Error("必须注入任务仓储。");
     this.backend = queue ? "postgres-outbox+redis" : "test";
     this.locks = new Map();
     this.scheduled = new Set();
     this.timers = new Map();
+    this.budgetTimers = new Map();
     this.closed = false;
     this.failure = null;
     this.onCompleted = ({ threadId, turn }) => {
@@ -25,6 +26,7 @@ export class MessageService {
       void this.fail(error);
     };
     sessions.on("turnCompleted", this.onCompleted);
+    sessions.on("usageError", this.onFatal);
     rpc.on("fatal", this.onFatal);
   }
   async open() {
@@ -233,6 +235,14 @@ export class MessageService {
     if (active || all.some((j) => executing.includes(j.status))) return;
     const job = pending.find((j) => j.mode === "append") || pending[0];
     if (!job) return;
+    const budget = await this.usage?.budgetStatus();
+    if (budget?.exceeded) {
+      this.retryBudget(threadId, budget);
+      await this.publish(threadId);
+      return;
+    }
+    clearTimeout(this.budgetTimers.get(threadId));
+    this.budgetTimers.delete(threadId);
     if (!(await this.store.patch(job.id, { status: "starting" }, ["queued"])))
       return;
     await this.publish(threadId);
@@ -265,11 +275,13 @@ export class MessageService {
         sent = true;
         // 每一轮都明确带上模型：Codex 的 turn/start 指定的模型会沿用到后面的轮次，不写就会一直用上一步的。
         const router = this.config.launch.router;
+        const model = router ? router.resolve({ model: step.model || null }).id : this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
+        this.sessions.prepareUsage(threadId, { model, taskId: job.id });
         const result = await this.rpc.request("turn/start", {
           threadId,
           clientUserMessageId: job.id,
           input: prepared,
-          ...(router ? { model: router.resolve({ model: step.model || null }).id } : {}),
+          ...(router ? { model } : {}),
         });
         const turn = this.sessions.recordTurn(threadId, result.turn);
         await this.bind(job.id, result.turn.id);
@@ -279,8 +291,20 @@ export class MessageService {
       // 只结束本任务自己开启的权限上下文：gate.start 成功后 sent 才为真；start 被拒（该会话已有运行中的任务）时不能结束别人的。
       if (sent) this.gate?.end(threadId);
       await this.executionError(job, error, sent);
+    } finally {
+      this.sessions.finishUsageStart(threadId);
     }
     await this.publish(threadId);
+  }
+  retryBudget(threadId, budget) {
+    if (this.budgetTimers.has(threadId) || this.closed || this.failure) return;
+    const wait = Math.max(1, Math.min(180000, Date.parse(budget.resetsAt) - this.usage.now()));
+    const timer = setTimeout(() => {
+      this.budgetTimers.delete(threadId);
+      if (!this.closed && !this.failure) this.schedule(threadId);
+    }, wait);
+    timer.unref();
+    this.budgetTimers.set(threadId, timer);
   }
   async steer(job) {
     if (!(await this.store.patch(job.id, { status: "steering" }, ["queued"])))
@@ -426,6 +450,7 @@ export class MessageService {
     return {
       threadId,
       paused: await this.store.paused(threadId),
+      budget: await this.usage?.budgetStatus() || { exceeded: false, reason: null, resetsAt: null },
       jobs: ordered.map((j) => this.publicJob(j)),
     };
   }
@@ -437,7 +462,10 @@ export class MessageService {
     this.closed = true;
     await this.queue?.close();
     for (const timer of this.timers.values()) clearTimeout(timer);
+    for (const timer of this.budgetTimers.values()) clearTimeout(timer);
+    this.budgetTimers.clear();
     this.sessions.off("turnCompleted", this.onCompleted);
+    this.sessions.off("usageError", this.onFatal);
     this.rpc.off("fatal", this.onFatal);
     await Promise.allSettled([...this.locks.values()]);
     await this.store.recover(

@@ -532,3 +532,26 @@ test("真实 PG：多步任务的 step、note、checks 读写；等待确认的�
   assert.deepEqual([row.status, row.step, row.note, row.workflow, row.checks], ["queued", 1, "按第二版写", "article", checks]);
   assert.equal(await r.jobs.patch("steps", { status: "queued", step: 2 }, ["waiting"]), false, "只有等待确认的任务能被确认");
 });
+
+
+test("真实 PG：迁移 006 用量持久化、按时区汇总与实例/owner 隔离", async t => {
+  const { UsageService } = await import("../server/modules/usage/index.mjs");
+  const { budgetConfig } = await import("../server/modules/usage/config.mjs");
+  const r = await setup(t), now = Date.parse("2026-11-03T12:00:00Z");
+  const registry = { currency: "CNY", models: { "example/model": { pricing: { input: 2, output: 4 } } } };
+  const options = { pool: r.pool, scope: r.scope, registry, now: () => now, budget: budgetConfig({ AGENT_BUDGET_TIMEZONE: "Asia/Shanghai", AGENT_BUDGET_DAILY_TOKENS: "10" }) };
+  const usage = new UsageService(options);
+  await usage.record({ source: "chat", model: "example/model", inputTokens: 8, outputTokens: 2, cachedInputTokens: 4, reasoningOutputTokens: 1,
+    taskId: "usage-task", threadId: "thread-1", turnId: "turn-1" });
+  await usage.record({ source: "image", model: "example/image", units: 2 });
+  await usage.record({ source: "embedding", model: "example/embed", inputTokens: 100, createdAt: Date.parse("2026-11-02T15:59:59Z") });
+  const restarted = new UsageService(options), today = await restarted.summary(), month = await restarted.summary("month");
+  assert.equal(today.storage, "postgres"); assert.equal(today.total.totalTokens, 10); assert.equal(month.total.totalTokens, 110);
+  assert.equal(today.total.estimatedCost, 0.000024); assert.equal(today.total.unpricedRequests, 1);
+  assert.equal(today.budget.exceeded, true); assert.equal(today.bySource.find(row => row.source === "image").units, 2);
+  assert.deepEqual(month.byDay.map(row => row.day), ["2026-11-02", "2026-11-03"]);
+  const stored = (await r.pool.query("SELECT thread_id,turn_id,task_id FROM agent_data.usage WHERE instance_id=$1 AND source='chat'", [r.scope.instanceId])).rows[0];
+  assert.deepEqual(stored, { thread_id: "thread-1", turn_id: "turn-1", task_id: "usage-task" });
+  for (const scope of [{ ...r.scope, ownerId: randomUUID() }, { ...r.scope, instanceId: randomUUID() }])
+    assert.equal((await new UsageService({ ...options, scope }).summary()).total.requests, 0);
+});

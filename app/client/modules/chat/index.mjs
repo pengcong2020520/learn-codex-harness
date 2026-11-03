@@ -9,6 +9,7 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /confirm [补充说明]  确认等待中的 Workflow 步骤，或执行 Agent 的任务提议
 /reject             结束等待确认的 Workflow 任务，或忽略 Agent 的提议
 /queue              查看队列
+/usage [month]      查看今日用量和预算；month 查看本月
 /tools              查看已加载工具和更新状态
 /memory             查看记忆配置和产物状态（不触发模型）
 /memory show        查看已有记忆摘要
@@ -20,6 +21,26 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /exit               仅退出客户端，服务端任务继续运行`;
 
 const toolStatus = state => `工具目录：${({ ready: "已就绪", pending: "等待当前任务结束后更新", loading: "更新中", degraded: "更新失败，沿用上一版", unavailable: "不可用" })[state.status] || state.status}${state.error ? `；${state.error}` : ""}`;
+
+// 中文终端按显示宽度补齐，模型 ID 保留完整，便于对照价格清单。
+export function formatUsage(usage) {
+  const labels = { chat: "对话", embedding: "向量", image: "生图", video: "生视频" };
+  const width = value => [...String(value)].reduce((sum, c) => sum + (c.codePointAt(0) > 255 ? 2 : 1), 0);
+  const cost = row => `${row.estimatedCost.toFixed(6)}${row.unpricedRequests ? `（${row.unpricedRequests} 条未计价）` : ""}`;
+  const table = (title, rows) => {
+    const cells = [[title, "请求", "输入", "缓存输入", "输出", "推理输出", "总 token", "数量", `估算花费 ${usage.currency}`],
+      ...rows.map(([name, row]) => [name, row.requests, row.inputTokens, row.cachedInputTokens, row.outputTokens, row.reasoningOutputTokens, row.totalTokens, row.units ?? "—", cost(row)])];
+    const widths = cells[0].map((_, i) => Math.max(...cells.map(row => width(row[i]))));
+    return cells.map(row => row.map((cell, i) => String(cell) + " ".repeat(widths[i] - width(cell))).join("  ").trimEnd()).join("\n");
+  };
+  return [ `${usage.period === "month" ? "本月" : "今日"}用量（${usage.timezone}，${usage.currency}）${usage.storage === "memory" ? "；内存账本，重启清空" : ""}`,
+    table("合计", [["全部来源", usage.total]]),
+    table("模型", usage.byModel.map(row => [row.model, row])),
+    table("来源", usage.bySource.map(row => [labels[row.source] || row.source, row])),
+    table("日期", usage.byDay.map(row => [row.day, row])),
+    usage.budget.exceeded ? `预算已达上限：${usage.budget.reason}；额度重置：${usage.budget.resetsAt}` : "预算：未达上限",
+  ].join("\n\n");
+}
 
 export async function runChat(api, terminal) {
   let current = null;
@@ -118,6 +139,11 @@ export async function runChat(api, terminal) {
     if (!text || exiting) return;
     if (text === "/exit") { exiting = true; terminal.close(); return; }
     if (text === "/help") return terminal.write(HELP);
+    if (/^\/usage(?:\s|$)/.test(text)) {
+      const period = text.slice(6).trim() || "today";
+      if (!["today", "month"].includes(period)) return terminal.write("用法：/usage 或 /usage month");
+      return terminal.write(formatUsage(await api.request(`/usage?period=${period}`)));
+    }
     if (/^\/memory(?:\s|$)/.test(text)) {
       const command = text.slice(7).trim();
       if (!command) {
