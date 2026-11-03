@@ -2,6 +2,9 @@ import { EventEmitter } from "node:events";
 import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from "./history.mjs";
 import { AppError, requireId } from "../../../shared/errors.mjs";
 
+// 内存只保留近期轮次；完整历史仍由 Codex 原生记录保存。
+export const SESSION_TURN_MEMORY = 100;
+
 export class SessionService extends EventEmitter {
   constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository }) {
     super();
@@ -44,7 +47,7 @@ export class SessionService extends EventEmitter {
     const thread = result.thread;
     const session = { id: thread.id, cwd: thread.cwd || this.runtime.workspaceDir,
       name: thread.name || thread.preview || "新会话", model: result.model,
-      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, turns: new Map() };
+      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, turns: new Map(), forgottenTurnIds: new Set() };
     this.sessions.set(session.id, session);
     for (const turn of thread.turns || []) this.recordTurn(session.id, turn);
     this.publish(session.id);
@@ -96,11 +99,12 @@ export class SessionService extends EventEmitter {
 
   recordTurn(threadId, turn) {
     const session = this.sessions.get(threadId);
-    if (!session || !turn?.id) return;
+    if (!session || !turn?.id || session.forgottenTurnIds.has(turn.id)) return;
     let record = session.turns.get(turn.id);
     if (!record) {
       record = { id: turn.id, status: turn.status || "inProgress", answers: {}, tools: {}, artifacts: {}, messages: [], error: null };
       session.turns.set(turn.id, record);
+      this.forgetOldTurns(session);
     }
     // 早到的 completed 不能被随后到达的 turn/start RPC 响应覆盖成执行中。
     const terminal = ["completed", "failed", "interrupted"].includes(record.status);
@@ -112,6 +116,18 @@ export class SessionService extends EventEmitter {
     // 不让旧轮次迟到的完成事件覆盖最新轮次的定位。
     session.lastTurnId = [...session.turns.keys()].at(-1) || null;
     return record;
+  }
+
+  // 从最早的轮次开始丢；执行中或仍被 activeTurnId 引用的轮次不能丢。
+  forgetOldTurns(session) {
+    for (const [id, turn] of session.turns) {
+      if (session.turns.size <= SESSION_TURN_MEMORY) break;
+      if (turn.status !== "inProgress" && id !== session.activeTurnId) {
+        session.turns.delete(id);
+        // 仅保留 ID，防止迟到通知或 RPC 响应把旧轮次重新加入近期视图。
+        session.forgottenTurnIds.add(id);
+      }
+    }
   }
 
   applyItem(turn, item) {
@@ -143,7 +159,7 @@ export class SessionService extends EventEmitter {
     const threadId = params.threadId;
     if (!this.sessions.has(threadId)) return;
     const turnId = params.turnId || params.turn?.id;
-    if (!turnId) return;
+    if (!turnId || this.sessions.get(threadId).forgottenTurnIds.has(turnId)) return;
     let turn = this.getTurn(threadId, turnId);
     if (message.method === "turn/started" || message.method === "turn/completed") {
       turn = this.recordTurn(threadId, params.turn);
