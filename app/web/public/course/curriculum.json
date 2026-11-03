@@ -1567,7 +1567,7 @@
         "start": 16,
         "anchor": 18,
         "code": "  const covers = (root, relative) =>\n    relative === root || relative.startsWith(root + \"/\");\n  const readable = (relative) =>\n    !sources ||\n    sources.some(\n      (source) =>\n        source.actions.includes(\"read\") && covers(source.locator, relative),\n    );\n  const browsable = (relative) =>\n    readable(relative) ||\n    (sources &&\n      sources.some(\n        (source) =>\n          source.actions.includes(\"read\") &&\n          (!relative || source.locator.startsWith(relative + \"/\")),\n      ));\n  const writable = (relative) =>\n    !sources ||\n    sources.some(\n      (source) =>\n        source.actions.includes(\"create\") && covers(source.locator, relative),\n    ) ||\n    (outputs && covers(outputs.directory, relative));\n  function directory(file) {\n    try {\n      fs.mkdirSync(file, { mode: 0o700 });",
-        "hash": "1aae2cd6ba357fc9143d608cfcb833dc0a4f7828f9a2b136978245a5294f4279"
+        "hash": "f9e8157be773bfefe4eda0d011c5a03a2d8c061843748475619f789eca62ba6c"
       },
       "scenarios": [
         {
@@ -2128,7 +2128,7 @@
         "start": 114,
         "anchor": 114,
         "code": "  async version(row, body, client, humanEdited = false) {\n    const versionId = randomUUID();\n    await this.query(\n      `INSERT INTO agent_data.resource_versions(instance_id,id,resource_id,revision,blob,bytes)\n      SELECT $1,$3,$4,$5,$6,$7 WHERE $2::uuid IS NOT NULL`,\n      [versionId, row.id, body.revision, body.blob, body.bytes],\n      client,\n    );\n    await this.query(\n      `UPDATE agent_data.resources SET current_version=$4,state='ready',human_edited=human_edited OR $5,updated_at=now()\n      WHERE instance_id=$1 AND owner_id=$2 AND id=$3`,\n      [row.id, versionId, humanEdited],\n      client,\n    );\n    if (row.current_version) await this.invalidate(row.id, client);\n    return { resourceId: row.id, versionId, revision: body.revision };\n  }\n  async read_file(args) {\n    const locator = args.path;",
-        "hash": "df37d121c7009791dee437794741e63bf21ec1d69d0852bca8e35ba1cff8df23"
+        "hash": "3c62b46d057c3df641468a1777cf91bae8780934b01f7545892d420ffab96d57"
       },
       "scenarios": [
         {
