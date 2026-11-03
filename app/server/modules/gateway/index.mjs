@@ -40,6 +40,9 @@ export function validateRegistry(registry) {
     if (levels.some(level => !REASONING.includes(level))) fail(`模型 ${id} 的 reasoningLevels 只能是 ${REASONING.join("、")}。`);
     if (spec.defaultReasoningLevel && !levels.includes(spec.defaultReasoningLevel)) fail(`模型 ${id} 的 defaultReasoningLevel 必须在 reasoningLevels 里。`);
     if (spec.defaultVerbosity && !spec.supportVerbosity) fail(`模型 ${id} 设置 defaultVerbosity 时 supportVerbosity 必须为 true。`);
+    if (spec.maxOutputTokens !== undefined && (!Number.isSafeInteger(spec.maxOutputTokens) || spec.maxOutputTokens < 1)) fail(`模型 ${id} 的 maxOutputTokens 必须是正整数。`);
+    // Claude 格式的接口必须带输出上限；Codex 不发，网关就按清单填，清单里没有会被网关默认的 4096 截断长输出。
+    if (providers[provider].type === "anthropic" && !spec.maxOutputTokens) fail(`模型 ${id} 走 Claude 格式接口，必须填 maxOutputTokens。`);
     for (const target of spec.fallbacks || []) {
       if (target === id || !models[target]) fail(`模型 ${id} 的备用模型 ${target} 必须是清单里的其他模型。`);
     }
@@ -82,6 +85,16 @@ export function enabledProviders(registry, environment) {
   return new Set(Object.entries(registry.providers).filter(([, provider]) => environment[provider.keyEnv]?.trim()).map(([id]) => id));
 }
 
+// 网关的模型参数表：只放已启用服务商的模型，键是“服务商/模型名”（网关按这个匹配）。
+// 用本地文件代替网关从官网下载的公开大表：清单里的输出上限才会生效，也少一次对外下载。
+export function buildModelParameters(registry, environment) {
+  const enabled = enabledProviders(registry, environment);
+  return Object.fromEntries(Object.entries(registry.models).filter(([id]) => enabled.has(splitModelId(id).provider)).map(([id, spec]) => [id, {
+    provider: splitModelId(id).provider, mode: "chat", max_input_tokens: spec.contextWindow,
+    ...(spec.maxOutputTokens ? { max_output_tokens: spec.maxOutputTokens, max_tokens: spec.maxOutputTokens } : {}),
+  }]));
+}
+
 export function buildGatewayConfig(registry, environment) {
   const selected = environment.CODEX_MODEL?.trim();
   if (!selected || !registry.models[selected]) throw new Error(`CODEX_MODEL（${selected || "未设置"}）不在 config/models.json 里；网关模式要写成“服务商/模型名”，如 kimi/kimi-k2.7-code。`);
@@ -117,8 +130,8 @@ export function buildGatewayConfig(registry, environment) {
     client: { drop_excess_requests: false, enable_logging: false, disable_content_logging: true },
     config_store: { enabled: true, type: "sqlite", config: { path: "/app/data/config.db" } },
     logs_store: { enabled: false },
-    // 不在后台同步 Bifrost 的 MCP 目录（用不到，也少一个对外连接）。
-    framework: { pricing: { mcp_library_sync_interval: 0 } },
+    // 不在后台同步 Bifrost 的 MCP 目录（用不到，也少一个对外连接）；模型参数表用本地文件（见 buildModelParameters）。
+    framework: { pricing: { mcp_library_sync_interval: 0, model_parameters_url: "file:///app/data/model-parameters.json" } },
     providers,
     governance: {
       // Codex 用 AGENT_GATEWAY_KEY 访问网关；没有这把钥匙的请求一律 401。

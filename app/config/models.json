@@ -7,7 +7,9 @@
     "openai": { "type": "openai", "keyEnv": "OPENAI_API_KEY" },
     "anthropic": { "type": "anthropic", "keyEnv": "ANTHROPIC_API_KEY" },
     "gemini": { "type": "gemini", "keyEnv": "GEMINI_API_KEY" },
-    "xai": { "type": "xai", "keyEnv": "XAI_API_KEY" }
+    "xai": { "type": "xai", "keyEnv": "XAI_API_KEY" },
+    "zhipu": { "type": "anthropic", "baseUrl": "https://open.bigmodel.cn/api/anthropic", "keyEnv": "ZHIPU_API_KEY",
+      "note": "智谱国内站。没有 OpenAI 新接口（/responses 返回 404），走它的 Claude 格式接口；国际站 Z.ai 把 baseUrl 改成 https://api.z.ai/api/anthropic" }
   },
   "models": {
     "kimi/kimi-k2.7-code": {
@@ -25,8 +27,11 @@
       "supportVerbosity": true, "defaultVerbosity": "low",
       "fallbacks": ["kimi/kimi-k2.7-code"], "verified": "2026-10-31"
     },
+    "deepseek/deepseek-v4-pro": { "displayName": "DeepSeek V4 Pro", "contextWindow": 1048576, "inputModalities": ["text", "image"], "fallbacks": ["deepseek/deepseek-flash"] },
+    "zhipu/glm-5.3": { "displayName": "GLM-5.3", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text"], "fallbacks": ["zhipu/glm-5.3-flash"] },
+    "zhipu/glm-5.3-flash": { "displayName": "GLM-5.3 Flash", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text", "image"] },
     "openai/gpt-6.1-terra": { "displayName": "GPT-6.1 Terra", "contextWindow": 1050000, "inputModalities": ["text", "image"] },
-    "anthropic/claude-sonnet-5-5": { "displayName": "Claude Sonnet 5.5", "contextWindow": 1000000, "inputModalities": ["text", "image"] },
+    "anthropic/claude-sonnet-5-5": { "displayName": "Claude Sonnet 5.5", "contextWindow": 1000000, "maxOutputTokens": 64000, "inputModalities": ["text", "image"] },
     "gemini/gemini-3-flash-preview": { "displayName": "Gemini 3 Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"] },
     "xai/grok-4.7": { "displayName": "Grok 4.7", "contextWindow": 500000, "inputModalities": ["text", "image"] }
   }

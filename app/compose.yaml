@@ -33,9 +33,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
     ports: ["127.0.0.1:${AGENT_GATEWAY_PORT:-4330}:8080"]
     tmpfs: ["/app/data:uid=1000,gid=0,mode=0770"]
-    volumes: ["./.data/gateway/config.json:/app/data/config.json:ro"]
+    volumes: ["./.data/gateway/config.json:/app/data/config.json:ro", "./.data/gateway/model-parameters.json:/app/data/model-parameters.json:ro"]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
       interval: 5s
