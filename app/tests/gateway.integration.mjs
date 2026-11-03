@@ -59,6 +59,7 @@ test("模型网关：没有访问密钥一律拒绝；主模型余额不足时�
   const config = buildGatewayConfig(registry, environment);
   for (const [id, mock] of [["alpha", alpha], ["beta", beta]]) config.providers[id].network_config = { base_url: mock.url, allow_private_network: true, max_retries: 0 };
   // Colima 只把用户目录共享进虚拟机，配置文件放在项目的 .runs 下（不进 git）。
+  fs.mkdirSync(path.join(app, ".runs"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(app, ".runs", "gateway-test-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify(config), { mode: 0o644 });
