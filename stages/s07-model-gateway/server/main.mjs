@@ -46,6 +46,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     lifecycle.defer(() => usage.pending);
     const warning = pricingWarning(config.registry, config.launch.model, usage.budget);
     if (warning) safeLog(warning);
+    for (const warning of config.launch.warnings || []) safeLog(warning);
 
     // 2. 准备运行目录，由自己的服务自动启动本机 Codex。
     const agent = new AgentDefinition(config.root, config.agentFile);

@@ -1,4 +1,4 @@
-import { gatewayEndpoint } from "../gateway/index.mjs";
+import { gatewayEndpoint, fallbackWarnings } from "../gateway/index.mjs";
 import { createModelRouter } from "../gateway/router.mjs";
 
 function booleanValue(environment, name, fallback) {
@@ -131,11 +131,13 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   // 网关模式：Codex 的接口地址和密钥换成本机网关的，后面按直连同样校验。
   const gateway = gatewayEndpoint(environment);
   // 网关模式下由模型路由决定默认的对话模型（CODEX_MODEL 可覆盖），工作流步骤再按需切换（见 messages）。
-  const router = gateway && registry ? createModelRouter(registry, environment) : null;
+  let router = gateway && registry ? createModelRouter(registry, environment) : null;
   const searchMode = environment.AGENT_WEB_SEARCH?.trim() ?? "auto";
   if (!["auto", "off"].includes(searchMode)) throw new Error("AGENT_WEB_SEARCH 必须为 auto 或 off。");
   const chosen = router?.resolve();
   const webSearch = searchMode === "auto" && chosen?.spec.nativeTools?.includes("web_search") ? "live" : "disabled";
+  if (router && webSearch === "live") router = createModelRouter(registry, environment, { webSearch: true });
+  const warnings = router ? fallbackWarnings(registry, environment) : [];
   if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey, ...(router ? { CODEX_MODEL: chosen.id } : {}) };
   const env = { ...environment };
   // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。
@@ -189,5 +191,5 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   );
   // 密钥只通过子进程环境传递，不进入启动参数。
   env.CODEX_API_KEY = values.CODEX_API_KEY;
-  return { args, env, model, catalog, timeoutMs, webSearch, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway), router };
+  return { args, env, model, catalog, timeoutMs, webSearch, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway), router, warnings };
 }

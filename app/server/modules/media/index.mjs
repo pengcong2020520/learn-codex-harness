@@ -59,9 +59,10 @@ export class MediaService {
     this.gate?.check('create', { path: locator });
     if (fs.existsSync(this.files.check_binary(locator))) throw new Error('文件已存在，未覆盖。请使用新版本文件名。');
   }
-  async generateImage({ prompt, size = '2048x2048', n = 1, path: relative }, { signal, context } = {}) {
+  async generateImage({ prompt, quality, size = '2048x2048', n = 1, path: relative }, { signal, context } = {}) {
     await this.budget();
-    const model = this.router.resolve({ purpose: 'image' }).id;
+    if (quality !== undefined && !['fast', 'strong'].includes(quality)) throw new AppError('quality 只能是 fast 或 strong。', 400);
+    const model = this.router.resolve({ purpose: 'image', model: quality }).id;
     const target = this.target(relative, 'png'), ext = path.extname(target);
     if (!['.png', '.jpeg', '.webp'].includes(ext.toLowerCase())) throw new Error('图片路径必须是 png / jpeg / webp。');
     const paths = Array.from({ length: n }, (_, i) => n === 1 ? target : `${target.slice(0, -ext.length)}-${i + 1}${ext}`);
@@ -82,9 +83,10 @@ export class MediaService {
     }
     return { paths: images.map(item => item.path), model, size, images };
   }
-  async generateVideo({ prompt, seconds = 5, size = '1280x720', path: relative }, { signal, context } = {}) {
+  async generateVideo({ prompt, quality, seconds = 5, size = '1280x720', path: relative }, { signal, context } = {}) {
     await this.budget();
-    const model = this.router.resolve({ purpose: 'video' }).id;
+    if (quality !== undefined && !['fast', 'strong'].includes(quality)) throw new AppError('quality 只能是 fast 或 strong。', 400);
+    const model = this.router.resolve({ purpose: 'video', model: quality }).id;
     const locator = this.target(relative, 'mp4');
     if (path.extname(locator).toLowerCase() !== '.mp4') throw new Error('视频路径必须是 mp4。');
     this.preflight(locator);

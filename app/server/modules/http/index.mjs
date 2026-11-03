@@ -77,6 +77,9 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         const body = await readBody(request);
         await data.repository.setPreference(body.key, body.value); return json(200, { saved: true, injectedIntoContext: false });
       }
+      if (route === "GET /models") return json(200, config.launch.router?.catalog() || {
+        models: {}, scenes: {}, defaults: { chat: config.launch.model || null }, webSearch: config.launch.webSearch || "disabled"
+      });
       if (route === "GET /usage") return json(200, await usage.summary(url.searchParams.get("period") || "today"));
       if (route === "GET /memory") return json(200, memory.snapshot());
       if (route === "GET /memory/summary") return json(200, memory.summary());

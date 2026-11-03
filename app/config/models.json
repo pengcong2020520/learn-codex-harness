@@ -7,8 +7,8 @@
     "video": ["byteplus/doubao-seedance-2-0-mini-260615", "byteplus/doubao-seedance-2-0-fast-260128"]
   },
   "scenes": {
-    "fast": ["deepseek/deepseek-flash", "zhipu/glm-5.3-flash", "kimi/kimi-k2.7-code"],
-    "strong": ["deepseek/deepseek-v4-pro", "kimi/kimi-k2.7-code", "zhipu/glm-5.3"]
+    "fast": ["deepseek/deepseek-flash", "zhipu/glm-5.3-flash", "kimi/kimi-k2.7-code", "byteplus/doubao-seedream-5-0-flash-260915", "byteplus/doubao-seedance-2-0-mini-260615"],
+    "strong": ["deepseek/deepseek-v4-pro", "kimi/kimi-k2.7-code", "zhipu/glm-5.3", "byteplus/doubao-seedream-5-0-pro-260628", "byteplus/doubao-seedance-2-0-fast-260128"]
   },
   "providers": {
     "byteplus": { "type": "byteplus", "baseUrl": "https://ark.cn-beijing.volces.com", "keyEnv": "ARK_API_KEY" },

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { validateEffort } from "../gateway/router.mjs";
 import { readCompatibility } from "./upgrade.mjs";
 import { selectAgentFile } from "./selection.mjs";
 import { CONTRACTS, digest } from "./contracts.mjs";
@@ -162,13 +163,17 @@ export class AgentDefinition {
     if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };
     // 工作流步骤指定的模型在启动时就解析一遍：写错的场景名、没启用的服务商当场报错，而不是跑到那一步才失败。
     for (const workflow of this.workflows.list()) for (const step of workflow.steps || []) {
-      if (!step.model) continue;
-      if (!config.launch.router) throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id} 指定了模型 ${step.model}；按步骤切换模型需要启用模型网关（AGENT_GATEWAY_KEY）。`);
+      if (!step.model && !step.needs && !step.effort) continue;
+      if (!config.launch.router) {
+        // 直连只有一个模型：场景、能力要求和推理档位都无从选择，提醒后忽略，同一个 Agent 包在两种模式下都能用；
+        // 写死“服务商/模型名”则无法满足，报错。
+        if (step.model?.includes("/")) throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id} 指定了模型 ${step.model}；按步骤切换具体模型需要启用模型网关（AGENT_GATEWAY_KEY）。`);
+        this.warnings.push(`未启用模型网关：Workflow ${workflow.id} 的步骤 ${step.id} 的场景、能力要求或推理档位不生效，使用默认模型。`);
+        continue;
+      }
       try {
-        const chosen = config.launch.router.resolve({ model: step.model });
-        if (config.launch.webSearch === "live" && !chosen.spec.nativeTools?.includes("web_search")) {
-          throw new Error(`模型 ${chosen.id}（配置 ${step.model}）未声明 nativeTools: web_search；同一会话不能按轮切换联网搜索。请换成支持搜索的模型，或设置 AGENT_WEB_SEARCH=off。`);
-        }
+        const chosen = config.launch.router.resolve({ model: step.model, needs: step.needs });
+        validateEffort(chosen, step.effort);
       }
       catch (error) { throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id}：${error.message}`); }
     }

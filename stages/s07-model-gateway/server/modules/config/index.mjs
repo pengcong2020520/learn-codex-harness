@@ -81,6 +81,10 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
   const registry = loadModelRegistry(root), budget = budgetConfig(environment);
   const launch = buildRestrictedLaunch(environment, { registry });
+  if (budget.downgradeAt !== null && [budget.dailyTokens, budget.monthlyTokens, budget.dailyCost, budget.monthlyCost].some(limit => limit !== null)) {
+    if (!launch.router) throw new Error("预算降级需要启用模型网关（AGENT_GATEWAY_KEY）。");
+    launch.router.resolve({ model: budget.downgradeScene });
+  }
   const rag = { chromaUrl: environment.CHROMA_URL, url: environment.EMBEDDING_BASE_URL,
     apiKey: environment.EMBEDDING_API_KEY, model: environment.EMBEDDING_MODEL,
     dimensions: Number(environment.EMBEDDING_DIMENSIONS) };

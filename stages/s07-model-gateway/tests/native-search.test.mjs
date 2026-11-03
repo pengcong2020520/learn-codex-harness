@@ -62,8 +62,9 @@ test("工作流启动校验：搜索开启时具体模型和场景都必须支�
     const agent = new AgentDefinition(root);
     agent.configure({ launch: launch(env), memory: { enabled: false, use: false } }, { workspaceDir: path.join(root, "workspace") });
   };
-  for (const model of ["fast", "deepseek/deepseek-flash"]) {
-    assert.throws(() => configure(model), /Workflow write-article 的步骤 outline：模型 deepseek\/deepseek-flash.*换成支持搜索的模型.*AGENT_WEB_SEARCH=off/);
+  assert.doesNotThrow(() => configure("fast"));
+  for (const model of ["deepseek/deepseek-flash"]) {
+    assert.throws(() => configure(model), /Workflow write-article 的步骤 outline：.*deepseek\/deepseek-flash：不支持原生能力 联网搜索/);
     assert.doesNotThrow(() => configure(model, { ...environment, AGENT_WEB_SEARCH: "off" }));
   }
   assert.doesNotThrow(() => configure("kimi/kimi-k2.6"));

@@ -20,6 +20,7 @@ export function installToolFixture(root, { knowledge = false, article = false } 
   for (const area of ["inputs", "research", "drafts", "outputs"]) mkdirSync(path.join(root, "workspace", area), { recursive: true });
   cpSync(path.join(project, "config/tools"), path.join(root, "config/tools"), { recursive: true });
   cpSync(path.join(project, "server/modules/tools"), path.join(root, "server/modules/tools"), { recursive: true });
+  for (const name of ["gateway", "usage"]) cpSync(path.join(project, "server/modules", name), path.join(root, "server/modules", name), { recursive: true });
   cpSync(path.join(project, "server/modules/agents"), path.join(root, "server/modules/agents"), { recursive: true });
   cpSync(path.join(project, "server/modules/role"), path.join(root, "server/modules/role"), { recursive: true });
   cpSync(path.join(project, "server/modules/workflows"), path.join(root, "server/modules/workflows"), { recursive: true });

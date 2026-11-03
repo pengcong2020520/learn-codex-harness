@@ -73,6 +73,8 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 | `AGENT_BUDGET_DAILY_COST` | 当日估算金额上限，按模型清单的 currency；未定价模型不计金额 | 不限 |
 | `AGENT_BUDGET_MONTHLY_COST` | 当月估算金额上限 | 不限 |
 | `AGENT_BUDGET_TIMEZONE` | 预算自然日/月的 IANA 时区，如 `Asia/Shanghai` | 系统时区 |
+| `AGENT_BUDGET_DOWNGRADE_AT` | 大于 0、小于 1 的比例，如 `0.8`；日/月任一预算达到该比例时降级，无预算上限不生效 | 关闭 |
+| `AGENT_BUDGET_DOWNGRADE_SCENE` | 降级使用的对话场景；步骤或任务最终指定具体模型时不降级 | `fast` |
 | `AGENT_GATEWAY_DAILY_TOKENS` | 网关 token 兜底，优先于每日预算派生值；容器重启清零 | 每日 token 预算 × 1.5 向上取整；未设预算则不限 |
 | `OLLAMA_BASE_URL` | 本地 Ollama 的地址（`npm run ollama:up` 启动后填 `http://ollama:11434`），填了才启用本地向量模型 | — |
 | `CODEX_API_KEY` / `CODEX_BASE_URL` | 不用网关、直连某一家时填写（接口须支持 Responses API）；与 `AGENT_GATEWAY_KEY` 二选一 | — |
