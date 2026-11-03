@@ -1,0 +1,16 @@
+{
+  "id": "s4-report",
+  "name": "写汇报材料",
+  "prompt": "帮我写一份给部门总监的 Q3 季度汇报材料，项目是客服智能助手，资料在 inputs/report/ 下。要求：一页半左右（800–1200 字），开头先说结论；用数据说话，写清楚取得的成果、没有达成的目标和原因、主要问题、Q4 计划和需要总监支持的事项。直接写完保存到 outputs/。",
+  "checks": [
+    { "id": "deliverable", "label": "交付物保存在 outputs/", "type": "deliverable", "dir": "outputs" },
+    { "id": "length", "label": "篇幅 700–1800 字", "type": "length", "min": 700, "max": 1800 },
+    { "id": "headings", "label": "至少 4 个部分", "type": "headings", "min": 4 },
+    { "id": "rate-gap", "label": "解决率 63% 未达 65% 目标", "type": "includes-all", "all": ["63\\s*%", "65\\s*%", "(未达|未完成|没有达成|未实现|差距|低于|差\\s*2)"] },
+    { "id": "key-metrics", "label": "关键数据准确（满意度 4.4、转人工 31%、1,850 小时）", "type": "includes-all", "all": ["4\\.4", "31\\s*%", "1,?850"] },
+    { "id": "problems", "label": "主要问题（9 天、71%、工单 18%）", "type": "includes-all", "all": ["9\\s*天", "71\\s*%", "18\\s*%"] },
+    { "id": "asks", "label": "需要的支持（2 名标注、IT 排期、15 万预算）", "type": "includes-all", "all": ["2\\s*名", "(IT|工单)", "15\\s*万"] },
+    { "id": "conclusion-first", "label": "开头先给结论", "type": "opening-includes", "within": 400, "any": ["结论", "总体", "核心", "概括", "一句话", "63\\s*%", "解决率"] }
+  ],
+  "judgeFocus": "是否开头先给结论、适合总监快速阅读；数据是否准确且有对比（月度趋势、目标达成情况），是否如实写出未达成的解决率目标及原因而不是只报喜；问题与 Q4 计划是否对应；需要的支持是否具体可决策；篇幅是否克制、没有空话套话。"
+}
