@@ -41,6 +41,9 @@
     "gateway:config": "node scripts/gateway-config.mjs",
     "gateway:up": "node scripts/gateway-config.mjs && docker compose up -d --wait --force-recreate gateway",
     "gateway:down": "docker compose stop gateway",
+    "ollama:up": "docker compose --profile embedding up -d --wait ollama",
+    "ollama:pull": "node scripts/ollama-pull.mjs",
+    "ollama:down": "docker compose --profile embedding stop ollama",
     "test:gateway": "node --test --test-concurrency=1 tests/gateway.integration.mjs",
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs"

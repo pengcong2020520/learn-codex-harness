@@ -70,7 +70,7 @@ export class Embeddings {
 }
 export async function createRag(config, directory) {
   if (!config?.chromaUrl && !config?.url) return null;
-  if (!config.chromaUrl || !config.url) throw new Error('RAG 必须同时配置 CHROMA_URL 和 EMBEDDING_BASE_URL。');
+  if (!config.chromaUrl || !config.url) throw new Error(config.unavailable ? `已配置 CHROMA_URL，但没有可用的向量模型：${config.unavailable}` : 'RAG 必须同时配置 CHROMA_URL 和 EMBEDDING_BASE_URL。');
   const { ChromaClient } = await import('chromadb');
   const endpoint = new URL(config.chromaUrl);
   if (!['127.0.0.1','localhost'].includes(endpoint.hostname) || endpoint.protocol !== 'http:' || endpoint.username || endpoint.password) throw new Error('首版 Chroma 仅允许本机 HTTP 服务。');

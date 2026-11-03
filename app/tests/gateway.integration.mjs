@@ -61,7 +61,9 @@ test("模型网关：没有访问密钥一律拒绝；主模型余额不足时�
   const registry = validateRegistry({ schemaVersion: 1,
     providers: { alpha: { type: "openai", baseUrl: "https://alpha.example", keyEnv: "ALPHA_API_KEY" }, beta: { type: "openai", baseUrl: "https://beta.example", keyEnv: "BETA_API_KEY" },
       gamma: { type: "anthropic", baseUrl: "https://gamma.example", keyEnv: "GAMMA_API_KEY" } },
-    models: { "alpha/model-a": { contextWindow: 128000, fallbacks: ["beta/model-b"] }, "beta/model-b": { contextWindow: 128000 }, "gamma/model-c": { contextWindow: 128000, maxOutputTokens: 23456 } } });
+    models: { "alpha/model-a": { purposes: ["chat"], contextWindow: 128000, fallbacks: ["beta/model-b"] }, "beta/model-b": { purposes: ["chat"], contextWindow: 128000 },
+      "gamma/model-c": { purposes: ["chat"], contextWindow: 128000, maxOutputTokens: 23456 } },
+    routes: { chat: ["alpha/model-a"] } });
   const gatewayKey = `sk-bf-test-${randomBytes(8).toString("hex")}`;
   const environment = { AGENT_GATEWAY_KEY: gatewayKey, ALPHA_API_KEY: "sk-alpha-test", BETA_API_KEY: "sk-beta-test", GAMMA_API_KEY: "sk-gamma-test", CODEX_MODEL: "alpha/model-a" };
   const config = buildGatewayConfig(registry, environment);
@@ -116,12 +118,14 @@ test("模型网关：没有访问密钥一律拒绝；主模型余额不足时�
   definition.agent.skills = []; definition.agent.workflows = []; definition.bindings.skills = {};
   delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
   fs.writeFileSync(path.join(agentDir, "agent.json"), JSON.stringify(definition));
-  const env = { ...process.env, AGENT_GATEWAY_KEY: gatewayKey, AGENT_GATEWAY_PORT: String(port), CODEX_MODEL: "alpha/model-a",
-    CODEX_MODEL_CATALOG_ENABLED: "true", CODEX_MODEL_CONTEXT_WINDOW: "128000", DEMO_TIMEOUT_MS: "30000" };
-  for (const name of ["CODEX_BASE_URL", "CODEX_API_KEY"]) delete env[name];
+  // 默认模型由模型路由按这份清单的 routes.chat 决定（不写 CODEX_MODEL）。
+  const env = { ...process.env, AGENT_GATEWAY_KEY: gatewayKey, AGENT_GATEWAY_PORT: String(port), ALPHA_API_KEY: "sk-alpha-test", BETA_API_KEY: "sk-beta-test",
+    CODEX_MODEL_CATALOG_ENABLED: "true", DEMO_TIMEOUT_MS: "30000" };
+  for (const name of ["CODEX_BASE_URL", "CODEX_API_KEY", "CODEX_MODEL"]) delete env[name];
   const before = beta.requests.length;
   const record = await runOnce({ label: "gateway", agentDir, scenario: loadScenarios(["s2-wechat"])[0], index: 1, env, out: path.join(work, "out"),
-    timeoutMs: 90000, dataFactory: testDataFactory });
+    timeoutMs: 90000, dataFactory: testDataFactory, files: { "config/models.json": JSON.stringify(registry) } });
+  assert.equal(record.model, "alpha/model-a", "默认模型来自清单的 routes.chat");
   assert.equal(record.status, "completed", record.error);
   assert.equal(record.reply, "已经看过资料目录。");
   assert.deepEqual(record.tools.map(tool => tool.tool), ["list_files"]);

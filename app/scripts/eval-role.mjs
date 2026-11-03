@@ -37,9 +37,11 @@ function walk(dir, base = dir) {
 }
 
 // 与 installToolFixture 相同的做法：复制服务代码与配置，Agent 包换成待评估的版本，依赖目录用链接。
-export function prepareRoot(agentDir, scenario) {
+// files：覆盖临时项目里的个别文件（相对项目根），例如测试用自己的 config/models.json。
+export function prepareRoot(agentDir, scenario, files = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "eval-role-")));
   for (const dir of ["config", "server", "shared"]) fs.cpSync(path.join(app, dir), path.join(root, dir), { recursive: true });
+  for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(root, file), content);
   fs.cpSync(agentDir, path.join(root, "agents/writing"), { recursive: true });
   fs.symlinkSync(path.join(app, "node_modules"), path.join(root, "node_modules"), "dir");
   const definition = JSON.parse(fs.readFileSync(path.join(root, "agents/writing/agent.json"), "utf8"));
@@ -61,8 +63,8 @@ async function waitFor(server, id, timeoutMs) {
   }
 }
 
-export async function runOnce({ label, agentDir, scenario, index, env, out, timeoutMs, dataFactory, capture = false }) {
-  const { root, workspace } = prepareRoot(agentDir, scenario);
+export async function runOnce({ label, agentDir, scenario, index, env, out, timeoutMs, dataFactory, capture = false, files = {} }) {
+  const { root, workspace } = prepareRoot(agentDir, scenario, files);
   const endpoint = modelEndpoint(env);
   const proxy = capture ? await captureProxy(endpoint.baseUrl) : null;
   // 采集时让 Codex 直连代理，代理再原样转给模型网关或模型服务。

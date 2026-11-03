@@ -160,6 +160,13 @@ export class AgentDefinition {
     if (this.definition.agent.knowledge?.length && (config.memory.enabled || config.memory.use || config.memory.contribute)) throw new Error('挂载知识库时请设置 AGENT_MEMORY_ENABLED=false；首版禁用共享原生记忆，避免重新注入范围外知识。');
     this.memory = { ...config.memory };
     if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };
+    // 工作流步骤指定的模型在启动时就解析一遍：写错的场景名、没启用的服务商当场报错，而不是跑到那一步才失败。
+    for (const workflow of this.workflows.list()) for (const step of workflow.steps || []) {
+      if (!step.model) continue;
+      if (!config.launch.router) throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id} 指定了模型 ${step.model}；按步骤切换模型需要启用模型网关（AGENT_GATEWAY_KEY）。`);
+      try { config.launch.router.resolve({ model: step.model }); }
+      catch (error) { throw new Error(`Workflow ${workflow.id} 的步骤 ${step.id}：${error.message}`); }
+    }
   }
   activate(toolVersion, skills = this.availableSkills || []) {
     this.assertCurrent(); this.availableSkills = skills;

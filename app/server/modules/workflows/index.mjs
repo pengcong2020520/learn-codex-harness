@@ -58,7 +58,7 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
   }
   return freeze({
     list: () => [...workflows.values()].map(({ id, label, params, checks, steps }) => ({ id, label, params: params || null, checks: checks || [],
-      steps: steps ? steps.map(({ id: step, goal, confirm, checks }) => ({ id: step, goal, confirm: confirm === true, checks: checks || [] })) : null })),
+      steps: steps ? steps.map(({ id: step, goal, confirm, checks, model }) => ({ id: step, goal, confirm: confirm === true, checks: checks || [], model: model || null })) : null })),
     resolve(id = "chat", params = null) {
       const workflow = workflows.get(id);
       if (typeof id !== "string" || !workflow) throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
@@ -69,7 +69,7 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
       const grants = (workflow.grants || []).map(grant => ({ type: grant.type, kbId: typeof grant.kbId === "object" ? params[grant.kbId.param] : grant.kbId }));
       for (const grant of grants) if (!updatable.has(grant.kbId)) throw new AppError(`Agent 没有更新知识库 ${grant.kbId} 的权限。`, 403, "FORBIDDEN");
       return freeze({ id, label: workflow.label, skill: workflow.skill || null, params: workflow.validate ? { ...params } : null, grants, checks: [...(workflow.checks || [])],
-        steps: workflow.steps ? workflow.steps.map(step => ({ id: step.id, goal: step.goal, writes: step.writes ? [...step.writes] : null, confirm: step.confirm === true, checks: [...(step.checks || [])] })) : null });
+        steps: workflow.steps ? workflow.steps.map(step => ({ id: step.id, goal: step.goal, writes: step.writes ? [...step.writes] : null, confirm: step.confirm === true, checks: [...(step.checks || [])], model: step.model || null })) : null });
     }
   });
 }
