@@ -135,7 +135,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
 
     // 5. 就绪；客户端退出不触发这里的服务关闭。
     safeLog(`网络模式：${tools.registry.networkMode === "proxy-debug" ? "本地调试，信任 HTTPS 域名的代理 Fake-IP 映射；生产部署请设置 NODE_ENV=production" : "严格公网地址检查"}`);
-    safeLog(`Agent 服务已就绪：${url}\nAgent：${agent.definition.agent.id}\n模型：${config.launch.model || "Codex 默认"}\n资料目录：${runtime.workspaceDir}\n工具：允许范围已核验；数据层运行使用原生动态工具 + 任务门禁\n工具目录：config/tools/（空闲边界更新；权限契约变化后需新建会话）\n协议日志：${runtime.runDir}/protocol.jsonl\n另开终端运行 npm run chat；此终端 Ctrl+C 停止服务。`);
+    safeLog(`Agent 服务已就绪：${url}\nAgent：${agent.definition.agent.id}\n模型：${config.launch.model || "Codex 默认"}${config.launch.gateway ? "（经本机模型网关）" : ""}\n资料目录：${runtime.workspaceDir}\n工具：允许范围已核验；数据层运行使用原生动态工具 + 任务门禁\n工具目录：config/tools/（空闲边界更新；权限契约变化后需新建会话）\n协议日志：${runtime.runDir}/protocol.jsonl\n另开终端运行 npm run chat；此终端 Ctrl+C 停止服务。`);
     return { config, agent, runtime, rpc, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, url, token, close: () => lifecycle.close() };
   } catch (error) {
     await lifecycle.close().catch(() => {});

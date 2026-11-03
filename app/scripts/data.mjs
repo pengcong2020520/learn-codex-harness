@@ -23,6 +23,7 @@ import { createFileTools } from "../server/modules/data/files.mjs";
 const [command, ...args] = process.argv.slice(2),
   env = loadEnvironment();
 const redact = createLogRedactor(env.CODEX_API_KEY, [
+  env.AGENT_GATEWAY_KEY,
   env.DATABASE_URL,
   env.REDIS_URL,
 ]);

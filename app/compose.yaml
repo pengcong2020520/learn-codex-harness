@@ -20,6 +20,28 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports: ["127.0.0.1:${AGENT_REDIS_PORT:-6379}:6379"]
     volumes: ["redis-data:/data"]
+  # 模型网关（Bifrost）：Codex 只连这里，再由网关转到各家模型并在失败时改用备用模型。
+  # 配置由 npm run gateway:config 生成（.data/gateway/config.json，不含密钥），每次启动都以它为准；
+  # 配置库放在临时目录里，重启即清空。只把下面列出的密钥传进容器，其他 .env 内容不进。
+  gateway:
+    image: maximhq/bifrost:v2.4.0@sha256:a1c90607dcfd13c1fb2f9476ceb3bb24407a50ade7fdf3e61a59fb42b09e5c57
+    environment:
+      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:-}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+    ports: ["127.0.0.1:${AGENT_GATEWAY_PORT:-4330}:8080"]
+    tmpfs: ["/app/data:uid=1000,gid=0,mode=0770"]
+    volumes: ["./.data/gateway/config.json:/app/data/config.json:ro"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
   chroma:
     image: chromadb/chroma:1.5.0
     profiles: ["rag"]
