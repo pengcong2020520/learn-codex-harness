@@ -1,15 +1,17 @@
 # learn-codex-harness
 
-从一次 SDK 调用开始，逐层搭出一个**配置驱动、可持久化、带知识层与权限门禁**的 Codex Agent 服务。6 个阶段、17 节机制课，每一步都是可以独立运行和测试的真实代码。
+**Agent = 模型 + Harness。** OpenAI 的 Codex 在 Web、CLI、IDE 扩展和桌面应用里，底层都由同一个 harness 驱动：智能体循环、会话的保存与恢复、工具执行与审批都在里面，并通过 App Server 协议对外开放。
 
-> 模型负责推理，Harness 负责执行。
-> 本仓库**不自造 agent loop**：模型与工具的执行循环始终交给 Codex 原生 App Server，我们只在它外面一层层加上会话、配置、数据、知识和权限。
+这套教程教你把这个现成的执行引擎接进自己的产品：**不自造 agent loop**，把精力放在业务上，在它外面一层层加上会话、角色与工具、数据、知识、权限和工作流。6 个阶段、17 节机制课，每一步都是可以独立运行和测试的真实代码。
+
+> 先读 [导论](stages/introduction.md)：Codex harness 是什么，App Server 怎么用，一个 Agent 要回答哪六个问题，其中哪些 Codex 已经替你回答了。
 
 ## 学习路线
 
 ```mermaid
 flowchart LR
-  s00["s00 SDK 入门<br/>Thread / Turn / 事件"] --> s01["s01 单轮问答<br/>App Server JSON-RPC"]
+  intro["导论<br/>harness 与 App Server"] --> s00["s00 先体验<br/>Thread / Turn / Item"]
+  s00 --> s01["s01 单轮问答<br/>接上模型 / JSON-RPC"]
   s01 --> s02["s02 多轮会话<br/>FIFO 输入 / 原生历史"]
   s02 --> s03["s03 Agent 核心<br/>配置装配 / Skills / MCP 工具"]
   s03 --> s04["s04 数据层<br/>PG outbox / Redis 调度 / 资源版本"]
@@ -20,16 +22,17 @@ flowchart LR
 
 | 阶段 | 主题 | 解决的问题 | 机制课 |
 |------|------|-----------|--------|
-| [s00-sdk-quickstart](stages/s00-sdk-quickstart/README.md) | SDK 入门 | 怎样让 Codex 在本机完成一个任务、修复代码并通过测试 | — |
-| [s01-single-turn](stages/s01-single-turn/README.md) | 单轮问答 | 不用 SDK，直接说 App Server 协议；怎样判断一轮真的结束了 | 2 |
-| [s02-multi-turn](stages/s02-multi-turn/README.md) | 多轮会话 | 连续输入不丢、不抢跑；恢复会话而不是重新拼历史 | 2 |
-| [s03-agent-core](stages/s03-agent-core/README.md) | 可配置 Agent | 角色、Skills、工具、工作区由一份 JSON 装配，权限与能力一起生效 | 5 |
+| [导论](stages/introduction.md) | Codex harness 是什么 | harness 里有什么；App Server 的协议与三个原语；六个问题里哪些交给 Codex、哪些由我们来做 | — |
+| [s00-sdk-quickstart](stages/s00-sdk-quickstart/README.md) | 先体验 | 用 SDK 把一个真实任务交给 Codex：循环由谁来转，"修好了"凭什么信 | — |
+| [s01-single-turn](stages/s01-single-turn/README.md) | 单轮问答 | 接上模型；不用 SDK，直接说 App Server 协议；怎样判断一轮真的结束了 | 2 |
+| [s02-multi-turn](stages/s02-multi-turn/README.md) | 多轮会话 | Thread 与 Turn；连续输入不丢、不抢跑；恢复会话而不是重新拼历史 | 2 |
+| [s03-agent-core](stages/s03-agent-core/README.md) | 可配置 Agent | 角色、工具、记忆、Skill 和工作区由一份配置装配，权限与能力一起生效 | 5 |
 | [s04-data-layer](stages/s04-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s05-knowledge-layer](stages/s05-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
 | [s06-skill-workflow](stages/s06-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
 | [app](app/README.md) | 完整项目 | 在 s06 之上持续开发：Web 工作台、互动课程等 | — |
 
-每章 README 都按「问题 → 解决方案 → 工作原理 → 试一下 → 接下来」组织，配一张机制图；工作原理里的代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
+每章 README 先讲概念再动手，按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织，配一张机制图，并标出对应导论里六个问题中的哪几个；关键代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
 ## 快速开始
 
@@ -82,7 +85,8 @@ s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 learn-codex-harness/
 ├── stages/                     # 教学迭代：每个阶段一份独立、冻结的可运行快照
 │   │                           #   每章含 README（章节）、images/（机制图）、docs/design.md（设计说明）、lessons/（离线实验）
-│   ├── s00-sdk-quickstart/     #   SDK 入门（examples/01–05、fixture、doctor）
+│   ├── introduction.md         #   导论：Codex harness、App Server 与六个问题
+│   ├── s00-sdk-quickstart/     #   s00：先体验，用 SDK 交一个任务（examples/01–05、fixture、doctor）
 │   ├── s01-single-turn/        #   s01：单轮问答
 │   ├── s02-multi-turn/         #   s02：多轮会话
 │   ├── s03-agent-core/         #   s03：配置驱动 Agent 核心

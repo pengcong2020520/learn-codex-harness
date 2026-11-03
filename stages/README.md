@@ -1,5 +1,7 @@
 # stages — 教学迭代路线
 
+从 [导论](introduction.md) 开始：先弄清 Codex harness 是什么、App Server 怎么用，以及一个 Agent 要回答的六个问题里，哪些 Codex 已经替你回答了，哪些要由我们在外面补上。后面每一章补上其中的一部分。
+
 每个阶段是一份**独立、可运行、已冻结**的源码快照：有自己的 `package.json`、`.env`、`.data`、`.runs` 和 `workspace`，互不共享，可以单独复制出去运行。阶段之间只做增量：下一阶段在上一阶段基础上只引入一个主要机制。
 
 持续开发发生在 [`../app`](../app/README.md)，**不与任何阶段同步**。s06 是 2026-10-31 从 `app` 冻结的快照，因此也带着 s05 之后加入的配置选择、会话升级、协议兼容检查和流式推送协议 v2；s06 的章节只讲 Skill 与 Workflow。Web 工作台与互动课程只在 `app` 里，s06 的快照不包含它们。
@@ -8,6 +10,7 @@
 
 | 阶段 | 核心能力 | 新引入的机制 | 默认端口 |
 |------|---------|-------------|---------|
+| [导论](introduction.md) | 理解 Codex harness | harness 的能力、App Server 协议、Item / Turn / Thread、六个问题 | — |
 | [s00-sdk-quickstart](s00-sdk-quickstart/README.md) | 用官方 SDK 调用 Codex | Thread / Turn、事件流、结构化输出、沙箱 | — |
 | [s01-single-turn](s01-single-turn/README.md) | 单轮对话 | 直连 App Server JSON-RPC，按终态判定成败 | — |
 | [s02-multi-turn](s02-multi-turn/README.md) | 单进程多轮对话 | FIFO 输入、同一 Thread 多 Turn、原生历史恢复 | — |
@@ -25,7 +28,7 @@
 
 ## 关键约束
 
-- **单机单 owner 单 Agent 配置、多 Thread**：每服务实例绑定一个 Agent 配置，支持多个会话 Thread，不支持多账户登录、多 Agent 编排或多主机共享。
+- **单机单 owner 单 Agent 配置、多 Thread**：每服务实例绑定一个 Agent 配置，支持多个会话 Thread，不支持多账户登录、多 Agent 编排或多主机共享。这三个方向的思路分别写在 s05、s06 章节末尾的"延伸"里。
 - **Node >= 24，`@openai/codex` 固定 `0.154.0`**。
 - **不自造模型/工具执行 loop**：模型执行循环由 Codex 原生负责。
 - **版本变化需新 Thread**：配置、角色、Skill 任一变更后旧 Thread 不自动兼容，需 `/new`；不删除原生历史。

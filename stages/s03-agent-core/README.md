@@ -1,165 +1,140 @@
-# s03: 可配置 Agent — 配置是装配合同，不是临时提示词
+# s03: 可配置 Agent — 角色、工具、记忆，装配成一个 Agent
 
-[s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
-> *"改配置就能换 Agent，但模型不能自己给自己加权限"* — 能力和边界写在同一份 JSON 里，一起生效、一起失效。
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [app](../../app/)
+> *"改配置就能换 Agent，但模型不能自己给自己加权限"* — 角色、工具、记忆和资料边界写在同一份配置里，一起生效，一起失效。
 >
-> **Harness 层**: 装配 — 角色、Skills、工具和资料边界由配置决定，由服务端执行。
+> **对应六个问题**：① 我是谁？ ③ 之前聊过什么？ ⑤ 能用什么？ ⑥ 谁说了算？
 
 ---
 
-## 问题
+## 要回答的问题
 
-你想把写作助手改成客服助手：换角色提示词、换资料目录、去掉联网工具。如果这些都写在代码里，每换一个 Agent 就要改一次代码。
+建立了多轮对话以后，Agent 还只是一个"会聊天的模型"。要让它变成一个能干活的写作助手，还差三样东西：
 
-就算把它们挪进配置文件，边界问题依然存在：
+1. **角色**：它是谁，按什么方法工作，边界在哪里？角色写在哪、什么时候生效？
+2. **工具**：它怎么读资料、写文件、上网查？模型怎么知道有哪些工具、参数该怎么填？
+3. **记忆**：上周聊过的偏好，这周还记得吗？记忆由谁来提炼、存在哪？
 
-1. **隐藏不等于禁止**：工具清单里不列某个工具，模型仍可能凭名字直接调用它。
-2. **在工作区里不等于有权读写**：Agent 能看到 `workspace/`，不代表它可以读 `drafts/`，更不代表它能覆盖 `outputs/` 里的成品。
-3. **配置变了，旧会话还以为是原来的自己**：服务运行中有人改了角色文件或工具白名单，正在进行的会话继续用旧权限干活。
+再往前想一步：明天你想把写作助手改成客服助手，换角色、换资料目录、去掉联网工具，难道每换一个 Agent 都要改一次代码？就算挪进配置文件，还有三个边界问题：
+
+- **隐藏不等于禁止**：工具清单里不列某个工具，模型仍可能凭名字直接调用它。
+- **在工作区里不等于有权读写**：Agent 能看到 `workspace/`，不代表它能读 `drafts/`，更不代表它能覆盖 `outputs/` 里的成品。
+- **配置变了，旧会话还以为自己是原来那个 Agent**：服务运行中有人改了角色或工具白名单，正在进行的会话继续用旧权限干活。
 
 ---
 
-## 解决方案
+## 核心概念
+
+### 角色定义：给 Agent 一个"人设和工作方法"
+
+角色通常就是一段提示词，写清楚 Agent 是谁、要帮用户做什么、按什么方法做、哪些事不能做。本阶段的写作助手，角色写在 [`agents/roles/writing-assistant.md`](agents/roles/writing-assistant.md)，开头是这样的：
+
+```text
+你是“AI 知识整理助手”。
+
+你的任务是以用户的观点为起点，理解其真正想表达的内容，通过资料研究、文章编写、事实核查、润色和最终合稿，
+帮助用户形成有依据、有个人表达、逻辑完整的文章。你是在帮助用户发展和表达观点，而不是用通用的 AI 文章替换用户的观点。……
+```
+
+角色不是随便塞进第一条消息里的。它通过 Codex 留给角色的两个位置生效：
+
+```text
+agents/roles/writing-assistant.md（角色正文）
+  ├─ 模型目录 models.json → instructions_template（启用模型目录时）
+  └─ 会话服务 → baseInstructions
+        ├─ thread/start：新建会话时带上
+        └─ thread/resume：恢复会话时也带上
+```
+
+一个好的角色还会写清楚工具边界：只用本轮实际提供的工具，工具没提供或调用失败时如实说明，不能声称自己"已经联网核查"。**角色描述不等于能力，也不能扩大权限**，真正的权限由下面的工具和门禁决定。
+
+### 工具调用：从一份 JSON 到模型的选择
+
+工具怎么接进来？一条完整的链路是这样的：
+
+```text
+config/tools/*.json                     每组工具一个文件：工具名、说明、参数（JSON Schema）
+        ↓
+校验配置、编译参数 Schema（loader.mjs）
+        ↓
+动态导入对应的 .mjs，调用 createTools() 拿到执行函数
+        ↓
+Registry：工具名 → 定义 + 校验器 + 执行函数
+        ↓
+本地 MCP 服务 → Codex 发现工具 → 模型决定调用哪个、传什么参数
+```
+
+**Registry** 就是一张按工具名查的内存表，把分开写的配置和代码关联起来。每个工具在表里有三样东西：
+
+| 部分 | 作用 |
+|------|------|
+| 定义（spec） | 告诉模型这个工具能干什么、需要什么参数 |
+| 校验器（validate） | 检查模型传来的参数是否符合 Schema，不合法直接拒绝 |
+| 执行函数（execute） | 真正去读文件、写文件、抓网页 |
+
+所有工具走**同一个本地 MCP 入口**，而不是一个工具起一个服务。官方说，Codex 会连接 MCP 服务器和技能，让它们按一致的策略参与智能体循环。我们要做的，是把自己的工具按 MCP 的方式交给 Codex。
+
+### 记忆管理：Codex 提炼，服务端管控
+
+Codex 原生就有长期记忆。三方分工如下：
+
+| 谁 | 负责什么 |
+|----|---------|
+| Codex | 从历史会话里提炼记忆、合并记忆，并在后续会话中使用 |
+| 服务端 | 是否开启、存在哪、状态检查、摘要查看，以及**哪些会话可以贡献记忆** |
+| CLI 客户端 | 提供操作命令、展示结果，不直接读写记忆文件 |
+
+记忆文件都在本阶段的 Codex 状态目录里：
+
+```text
+.data/codex/
+  ├── config.toml            # 启动时生成的 Codex 配置
+  ├── …                      # 原生会话记录和数据库
+  └── memories/
+      ├── raw_memories.md    # 提炼出的原始记忆
+      ├── MEMORY.md          # 合并后的详细记忆
+      └── memory_summary.md  # 后续会话使用的摘要
+```
+
+记忆默认关闭（`AGENT_MEMORY_ENABLED=false`），开启后才会在会话空闲一段时间后提炼。
+
+### 一份配置，装配一个 Agent
 
 ![配置驱动 Agent](images/agent-assembly.svg)
 
-一份 [`agents/writing-agent.json`](agents/writing-agent.json) 是唯一的装配入口：
+角色、工具、记忆，再加上资料边界，都写进一份 [`agents/writing-agent.json`](agents/writing-agent.json)。它是唯一的装配入口：
 
 | 字段 | 决定什么 |
 |------|---------|
-| `agent.instructions` | 角色正文所在的文件（`roles/*.md`），不从环境变量读取 |
-| `agent.skills` | 启用哪些原生 Skill；范围外的一律禁用 |
-| `agent.tools.allow` | 工具白名单；列出工具和调用工具时都检查 |
+| `agent.instructions` | 角色正文在哪个文件 |
+| `agent.skills` | 启用哪些原生 Skill，范围外的一律关掉 |
+| `agent.tools.allow` | 工具白名单：列出工具时检查，调用工具时**再检查一次** |
 | `agent.dataBindings` | 每个资料源允许的动作：`read` / `create` |
 | `agent.outputs` | 产物目录、格式与写入方式（`create-only`，不覆盖） |
 | `agent.memory` | 是否使用、是否贡献原生记忆 |
-| `bindings` | 工作区目录、资料源路径、执行策略（只读沙箱、关闭原生 shell 与写文件） |
+| `bindings` | 工作区目录、资料源路径、执行策略（只读沙箱，关闭原生 shell 与写文件） |
 
-服务端（`npm run server`，端口 4313）读取配置、装配运行态，再通过 HTTP / SSE 对外提供服务；CLI（`npm run chat`）只是一个客户端。工具通过 MCP 入口进入 Codex。
+配置、角色、Skill 文件的内容一起算一个哈希。任何一个变了，旧的权限立即作废，必须重启服务、新建会话。
 
----
-
-## 工作原理
-
-**第 1 步**：一份 JSON 描述 Agent。未知字段直接拒绝（Schema `1.0`）。
-
-```json
-{
-  "schemaVersion": "1.0",
-  "agent": {
-    "id": "writing-assistant",
-    "instructions": "roles/writing-assistant.md",
-    "skills": [],
-    "tools": { "allow": ["list_files", "read_file", "write_file", "search_web", "read_webpage"] },
-    "dataBindings": [
-      { "sourceRef": "originals", "actions": ["read"], "methods": ["files"], "required": true },
-      { "sourceRef": "drafts", "actions": ["read", "create"], "methods": ["files"], "required": true }
-    ],
-    "outputs": { "directory": "outputs", "formats": ["md", "txt"], "writeMode": "create-only" }
-  }
-}
-```
-
-**第 2 步**：服务启动时按固定顺序装配（[`server/main.mjs`](server/main.mjs)）：读定义 → 准备运行目录 → 文件服务 → 工具 → 连接 Codex → 核验 Skill → 生成描述符。
-
-```javascript
-const agent = new AgentDefinition(config.root, config.agentFile);
-const runtime = await prepareRun(config.launch, config.root, { workspaceDir: agent.workspacePath, instructions: agent.instructions });
-const localFiles = createFileTools(config.root, { workspaceDir: runtime.workspaceDir, sources: agent.sources,
-  outputs: agent.outputs, assertCurrent: () => agent.assertCurrent() });
-const tools = new ToolManager({ config, runtime, files, agent, boundary, log: safeLog, redact });
-await tools.open();
-const rpc = new CodexConnection({ launch: config.launch, runtime, redact, cli, log: safeLog });
-await rpc.open();
-const skills = await verifySkills(rpc, agent, runtime.workspaceDir);
-await agent.activate(tools.registry.version, skills);
-```
-
-**第 3 步**：配置、角色、Skill 文件的内容一起算哈希。任何一个变了，立刻撤销，后续调用全部停止，必须重启并新建会话。
-
-```javascript
-sourceHash() {
-  return digest([fs.readFileSync(this.file, "utf8"), fs.readFileSync(this.roleFile, "utf8"),
-    ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);
-}
-assertCurrent() {
-  try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }
-  if (this.revoked) {
-    const error = new AppError("Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。", 409, "AGENT_CHANGED");
-    this.revocation.abort(error); throw error;
-  }
-}
-allowsTool(name) { this.assertCurrent(); return this.definition.agent.tools.allow.includes(name); }
-```
-
-**第 4 步**：Skill 只启用配置里声明的。Codex 发现的其他 Skill 会被主动关掉；关不掉就拒绝运行。
-
-```javascript
-for (const skill of discovered) {
-  const enabled = requested.has(canonical(skill.path));
-  if (skill.enabled !== enabled) {
-    await rpc.request("skills/config/write", { path: skill.path, enabled });
-    changed = true;
-  }
-}
-if (discovered.some(skill => skill.enabled && !requested.has(canonical(skill.path))))
-  throw new Error("Codex 仍启用了 Agent 范围外的 Skill，已停止执行。");
-```
-
-**第 5 步**：每次工具调用都要过白名单和参数合同（JSON Schema）。错误统一包装成工具结果返回给模型，不会让服务崩溃。
-
-```javascript
-validate(name, args) {
-  const entry = entries.get(name);
-  if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
-  if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
-  return entry;
-},
-async call({ tool, namespace, arguments: args }, { signal } = {}) {
-  if (namespace != null) throw new Error("未授权的工具命名空间。");
-  const entry = this.validate(tool, args);
-  const data = await entry.execute(args, { signal });
-  return { success: true, contentItems: [{ type: "inputText", text: JSON.stringify(data ?? null) }] };
-}
-```
-
-**第 6 步**：所有工具走同一个 MCP 入口，而不是每个工具起一个服务。入口校验本地凭据，拒绝跨源请求，每次调用最多 30 秒。
-
-```javascript
-if (request.headers.origin || auth.length !== expected.length || !timingSafeEqual(auth, expected)) {
-  response.writeHead(403); response.end(); return;
-}
-server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: registry.specs }));
-server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra) => {
-  const result = await registry.call({ tool: params.name, arguments: params.arguments || {} },
-    { signal: AbortSignal.any([extra.signal, controller.signal, AbortSignal.timeout(30000)]) });
-  return { isError: !result.success, content: result.contentItems.map(item => ({ type: "text", text: redact(item.text) })) };
-});
-```
-
-**第 7 步**：文件服务按资料绑定逐目录授权。能读的目录、能新建的目录、产物目录分开判断。
-
-```javascript
-const readable = (relative) =>
-  !sources ||
-  sources.some(
-    (source) =>
-      source.actions.includes("read") && covers(source.locator, relative),
-  );
-const writable = (relative) =>
-  !sources ||
-  sources.some(
-    (source) =>
-      source.actions.includes("create") && covers(source.locator, relative),
-  ) ||
-  (outputs && covers(outputs.directory, relative));
-```
-
-从这一章开始，"这个 Agent 能做什么"不再是代码里的常量，而是一份可审查、可替换的合同。模型只能在合同范围内行动；合同一变，旧的权限立即作废。
+从这一章开始，程序也拆成了两半：服务端（`npm run server`，端口 4313）读取配置、装配 Agent、连接 Codex；CLI（`npm run chat`）只是一个客户端。
 
 ---
 
-## 试一下
+## 分工：Codex 做什么，我们做什么
+
+| 事情 | Codex | 我们的程序 |
+|------|-------|----------|
+| 角色 | 留出 `baseInstructions`、`instructions_template` 两个位置 | 角色写什么、从哪个文件读、改了以后让旧会话失效 |
+| 工具 | 通过 MCP 发现工具，在循环里让模型选择和调用 | 工具定义、参数校验、执行函数、白名单，每次调用都重新检查 |
+| Skill | 发现和调用原生 Skill | 只启用配置里声明的，关不掉范围外的就拒绝运行 |
+| 记忆 | 提炼、合并、使用记忆 | 开关、存储位置、哪些会话可以贡献 |
+| 资料 | — | 文件服务按目录授权：能读、能新建、产物不覆盖 |
+
+模型能决定"调用哪个工具、传什么参数"，但工具存不存在、参数合不合法、目录能不能写，都由服务端说了算。
+
+---
+
+## 跑起来看看
 
 **准备**：
 
@@ -183,7 +158,9 @@ npm run chat            # 终端 2：CLI 客户端
 3. `把 outputs/summary.md 改写成另一个版本并覆盖原文件`：create-only，应该被拒绝
 4. 服务运行时修改 `agents/roles/writing-assistant.md` 的任意一个字，再让它列出资料目录：工具调用会被拒绝，提示受控重启后新建会话
 
-CLI 常用命令：`/new` 新建会话、`/resume` 恢复、`/tools` 查看可用工具、`/queue` 查看排队任务、`/exit` 退出客户端（服务不停）。
+CLI 常用命令：`/new` 新建会话、`/resume` 恢复、`/tools` 查看可用工具、`/memory` 查看记忆状态、`/exit` 退出客户端（服务不停）。
+
+**这次运行多了什么**：`.runs/app-server-*/models.json` 里多了 `instructions_template`（角色正文）；`workspace/outputs/` 里出现了 Agent 写的文件；开启记忆并空闲一段时间后，`.data/codex/memories/` 下会出现记忆文件。
 
 **离线实验**：
 
@@ -195,12 +172,67 @@ npm run lesson -- s03-mcp             # 入口拒绝无令牌和跨源请求
 npm run lesson -- s03-workspace       # 路径遍历、符号链接绕过被拒绝；产物不能覆盖
 ```
 
-六项配置的完整说明、文件工具规则与当前限制见 [s03 设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
+六项核心配置的完整说明、文件工具规则与当前限制见 [s03 设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
 
 ---
 
-## 接下来
+## 关键代码
+
+**角色进入 Codex 的两个位置**（[`server/modules/agents/index.mjs`](server/modules/agents/index.mjs)、[`server/modules/sessions/index.mjs`](server/modules/sessions/index.mjs)）：
+
+```javascript
+if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };
+// …会话服务新建、恢复会话时都带上：
+baseInstructions: config.agent?.instructions || "",
+```
+
+**Registry 的校验与调用**（[`server/modules/tools/loader.mjs`](server/modules/tools/loader.mjs)）。白名单和参数合同每次调用都检查；出错统一包装成工具结果返回给模型，不会让服务崩溃：
+
+```javascript
+validate(name, args) {
+  const entry = entries.get(name);
+  if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
+  if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
+  return entry;
+},
+async call({ tool, namespace, arguments: args }, { signal } = {}) {
+  if (namespace != null) throw new Error("未授权的工具命名空间。");
+  const entry = this.validate(tool, args);
+  const data = await entry.execute(args, { signal });
+  return { success: true, contentItems: [{ type: "inputText", text: JSON.stringify(data ?? null) }] };
+}
+```
+
+**配置一变，旧权限作废**。配置、角色、Skill 的内容一起算哈希，每次检查权限前先核对：
+
+```javascript
+sourceHash() {
+  return digest([fs.readFileSync(this.file, "utf8"), fs.readFileSync(this.roleFile, "utf8"),
+    ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);
+}
+assertCurrent() {
+  try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }
+  if (this.revoked) {
+    const error = new AppError("Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。", 409, "AGENT_CHANGED");
+    this.revocation.abort(error); throw error;
+  }
+}
+allowsTool(name) { this.assertCurrent(); return this.definition.agent.tools.allow.includes(name); }
+```
+
+---
+
+## 小结
+
+- **角色**是 Agent 的人设和工作方法，通过 `baseInstructions` 和 `instructions_template` 进入 Codex，新建和恢复会话时都要带上。
+- **工具**从 `config/tools/*.json` 到 Registry，再经一个 MCP 入口交给 Codex。模型负责选择，服务端负责校验和执行。
+- **记忆**由 Codex 提炼和使用，服务端决定开不开、存在哪、哪些会话能贡献。
+- 一份配置装配一个 Agent。能力和边界写在一起，配置一变，旧权限立即作废。
+
+---
+
+## 下一章
 
 业务状态还存在 `.data/*.json` 里。写任务和通知执行器是两步操作，服务在中间崩溃，任务就可能永远没人执行；Agent 根据原文写了摘要，后来原文改了一句，摘要却不知道自己已经过期。
 
-s04 数据层 → PostgreSQL 记事实，Redis 只负责叫醒。消息收到了，为什么还需要一条 outbox？
+[s04 数据层](../s04-data-layer/) → 对话历史归 Codex，业务事实归我们。哪些数据该交给数据库，哪些仍然留给 Codex？
