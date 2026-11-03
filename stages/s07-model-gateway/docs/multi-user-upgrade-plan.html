@@ -1,0 +1,1031 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>单机多用户升级方案 · 后置参考</title><style>
+*{box-sizing:border-box}hr{display:none}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;background:#f6f8fb;color:#243448;font:16px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}a{color:#245bac;text-decoration:none}a:hover{text-decoration:underline}aside{position:fixed;top:0;left:0;bottom:0;width:258px;background:#edf1f6;border-right:1px solid #dce3ec;padding:35px 20px;overflow:auto}aside b{display:block;font-size:17px;margin-bottom:20px;color:#172d4a}.toc ul{padding-left:0;list-style:none}.toc li{margin:11px 0;font-size:13px;line-height:1.6}.toc ul ul{display:none}main{margin:34px 36px 70px 292px;max-width:1090px;background:white;border:1px solid #e0e6ee;border-radius:12px;padding:42px 48px;box-shadow:0 8px 26px #132d5010}h1{font-size:30px;line-height:1.4;margin:0 0 25px;color:#152c49}h2{font-size:23px;line-height:1.45;margin:46px 0 20px;padding-top:12px;border-top:1px solid #e4eaf2;color:#142d4b}h3{font-size:18px;margin:28px 0 13px}p{margin:13px 0}li{margin:7px 0}strong{color:#1a304c}code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f0f3f8;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{background:#f1f4f8;border-radius:8px;padding:20px;overflow-x:auto}pre code{padding:0;background:none;white-space:pre}blockquote{margin:20px 0;padding:10px 20px;background:#eef5ff;border-left:4px solid #699cde}.table-wrap{overflow-x:auto;margin:20px 0}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.75}th{background:#edf2f8;color:#15304f;text-align:left}td,th{padding:11px 13px;border:1px solid #dce4ee;vertical-align:top}td{min-width:130px}tr:nth-child(even){background:#fbfcfe}.diagram{margin:26px -18px}.diagram svg{width:100%;height:auto;display:block}footer{font-size:12px;color:#607085;border-top:1px solid #e2e8ef;padding-top:20px;margin-top:45px}.topbar{font-size:12px;letter-spacing:.08em;color:#526b89;margin-bottom:18px}.topbar span{background:#eaf2ff;padding:5px 9px;border-radius:5px;margin-right:10px}@media(min-width:1500px){main{margin-left:calc(258px + (100vw - 258px - 1160px)/2)}}@media(max-width:1000px){aside{display:none}main{margin:15px;padding:30px 24px}}@media(max-width:560px){body{font-size:15px}main{margin:0;border-radius:0;border:0;padding:26px 18px}h1{font-size:25px}h2{font-size:21px}.diagram{margin:18px 0;overflow-x:auto}.diagram svg{min-width:680px}td{min-width:145px}}@media print{aside,.topbar{display:none}body{background:#fff;font-size:11pt}main{margin:0;padding:0;max-width:none;border:0;box-shadow:none}h2{break-after:avoid}tr,pre,blockquote{break-inside:avoid}.diagram{margin:10px 0}.diagram svg{max-height:24cm}a{color:inherit}table{font-size:9pt}}
+</style></head><body><aside><b>多用户方案 · 后置参考</b><div class="toc">
+<ul>
+<li><a href="#_1">结论</a></li>
+<li><a href="#_2">一、现状诊断</a></li>
+<li><a href="#_3">二、目标架构</a></li>
+<li><a href="#_4">三、身份与认证</a></li>
+<li><a href="#mcp">四、MCP 执行授权（技术门槛）</a></li>
+<li><a href="#_5">五、三项基础控制</a></li>
+<li><a href="#api">六、API 设计</a></li>
+<li><a href="#_6">七、数据模型</a></li>
+<li><a href="#json">八、现有 JSON 数据迁移</a></li>
+<li><a href="#_7">九、现有模块改动清单</a></li>
+<li><a href="#_8">十、记忆与配置的特殊说明</a></li>
+<li><a href="#_9">十一、实施阶段</a></li>
+<li><a href="#_10">十二、首版验收清单</a></li>
+<li><a href="#_11">附：参考资料</a></li>
+</ul>
+</div>
+</aside><main><div class="topbar"><span>历史调研 · 后置参考</span>历史核验 2026-09-28</div><h1 id="agent">单机多用户升级方案（后置参考）</h1>
+<p><strong>历史核验时间</strong>：2026-09-28。当时 <code>npm test</code>：127/127 通过，未包含多用户验收或原生集成脚本；不代表本次文档修订重跑了测试。</p>
+<blockquote><p><strong>状态</strong>：2026-09-29 起后置，保留作历史调研参考，尚未实施多用户改造。当前设计以<a href="agent-core-design.html">Agent 脚手架设计方案</a>为准，先完成工作区、可配置 Agent、轻量装配与数据访问。</p></blockquote>
+<p><strong>历史范围</strong>：下文 P0—P4、架构图及“首版”均指原单机多用户方案，不是当前版本的实施承诺。文中现状与外部参考保留原核验日期，重新启动本方案前需复核。</p>
+<hr />
+<h2 id="_1">结论</h2>
+<p>本历史方案曾提出<strong>在单机上服务多个真实账号</strong>，覆盖单机、多用户、多会话场景。该方向已后置；当前阶段仍围绕本机单用户脚手架完善 Agent 核心能力。</p>
+<p>原方案提出五项建设内容：</p>
+<ol>
+<li>建立账号与登录态（email + password + JWT + Refresh 轮换），Web/App/CLI 三端统一</li>
+<li>每位用户拥有独立的 Codex 本机进程、原生目录和 MCP 身份入口</li>
+<li>每次工具执行前绑定服务端不可伪造的 execution grant</li>
+<li>将资源归属、工具权限、用量与并发内置为不可绕过的逻辑层</li>
+<li>平稳迁移现有 JSON 文件数据，保留可回滚点</li>
+</ol>
+<p>PostgreSQL 负责业务账号、归属、配额与共享调度；Codex 原生 SQLite/JSONL 继续管理原生上下文与历史，两者并存，不相互替代。API 职责与调度执行职责在同一 Node 服务内，接口清晰即可。会员分级、定价、支付由使用者自行扩展，内核只提供权限与用量扩展接口；不建设用户自定义多 Agent 管理平台。以上均为待实施目标。</p>
+<hr />
+<h2 id="_2">一、现状诊断</h2>
+<h3 id="11">1.1 进程与状态</h3>
+<p><a href="../server/main.mjs"><code>server/main.mjs</code></a> 在服务启动时按顺序执行一次 <code>prepareRun</code>，生成全局单例：</p>
+<ul>
+<li>一个 <code>ToolManager</code>（工具注册表，热加载）</li>
+<li>一个 <code>CodexConnection</code>（stdio spawn 本机 Codex app-server）</li>
+<li>一个 <code>SessionService</code>、<code>MessageService</code>、<code>MemoryService</code></li>
+</ul>
+<p>所有 HTTP 请求共享这些对象。没有用户概念，也没有会话归属。</p>
+<h3 id="12">1.2 认证</h3>
+<p><a href="../server/modules/http/index.mjs"><code>server/modules/http/index.mjs</code></a> 用一个随机生成的 Bearer token 做全局鉴权，token 写入 <code>.data/connection.json</code>。所有带 <code>Origin</code> 头的请求直接拒绝——这是当前本机服务的来源限制，不能直接承载需要跨源访问的 Web 客户端。</p>
+<h3 id="13-sse">1.3 SSE 与事件隔离</h3>
+<p>SSE 过滤条件是 <code>(!event.threadId || event.threadId === id)</code>：没有 <code>threadId</code> 的事件目前对所有监听者广播。多用户场景下，这会造成用户 A 的事件泄露给用户 B。</p>
+<h3 id="14">1.4 存储</h3>
+<p><a href="../server/modules/storage/index.mjs"><code>server/modules/storage/index.mjs</code></a> 的 <code>JobStore</code> 把整个 <code>.data/messages.json</code> 整体读写，版本号 + 克隆提交，没有行级事务。<a href="../server/modules/sessions/history.mjs"><code>server/modules/sessions/history.mjs</code></a> 的会话索引是 <code>.data/session-index.json</code>，按 <code>.runs</code> 来源拼装，也是平面文件。当前有单服务锁、同步写入及线程调度锁，不能称为“没有保护”；但它们没有用户维度、数据库事务及跨业务记录的一致性约束，多用户改造需要重做存储接口。</p>
+<h3 id="15-codex">1.5 Codex 进程与目录</h3>
+<p><a href="../server/modules/codex/config.mjs"><code>server/modules/codex/config.mjs</code></a> 把 <code>root/.data/codex</code> 固定为 <code>CODEX_HOME</code> 和 <code>CODEX_SQLITE_HOME</code>。<a href="../server/modules/codex/runtime.mjs"><code>server/modules/codex/runtime.mjs</code></a> 每次启动在 <code>.runs/app-server-随机/</code> 创建一个实例目录，存 <code>run.json</code>、<code>models.json</code>、运行日志——这是运行时产物，不是业务 runId。<a href="../server/modules/codex/connection.mjs"><code>server/modules/codex/connection.mjs</code></a> 通过 stdio spawn 启动 Codex，<code>cwd</code> 是 <code>runtime.workspace</code>，当前启动配置继承进程环境；升级后若继续透传，就可能把新增的 DB 密码、JWT 密钥交给 Codex，因此必须改为白名单。</p>
+<h3 id="16">1.6 工具</h3>
+<p><a href="../server/modules/tools/loader.mjs"><code>server/modules/tools/loader.mjs</code></a> 用同一个 <code>root</code> 路径既加载可信工具代码，又作为文件工具的工作区。<code>readOnlyHint</code> 只是元数据描述，不是安全控制。<a href="../server/modules/tools/mcp-server.mjs"><code>server/modules/tools/mcp-server.mjs</code></a> 提供回环 HTTP，Bearer secret，URL 按 <code>/&lt;registry.version&gt;</code> 路由，但 <code>registry.call</code> 只接受 <code>{signal}</code>——没有可信的 <code>userId/threadId/turnId/jobId</code>，接上 token 不等于拥有任务身份。</p>
+<h3 id="17-accountsindexmjs">1.7 <code>accounts/index.mjs</code> 不存在</h3>
+<p>当前代码库没有账号模块。<code>package.json</code> 确认依赖中没有 DB 客户端、JWT 库、密码哈希库。这些全部需要新增。</p>
+<hr />
+<h2 id="_3">二、目标架构</h2>
+<blockquote>
+<p><strong>建议</strong>（待实施）：以下为目标架构；复用现有 Node/Codex/工具机制，新增多用户边界尚未实施。</p>
+</blockquote>
+<p><div class="diagram"><svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1000" viewBox="0 0 1120 1000" role="img" aria-labelledby="title desc">
+<title id="title">单机多用户 Agent 目标架构</title><desc id="desc">三个客户端进入统一认证与业务服务，PostgreSQL 记录归属和调度。运行环境管理器为每个活跃用户管理独立 Codex 进程、MCP 授权入口及本机持久目录。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#738398"/></marker></defs>
+<style>text{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;fill:#182b40;font-size:17px}.title{font-size:24px;font-weight:700}.h{font-size:19px;font-weight:650}.s{font-size:15px;fill:#526579}.edge{fill:none;stroke:#738398;stroke-width:1.8;marker-end:url(#arrow)}</style>
+<rect width="1120" height="1000" fill="#f7f9fc" rx="16"/>
+<text x="40" y="44" class="title">单机多用户 Agent · 目标架构</text><text x="40" y="72" class="s">共享产品代码与业务服务；用户身份、运行状态和持久数据分别隔离</text>
+<rect x="80" y="99" width="300" height="70" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="230.0" y="127.0" class="h">Web</text><text text-anchor="middle" x="230.0" y="153.0" class="s">Cookie + 内存 Access Token</text><rect x="410" y="99" width="300" height="70" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="560.0" y="127.0" class="h">App</text><text text-anchor="middle" x="560.0" y="153.0" class="s">系统安全存储 + Access Token</text><rect x="740" y="99" width="300" height="70" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="890.0" y="127.0" class="h">CLI</text><text text-anchor="middle" x="890.0" y="153.0" class="s">凭据库 + Access Token</text><path d="M230 169 V192 H560 V219" class="edge"/><path d="M560 169 V219" class="edge"/><path d="M890 169 V192 H560" class="edge"/><rect x="30" y="204" width="1060" height="684" rx="16" fill="none" stroke="#aabed3" stroke-dasharray="6 5"/><text x="48" y="235" class="s">同一台服务器</text><rect x="270" y="221" width="580" height="72" rx="10" fill="#eaf2ff" stroke="#aac7f0"/><text text-anchor="middle" x="560.0" y="250.0" class="h">统一 API · 认证与授权</text><text text-anchor="middle" x="560.0" y="276.0" class="s">服务端确定 userId · 检查归属 · 三端共用接口</text><path d="M560 293 V325" class="edge"/><rect x="60" y="325" width="660" height="88" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="390.0" y="349.0" class="h">会话与任务服务</text><text text-anchor="middle" x="390.0" y="375.0" class="s">会话映射 · 消息调度 · 工具策略 · 并发与用量</text><text text-anchor="middle" x="390.0" y="401.0" class="s">保留 FIFO / append / 幂等 / 异常暂停</text><rect x="760" y="325" width="300" height="88" rx="10" fill="#eef4ff" stroke="#cbd7e4"/><text text-anchor="middle" x="910.0" y="349.0" class="h">PostgreSQL</text><text text-anchor="middle" x="910.0" y="375.0" class="s">账号与登录态 · 资源归属</text><text text-anchor="middle" x="910.0" y="401.0" class="s">任务状态 · 配额与审计</text><path d="M720 369 H760" class="edge"/><path d="M390 413 V448" class="edge"/><rect x="60" y="448" width="660" height="72" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="390.0" y="477.0" class="h">RuntimeManager · 运行环境管理</text><text text-anchor="middle" x="390.0" y="503.0" class="s">按用户懒启动 / 复用 / 空闲回收 · 全局容量与公平排队</text><rect x="760" y="448" width="300" height="72" rx="10" fill="#f1f2f5" stroke="#cbd7e4"/><text text-anchor="middle" x="910.0" y="477.0" class="h">可信公共代码</text><text text-anchor="middle" x="910.0" y="503.0" class="s">Role / Tool Schema / 工具实现</text><path d="M760 484 H720" class="edge"/><path d="M390 520 V542 H292 V568" class="edge"/><path d="M390 542 H828 V568" class="edge"/><rect x="60" y="568" width="465" height="278" rx="14" fill="#edf8f3" stroke="#b8cbd8"/><text x="292.5" y="601" class="h" text-anchor="middle">用户 A · 独立运行环境</text><rect x="78" y="618" width="205" height="68" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="180.5" y="645.0" class="h">Codex 进程</text><text text-anchor="middle" x="180.5" y="671.0" class="s">原生 Thread / Turn</text><rect x="302" y="618" width="205" height="68" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="404.5" y="645.0" class="h">MCP 工具入口</text><text text-anchor="middle" x="404.5" y="671.0" class="s">用户 + 执行授权绑定</text><path d="M283 652 H302" class="edge"/><path d="M180 686 V714" class="edge"/><path d="M404 686 V714" class="edge"/><rect x="78" y="714" width="429" height="108" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="292.5" y="748.0" class="h">本机用户持久目录</text><text text-anchor="middle" x="292.5" y="774.0" class="s">codex/：原生 SQLite / JSONL / 记忆</text><text text-anchor="middle" x="292.5" y="800.0" class="s">workspace/：用户文件 · runs/：运行日志</text><rect x="595" y="568" width="465" height="278" rx="14" fill="#f0f4ff" stroke="#b8cbd8"/><text x="827.5" y="601" class="h" text-anchor="middle">用户 B · 独立运行环境</text><rect x="613" y="618" width="205" height="68" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="715.5" y="645.0" class="h">Codex 进程</text><text text-anchor="middle" x="715.5" y="671.0" class="s">原生 Thread / Turn</text><rect x="837" y="618" width="205" height="68" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="939.5" y="645.0" class="h">MCP 工具入口</text><text text-anchor="middle" x="939.5" y="671.0" class="s">用户 + 执行授权绑定</text><path d="M818 652 H837" class="edge"/><path d="M715 686 V714" class="edge"/><path d="M939 686 V714" class="edge"/><rect x="613" y="714" width="429" height="108" rx="10" fill="#fff" stroke="#cbd7e4"/><text text-anchor="middle" x="827.5" y="748.0" class="h">本机用户持久目录</text><text text-anchor="middle" x="827.5" y="774.0" class="s">codex/：原生 SQLite / JSONL / 记忆</text><text text-anchor="middle" x="827.5" y="800.0" class="s">workspace/：用户文件 · runs/：运行日志</text><text x="560" y="872" text-anchor="middle" class="s">建议首版每用户 1 个活动 Turn；用户间并行。MCP 执行绑定需先通过原生集成验证。</text><path d="M30 652 H15 V934 H340" class="edge"/><path d="M60 652 H30" fill="none" stroke="#738398" stroke-width="1.8"/><path d="M1060 652 H1105 V934 H780" class="edge"/><rect x="340" y="902" width="440" height="64" rx="10" fill="#fff7e9" stroke="#e1c791"/><text text-anchor="middle" x="560.0" y="927.0" class="h">模型 API / 受控外部服务</text><text text-anchor="middle" x="560.0" y="953.0" class="s">在服务器外；凭据由服务端配置</text></svg></div></p>
+<p>图示对应本版本的单机多用户部署。</p>
+<p>核心原则：</p>
+<ul>
+<li><strong>首版一个 Node 服务</strong>，内部区分 API 与执行职责，负责 HTTP/SSE、认证、调度、策略、用量</li>
+<li><strong>首版一个 PostgreSQL 实例</strong>，管理共享业务状态；Codex 原生 SQLite/JSONL 管理原生运行状态与历史，存储和记忆的区别见 2.4 节</li>
+<li><strong>按用户管理的 Codex 进程</strong>：执行任务或调用原生历史接口时按需创建，空闲回收；单个 Codex 子进程崩溃不连累其他用户</li>
+<li><strong>每用户独立的本机目录</strong>：<code>AGENT_DATA_ROOT/users/&lt;server-generated-uuid&gt;/</code></li>
+<li><strong>采用单体部署</strong>，不要求 Redis、Kubernetes 或微服务</li>
+</ul>
+<h3 id="21">2.1 请求上下文</h3>
+<p>每个通过认证的请求携带一个不可变的 <code>RequestContext</code>：</p>
+<pre><code>{ userId, authSessionId, requestId }
+</code></pre>
+<p>下游所有模块——ownership 检查、policy 决策、quota 预留、任务调度——均从这个上下文取 <code>userId</code>，绝不信任客户端传来的 <code>userId</code> 字段。</p>
+<h3 id="22-codex">2.2 用户 Codex 进程生命周期</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>触发条件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>未创建</td>
+<td>尚无执行或原生读取需求</td>
+<td>无该用户的常驻 Codex 进程</td>
+</tr>
+<tr>
+<td>启动中</td>
+<td>首次调度任务或需要原生历史读取</td>
+<td>RuntimeManager 分配目录、白名单环境变量、spawn</td>
+</tr>
+<tr>
+<td>活跃</td>
+<td>turn 运行中</td>
+<td>持有独立 <code>CODEX_HOME</code>、独立 MCP 路由</td>
+</tr>
+<tr>
+<td>空闲</td>
+<td>turn 结束 N 秒内</td>
+<td>可复用，超时关闭</td>
+</tr>
+<tr>
+<td>已销毁</td>
+<td>超时/用户禁用/服务关闭</td>
+<td>关闭进程；日志按保留策略清理，保留持久目录</td>
+</tr>
+</tbody>
+</table></div>
+<p>原生历史读取也要经过 RuntimeManager 的容量控制，不能通过大量查询绕过进程上限。纯数据库的账号信息和会话列表查询不启动 Codex。</p>
+<p>一个用户的 Codex 子进程崩溃，只影响该用户当前任务；共享 Node 服务本身仍是单点，进程异常与内存耗尽需要单独监控。</p>
+<p><strong>建议的首版约束</strong>：每用户同时最多 1 个活跃 turn，同用户多会话可排队，不同用户并行执行。这是本方案提出的首版限制，尚非用户已确认的产品要求；普通用户不能绕过该限制。未来允许同用户多 turn 并行不是改一个数字就够，需要重新设计 execution grant 的绑定逻辑。</p>
+<h3 id="23">2.3 目录布局</h3>
+<pre><code>AGENT_DATA_ROOT/
+  users/
+    &lt;server-generated-uuid&gt;/          # 用户根，0700
+      codex/                          # CODEX_HOME，原生 SQLite/rollout JSONL/记忆 md
+      workspace/
+        inputs/                       # 只读输入
+        research/
+        drafts/
+        outputs/
+      runs/                           # app-server-* 运行时产物（非业务数据）
+
+codeRoot/                             # 只读，工具代码/role 定义，部署为只读
+</code></pre>
+<p><code>codeRoot</code> 和用户数据目录严格分离：工具代码从 <code>codeRoot</code> 读，不能从用户目录覆盖；用户数据写入 <code>workspace</code>，不能读工具代码。文件元数据中的 <code>storageKey</code> 使用相对用户根的路径，不能接受客户端提供的绝对路径；文件本体留在磁盘。消息文本及可选对话查询副本仍可存入数据库。</p>
+<blockquote>
+<p><strong>隔离强度说明</strong>：同 OS 账号下的进程和目录隔离属于应用层控制，不是针对恶意代码的硬隔离。若未来允许用户执行任意代码，需要额外的容器或 OS 身份边界，仅靠 PostgreSQL 或目录权限不能提供该保证。</p>
+</blockquote>
+<h3 id="24">2.4 原生存储与长期记忆</h3>
+<p>Codex app-server 的原生持久化包括：<strong>SQLite</strong>（存储线程元数据、内部状态、记忆参与设置等）和 <strong>rollout JSONL</strong>（存储会话执行记录）。这两者是 Codex 自身的存储机制，历史存盘不等于长期记忆生效——长期记忆还需提炼合并、生成 <code>.md</code> 产物并在后续 turn 中召回使用。<strong>当前记忆合并因禁用 shell/patch 而被阻塞</strong>（<code>generationBlocked = true</code>），两者不可混淆。</p>
+<p>SQLite 本机适用性摘要（依据 <a href="https://www.sqlite.org/whentouse.html">sqlite.org/whentouse</a> 与 <a href="https://www.sqlite.org/wal.html">sqlite.org/wal</a>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>嵌入式本地存储</td>
+<td>无独立数据库服务进程，随进程启动，适合本机单节点应用</td>
+</tr>
+<tr>
+<td>按用户分库</td>
+<td>可为每个用户使用独立库文件，降低写锁争用</td>
+</tr>
+<tr>
+<td>WAL 模式读写并行</td>
+<td>读写可并发，但仍单 writer；需同一主机共享内存</td>
+</tr>
+<tr>
+<td>备份一致性</td>
+<td>Online Backup API（<a href="https://www.sqlite.org/backup.html">sqlite.org/backup</a>）可生成单库一致性副本，完整快照还须协调 JSONL、工作区文件与 PostgreSQL 业务记录</td>
+</tr>
+</tbody>
+</table></div>
+<p>用户独立库降低互相写锁争用，访问隔离仍由服务端权限检查保证；本机部署需定期执行一致性备份与恢复演练。</p>
+<h3 id="25">2.5 单机模块职责</h3>
+<p>首版在单机单 Node 服务内同时承载 API 与调度两类职责，以下三个核心模块均为<strong>单机本地实现（待实施）</strong>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>单机职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RuntimeManager</code></td>
+<td>按用户标识懒启动、复用、回收 Codex 本机进程；控制并发容量上限；通过接口提供运行、中止和状态查询，HTTP 层不直接持有子进程</td>
+</tr>
+<tr>
+<td><code>UserStorage</code></td>
+<td>以服务端用户标识定位专属本机目录；执行受控文件操作；管理快照格式与备份恢复演练；上层不拼绝对路径，路径由服务端确定</td>
+</tr>
+<tr>
+<td><code>JobRepository</code></td>
+<td>PostgreSQL 单机事务保存消息与任务；保证任务幂等领取与状态迁移；配合单进程调度锁避免重复执行</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>禁止客户端传入 userId 覆盖身份</strong>，所有路径与归属由服务端根据已验证登录态确定。以上均为未实现状态，待逐步落地。</p>
+<hr />
+<h2 id="_4">三、身份与认证</h2>
+<blockquote>
+<p><strong>建议</strong>（待实施）：以下为本方案设计，参考 <a href="https://www.librechat.ai/docs/configuration/authentication">LibreChat 认证配置</a> 和 <a href="https://www.librechat.ai/docs/features/authentication">LibreChat 认证特性</a> 的核心机制，具体安全设计属于本项目方案，不声称 LibreChat 自带三端实现。</p>
+</blockquote>
+<h3 id="31">3.1 账号模型</h3>
+<ul>
+<li><strong>登录标识</strong>：email + password（email 仅作登录名，无 SMTP，不发验证邮件）</li>
+<li><strong>密码哈希</strong>：<a href="https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html">Argon2id</a>，参数参照 OWASP 建议</li>
+<li><strong>注册开关</strong>：生产环境默认关闭，管理员用离线脚本创建用户；不抢第一注册者为 admin</li>
+<li><strong>技术角色</strong>：<code>admin</code> / <code>user</code> 两种，admin 没有默认读取所有私有对话的权限</li>
+<li><strong>Role 的含义</strong>：当前 <code>server/modules/role/index.mjs</code> 中的产品行为指令，不等于账号角色或会员档位，也不代替工具权限检查</li>
+</ul>
+<p>默认不依赖邮件服务；忘记密码由可信管理命令重置，并吊销全部登录态，邮件找回后续扩展。email 未验证，不能作为已验证身份使用；规范化登录名后建立唯一约束。</p>
+<p>登录失败响应使用统一文案，不区分"账号不存在"和"密码错误"。登录接口对账号 + IP 双维度限速。密码和 token 绝不写入日志。改密码立即吊销该账号的全部登录会话。</p>
+<h3 id="32-token">3.2 Token 设计</h3>
+<p><strong>Access Token</strong>（JWT）：</p>
+<pre><code>sub=userId, sid=authSessionId, jti, iat, exp, iss, aud
+</code></pre>
+<ul>
+<li>有效期 15 分钟（建议可配）</li>
+<li>签名算法在服务端硬编码校验，拒绝 <code>alg: none</code> 及其他算法</li>
+<li>不在 payload 中嵌入套餐或权限，权限查 DB</li>
+</ul>
+<p><strong>Refresh Token</strong>：
+- 有效期 7 天绝对到期，每次刷新继承原始会话的过期时间（不会因为刷新无限续期）
+- DB 只存 hash，不存原始 token
+- 每次刷新生成新 pair，旧 refresh token 立即失效</p>
+<p><strong><code>auth_sessions</code> 表</strong>（逻辑结构）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>authSessionId</td>
+</tr>
+<tr>
+<td><code>userId</code></td>
+<td>归属用户</td>
+</tr>
+<tr>
+<td><code>refreshTokenHash</code></td>
+<td>只存 hash</td>
+</tr>
+<tr>
+<td><code>family</code> / <code>generation</code></td>
+<td>检测 refresh 重放</td>
+</tr>
+<tr>
+<td><code>absoluteExpiresAt</code></td>
+<td>7 天绝对到期</td>
+</tr>
+<tr>
+<td><code>revokedAt</code></td>
+<td>吊销时间</td>
+</tr>
+<tr>
+<td><code>clientHint</code></td>
+<td>设备/端标识（非鉴权依据）</td>
+</tr>
+</tbody>
+</table></div>
+<p>重放检测：检测到旧 refresh token 被使用，立即吊销整个 family（该设备的全部 refresh），需要重新登录。</p>
+<h3 id="33-access-token">3.3 Access Token 生命周期校验</h3>
+<p>每个需要认证的请求：
+1. 验证 access token 签名与过期
+2. <strong>查 DB</strong>：用户账号是否启用、<code>authSessionId</code> 对应会话是否未吊销</p>
+<p>用 DB 查询起步，不引入 Redis。logout 立即生效：吊销 DB 中的 session 记录，下一个请求的 DB 查询即返回失效。</p>
+<h3 id="34">3.4 并发刷新处理</h3>
+<p>同一登录会话的多标签刷新可能竞争；不同设备持有独立的 <code>authSessionId</code>，不共享 refresh token。建议：</p>
+<ul>
+<li>客户端对同一登录会话做 singleflight；服务端用事务和旧 hash/代际比较实现一次性轮换，不向携带不同或已失效 token 的请求共享新凭据</li>
+<li>客户端跨 Tab 通过 BroadcastChannel 协调，检测到其他 Tab 已刷新则直接使用新 token</li>
+<li>竞争失败（旧 token 已被使用）可触发吊销本 family，需重新登录</li>
+</ul>
+<blockquote>
+<p><strong>注意</strong>：跨 Tab 并发刷新的边界情况必须有专项测试，不做无限旧 token 宽限期。</p>
+</blockquote>
+<h3 id="35">3.5 三端适配</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>端</th>
+<th>Access Token 存储</th>
+<th>Refresh Token 存储</th>
+<th>刷新方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web</td>
+<td>内存（JS 变量） + <code>Authorization</code> header</td>
+<td>HttpOnly Secure SameSite=Strict Cookie</td>
+<td>Cookie 路由，校验 Origin/CSRF</td>
+</tr>
+<tr>
+<td>原生 App</td>
+<td>内存</td>
+<td>系统安全存储（Keychain/Keystore）</td>
+<td>HTTPS body</td>
+</tr>
+<tr>
+<td>CLI</td>
+<td>内存</td>
+<td>OS 凭据库优先，0600 本地文件兜底</td>
+<td>HTTPS body</td>
+</tr>
+</tbody>
+</table></div>
+<p>Web 端：
+- <code>localStorage</code> 禁止存 token
+- Cookie 刷新/登出端点额外校验 <code>Origin</code> 和 CSRF token，防跨站请求
+- API 端点维护受控 Origin allowlist，默认同域部署，禁止 <code>credentials: true</code> + 通配符 Origin</p>
+<p>CLI 端：
+- 密码通过 stdin 交互输入，禁止作为命令行参数传递
+- <a href="../client/modules/connection/index.mjs"><code>client/modules/connection/index.mjs</code></a> 现在读 <code>.data/connection.json</code> 中的固定 token，目标改为：读服务 URL 配置 + 登录态凭据，设备登录凭据与服务发现文件隔离，不共享用户 refresh token</p>
+<p>所有认证响应添加 <code>Cache-Control: no-store</code>，禁止日志输出 token 内容。浏览器端和非浏览器端使用不同的刷新端点，不因 <code>clientType</code> 免认证，非浏览器端同样执行认证和限速。</p>
+<p>App 技术栈由实施时选定；用户未指定，不提前假设。仅提供 API 不算 App 端验收完成。</p>
+<hr />
+<h2 id="mcp">四、MCP 执行授权（技术门槛）</h2>
+<blockquote>
+<p>这是本方案最关键的技术挑战，也是 P0 阶段的验证闸门。以下为<strong>待技术验证的方案</strong>，不是已实现功能。</p>
+</blockquote>
+<h3 id="41">4.1 问题根源</h3>
+<p><a href="../server/modules/tools/mcp-server.mjs"><code>server/modules/tools/mcp-server.mjs</code></a> 当前的 <code>registry.call</code> 只接受 <code>{signal}</code>，没有任何任务身份信息。用户 MCP token 只能证明"这是某用户"，不能证明"这是某用户的某次具体任务"。<a href="../server/modules/tools/index.mjs"><code>server/modules/tools/index.mjs</code></a> 的 verify 仅核对工具名称，不能证明调用上下文合法。</p>
+<h3 id="42-execution-grant">4.2 Execution Grant 设计（建议）</h3>
+<p>每次 turn 开始前，服务端生成一个不可变的 <strong>execution grant</strong>，包含：</p>
+<pre><code>{
+  userId,
+  businessSessionId,
+  executionId,
+  toolAllowlist,        // 本次 turn 允许调用的工具名集合
+  resourceScope,        // 文件路径范围、连接凭据范围
+  registryVersion,      // 工具注册表版本快照
+  nonce,               // 服务端随机生成，防伪造
+  expiry               // turn 超时时间
+}
+</code></pre>
+<p>完整 Grant 保存在服务端，业务客户端和模型参数无法指定或改写它；Codex 只获得调用所需的本机入口和运行时凭据。进程重启使全部内存 Grant 失效，关联执行转入待核对流程。</p>
+<p>MCP 路由建议使用 <code>/&lt;registryVersion&gt;/&lt;serverNonce&gt;</code>，在服务端映射到 executionId，认证仍需用户运行时 token。turn 开始前在边界锁内装配路由、执行现有配置写入和 MCP reload，并验证成功后才发起 <code>turn/start</code>；turn 完成或超时时吊销路由，等待已有调用结束再允许复用 runtime。工具发现（list）在无 grant 时可返回工具清单，但实际执行请求在无有效 grant 时拒绝。</p>
+<h3 id="43">4.3 技术验证闸门</h3>
+<p>在进入 P2 阶段之前，必须用锁定版本（<code>@openai/codex 0.154.0</code>）实际验证：</p>
+<ol>
+<li><strong>resumed thread 的新 turn 确实使用新的 MCP 路由</strong>，旧路由已吊销</li>
+<li><strong>迟到的旧 turn 调用不能落到新 task 的 grant 上</strong></li>
+<li><strong>路由切换时序可靠</strong>：并发 append 属于同一 execution，不会因路由切换而落到错误 grant</li>
+</ol>
+<p>如果上述验证无法可靠成立，需要回退到<strong>会话级独立 runtime</strong>方案（每个 businessSession 独占一个 Codex 进程），重新设计授权边界，不能用全局可变 <code>currentTask</code> 悄悄放行调用。</p>
+<p>禁止的替代方案：按时间猜测当前 task；仅校验模型传来的参数中的 userId 或 jobId。</p>
+<p>MCP 服务仍可由项目 Node 进程承载，一个用户的授权入口包含多个工具；不需要每注册一个工具就启动一个独立进程，Web/App/CLI 也不直接访问 MCP。会话级 runtime 的备选方案仍需验证独立原生状态目录、会话迁移与执行归因，不能让多个进程无约束共享同一 CODEX_HOME。</p>
+<h3 id="44">4.4 工具路径隔离</h3>
+<p><a href="../server/modules/tools/loader.mjs"><code>server/modules/tools/loader.mjs</code></a> 目前用同一个 <code>root</code> 做两件事。目标拆分为五个明确的根路径：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>根路径</th>
+<th>用途</th>
+<th>可写</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>codeRoot</code></td>
+<td>可信工具代码、role 定义</td>
+<td>服务端只读</td>
+</tr>
+<tr>
+<td><code>dataRoot</code></td>
+<td>用户持久数据总根</td>
+<td>仅服务端按归属写</td>
+</tr>
+<tr>
+<td><code>workspaceRoot</code></td>
+<td>文件工具工作区（四个子目录）</td>
+<td>工具受控写</td>
+</tr>
+<tr>
+<td><code>codexHome</code></td>
+<td>Codex 原生持久化</td>
+<td>Codex 进程写</td>
+</tr>
+<tr>
+<td><code>runRoot</code></td>
+<td>启动实例临时产物</td>
+<td>服务写/定期清理</td>
+</tr>
+</tbody>
+</table></div>
+<p>不能简单把 <code>root</code> 替换成用户目录——那样要么加载不到可信工具代码，要么允许用户覆盖可信工具定义。</p>
+<h3 id="45">4.5 工具调用授权原则</h3>
+<ul>
+<li><code>readOnlyHint</code> 是元数据描述，不是安全控制</li>
+<li>授权在调度前做一次（policy 检查），在实际工具调用前再做一次（grant 校验）</li>
+<li>禁止用客户端或模型传入的 <code>userId</code>/<code>basePath</code> 执行授权判断</li>
+<li>普通用户不能上传或执行自定义代码；自定义工具由服务器管理员安装信任</li>
+</ul>
+<hr />
+<h2 id="_5">五、三项基础控制</h2>
+<h3 id="51-ownership">5.1 资源归属（Ownership）</h3>
+<p>每个查询包含 <code>userId</code> 条件，子资源通过复合外键约束绑定归属；应用层鉴权和数据库约束同时存在。</p>
+<pre><code class="language-sql">-- 示例复合唯一约束（PostgreSQL）
+UNIQUE (userId, nativeThreadId)        -- sessions 表
+UNIQUE (userId, sessionId, clientMessageId)  -- jobs 表
+</code></pre>
+<p>参考：<a href="https://www.postgresql.org/docs/current/ddl-constraints.html">PostgreSQL 复合约束文档</a></p>
+<p>越权资源一律返回 404（不返回 403，避免探测存在性）。列表、搜索、导出、SSE 推送均在数据层过滤归属，不依赖结果层裁剪。</p>
+<h3 id="52-policy">5.2 策略控制（Policy）</h3>
+<p>工具调用的实际权限 = 服务器开关 ∩ 用户能力许可 ∩ 任务 execution grant ∩ 资源路径约束</p>
+<p><strong>Deny wins</strong>：任何一层否定即拒绝，不存在"某层允许覆盖其他层拒绝"。</p>
+<p>策略检查两个时机：
+1. <strong>调度前</strong>：用户有权限启动这个任务吗？服务端为该用户和本次任务允许的工具集合是什么？
+2. <strong>执行前</strong>：当前 execution grant 与最新用户策略是否都允许调用这个工具和这个资源路径？排队任务真正启动前同样重新授权。</p>
+<p>用户禁用/权限撤销在执行期有效：检测到用户被禁用时，阻止新工具调用，并向当前 turn 发送中止信号。用户退出登录或网络断开，不自动撤销已被授权接收的任务（包括已持久化接受的排队任务）；用户账号被禁用，才要求阻止新工具调用并中止。</p>
+<p>提供 <code>policy.resolve()</code> 和 <code>policy.authorize()</code> 两个扩展契约，默认实现读取本地静态配置；会员/支付/营销逻辑只通过这两个接口注入，不写入 JWT 或认证核心。</p>
+<p>保留现有文件工具的四目录、inputs 只读、md/txt、256 KiB、禁软硬链接和禁止覆盖规则；网络工具保留 SSRF/DNS/重定向检查，生产显式使用 <code>NODE_ENV=production</code>。Grant 中的文件范围、域名和连接凭据范围是分别校验的约束。</p>
+<h3 id="53-quota">5.3 用量与并发控制（Quota）</h3>
+<p>控制维度：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全局活跃并发</td>
+<td>活跃 turn 总数上限；另设 <code>maxActiveRuntimes</code> 限制含空闲在内的常驻 Codex 进程数</td>
+</tr>
+<tr>
+<td>单用户活跃 turn</td>
+<td>首版固定为 1，同用户多会话排队</td>
+</tr>
+<tr>
+<td>请求速率</td>
+<td>按用户限制提交消息和工具调用速率，登录另按账号/IP 限流</td>
+</tr>
+<tr>
+<td>单用户排队数</td>
+<td>最大排队任务数（现有每线程上限 100，目标加用户全局限额）</td>
+</tr>
+<tr>
+<td>Turn 超时</td>
+<td>现有默认 600000ms，保持语义，加用户维度限额</td>
+</tr>
+<tr>
+<td>存储配额</td>
+<td>用户目录总大小限制</td>
+</tr>
+<tr>
+<td>模型用量</td>
+<td>依赖 provider 事件，中断有延迟，不承诺绝不超一个 token</td>
+</tr>
+</tbody>
+</table></div>
+<p>用量记账流程：</p>
+<pre><code>预留（reserve）-&gt; 外部执行（不持有长事务）-&gt; 幂等结算（settle）/ 释放（release）
+</code></pre>
+<p>并发槽位用数据库条件更新/锁在短事务内原子预留，不能用“先查余额再更新”的分离操作；token 用量取决于 provider 返回的事件，中断时的未知用量标记为 <code>unknown/reconcile</code> 状态，不当 0 免费处理。</p>
+<p>并发 append（同一 turn 的多条消息）属于同一个 execution，不重复计量并发。重复请求（clientMessageId 幂等）不重复扣减用量。</p>
+<p>提供 <code>quota.reserve()</code> / <code>quota.settle()</code> / <code>quota.release()</code> 扩展契约，默认实现使用本地静态配额配置和 PostgreSQL 持久用量记录。</p>
+<p>存储统计覆盖 workspace、Codex 原生状态和日志，不能只累计 files 表。受控写入先预留空间，异常补偿释放并周期核账；原生进程写入仍需磁盘水位保护，应用层统计不能冒充文件系统硬配额。</p>
+<hr />
+<h2 id="api">六、API 设计</h2>
+<blockquote>
+<p><strong>建议</strong>（待实施）：以下为升级后的接口契约，部分路径沿用现有接口，但用户认证与归属语义需要重构。</p>
+</blockquote>
+<h3 id="61">6.1 认证端点</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/auth/login</code></td>
+<td>email + password，返回 access token + refresh cookie</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/auth/refresh</code></td>
+<td>刷新，轮换 refresh token</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/auth/logout</code></td>
+<td>吊销当前 session</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/auth/me</code></td>
+<td>当前用户信息</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/auth/devices</code></td>
+<td>已登录设备列表</td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td><code>/auth/devices/:id</code></td>
+<td>吊销指定设备会话（用户自己操作）</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/auth/password</code></td>
+<td>修改密码，吊销全部 session</td>
+</tr>
+</tbody>
+</table></div>
+<p>原生 App 和 CLI 使用 <code>/auth/native/login</code>、<code>/auth/native/refresh</code>、<code>/auth/native/logout</code>，HTTPS body 传递 refresh，响应体返回新 pair，不读写 Cookie；这些端点不开放浏览器跨源读取，也不能因 <code>clientType</code> 跳过凭据检查。设备撤销必须查询当前用户归属；修改密码要求当前密码或可信重置凭据。</p>
+<h3 id="62">6.2 会话与消息端点</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/sessions</code></td>
+<td>创建会话，返回 <code>sessionId</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/sessions</code></td>
+<td>列出当前用户会话</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/sessions/:sessionId/messages</code></td>
+<td>发送消息，body: <code>{clientMessageId, mode, content, targetTurnId?}</code>；append 必须校验目标 turn 属于当前会话，返回 202 + <code>{jobId, sessionId}</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/sessions/:sessionId/state</code></td>
+<td>当前会话状态快照</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/sessions/:sessionId/events</code></td>
+<td>SSE 事件流，header 传 token，不在 URL 中</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/sessions/:sessionId/continue</code></td>
+<td>恢复暂停队列（现有 <code>/queue/continue</code> 语义，加归属校验）</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/sessions/:sessionId/interrupt</code></td>
+<td>中断当前 turn</td>
+</tr>
+</tbody>
+</table></div>
+<p>接口中的 <code>sessionId</code> 即业务会话 ID，后文 <code>businessSessionId</code> 是同一字段的说明性称呼。资源定位以它为准；不把 <code>nativeThreadId</code> 作为授权依据。<code>nativeThreadId</code> 在服务端内部管理，不暴露到 URL 路径做授权。</p>
+<p>文件接口建议为 <code>GET/POST /files</code>、<code>GET /files/:fileId/content</code>，服务端映射 storageKey；记忆接口保留 <code>/memory</code>、<code>/memory/summary</code>，以当前认证用户定位，参与开关按业务 sessionId 授权。新增 <code>/tools</code> 返回该用户允许的工具，不能暴露其他用户状态。</p>
+<h3 id="63">6.3 错误码语义</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>状态码</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>401</code></td>
+<td>token 无效、过期、session 已吊销</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>已拥有资源上的操作或工具能力不足</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td>资源不存在或越权（统一 404，不区分）</td>
+</tr>
+<tr>
+<td><code>409</code></td>
+<td>状态冲突（会话已暂停、任务已取消）</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>超额，响应体包含可重试线索（<code>retryAfter</code>）</td>
+</tr>
+<tr>
+<td><code>503</code></td>
+<td>数据库或必要运行服务不可用，不绕过鉴权或预留继续执行</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="64-sse">6.4 SSE 安全</h3>
+<ul>
+<li>Token 通过 <code>Authorization</code> header 传递，不放 URL query string</li>
+<li>每个 SSE 连接绑定 <code>userId + businessSessionId</code>，服务端只推送该用户该会话的事件</li>
+<li>无 <code>threadId</code> 的全局事件不再广播，需补充服务端 <code>userId</code>/<code>sessionId</code>/<code>channel</code> 标记</li>
+<li>退出登录、撤销设备或禁用账号时主动关闭关联 SSE；心跳复查状态作为兜底，access token 过期时关闭连接，客户端刷新后重连</li>
+<li>重连时服务端推送当前状态快照（非所有历史事件），不保证补齐全部过程事件，只保证最终状态</li>
+<li>已接受的任务继续执行，重连后通过快照同步得知结果</li>
+</ul>
+<hr />
+<h2 id="_6">七、数据模型</h2>
+<blockquote>
+<p><strong>建议</strong>（待实施）：以下为逻辑表设计，不包含完整 DDL，实施时按需补充字段和索引。</p>
+</blockquote>
+<h3 id="71">7.1 核心实体关系</h3>
+<pre><code>users
+  └── auth_sessions (userId)
+  └── sessions (userId, nativeThreadId, title, pause状态, delete状态)
+        └── jobs (userId, sessionId, clientMessageId, status, mode, content)
+              └── job_execution_links (jobId, executionId)
+        └── executions (userId, sessionId, nativeThreadId, nativeTurnId, status, usage)
+
+quota_reservations (userId, executionId, dimension, amount, status)
+usage_ledger (userId, executionId, dimension, amount, settled_at)
+
+files (userId, storageKey, size, hash, mime, status)
+audit_events (userId, eventType, 摘要, created_at)  -- 不默认留全文
+
+-- 可选，延后实施：
+transcript_items (userId, sessionId, nativeItemId, nativeTurnId, position, content, finalized)
+</code></pre>
+<h3 id="72">7.2 重要约束</h3>
+<ul>
+<li><code>sessions(userId, nativeThreadId)</code> 唯一：一个用户不能有两个会话指向同一个 native thread</li>
+<li><code>jobs(userId, sessionId, clientMessageId)</code> 唯一：clientMessageId 幂等去重</li>
+<li><code>sessions</code> 增加 <code>UNIQUE(userId, id)</code>，jobs/executions 的 <code>(userId, sessionId)</code> 复合外键引用它；job_execution_links 的两端也必须保持同一用户/会话。files 首版归用户；若绑定会话，则同样使用复合引用</li>
+<li>列表索引覆盖 <code>(userId, updatedAt, id)</code>，jobs 覆盖 <code>(userId, sessionId, status, createdAt)</code>；usage_ledger 对结算来源建立唯一约束，防重复入账。 schema migration 版本独立管理</li>
+</ul>
+<h3 id="73-id">7.3 关键 ID 语义</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>authSessionId</code></td>
+<td>一次登录设备</td>
+</tr>
+<tr>
+<td><code>businessSessionId</code></td>
+<td>一个业务聊天会话，映射 <code>(userId, nativeThreadId)</code></td>
+</tr>
+<tr>
+<td><code>jobId</code></td>
+<td>一条已接受的用户输入</td>
+</tr>
+<tr>
+<td><code>clientMessageId</code></td>
+<td>客户端去重标识，限定在 <code>userId + sessionId</code> 范围内唯一</td>
+</tr>
+<tr>
+<td><code>executionId</code></td>
+<td>一次实际 turn 尝试的持久记录，关联多个 append jobs；在 native 启动确认前 turnId 可为空</td>
+</tr>
+<tr>
+<td><code>nativeTurnId</code></td>
+<td>Codex 返回的一轮执行 ID；不是每条用户消息都有新的 turnId</td>
+</tr>
+<tr>
+<td><code>runId</code>（若沿用）</td>
+<td>可定义为 <code>executionId</code> 的别名，不另起第三实体</td>
+</tr>
+</tbody>
+</table></div>
+<p>Agent 定义 ≠ 执行实例 ≠ 本机启动的 <code>.runs</code> 目录。</p>
+<p>数据库查询会话正文有两种路径：首版可以先查业务归属，再从对应用户的 Codex 原生历史读取；如果需要直接从 DB 阅读或全文搜索，再启用 <code>transcript_items</code> 查询副本。副本按原生 item/turn 幂等更新、记录同步水位，崩溃后可补偿重建，不能拿副本替代原生 <code>thread/resume</code>。</p>
+<h3 id="74">7.4 存储迁移</h3>
+<p><a href="../server/modules/storage/index.mjs"><code>server/modules/storage/index.mjs</code></a> 的 JobStore 同步整文件读写，目标改为异步 Repository + 行级事务，不是换一个连接串就能完成的，整个读写模式需要重写。</p>
+<p>DB 连接池应小而有上限（具体上限结合单机容量压测确定），避免单机 PostgreSQL 连接耗尽。migration 工具和 app 使用不同的 DB 角色，migration 角色有 DDL 权限，app 角色仅有必要的表操作权限。首版以统一 Repository 归属校验为强制入口，RLS 可后续加作纵深防御；不引入外部权限引擎。</p>
+<h3 id="75">7.5 调度与跨系统一致性</h3>
+<p>保留同会话普通消息 FIFO；append 对活动 turn 执行 steer，已结束 turn 的追加进入续接队列并优先于普通消息。用户之间按公平队列轮转，避免一个用户持续追加占满整机；消息去重必须先于预留，相同 <code>clientMessageId</code> 携带不同内容返回 409。</p>
+<p>DB、文件系统与 Codex RPC 之间没有共同事务：先持久化 <code>creating/queued/starting</code> 意图，再调用外部系统，最后写回确认的 <code>threadId/turnId</code>。RPC 超时可能已执行，必须转 <code>unconfirmed</code> 并核对原生状态，<strong>不能自动重试产生第二次执行</strong>。创建会话后 DB 写回失败的孤立原生线程进入补偿核对，不得由未经归属校验的 native 全量列表直接暴露。</p>
+<p><strong>任务状态语义</strong>：<code>queued</code> 表示确认未开始，在满足归属、权限与暂停恢复规则后可再次调度；<code>starting/running</code> 若遭遇崩溃或 RPC 结果不明，则转入 <code>unconfirmed</code> 核对，<strong>不自动重放</strong>——原生生成或工具调用可能已产生外部副作用，幂等账本仅防重复扣账，不能保证外部操作恰好一次。</p>
+<p>服务重启时，无论执行不明还是遗留排队，均沿用现有暂停恢复规则，不自动重发。</p>
+<p><strong>首版</strong>保留单服务调度锁；<code>JobRepository</code> 以本地 PostgreSQL 单机事务实现，任务幂等领取与已确认状态的写回在短事务内完成，原生 RPC 核对在事务之外进行。</p>
+<hr />
+<h2 id="json">八、现有 JSON 数据迁移</h2>
+<h3 id="81">8.1 迁移矩阵</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>现有文件</th>
+<th>目标</th>
+<th>注意事项</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.data/messages.json</code></td>
+<td><code>jobs</code> 表（状态/幂等映射）+ <code>paused</code> 状态</td>
+<td>整体读写改行级事务</td>
+</tr>
+<tr>
+<td><code>.data/session-index.json</code></td>
+<td><code>sessions</code> 表历史归属 + native 定位索引</td>
+<td>不混入会话正文，作为索引辅助</td>
+</tr>
+<tr>
+<td><code>.data/connection.json</code></td>
+<td><strong>不迁移为用户表或登录态</strong></td>
+<td>改为 CLI 服务 URL 配置，设备登录凭据独立管理，不共享用户 token</td>
+</tr>
+<tr>
+<td><code>.data/codex/</code></td>
+<td>迁至 <code>AGENT_DATA_ROOT/users/&lt;uuid&gt;/codex/</code>，保持原生格式</td>
+<td>标记为 legacy owner，原生 Codex 不动格式</td>
+</tr>
+<tr>
+<td><code>.runs/*/</code></td>
+<td>运行时产物，不迁业务表</td>
+<td>维护/清理逻辑需按用户分区</td>
+</tr>
+<tr>
+<td>工具 JSON 配置与 Role 源码（当前为 <code>.mjs</code>）</td>
+<td>版本化代码配置，不进用户业务表</td>
+<td>仍作为 codeRoot 内容</td>
+</tr>
+<tr>
+<td>工具四目录数据</td>
+<td>迁至同 owner 的用户 workspace</td>
+<td>新用户空白</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>重要</strong>：不自动收集开发者个人的 <code>~/.codex</code>；账号归属不能靠路径猜测。</p>
+<h3 id="82">8.2 迁移流程（建议）</h3>
+<p>迁移是一次性操作，必须严格按顺序执行：</p>
+<ol>
+<li><strong>只读 dry-run</strong>：生成迁移清单，检查文件完整性、JSON 格式、路径合法性，不修改源目录与业务数据库，只输出报告</li>
+<li><strong>指定归属</strong>：人工指定旧数据归属的唯一用户 UUID（不能自动猜测）</li>
+<li><strong>停旧服务</strong>：优雅关闭旧 Node 服务，等待 Codex 进程原生退出，暂停写入</li>
+<li><strong>初始化 schema</strong>：如 DB 不存在，先运行 schema migration</li>
+<li><strong>一致性备份</strong>：对 <code>.data/</code>、完整用户 <code>workspace/</code>、历史所依赖的 <code>.runs/</code> 和配置做一致性备份，记录代码/依赖版本，生成 manifest 校验文件</li>
+<li><strong>幂等导入</strong>：复制文件，写入 DB，不删除源文件，支持重跑</li>
+<li><strong>原生验证</strong>：用 Codex 0.154.0 实际恢复历史，验证旧 <code>cwd</code> 兼容性和隔离性，抽样对比 jobs/会话/文件记录</li>
+<li><strong>切换服务</strong>：启动新多用户服务，三端逐一验收</li>
+<li><strong>旧 token 失效</strong>：切换时移除旧 token 验证入口，并实测旧 Bearer 被拒绝；只写“作废”说明没有效果</li>
+</ol>
+<p><strong>关于旧历史的 resume</strong>：
+旧会话的 <code>cwd</code> 可能指向旧 <code>.runs</code> 路径。迁移后必须验证：旧 cwd 可兼容或已隔离，禁止继续共享写入，不得直接批量修改原生 SQLite。若 cwd 依赖未解决，不能直接上线，可提供离线只读历史导出，用户选择在新会话中继续，明确不保证 resume 连续性。</p>
+<p><strong>回滚边界</strong>：上线前可安全退出副本切回旧服务；一旦产生新多用户写入，不能简单切回旧服务，需要停写保存新增数据，明确恢复点和可接受的数据损失范围，不承诺无损自动回滚。</p>
+<h3 id="83-import">8.3 历史 Import 机制</h3>
+<p><a href="../server/modules/sessions/history.mjs"><code>server/modules/sessions/history.mjs</code></a> 现有跨 CODEX_HOME 的旧历史导入逻辑，通过复制 rollout 文件并保留 thread id 实现，不是无风险的 <code>mv</code> 操作。该机制只证明特定旧 rollout 导入逻辑存在，不能当成整个用户目录迁移的保证。先在备份副本演练，验证通过才允许 resume；未通过的会话仅可在用户接受降级方案后作为只读历史保留。</p>
+<hr />
+<h2 id="_7">九、现有模块改动清单</h2>
+<blockquote>
+<p><strong>建议</strong>：以下列出需要修改的现有模块和需要新增的模块，不包含实现代码。</p>
+</blockquote>
+<h3 id="91">9.1 需要新增的模块</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块路径</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>server/modules/accounts/</code></td>
+<td>用户表 CRUD、密码哈希、账号启用/禁用</td>
+</tr>
+<tr>
+<td><code>server/modules/auth/</code></td>
+<td>JWT 生成/校验、refresh 轮换、session 管理、限速</td>
+</tr>
+<tr>
+<td><code>server/modules/policy/</code></td>
+<td><code>policy.resolve()</code> / <code>policy.authorize()</code>，逻辑交集，deny wins</td>
+</tr>
+<tr>
+<td><code>server/modules/quotas/</code></td>
+<td><code>quota.reserve()</code> / <code>quota.settle()</code> / <code>quota.release()</code>，usage 记账</td>
+</tr>
+<tr>
+<td><code>server/modules/runtime-manager/</code></td>
+<td>按用户管理本机 Codex 的懒启动、复用、空闲回收与容量</td>
+</tr>
+<tr>
+<td><code>server/modules/user-storage/</code></td>
+<td>按服务端用户标识定位专属目录，统一受控文件操作、本机备份与恢复</td>
+</tr>
+<tr>
+<td><code>server/modules/repositories/</code></td>
+<td>业务实体异步 Repository；JobRepository 统一任务幂等、领取和状态迁移</td>
+</tr>
+<tr>
+<td><code>server/modules/execution-grant/</code></td>
+<td>Execution grant 生成/校验/吊销，MCP 路由装配</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="92">9.2 需要改动的现有模块</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块路径</th>
+<th>主要改动</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../server/main.mjs"><code>server/main.mjs</code></a></td>
+<td>将全局 Codex/会话/记忆实例改为按用户管理；共享 HTTP、数据库池与调度器，接入 RuntimeManager</td>
+</tr>
+<tr>
+<td><a href="../server/modules/http/index.mjs"><code>server/modules/http/index.mjs</code></a></td>
+<td>替换全局 Bearer 为 JWT 认证中间件，移除 Origin 全拒绝，实现 CORS allowlist，加 RequestContext</td>
+</tr>
+<tr>
+<td><a href="../server/modules/sessions/index.mjs"><code>server/modules/sessions/index.mjs</code></a></td>
+<td>内存 thread/turn 加用户归属，接入 DB Repository</td>
+</tr>
+<tr>
+<td><a href="../server/modules/sessions/history.mjs"><code>server/modules/sessions/history.mjs</code></a></td>
+<td>历史列表加 userId 过滤，跨 CODEX_HOME 导入加归属标记</td>
+</tr>
+<tr>
+<td><a href="../server/modules/messages/index.mjs"><code>server/modules/messages/index.mjs</code></a></td>
+<td>队列加用户归属，全局并发 + 单用户并发双重上限，接入 quota.reserve/settle</td>
+</tr>
+<tr>
+<td><a href="../server/modules/storage/index.mjs"><code>server/modules/storage/index.mjs</code></a></td>
+<td>JobStore 全面改为异步 Repository + PG，移除整文件同步读写</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/config.mjs"><code>server/modules/codex/config.mjs</code></a></td>
+<td>CODEX_HOME 改为按用户 UUID 路径生成</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/connection.mjs"><code>server/modules/codex/connection.mjs</code></a></td>
+<td>launch.env 改为白名单环境变量，禁止透传 DB 密码/JWT secret</td>
+</tr>
+<tr>
+<td><a href="../server/modules/codex/runtime.mjs"><code>server/modules/codex/runtime.mjs</code></a></td>
+<td>runRoot 改为用户 runs 目录，生命周期接入 RuntimeManager</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/loader.mjs"><code>server/modules/tools/loader.mjs</code></a></td>
+<td>root 拆分为五个路径，工具代码从 codeRoot 加载，执行上下文隔离</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/index.mjs"><code>server/modules/tools/index.mjs</code></a></td>
+<td>共享源码扫描，逐用户空闲边界切版本；验证工具 schema/版本及真实调用，接入 grant 校验</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/mcp-server.mjs"><code>server/modules/tools/mcp-server.mjs</code></a></td>
+<td>接入 execution grant，以随机路由映射 executionId 并吊销</td>
+</tr>
+<tr>
+<td><a href="../server/modules/tools/files.mjs"><code>server/modules/tools/files.mjs</code></a></td>
+<td>basePath 改为服务端从用户目录解析，禁止客户端传入</td>
+</tr>
+<tr>
+<td><a href="../server/modules/memory/index.mjs"><code>server/modules/memory/index.mjs</code></a></td>
+<td>记忆路径改为用户独立目录，记忆 API 加归属校验</td>
+</tr>
+<tr>
+<td><a href="../server/modules/maintenance/index.mjs"><code>server/modules/maintenance/index.mjs</code></a></td>
+<td>清理逻辑改为按用户分区，保护用户持久目录</td>
+</tr>
+<tr>
+<td><a href="../client/modules/connection/index.mjs"><code>client/modules/connection/index.mjs</code></a></td>
+<td>读服务 URL + 登录态凭据，不再读全局 Bearer token</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="_8">十、记忆与配置的特殊说明</h2>
+<h3 id="101">10.1 记忆生成状态</h3>
+<p><a href="../server/modules/config/index.mjs"><code>server/modules/config/index.mjs</code></a> 明确禁用 shell 和 apply_patch。<a href="../server/modules/memory/index.mjs"><code>server/modules/memory/index.mjs</code></a> 中 <code>generationBlocked</code> = 禁 shell 且禁 patch。因此，<strong>当前记忆自动生成实际上是被阻塞的</strong>，不能声称记忆生成功能可用，兼容性仍待真实模型验证。验收清单中必须包含：记忆生成仍正确显示 blocked，不误报 ready。禁止为修改记忆私自启用 shell。</p>
+<p>记忆属于用户（不属于会话），多会话的记忆参与开关需要同时核对当前用户与目标会话归属。关闭参与开关不等于禁止读取已有记忆、删除已有记忆，或停止后台处理；这些是不同能力，必须分别定义。</p>
+<h3 id="102">10.2 协议日志</h3>
+<p><a href="../server/modules/codex/connection.mjs"><code>server/modules/codex/connection.mjs</code></a> 产生 <code>protocol.jsonl</code> 日志，内容涉及对话原文，属于敏感内容。多用户环境下：
+- 日志按用户目录分区存储
+- 不暴露给普通用户；技术 admin 也不因此自动获得私有原文读取权，诊断默认使用脱敏数据
+- 定期轮换，默认只留协议结构和必要摘要；若诊断必须暂存原文，需独立授权、访问审计和短期保留</p>
+<h3 id="103">10.3 维护与清理</h3>
+<p><a href="../server/modules/maintenance/index.mjs"><code>server/modules/maintenance/index.mjs</code></a> 现有清理逻辑保留最新 5 个 / 近 7 天 / 活跃目录，先保存历史索引。多用户改造后，清理必须按用户分区，不能跨用户清理，持久化的用户 codex 目录必须受保护不被清理。</p>
+<p>用户删除流程：停止该用户所有任务 → 吊销所有登录 session 和 runtime → 软删业务记录 → 异步删除持久文件内容 → 保留审计事件（去除个人内容）→ 备份过期后真正删除。</p>
+<hr />
+<h2 id="_9">十一、实施阶段</h2>
+<p>各阶段为<strong>建议</strong>顺序，依赖关系明确，不承诺工时。</p>
+<h3 id="p0-runtime">P0：验证闸门（未通过不固化 Runtime 方案）</h3>
+<p><strong>目标</strong>：确认核心技术可行性；P1 的账号与数据库工作可使用 fake runtime 独立推进。</p>
+<ul>
+<li>用 <code>@openai/codex 0.154.0</code> 实际验证：resumed thread 新 turn 使用新 MCP 路由，旧路由已吊销</li>
+<li>验证迟到旧调用不能落到新 task 的 grant</li>
+<li>验证旧 <code>cwd</code> 兼容性和隔离性</li>
+<li><strong>若路由切换验证失败</strong>：转向会话级独立 runtime 方案，重新评估 P2 设计</li>
+</ul>
+<p>影响文件：<a href="../server/modules/codex/connection.mjs"><code>server/modules/codex/connection.mjs</code></a>、<a href="../server/modules/tools/mcp-server.mjs"><code>server/modules/tools/mcp-server.mjs</code></a></p>
+<h3 id="p1db">P1：DB、认证、三端客户端核心</h3>
+<p><strong>目标</strong>：账号登录可用，三端可以认证通过，使用 fake runtime 跑通请求上下文流转。</p>
+<ul>
+<li>新增：<code>accounts</code>、<code>auth</code>、<code>repositories</code> 模块</li>
+<li>新增：PostgreSQL schema，基础 migration 脚本</li>
+<li>改造：<a href="../server/modules/http/index.mjs"><code>server/modules/http/index.mjs</code></a> 认证中间件，移除全局 Bearer</li>
+<li>改造：<a href="../client/modules/connection/index.mjs"><code>client/modules/connection/index.mjs</code></a> 三端登录态管理</li>
+<li>新增：Web 最简登录界面（仅功能验证）、CLI 登录命令</li>
+<li>fake runtime 在 P1 测试身份流转，P2 接真实 native 验证</li>
+</ul>
+<h3 id="p2-runtime-mcp">P2：用户 Runtime 隔离、目录迁移、MCP 权限</h3>
+<p><strong>目标</strong>：每用户独立 Codex 进程可用，execution grant 通过 P0 验证的方案实装。</p>
+<p><strong>依赖</strong>：P0 的原方案或经重新验证的备选方案通过，且 P1 认证/归属入口可用。P2 先接入最小 fail-closed 的 policy 接口，P3 补齐配额与完整策略。</p>
+<ul>
+<li>新增：<code>runtime-manager</code>、<code>user-storage</code>、<code>execution-grant</code> 模块；按 2.5 节落实单机模块职责，HTTP 层不直接持有子进程或拼接用户绝对路径</li>
+<li>改造：<a href="../server/modules/codex/config.mjs"><code>server/modules/codex/config.mjs</code></a>、<a href="../server/modules/codex/connection.mjs"><code>server/modules/codex/connection.mjs</code></a>（白名单环境变量）</li>
+<li>改造：<a href="../server/modules/tools/loader.mjs"><code>server/modules/tools/loader.mjs</code></a> 五根路径拆分</li>
+<li>改造：<a href="../server/modules/tools/mcp-server.mjs"><code>server/modules/tools/mcp-server.mjs</code></a> grant 路由装配</li>
+<li>执行目录布局实际创建与权限设置</li>
+</ul>
+<h3 id="p3sse">P3：存储改造、调度、SSE 归属、三控完整、迁移演练</h3>
+<p><strong>目标</strong>：三项控制完整实装，迁移流程可在测试环境演练。</p>
+<ul>
+<li>改造：<a href="../server/modules/storage/index.mjs"><code>server/modules/storage/index.mjs</code></a> 全面 async Repository</li>
+<li>改造：<a href="../server/modules/messages/index.mjs"><code>server/modules/messages/index.mjs</code></a> 用户并发限额、公平队列</li>
+<li>新增：<code>policy</code>、<code>quotas</code> 模块</li>
+<li>改造：SSE 事件过滤，加 <code>userId/sessionId/channel</code> 归属</li>
+<li>改造：<a href="../server/modules/maintenance/index.mjs"><code>server/modules/maintenance/index.mjs</code></a> 按用户分区</li>
+<li>迁移脚本 dry-run 测试（不动生产数据）；经 UserStorage 演练本机一致性快照与恢复，记录原生状态、用户文件及业务记录的对应关系</li>
+</ul>
+<h3 id="p4web-app-cli">P4：Web + App 最小端、CLI 完整验收、上线</h3>
+<p><strong>目标</strong>：三端完整可用，第十二章首版验收全部通过，迁移演练通过，正式上线。</p>
+<ul>
+<li>Web 真实界面（不只是 API 测试）</li>
+<li>App 最小可运行参考端（技术栈实施时确定，不提前假设）</li>
+<li>CLI 完整三端改造验收</li>
+<li>执行完整迁移流程（含回滚验证）</li>
+<li>第十二章的 39 项验收案例实测通过</li>
+</ul>
+<hr />
+<h2 id="_10">十二、首版验收清单</h2>
+<p>以下为<strong>多用户升级验收要求，均待实施后实测</strong>；不能用现有 127 项回归结果替代。</p>
+<h3 id="121">12.1 隔离与归属</h3>
+<ul>
+<li>[ ] 用户 A 和用户 B 在同一台机器，互相不可见对方的会话、消息、搜索结果、SSE 事件、文件、记忆</li>
+<li>[ ] 无 <code>threadId</code> 的全局事件不泄露给其他用户</li>
+<li>[ ] 篡改 <code>userId</code> 不改变身份；跨用户资源返回 404；路径越界或非法参数被拒绝，不产生读写</li>
+<li>[ ] 越权子资源（其他用户的 sessionId、jobId、fileId）返回 404</li>
+</ul>
+<h3 id="122-token">12.2 认证与 Token</h3>
+<ul>
+<li>[ ] access token 错误签名 → 401，立即拒绝</li>
+<li>[ ] access token 过期 → 401，客户端刷新后重试成功</li>
+<li>[ ] logout 后，旧 access token 在 DB session 校验时被拒绝（测试 DB session 校验，不只是 JWT 过期）</li>
+<li>[ ] 跨设备撤销：用户在设备列表中撤销设备 B 的 session，设备 B 下一次请求 → 401</li>
+<li>[ ] 改密码后，所有其他设备 session 立即失效</li>
+<li>[ ] refresh token 重放（发两次相同 refresh token）→ 第二次失败 + 本 family 吊销</li>
+<li>[ ] refresh 并发（两个 Tab 同时刷新）→ 仅一个成功，另一个通过协调获得新 token，不误触 family 吊销（需专项测试）</li>
+</ul>
+<h3 id="123">12.3 三端登录与重连</h3>
+<ul>
+<li>[ ] Web：登录 → 刷新 → 重连 SSE → 收到快照（实测浏览器，不只是 API 测试）</li>
+<li>[ ] CLI：登录 → 刷新 → 重连（OS 凭据库存储，实测）</li>
+<li>[ ] App：登录 → 刷新 → 重连（系统安全存储，实测，技术栈确定后）</li>
+<li>[ ] SSE 心跳检测到 token 过期 → 客户端刷新 → 重连 → 已接受任务结果通过快照获取</li>
+</ul>
+<h3 id="124">12.4 并发与队列</h3>
+<ul>
+<li>[ ] 用户 A 和用户 B 同时发送任务，两者并行执行，互不等待</li>
+<li>[ ] 同一用户两条普通 enqueue 消息，第二条排队，第一条正常完成后继续；append 仍保持既有 steer/续接语义</li>
+<li>[ ] 同一 turn 的多个 append 关联同一 executionId，不重复计量并发</li>
+<li>[ ] 重复发送（相同 clientMessageId）→ 返回原 jobId，不重新执行，不重复扣减用量</li>
+</ul>
+<h3 id="125">12.5 任务状态与恢复</h3>
+<ul>
+<li>[ ] 服务重启后，原 <code>executing</code> 状态的 job 标记为 <code>unconfirmed</code>，不自动重发</li>
+<li>[ ] 暂停态（paused）的会话，重启后仍为暂停，消息不自动执行</li>
+<li>[ ] 用户断开网络，已接受任务继续执行，重连后通过快照获取结果</li>
+<li>[ ] 用户账号被禁用 → 新工具调用被阻止 → 当前 turn 收到中止信号</li>
+</ul>
+<h3 id="126-runtime">12.6 Runtime 隔离</h3>
+<ul>
+<li>[ ] 用户 A 的 Codex 进程崩溃，用户 B 的当前 turn 不中断</li>
+<li>[ ] 用户 A 进程崩溃后，无法确认结果的 execution 标 unconfirmed 并暂停；释放确定失效的并发槽位，未知用量保留待核对记录，不自动重跑或当作零用量</li>
+</ul>
+<h3 id="127-mcp">12.7 MCP 执行授权</h3>
+<ul>
+<li>[ ] MCP execution grant 过期路由，旧调用被拒绝（已吊销路由返回 401/403）</li>
+<li>[ ] 跨会话验证：会话 1 turn 完成后，会话 2 新 turn 使用新 grant，不能用旧 grant 调用</li>
+<li>[ ] schema 升级不影响运行中的旧版本授权；在用户空闲边界激活新版本，后续 turn 使用对应新 grant，已吊销旧路由不能调用</li>
+</ul>
+<h3 id="128">12.8 配额与用量</h3>
+<ul>
+<li>[ ] 单用户并发达到上限（首版为 1）→ 新任务排队，返回 202 + 排队位置</li>
+<li>[ ] 全局并发达到上限且队列未满 → 新任务公平排队；队列满返回 429，不无限接收</li>
+<li>[ ] 中断 turn，未完成 usage 标记为 <code>unknown/reconcile</code>，不当 0 免费</li>
+<li>[ ] 预留 + 结算幂等：结算重复调用不重复扣减</li>
+</ul>
+<h3 id="129">12.9 历史迁移</h3>
+<ul>
+<li>[ ] 迁移后，使用 Codex 0.154.0 实际 resume 旧会话，对话上下文正确，<code>cwd</code> 兼容</li>
+<li>[ ] 旧会话与新用户数据隔离，不能互相访问</li>
+<li>[ ] 迁移 dry-run 只生成报告，不修改原始目录和业务数据库</li>
+<li>[ ] 迁移过程可幂等重跑（中断后继续）</li>
+</ul>
+<h3 id="1210">12.10 备份与记忆</h3>
+<ul>
+<li>[ ] DB + 文件快照一致性备份，恢复后服务可正常启动，会话可访问</li>
+<li>[ ] 记忆生成状态：显示 <code>blocked</code>（因禁 shell/patch），不误报 <code>ready</code></li>
+<li>[ ] 记忆读取按用户归属，不泄露其他用户记忆</li>
+</ul>
+<hr />
+<h2 id="_11">附：参考资料</h2>
+<ul>
+<li><a href="https://www.librechat.ai/docs/configuration/authentication">LibreChat 认证配置</a>：email/password 账号配置，access 15 分钟/refresh 7 天默认，refresh hash 存 DB，access 请求 header，refresh HttpOnly cookie，new pair 刷新，可关注册、管理员脚本创建用户</li>
+<li><a href="https://www.librechat.ai/docs/features/authentication">LibreChat 认证特性</a>：每次新 refresh 继承原始 session 过期时间，即 7 日绝对期限</li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html">OWASP Password Storage Cheat Sheet</a>：Argon2id 推荐</li>
+<li><a href="https://www.postgresql.org/docs/current/ddl-constraints.html">PostgreSQL 约束文档</a>：复合唯一/外键设计依据</li>
+<li><a href="https://www.sqlite.org/whentouse.html">SQLite 适用场景</a>：本地嵌入式存储、按用户分库与写并发边界</li>
+<li><a href="https://www.sqlite.org/wal.html">SQLite WAL</a>：事务与读写并发机制</li>
+<li><a href="https://www.sqlite.org/backup.html">SQLite Backup API</a>：单数据库备份能力，不代替跨文件及业务记录的一致性方案</li>
+</ul>
+<hr />
+<p><strong>证据核验时间</strong>：2026-09-28
+<strong>当前回归结果</strong>：127/127 通过，0 skipped，0 fail（<code>npm test</code>，不含多用户测试及 <code>test:codex-tools</code>/<code>test:codex-memory</code> 原生集成脚本）
+<strong>本文状态</strong>：设计方案，所有标注"建议/待实施"内容均未实现，不声称任何目标功能已完成</p><footer>本页面由同目录 Markdown 生成。架构图内嵌，可离线阅读；代码链接指向项目现有文件。</footer></main></body></html>

@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1390" viewBox="0 0 1440 1390" role="img" aria-labelledby="title desc"><title id="title">知识更新与检索：先过门禁，再执行具体能力</title><desc id="desc">v1.2 · 默认 Wiki；可选 Chroma + BM25。两条路径复用同一门禁和 Codex，无独立 Wiki 推理引擎。</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#82929d"/></marker></defs><style>text{font-family:Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#203542}.title{font-size:32px;font-weight:700}.sub{font-size:18px;fill:#5b6d77}.ct{font-size:23px;font-weight:650}.body{font-size:19px}.small{font-size:17px;fill:#5b6d77}.tag{font-size:14px;font-weight:700}.section{font-size:20px;font-weight:650}.line{fill:none;stroke:#82929d;stroke-width:2;marker-end:url(#arrow)}</style><rect width="1440" height="1390" fill="#ffffff"/><rect x="0" y="0" width="12" height="1390" fill="#991b1b"/>
+<text x="48" y="56" class="title">03  知识更新与检索：先过门禁，再执行具体能力</text>
+<text x="48" y="91" class="sub">v1.2 · 默认 Wiki；可选 Chroma + BM25。两条路径复用同一门禁和 Codex，无独立 Wiki 推理引擎。</text>
+<rect x="48" y="114" width="16" height="16" rx="3" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="73" y="128" class="small">新增 / 新能力</text>
+<rect x="260" y="114" width="16" height="16" rx="3" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="285" y="128" class="small">改造 / 扩展现有</text>
+<rect x="470" y="114" width="16" height="16" rx="3" fill="#fffafb" stroke="#be7180" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="495" y="128" class="small">预留 / 尚未启用</text>
+<rect x="696" y="114" width="16" height="16" rx="3" fill="#f4f8fa" stroke="#55758a" stroke-width="2"/>
+<text x="721" y="128" class="small">复用 / 现有基础</text>
+<text x="1130" y="128" class="small">目标设计 · 尚未实施</text>
+<rect data-card="Agent → KB 绑定：wiki 默认 / rag 按需" x="280" y="170" width="880" height="106" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="302" y="207" class="ct" style="fill:#db5b53">Agent → KB 绑定：wiki 默认 / rag 按需</text>
+<rect x="1094" y="186" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="1104" y="203" class="tag" style="fill:#fff">改造</text>
+<text x="302" y="241" class="body">mode 改变知识使用预设；不改变资源归属，也不授予额外权限。</text>
+<path class="line" d="M530,276 L530,307 L370,307 L370,336"/>
+<path class="line" d="M910,276 L910,307 L1060,307 L1060,336"/>
+<rect x="48" y="336" width="644" height="636" rx="18" fill="#f4f8fa" stroke="#55758a" stroke-width="1.5"/>
+<text x="70" y="370" class="section" style="fill:#55758a">Wiki · 显式触发整理或更新</text>
+<rect x="732" y="336" width="660" height="636" rx="18" fill="#fff5f4" stroke="#991b1b" stroke-width="1.5"/>
+<text x="754" y="370" class="section" style="fill:#991b1b">RAG · 查询已就绪的索引</text>
+<rect data-card="门禁：允许此次知识维护吗？" x="72" y="394" width="596" height="113" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="94" y="431" class="ct" style="fill:#991b1b">门禁：允许此次知识维护吗？</text>
+<rect x="602" y="410" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="612" y="427" class="tag" style="fill:#fff">新增</text>
+<text x="94" y="465" class="body">校验目标 KB 的 create / update 动作</text>
+<text x="94" y="494" class="body">服务端绑定运行任务，不能由 Skill 自授权</text>
+<path class="line" d="M370,507 L370,539"/>
+<rect data-card="Codex + Wiki Skill 生成候选" x="72" y="539" width="596" height="113" rx="14" fill="#f4f8fa" stroke="#55758a" stroke-width="2"/>
+<text x="94" y="576" class="ct" style="fill:#55758a">Codex + Wiki Skill 生成候选</text>
+<rect x="602" y="555" width="48" height="23" rx="5" fill="#55758a"/>
+<text x="612" y="572" class="tag" style="fill:#fff">复用</text>
+<text x="94" y="610" class="body">受控工具读取来源，整理主题页与引用</text>
+<text x="94" y="639" class="body">原生任务复用现有串行调度与事件流</text>
+<path class="line" d="M370,652 L370,683"/>
+<rect data-card="资源操作：检查并保存有效版本" x="72" y="683" width="596" height="143" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="94" y="720" class="ct" style="fill:#db5b53">资源操作：检查并保存有效版本</text>
+<rect x="602" y="699" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="612" y="716" class="tag" style="fill:#fff">改造</text>
+<text x="94" y="754" class="body">提交前门禁复检；资源检查版本 / 格式 / 来源</text>
+<text x="94" y="783" class="body">符合规则 → 保存版本、切有效指针，自动生效</text>
+<text x="94" y="812" class="body">冲突 → 阻断；草稿不因存在于文件夹而生效</text>
+<rect data-card="后续读取仍先过门禁" x="72" y="843" width="596" height="102" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="94" y="880" class="ct" style="fill:#db5b53">后续读取仍先过门禁</text>
+<rect x="602" y="859" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="612" y="876" class="tag" style="fill:#fff">改造</text>
+<text x="94" y="914" class="body">按目录 / 文本搜索读取有效页面，无需向量库</text>
+<path class="line" d="M370,826 L370,843"/>
+<rect data-card="门禁：允许搜索哪个 KB？" x="756" y="394" width="612" height="113" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="778" y="431" class="ct" style="fill:#991b1b">门禁：允许搜索哪个 KB？</text>
+<rect x="1302" y="410" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="1312" y="427" class="tag" style="fill:#fff">新增</text>
+<text x="778" y="465" class="body">校验工具与目标知识库，限定授权范围</text>
+<text x="778" y="494" class="body">资源管理解析对应 indexRevision / 集合</text>
+<path class="line" d="M1060,507 L1060,539"/>
+<rect data-card="RAG 适配器执行检索" x="756" y="539" width="612" height="113" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="778" y="576" class="ct" style="fill:#991b1b">RAG 适配器执行检索</text>
+<rect x="1302" y="555" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="1312" y="572" class="tag" style="fill:#fff">新增</text>
+<text x="778" y="610" class="body">Chroma 向量 + BM25 词法 → RRF 融合</text>
+<text x="778" y="639" class="body">同 chunk / 来源 / 索引版本，先召回候选</text>
+<path class="line" d="M1060,652 L1060,683"/>
+<rect data-card="返回前检查权限与来源状态" x="756" y="683" width="612" height="143" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="778" y="720" class="ct" style="fill:#db5b53">返回前检查权限与来源状态</text>
+<rect x="1302" y="699" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="1312" y="716" class="tag" style="fill:#fff">改造</text>
+<text x="778" y="754" class="body">门禁复检权限；资源模块校验来源状态</text>
+<text x="778" y="783" class="body">失效则拒绝；仅授权有效候选可进重排 / 模型</text>
+<text x="778" y="812" class="body">通过后可选 Rerank；缓存也需检查</text>
+<path class="line" d="M1060,826 L1060,843"/>
+<rect data-card="Codex 使用结果作答" x="756" y="843" width="612" height="102" rx="14" fill="#f4f8fa" stroke="#55758a" stroke-width="2"/>
+<text x="778" y="880" class="ct" style="fill:#55758a">Codex 使用结果作答</text>
+<rect x="1302" y="859" width="48" height="23" rx="5" fill="#55758a"/>
+<text x="1312" y="876" class="tag" style="fill:#fff">复用</text>
+<text x="778" y="914" class="body">继续比较证据、读取材料并完成任务</text>
+<rect x="48" y="1007" width="1344" height="232" rx="18" fill="#fff8f5" stroke="#db5b53" stroke-width="1.5"/>
+<text x="70" y="1041" class="section" style="fill:#db5b53">模式切换与索引准备 · 属于能力管理，不属于权限门禁</text>
+<rect data-card="选择目标预设" x="70" y="1064" width="257" height="131" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="92" y="1101" class="ct" style="fill:#db5b53">选择目标预设</text>
+<rect x="261" y="1080" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="271" y="1097" class="tag" style="fill:#fff">改造</text>
+<text x="92" y="1135" class="body">记录 desiredMode</text>
+<text x="92" y="1164" class="body">不自动扩大权限</text>
+<rect data-card="准备知识表示" x="369" y="1064" width="302" height="131" rx="14" fill="#fff5f4" stroke="#991b1b" stroke-width="2"/>
+<text x="391" y="1101" class="ct" style="fill:#991b1b">准备知识表示</text>
+<rect x="605" y="1080" width="48" height="23" rx="5" fill="#991b1b"/>
+<text x="615" y="1097" class="tag" style="fill:#fff">新增</text>
+<text x="391" y="1135" class="body">Wiki 有效页面，或</text>
+<text x="391" y="1164" class="body">Chroma + BM25 双就绪</text>
+<rect data-card="切换有效指针" x="713" y="1064" width="286" height="131" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="735" y="1101" class="ct" style="fill:#db5b53">切换有效指针</text>
+<rect x="933" y="1080" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="943" y="1097" class="tag" style="fill:#fff">改造</text>
+<text x="735" y="1135" class="body">先 staging 后生效</text>
+<text x="735" y="1164" class="body">PG 事务写就绪清单</text>
+<rect data-card="受控装配 / 新会话" x="1041" y="1064" width="329" height="131" rx="14" fill="#fff8f5" stroke="#db5b53" stroke-width="2"/>
+<text x="1063" y="1101" class="ct" style="fill:#db5b53">受控装配 / 新会话</text>
+<rect x="1304" y="1080" width="48" height="23" rx="5" fill="#db5b53"/>
+<text x="1314" y="1097" class="tag" style="fill:#fff">改造</text>
+<text x="1063" y="1135" class="body">激活 effectiveMode</text>
+<text x="1063" y="1164" class="body">失败保留仍有效旧模式</text>
+<path class="line" d="M327,1130 L369,1130"/>
+<path class="line" d="M671,1130 L713,1130"/>
+<path class="line" d="M999,1130 L1041,1130"/>
+<text x="70" y="1220" class="small">首次未就绪明确拒绝；不自动混合、不静默降级。索引构建任务也须授权，按需使用独立任务类型。</text>
+<text x="48" y="1276" class="small">默认没有“手工发布”步骤或必选 publish 工具；业务如需审核，可扩展内容流程，不能把审核塞进通用门禁。</text>
+<text x="48" y="1310" class="small">跨文件、PostgreSQL 与索引后端不承诺统一事务；幂等重试与失败恢复保证只读取已完成生效的版本。</text>
+<text x="48" y="1344" class="small">代码校验不保证语义真伪；来源矛盾需处理，不静默覆盖人工修改。普通问答不会触发隐式知识重建。</text>
+<text x="48" y="1378" class="small">方案与验收目标，尚未实施；原生记忆继续作为辅助回忆，不替代业务知识库。</text>
+</svg>

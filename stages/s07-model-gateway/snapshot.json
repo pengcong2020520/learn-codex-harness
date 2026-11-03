@@ -1,0 +1,41 @@
+{
+  "stage": 7,
+  "name": "模型网关",
+  "snapshotDate": "2026-11-03",
+  "source": "../../app",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".DS_Store",
+    ".git",
+    ".data",
+    ".runs",
+    "workspace",
+    "node_modules",
+    ".env",
+    ".env.* (except .env.example)",
+    "output",
+    "web",
+    "docs/verification",
+    "tests/research-protocol",
+    "scripts/test-research-protocol.mjs",
+    "tests/research-redact.test.mjs",
+    "eval",
+    "scripts/eval",
+    "scripts/eval-role*.mjs",
+    "tests/eval-role*",
+    "Dockerfile",
+    ".dockerignore",
+    "deploy",
+    "tests/deploy.test.mjs"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "workspace 排除的是项目根目录运行数据；examples/*/workspace 保留版本化示例资料，与 s06 一致。",
+    "移除研究协议脱敏测试及 scripts/eval，因为其所属研究/评估工具不进入本阶段。",
+    "网关集成测试使用假模型服务验证真实 Bifrost；移除依赖角色评估运行器的 Codex 子场景。",
+    "知识集成测试改用 Agent HTTP API，去除 Web 工作台依赖；设计文档中已移除被排除工具的失效引用。"
+  ]
+}

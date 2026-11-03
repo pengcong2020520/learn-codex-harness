@@ -28,6 +28,7 @@ jobs:
           - stages/s04-data-layer
           - stages/s05-knowledge-layer
           - stages/s06-skill-workflow
+          - stages/s07-model-gateway
           - app
     defaults:
       run:

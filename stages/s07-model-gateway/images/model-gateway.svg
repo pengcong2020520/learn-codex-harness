@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="874" viewBox="0 0 760 874" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">s07 · 模型网关 — Codex 只连网关，网关替它对接各家模型</title>
+  <desc id="desc">统一协议、多模型协调、用量与预算三层。服务商密钥只交给网关，Codex 只拿网关访问密钥。预算只阻止新任务派发，视频任务在后台查询并支持重启恢复。</desc>
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b63743"/></marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="760" height="874" fill="#fafbfc" rx="8"/>
+  <rect width="760" height="48" fill="url(#header)" rx="8"/>
+  <rect y="40" width="760" height="8" fill="url(#header)"/>
+  <text x="380" y="31" fill="#fff" font-size="16" font-weight="700" text-anchor="middle">s07 · 模型网关 — Codex 只连网关，网关替它对接各家模型</text>
+  <rect x="24" y="64" width="712" height="44" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="1"/>
+  <text x="38" y="83" fill="#7a5b00" font-size="12" font-weight="700" text-anchor="start">密钥边界</text>
+  <text x="110" y="83" fill="#475569" font-size="12" font-weight="400" text-anchor="start">各家服务商密钥只交给网关；Codex 只拿网关访问密钥。</text>
+  <text x="110" y="100" fill="#475569" font-size="11" font-weight="400" text-anchor="start">清单只写密钥变量名；生成的网关配置只保留环境变量引用。</text>
+  <rect x="24" y="124" width="712" height="218" rx="8" fill="#fff" stroke="#dbe2eb" stroke-width="1"/>
+  <text x="40" y="148" fill="#1e3a5f" font-size="14" font-weight="700" text-anchor="start">① 统一协议</text>
+  <rect x="40" y="164" width="156" height="106" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="52" y="186" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="start">Codex</text>
+  <text x="52" y="207" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">只说 Responses</text>
+  <text x="52" y="224" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">带上模型标识</text>
+  <text x="52" y="241" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">用网关访问密钥鉴权</text>
+  <rect x="226" y="164" width="262" height="106" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="238" y="186" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">模型网关 · Bifrost</text>
+  <text x="238" y="207" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">支持 Responses → 原样转发</text>
+  <text x="238" y="224" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">对话补全接口 → 转 Chat Completions</text>
+  <text x="238" y="241" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">Claude 接口 → 转 Messages</text>
+  <rect x="518" y="164" width="202" height="106" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="2"/>
+  <text x="530" y="186" fill="#374151" font-size="13" font-weight="700" text-anchor="start">各家模型服务</text>
+  <text x="530" y="207" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">Kimi / DeepSeek / 智谱等</text>
+  <text x="530" y="224" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">网关代填各家鉴权</text>
+  <text x="530" y="241" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">返回统一的响应与用量</text>
+  <path d="M 196 217 H 226" fill="none" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <path d="M 488 217 H 518" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <rect x="40" y="284" width="680" height="42" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="1"/>
+  <text x="52" y="301" fill="#1e3a5f" font-size="12" font-weight="700" text-anchor="start">模型自带联网搜索：清单 nativeTools + AGENT_WEB_SEARCH=auto / off</text>
+  <text x="52" y="318" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">跟随实际默认模型；属于会话配置，不能按轮切换；自检须看到搜索调用标记。</text>
+  <rect x="24" y="358" width="712" height="266" rx="8" fill="#fff" stroke="#dbe2eb" stroke-width="1"/>
+  <text x="40" y="382" fill="#1e3a5f" font-size="14" font-weight="700" text-anchor="start">② 多模型协调</text>
+  <rect x="40" y="398" width="260" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="52" y="420" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">模型清单 · config/models.json</text>
+  <text x="52" y="441" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">用途 purposes · 候选 routes · 场景 scenes</text>
+  <text x="52" y="458" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">能力与价格统一登记</text>
+  <text x="52" y="475" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">缺密钥、能力不符、无候选 → 说明原因</text>
+  <rect x="330" y="398" width="390" height="92" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="342" y="420" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">本次选谁：按用途、场景、能力挑选</text>
+  <text x="342" y="441" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">对话按默认路由；工作流步骤可以指定场景或模型</text>
+  <text x="342" y="458" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">未指定的轮次回到默认对话模型</text>
+  <text x="342" y="475" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">备用链：主模型失败 → 网关尝试已启用的备用模型</text>
+  <path d="M 300 444 H 330" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <path d="M 380 490 V 510" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <rect x="40" y="518" width="156" height="88" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="52" y="540" fill="#1e3a5f" font-size="13" font-weight="700" text-anchor="start">对话</text>
+  <text x="52" y="561" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">Codex 执行循环</text>
+  <text x="52" y="578" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">工作流步骤换模型</text>
+  <rect x="212" y="518" width="156" height="88" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="224" y="540" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">向量</text>
+  <text x="224" y="561" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">RAG 经网关</text>
+  <text x="224" y="578" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">本地 Ollama</text>
+  <rect x="384" y="518" width="156" height="88" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="396" y="540" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">生图</text>
+  <text x="396" y="561" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">火山方舟</text>
+  <text x="396" y="578" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">生成后保存产物</text>
+  <rect x="556" y="518" width="164" height="88" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="568" y="540" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">生视频</text>
+  <text x="568" y="561" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">火山方舟 · 先回任务 ID</text>
+  <text x="568" y="578" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">后台跟进 · 重启续查</text>
+  <path d="M 118 510 H 638" fill="none" stroke="#555" stroke-width="1.4"/>
+  <path d="M 118 510 V 518" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <path d="M 290 510 V 518" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <path d="M 462 510 V 518" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <path d="M 638 510 V 518" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+  <rect x="24" y="640" width="712" height="192" rx="8" fill="#fff" stroke="#dbe2eb" stroke-width="1"/>
+  <text x="40" y="664" fill="#1e3a5f" font-size="14" font-weight="700" text-anchor="start">③ 用量与预算</text>
+  <rect x="40" y="680" width="204" height="94" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="52" y="702" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">账本 + 价格表</text>
+  <text x="52" y="723" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">对话 / 向量 / 图片 / 视频</text>
+  <text x="52" y="740" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">去重入账；按价格估算金额</text>
+  <text x="52" y="757" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">自然日、自然月按配置时区</text>
+  <rect x="274" y="680" width="238" height="94" rx="8" fill="#fffbea" stroke="#d4a72c" stroke-width="2"/>
+  <text x="286" y="702" fill="#7a5b00" font-size="13" font-weight="700" text-anchor="start">预算拦截派发</text>
+  <text x="286" y="723" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">超限 → 保持排队，不发起新任务</text>
+  <text x="286" y="740" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">在途轮次继续；不打断、不取消</text>
+  <text x="286" y="757" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">额度恢复 → 继续派发</text>
+  <rect x="542" y="680" width="178" height="94" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="554" y="702" fill="#8f1d2c" font-size="13" font-weight="700" text-anchor="start">网关 token 限流</text>
+  <text x="554" y="723" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">Bifrost 再兜底</text>
+  <text x="554" y="740" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">日 token 上限；超限拒绝</text>
+  <text x="554" y="757" fill="#475569" font-size="11.5" font-weight="400" text-anchor="start">默认日预算 × 1.5</text>
+  <path d="M 244 727 H 274" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <path d="M 512 727 H 542" fill="none" stroke="#b63743" stroke-width="1.8" marker-end="url(#arrow-red)"/>
+  <text x="40" y="800" fill="#1e3a5f" font-size="12" font-weight="700" text-anchor="start">派发前查预算 → 发起请求 → 响应用量入账 → 下一次派发再检查</text>
+  <text x="40" y="818" fill="#475569" font-size="11" font-weight="400" text-anchor="start">运行中的请求仍会产生用量；预算和网关限流不保证费用精确封顶。</text>
+  <rect x="24" y="850" width="14" height="14" rx="8" fill="#fdf0ef" stroke="#b63743" stroke-width="2"/>
+  <text x="44" y="861" fill="#475569" font-size="11" font-weight="400" text-anchor="start">红色：本阶段新增或变化</text>
+  <rect x="224" y="850" width="14" height="14" rx="8" fill="#f0f4ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="244" y="861" fill="#475569" font-size="11" font-weight="400" text-anchor="start">蓝色：沿用的执行结构与接口</text>
+</svg>
