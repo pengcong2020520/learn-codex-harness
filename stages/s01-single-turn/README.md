@@ -32,7 +32,7 @@ CODEX_BASE_URL=https://api.deepseek.com
 CODEX_MODEL=deepseek-flash
 ```
 
-第三方模型也可以，前提是它提供 OpenAI 的 Responses 接口，因为 Codex 只用这套接口跟模型对话。DeepSeek、Kimi 都可以直连。只有 Chat Completions 或 Claude 格式接口的模型，要经过模型网关转换（见[导论](../introduction.md#模型怎么接)）。
+第三方模型也可以，前提是它提供 OpenAI 的 Responses 接口，因为 Codex 只用这套接口跟模型对话。DeepSeek、Kimi 都可以直连。从这一章到 s06，我们都用直连，一个模型就够讲清原理；到 [s07](../s07-model-gateway/)，线上要同时用好几个模型，就要打造一个模型网关（见[导论](../introduction.md#模型怎么接)）。
 
 `.env` 里还有一组 `CODEX_MODEL_*`，这是**模型目录**：声明这个模型的上下文有多长、能不能看图、有哪些推理档位。每次运行，程序都会把它写成 `.runs/app-server-*/models.json` 交给 Codex。Codex 靠它认识这个模型，以后换模型也只改这一处。注意，这些都是能力声明，不代表给 Agent 授予任何系统权限。
 
@@ -203,7 +203,7 @@ await turn.completed.promise;
 
 ## 小结
 
-- 模型接入只要 API Key、Base URL、模型名，外加一份模型目录。支持 Responses 接口的第三方模型可以直连；线上要多模型协作时再加模型网关。
+- 模型接入只要 API Key、Base URL、模型名，外加一份模型目录。支持 Responses 接口的第三方模型可以直连；s01–s06 都用直连，到 s07 再打造模型网关。
 - App Server 是一条双向连接：请求换回包，一个请求带出很多条通知，服务端还可能反过来向你要审批。
 - 一轮的成败只看它自己的 `turn/completed`。回包只代表受理。
 - 会话历史存在 Codex 的状态目录里，不在我们的程序里。
