@@ -9,7 +9,9 @@
     "gemini": { "type": "gemini", "keyEnv": "GEMINI_API_KEY" },
     "xai": { "type": "xai", "keyEnv": "XAI_API_KEY" },
     "zhipu": { "type": "anthropic", "baseUrl": "https://open.bigmodel.cn/api/anthropic", "keyEnv": "ZHIPU_API_KEY",
-      "note": "智谱国内站。没有 OpenAI 新接口（/responses 返回 404），走它的 Claude 格式接口；国际站 Z.ai 把 baseUrl 改成 https://api.z.ai/api/anthropic" }
+      "note": "智谱国内站。没有 OpenAI 新接口（/responses 返回 404），走它的 Claude 格式接口；国际站 Z.ai 把 baseUrl 改成 https://api.z.ai/api/anthropic" },
+    "hf": { "type": "openai", "baseUrl": "https://router.huggingface.co", "keyEnv": "HUGGINGFACE_API_KEY",
+      "note": "Hugging Face 推理服务：一个令牌调用多家算力商托管的开源模型，按用量从 HF 账户扣费（免费账户额度很少）。有 OpenAI 新接口，原样转发。令牌只需“推理”权限。" }
   },
   "models": {
     "kimi/kimi-k2.7-code": {
@@ -30,6 +32,9 @@
     "deepseek/deepseek-v4-pro": { "displayName": "DeepSeek V4 Pro", "contextWindow": 1048576, "inputModalities": ["text", "image"], "fallbacks": ["deepseek/deepseek-flash"] },
     "zhipu/glm-5.3": { "displayName": "GLM-5.3", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text"], "fallbacks": ["zhipu/glm-5.3-flash"] },
     "zhipu/glm-5.3-flash": { "displayName": "GLM-5.3 Flash", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text", "image"] },
+    "hf/deepseek-ai/DeepSeek-V4.1-Flash": { "displayName": "DeepSeek V4.1 Flash（HF）", "contextWindow": 1048576, "inputModalities": ["text"] },
+    "hf/zai-org/GLM-5.3-Flash": { "displayName": "GLM-5.3 Flash（HF）", "contextWindow": 1000000, "inputModalities": ["text", "image"] },
+    "hf/MiniMaxAI/MiniMax-M3.1-Flash": { "displayName": "MiniMax M3.1 Flash（HF）", "contextWindow": 1000000, "inputModalities": ["text"] },
     "openai/gpt-6.1-terra": { "displayName": "GPT-6.1 Terra", "contextWindow": 1050000, "inputModalities": ["text", "image"] },
     "anthropic/claude-sonnet-5-5": { "displayName": "Claude Sonnet 5.5", "contextWindow": 1000000, "maxOutputTokens": 64000, "inputModalities": ["text", "image"] },
     "gemini/gemini-3-flash-preview": { "displayName": "Gemini 3 Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"] },

@@ -92,11 +92,17 @@ npm run server
   - Kimi K2.7 原样转发；转成 Claude 协议和 Chat Completions；DeepSeek 返回 402 时改用 Kimi。
   - DeepSeek V4 快速版（`deepseek/deepseek-flash`，网关转成它的对话接口；不填上限时实测可输出 6700 多词元，不会被截断）：“写汇报材料”完整任务 25 秒，8/8 项检查通过。
   - 智谱 GLM-5.3 Flash（转成 Claude 格式）：同一任务 5 分钟，8/8 项检查通过；补上输出上限之前，它在写文件时被截断而失败。
+- **只验证了链路**：Hugging Face 推理服务。请求经网关能到达 HF，但账户额度为 0，没有跑完整任务。
 - **未用真实密钥验证**：OpenAI、Claude、Gemini、Grok 的真实接口。清单里的模型名和上下文长度来自各家 2026 年 10 月的官方文档，第一次启用时建议先跑一个简单任务。
 
 ## 常见问题
 
 - **智谱 GLM**：没有 OpenAI 新接口（`/responses` 返回 404），清单里按 Claude 格式接入（`https://open.bigmodel.cn/api/anthropic`，国际站 Z.ai 用 `https://api.z.ai/api/anthropic`）。
+- **Hugging Face 推理服务**（服务商名 `hf`，密钥变量 `HUGGINGFACE_API_KEY`）：一个令牌调用多家算力商托管的开源模型，模型名写成 `hf/组织/模型`，如 `hf/deepseek-ai/DeepSeek-V4.1-Flash`。
+  - 按用量从 HF 账户扣费，免费账户额度很少，用完返回“no remaining credits”。
+  - 它有 OpenAI 新接口，网关原样转发。新接口出错时返回码仍是 200、错误写在内容里；Codex 用的流式请求会被网关识别为失败（502），备用切换照常触发。
+  - 同一模型由 HF 分配给不同算力商，速度和价格可能不同。清单里只登记了各算力商上下文都在 100 万左右的模型。
+  - 令牌只需“推理”权限，不要用带仓库写权限的令牌。
 - **长文章写到一半断掉、随后网关一直报 500**：走 Claude 格式的模型没填 `maxOutputTokens`，见上文“模型清单”。
 - **Kimi 返回 401 Invalid Authentication**：国内站和国际站账号不通用，platform.moonshot.cn 的密钥只能用 `api.moonshot.cn`。国际站密钥要把 `config/models.json` 里 kimi 的 `baseUrl` 改成 `https://api.moonshot.ai`。
 - **网关返回 "virtual key is required"**：访问密钥不是 `sk-bf-` 开头。删掉 .env 里的 `AGENT_GATEWAY_KEY` 后重新运行 `npm run gateway:key`。
