@@ -6,7 +6,7 @@
     { "id": "deliverable", "label": "交付物保存在 outputs/", "type": "deliverable", "dir": "outputs" },
     { "id": "length", "label": "篇幅 1400–3000 字（含标题备选）", "type": "length", "min": 1400, "max": 3000 },
     { "id": "subheadings", "label": "至少 3 个小标题", "type": "headings", "min": 3 },
-    { "id": "facts", "label": "用户素材准确（2000 篇、5%、800 字、40 周、分享两次）", "type": "includes-all", "all": ["2000", "5\\s*%", "800\\s*字", "40\\s*周", "(两次|2\\s*次)"] },
+    { "id": "facts", "label": "用户素材准确（2000 篇、5%、800 字、40 周、分享两次）", "type": "includes-all", "all": ["2,?000", "5\\s*%", "800\\s*字", "40\\s*周", "(两次|2\\s*次)"] },
     { "id": "three-notes", "label": "保留“三句话”方法", "type": "includes", "any": ["三句话"] },
     { "id": "no-anxiety", "label": "没有贩卖焦虑的“被 AI 取代”", "type": "excludes", "patterns": ["被\\s*AI\\s*取代", "AI\\s*会?取代你"] },
     { "id": "ending-question", "label": "结尾有互动问题", "type": "ending-question", "within": 300 }

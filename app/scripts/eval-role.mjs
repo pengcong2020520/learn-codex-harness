@@ -3,7 +3,8 @@
 // 会真实调用模型、产生费用。
 //
 // node scripts/eval-role.mjs --variant current=agents/writing --variant slim=<Agent 包目录> [--repeat 3] [--only s1-local-doc,s4-report]
-//   [--env .env] [--out .runs/eval-role/<时间>] [--timeout-min 20]
+//   [--env .env] [--out .runs/eval-role/<时间>] [--timeout-min 20] [--capture]
+// --capture 在 Codex 与模型服务之间放一个透传代理，记下每次请求的内容与组成（不改动请求和响应）。
 // 之后用 scripts/eval-role-score.mjs 打分并生成报告。
 import fs from "node:fs";
 import os from "node:os";
@@ -12,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
 import { startAgentServer } from "../server/main.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
+import { captureProxy, composition } from "./eval/capture-proxy.mjs";
 
 const app = fileURLToPath(new URL("../", import.meta.url));
 const scenarioRoot = path.join(app, "eval/role/scenarios");
@@ -58,9 +60,10 @@ async function waitFor(server, id, timeoutMs) {
   }
 }
 
-export async function runOnce({ label, agentDir, scenario, index, env, out, timeoutMs, dataFactory }) {
+export async function runOnce({ label, agentDir, scenario, index, env, out, timeoutMs, dataFactory, capture = false }) {
   const { root, workspace } = prepareRoot(agentDir, scenario);
-  const config = loadServerConfig(root, env);
+  const proxy = capture ? await captureProxy(env.CODEX_BASE_URL) : null;
+  const config = loadServerConfig(root, proxy ? { ...env, CODEX_BASE_URL: proxy.url } : env);
   config.port = 0;
   const started = Date.now(), usage = { total: null, requests: 0 }, tools = [];
   let server;
@@ -92,10 +95,15 @@ export async function runOnce({ label, agentDir, scenario, index, env, out, time
     record.tools = tools;
     record.files = walk(workspace).filter(file => !file.path.startsWith("inputs/"));
     await server?.close().catch(() => {});
+    await proxy?.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
   const dir = path.join(out, label, scenario.id);
   fs.mkdirSync(dir, { recursive: true });
+  if (proxy) {
+    record.requestParts = proxy.requests.map(body => body && composition(body));
+    fs.writeFileSync(path.join(dir, `run-${index}.requests.json`), JSON.stringify(proxy.requests, null, 2));
+  }
   fs.writeFileSync(path.join(dir, `run-${index}.json`), JSON.stringify(record, null, 2));
   return record;
 }
@@ -103,7 +111,8 @@ export async function runOnce({ label, agentDir, scenario, index, env, out, time
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({ options: {
     variant: { type: "string", multiple: true }, repeat: { type: "string", default: "3" }, only: { type: "string", default: "" },
-    env: { type: "string", default: path.join(app, ".env") }, out: { type: "string" }, "timeout-min": { type: "string", default: "20" } } });
+    env: { type: "string", default: path.join(app, ".env") }, out: { type: "string" }, "timeout-min": { type: "string", default: "20" },
+    capture: { type: "boolean", default: false } } });
   const variants = (values.variant || []).map(item => {
     const [label, dir] = item.split("=");
     if (!/^[a-zA-Z0-9_-]+$/.test(label || "") || !dir) throw new Error("--variant 格式：名称=Agent 包目录，名称只用字母、数字、- 和 _");
@@ -122,7 +131,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (let index = 1; index <= Number(values.repeat); index++) {
     for (const scenario of scenarios) {
       for (const variant of index % 2 ? variants : [...variants].reverse()) {
-        const record = await runOnce({ ...variant, scenario, index, env, out, timeoutMs });
+        const record = await runOnce({ ...variant, scenario, index, env, out, timeoutMs, capture: values.capture });
         const total = record.usage.total;
         console.log(`[${index}] ${scenario.id} ${variant.label}：${record.status}，${record.usage.requests} 次请求，` +
           `输入 ${total?.inputTokens ?? "-"}（缓存 ${total?.cachedInputTokens ?? "-"}），输出 ${total?.outputTokens ?? "-"}，` +

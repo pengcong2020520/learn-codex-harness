@@ -16,7 +16,7 @@
     "check:server": "node server/check.mjs --codex",
     "smoke": "node scripts/smoke.mjs",
     "tools": "node server/modules/tools/web-cli.mjs",
-    "test:codex-tools": "node --test tests/codex-tools.integration.mjs",
+    "test:codex-tools": "node --test tests/codex-tools.integration.mjs tests/eval-role.integration.mjs",
     "test:codex-memory": "node --test tests/codex-memory.integration.mjs",
     "data:migrate": "node scripts/data.mjs migrate",
     "data:import": "node scripts/data.mjs import",
@@ -36,7 +36,9 @@
     "sessions:upgrade": "node scripts/upgrade-sessions.mjs",
     "test:protocol:research": "node scripts/test-research-protocol.mjs",
     "db:up": "docker compose up -d --wait postgres redis",
-    "db:down": "docker compose stop postgres redis"
+    "db:down": "docker compose stop postgres redis",
+    "eval:role": "node scripts/eval-role.mjs",
+    "eval:role:score": "node scripts/eval-role-score.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

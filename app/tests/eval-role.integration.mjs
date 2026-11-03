@@ -61,3 +61,31 @@ test("评估运行器：独立临时项目里跑一个场景，记录 token、�
   const leftover = fs.readdirSync(path.dirname(work)).filter(name => name.startsWith("eval-role-") && !before.has(name));
   assert.deepEqual(leftover, [], "临时项目目录应已删除");
 });
+
+test("评估运行器 --capture：透传代理不改变结果，并记录每次请求的组成", { timeout: 90000 }, async t => {
+  const work = tempRoot(t), out = path.join(work, "out");
+  const agentDir = path.join(work, "agent");
+  fs.cpSync(path.join(app, "agents/writing"), agentDir, { recursive: true });
+  const definition = JSON.parse(fs.readFileSync(path.join(agentDir, "agent.json"), "utf8"));
+  definition.agent.tools.allow = ["list_files", "read_file", "write_file"];
+  definition.agent.skills = []; definition.agent.workflows = []; definition.bindings.skills = {};
+  delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
+  fs.writeFileSync(path.join(agentDir, "agent.json"), JSON.stringify(definition));
+  let step = 0;
+  const provider = await responsesFixture(work, body => step++ ? answer("完成。") : toolCall(toolSpecs(body).find(spec => spec.name?.endsWith("list_files")), {}));
+  const env = { ...process.env, CODEX_API_KEY: "local-test-only", CODEX_BASE_URL: provider.url, CODEX_MODEL: "local-test-model",
+    CODEX_MODEL_CATALOG_ENABLED: "true", CODEX_MODEL_CONTEXT_WINDOW: "128000", DEMO_TIMEOUT_MS: "15000" };
+  const record = await runOnce({ label: "current", agentDir, scenario: loadScenarios(["s2-wechat"])[0], index: 1, env, out, timeoutMs: 60000,
+    dataFactory: testDataFactory, capture: true });
+  assert.equal(record.status, "completed", record.error);
+  assert.equal(record.reply, "完成。");
+  assert.equal(provider.requests.length, 2, "请求经代理原样到达模型服务");
+  assert.equal(record.requestParts.length, 2);
+  const [first, second] = record.requestParts;
+  assert.ok(first.instructions > 1000, "基础指令里是角色内容");
+  assert.ok(first.tools > 100);
+  assert.ok(first["message:user"] > 100, "用户消息含场景要求");
+  assert.ok(second.function_call_output > 0, "第二次请求带上工具结果");
+  const saved = JSON.parse(fs.readFileSync(path.join(out, "current/s2-wechat/run-1.requests.json"), "utf8"));
+  assert.equal(saved[0].instructions, provider.requests[0].instructions);
+});

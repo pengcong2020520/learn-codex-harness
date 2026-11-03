@@ -1,11 +1,12 @@
 // 角色评估打分：读取 eval-role.mjs 的运行记录，做硬性检查、统计 token，并用更强的模型做盲评，生成报告。
 // node scripts/eval-role-score.mjs --dir <运行输出目录> --baseline current --candidate slim [--judge-model deepseek-v4-pro] [--env .env] [--no-judge]
 // 盲评：同一场景第 i 次的两版交付物配成一对，以“甲 / 乙”匿名，交换先后各评一次；两次结论一致才算胜负，不一致记为持平。
+// 每次评审结果存到 <运行输出目录>/judge/ 下，重新打分时直接复用，不重复花费。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
-import { mainDocument, runChecks, stats } from "./eval/checks.mjs";
+import { mainDocument, runChecks, stats, writtenPaths } from "./eval/checks.mjs";
 import { loadScenarios } from "./eval-role.mjs";
 
 const app = fileURLToPath(new URL("../", import.meta.url));
@@ -47,15 +48,64 @@ function judgePrompt(scenario, inputsText, docA, docB) {
   ];
 }
 
+// 读取流式响应：只拼接正文增量（推理增量只用来保持连接活跃），用量在最后一个事件里。
+async function readStream(response) {
+  const decoder = new TextDecoder();
+  let buffer = "", text = "", usage = null;
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) {
+      const data = line.trim().replace(/^data:\s*/, "");
+      if (!line.trim().startsWith("data:") || data === "[DONE]") continue;
+      const event = JSON.parse(data);
+      text += event.choices?.[0]?.delta?.content || "";
+      if (event.usage) usage = event.usage;
+    }
+  }
+  return { text, usage };
+}
+
+// 用流式请求：评审模型要推理好几分钟，非流式响应在这期间没有数据，会被客户端（默认 5 分钟）或代理当作超时断开。
 async function judge({ base, key, model }, messages) {
   const response = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, { method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, messages, temperature: 0, response_format: { type: "json_object" }, max_tokens: 4000 }) });
-  if (!response.ok) throw new Error(`评审请求失败：HTTP ${response.status} ${(await response.text()).slice(0, 200)}`);
-  const body = await response.json(), text = body.choices?.[0]?.message?.content || "";
+    body: JSON.stringify({ model, messages, temperature: 0, response_format: { type: "json_object" }, max_tokens: 16000,
+      stream: true, stream_options: { include_usage: true } }) });
+  if (!response.ok) {
+    const error = new Error(`评审请求失败：HTTP ${response.status} ${(await response.text()).slice(0, 200)}`);
+    error.retryable = response.status === 429 || response.status >= 500;
+    throw error;
+  }
+  // 个别服务不支持流式，会直接返回完整 JSON。
+  const { text, usage } = response.headers.get("content-type")?.includes("text/event-stream") ? await readStream(response)
+    : await response.json().then(body => ({ text: body.choices?.[0]?.message?.content || "", usage: body.usage || null }));
   const verdict = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
   if (!["甲", "乙", "平"].includes(verdict.overall)) throw new Error(`评审结果格式不对：${text.slice(0, 200)}`);
-  return { verdict, usage: body.usage || null };
+  return { verdict, usage };
+}
+
+// 评审模型推理时间长，连接偶尔会被中途断开；断线、限流、服务端错误和格式不对时重试，其余错误直接报出。
+async function judgeWithRetry(config, messages, { attempts = 3, delayMs = 5000 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await judge(config, messages);
+    } catch (error) {
+      if (attempt >= attempts || error.retryable === false) throw error;
+      console.error(`评审请求失败，${delayMs * attempt / 1000} 秒后第 ${attempt} 次重试：${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
+    }
+  }
+}
+
+// 已有评审结果就复用；同一对、同一先后顺序、同一评审模型只评一次。
+async function cachedJudge(file, run) {
+  if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
+  const result = await run();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(result, null, 2));
+  return result;
 }
 
 const pct = (a, b) => b ? `${a > b ? "+" : ""}${(((a - b) / b) * 100).toFixed(1)}%` : "-";
@@ -67,15 +117,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dir = path.resolve(values.dir);
   const env = { ...parseEnv(fs.readFileSync(values.env, "utf8")), ...process.env };
   const judgeConfig = { base: env.CODEX_BASE_URL, key: env.CODEX_API_KEY, model: values["judge-model"] };
+  const retry = { delayMs: Number(env.EVAL_JUDGE_RETRY_MS || 5000) };
   const labels = [values.baseline, values.candidate];
-  const result = { dir, baseline: values.baseline, candidate: values.candidate, judgeModel: values["no-judge"] ? null : judgeConfig.model, scenarios: [] };
+  const result = { dir: path.basename(dir), baseline: values.baseline, candidate: values.candidate, judgeModel: values["no-judge"] ? null : judgeConfig.model, scenarios: [] };
   const judgeUsage = { prompt: 0, completion: 0 };
 
   for (const scenario of loadScenarios()) {
     const inputsText = readInputs(scenario.inputs);
     const runs = Object.fromEntries(labels.map(label => [label, loadRuns(dir, label, scenario.id).map(run => {
-      const deliverable = scenario.checks.find(check => check.type === "deliverable")?.dir || "outputs";
-      return { ...run, doc: mainDocument(run.files, deliverable), checks: runChecks(scenario, { files: run.files, reply: run.reply, inputsText }), tokens: tokenFigures(run) };
+      const deliverable = scenario.checks.find(check => check.type === "deliverable")?.dir || "outputs", written = writtenPaths(run);
+      return { ...run, doc: mainDocument(run.files, deliverable, written), checks: runChecks(scenario, { files: run.files, reply: run.reply, inputsText, written }), tokens: tokenFigures(run) };
     })]));
     if (!runs[values.baseline].length && !runs[values.candidate].length) continue;
     const entry = { id: scenario.id, name: scenario.name, variants: {}, pairs: [] };
@@ -86,14 +137,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         failedChecks: [...new Set(checks.filter(check => !check.pass).map(check => check.label))],
         tokens: Object.fromEntries(["total", "input", "uncached", "cached", "output", "reasoning", "requests"].map(key => [key, stats(list.map(run => run.tokens?.[key]))])),
         elapsedSec: stats(list.map(run => Math.round(run.elapsedMs / 1000))),
-        skillReads: list.map(run => run.tools.filter(tool => tool.tool === "skill_read").map(tool => tool.args?.name)) };
+        skillReads: list.map(run => run.tools.filter(tool => tool.tool === "skill_read").map(tool => tool.args?.name)),
+        firstRequest: list.map(run => run.requestParts?.[0]).filter(Boolean) };
     }
     if (!values["no-judge"]) {
       for (const base of runs[values.baseline]) {
         const candidate = runs[values.candidate].find(run => run.index === base.index);
         if (!candidate) continue;
-        const first = await judge(judgeConfig, judgePrompt(scenario, inputsText, base, candidate));
-        const second = await judge(judgeConfig, judgePrompt(scenario, inputsText, candidate, base));
+        const cache = order => path.join(dir, "judge", judgeConfig.model, `${values.baseline}-vs-${values.candidate}`, `${scenario.id}-${base.index}-${order}.json`);
+        const first = await cachedJudge(cache("baseline-first"), () => judgeWithRetry(judgeConfig, judgePrompt(scenario, inputsText, base, candidate), retry));
+        const second = await cachedJudge(cache("candidate-first"), () => judgeWithRetry(judgeConfig, judgePrompt(scenario, inputsText, candidate, base), retry));
         for (const { usage } of [first, second]) { judgeUsage.prompt += usage?.prompt_tokens || 0; judgeUsage.completion += usage?.completion_tokens || 0; }
         const pair = { index: base.index, result: combine(first.verdict.overall, second.verdict.overall),
           scores: { [values.baseline]: (first.verdict.scores?.["甲"] + second.verdict.scores?.["乙"]) / 2, [values.candidate]: (first.verdict.scores?.["乙"] + second.verdict.scores?.["甲"]) / 2 },
@@ -119,6 +172,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const totalBase = result.scenarios.reduce((sum, e) => sum + (e.variants[values.baseline].tokens.total?.mean || 0), 0);
   const totalCand = result.scenarios.reduce((sum, e) => sum + (e.variants[values.candidate].tokens.total?.mean || 0), 0);
   lines.push("", `四个场景合计（各取平均）：基线 ${num(totalBase)}，候选 ${num(totalCand)}，变化 ${pct(totalCand, totalBase)}。`, "");
+  // --capture 记录了请求组成时，比较第一次请求里各部分的字符数（之后每次请求都会带上这些固定部分）。
+  const firstParts = label => result.scenarios.flatMap(entry => entry.variants[label].firstRequest || []);
+  if (firstParts(values.baseline).length && firstParts(values.candidate).length) {
+    const keys = ["instructions", "tools", "message:developer", "message:user"], names = { instructions: "基础指令（角色 + 资源规则）", tools: "工具定义", "message:developer": "Skill 清单与权限说明", "message:user": "环境信息与用户需求" };
+    const mean = (label, key) => stats(firstParts(label).map(parts => parts[key] || 0))?.mean;
+    lines.push("## 每次请求的固定部分（第一次请求，字符数平均值）", "", "| 部分 | 基线 | 候选 | 变化 |", "|---|---|---|---|");
+    for (const key of keys) lines.push(`| ${names[key]} | ${num(mean(values.baseline, key))} | ${num(mean(values.candidate, key))} | ${pct(mean(values.candidate, key), mean(values.baseline, key))} |`);
+    lines.push("");
+  }
   lines.push("## 质量", "", "| 场景 | 硬性检查（基线） | 硬性检查（候选） | 盲评（候选 胜/平/负） | 平均分（基线 → 候选） |", "|---|---|---|---|---|");
   const verdicts = [];
   for (const entry of result.scenarios) {

@@ -1,0 +1,835 @@
+{
+  "dir": "round3",
+  "baseline": "current",
+  "candidate": "slim3",
+  "judgeModel": null,
+  "scenarios": [
+    {
+      "id": "s1-local-doc",
+      "name": "本地写文档",
+      "variants": {
+        "current": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 45,
+          "checksTotal": 45,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 62612,
+              "min": 39149,
+              "max": 117850,
+              "n": 5
+            },
+            "input": {
+              "mean": 48105,
+              "min": 28688,
+              "max": 93779,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 7427,
+              "min": 2192,
+              "max": 16851,
+              "n": 5
+            },
+            "cached": {
+              "mean": 40678,
+              "min": 25728,
+              "max": 76928,
+              "n": 5
+            },
+            "output": {
+              "mean": 14507,
+              "min": 8149,
+              "max": 24071,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 8364,
+              "min": 3258,
+              "max": 17716,
+              "n": 5
+            },
+            "requests": {
+              "mean": 5,
+              "min": 4,
+              "max": 7,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 96,
+            "min": 56,
+            "max": 157,
+            "n": 5
+          },
+          "skillReads": [
+            [
+              "write-article"
+            ],
+            [],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            }
+          ]
+        },
+        "slim3": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 45,
+          "checksTotal": 45,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 38615,
+              "min": 30459,
+              "max": 60943,
+              "n": 5
+            },
+            "input": {
+              "mean": 27245,
+              "min": 22718,
+              "max": 40359,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 3744,
+              "min": 2343,
+              "max": 4659,
+              "n": 5
+            },
+            "cached": {
+              "mean": 23501,
+              "min": 19328,
+              "max": 38016,
+              "n": 5
+            },
+            "output": {
+              "mean": 11370,
+              "min": 7741,
+              "max": 20584,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 5981,
+              "min": 2943,
+              "max": 14597,
+              "n": 5
+            },
+            "requests": {
+              "mean": 4,
+              "min": 4,
+              "max": 5,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 74,
+            "min": 53,
+            "max": 127,
+            "n": 5
+          },
+          "skillReads": [
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 608
+            }
+          ]
+        }
+      },
+      "pairs": []
+    },
+    {
+      "id": "s2-wechat",
+      "name": "写公众号文章",
+      "variants": {
+        "current": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 35,
+          "checksTotal": 35,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 28407,
+              "min": 22109,
+              "max": 35869,
+              "n": 5
+            },
+            "input": {
+              "mean": 23300,
+              "min": 17422,
+              "max": 28674,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 3127,
+              "min": 1794,
+              "max": 5244,
+              "n": 5
+            },
+            "cached": {
+              "mean": 20173,
+              "min": 13056,
+              "max": 26880,
+              "n": 5
+            },
+            "output": {
+              "mean": 5107,
+              "min": 3553,
+              "max": 7195,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 3797,
+              "min": 2015,
+              "max": 5951,
+              "n": 5
+            },
+            "requests": {
+              "mean": 4,
+              "min": 3,
+              "max": 5,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 40,
+            "min": 33,
+            "max": 51,
+            "n": 5
+          },
+          "skillReads": [
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ]
+          ],
+          "firstRequest": [
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            }
+          ]
+        },
+        "slim3": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 34,
+          "checksTotal": 35,
+          "failedChecks": [
+            "篇幅 1400–3000 字（含标题备选）"
+          ],
+          "tokens": {
+            "total": {
+              "mean": 25284,
+              "min": 19745,
+              "max": 44307,
+              "n": 5
+            },
+            "input": {
+              "mean": 19991,
+              "min": 15590,
+              "max": 36087,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 2634,
+              "min": 1197,
+              "max": 4142,
+              "n": 5
+            },
+            "cached": {
+              "mean": 17357,
+              "min": 12160,
+              "max": 33152,
+              "n": 5
+            },
+            "output": {
+              "mean": 5293,
+              "min": 4134,
+              "max": 8220,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 3673,
+              "min": 2871,
+              "max": 5496,
+              "n": 5
+            },
+            "requests": {
+              "mean": 3,
+              "min": 3,
+              "max": 5,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 37,
+            "min": 31,
+            "max": 55,
+            "n": 5
+          },
+          "skillReads": [
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ],
+            [
+              "write-article"
+            ],
+            [],
+            [
+              "write-article"
+            ]
+          ],
+          "firstRequest": [
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 918
+            }
+          ]
+        }
+      },
+      "pairs": []
+    },
+    {
+      "id": "s3-research",
+      "name": "信息调研并整理成文档",
+      "variants": {
+        "current": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 50,
+          "checksTotal": 50,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 60843,
+              "min": 50447,
+              "max": 72228,
+              "n": 5
+            },
+            "input": {
+              "mean": 50433,
+              "min": 42487,
+              "max": 60455,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 7989,
+              "min": 5819,
+              "max": 10791,
+              "n": 5
+            },
+            "cached": {
+              "mean": 42445,
+              "min": 35200,
+              "max": 49664,
+              "n": 5
+            },
+            "output": {
+              "mean": 10409,
+              "min": 7960,
+              "max": 12190,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 3949,
+              "min": 2397,
+              "max": 5794,
+              "n": 5
+            },
+            "requests": {
+              "mean": 7,
+              "min": 6,
+              "max": 8,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 70,
+            "min": 53,
+            "max": 85,
+            "n": 5
+          },
+          "skillReads": [
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            }
+          ]
+        },
+        "slim3": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 50,
+          "checksTotal": 50,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 51784,
+              "min": 43736,
+              "max": 54826,
+              "n": 5
+            },
+            "input": {
+              "mean": 39198,
+              "min": 32724,
+              "max": 41676,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 6456,
+              "min": 2900,
+              "max": 8338,
+              "n": 5
+            },
+            "cached": {
+              "mean": 32742,
+              "min": 29824,
+              "max": 34560,
+              "n": 5
+            },
+            "output": {
+              "mean": 12586,
+              "min": 11012,
+              "max": 13774,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 5687,
+              "min": 4520,
+              "max": 7067,
+              "n": 5
+            },
+            "requests": {
+              "mean": 6,
+              "min": 5,
+              "max": 6,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 79,
+            "min": 69,
+            "max": 85,
+            "n": 5
+          },
+          "skillReads": [
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 672
+            }
+          ]
+        }
+      },
+      "pairs": []
+    },
+    {
+      "id": "s4-report",
+      "name": "写汇报材料",
+      "variants": {
+        "current": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 39,
+          "checksTotal": 40,
+          "failedChecks": [
+            "关键数据准确（满意度 4.4、转人工 31%、1,850 小时）"
+          ],
+          "tokens": {
+            "total": {
+              "mean": 35883,
+              "min": 33931,
+              "max": 42299,
+              "n": 5
+            },
+            "input": {
+              "mean": 27967,
+              "min": 26357,
+              "max": 30508,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 3493,
+              "min": 2348,
+              "max": 7925,
+              "n": 5
+            },
+            "cached": {
+              "mean": 24474,
+              "min": 18432,
+              "max": 28160,
+              "n": 5
+            },
+            "output": {
+              "mean": 7916,
+              "min": 4108,
+              "max": 11791,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 5715,
+              "min": 1843,
+              "max": 9787,
+              "n": 5
+            },
+            "requests": {
+              "mean": 4,
+              "min": 4,
+              "max": 5,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 47,
+            "min": 29,
+            "max": 63,
+            "n": 5
+          },
+          "skillReads": [
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 3066,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            }
+          ]
+        },
+        "slim3": {
+          "runs": 5,
+          "completed": 5,
+          "checksPassed": 40,
+          "checksTotal": 40,
+          "failedChecks": [],
+          "tokens": {
+            "total": {
+              "mean": 32497,
+              "min": 27880,
+              "max": 37117,
+              "n": 5
+            },
+            "input": {
+              "mean": 25832,
+              "min": 21536,
+              "max": 29063,
+              "n": 5
+            },
+            "uncached": {
+              "mean": 3253,
+              "min": 2336,
+              "max": 5895,
+              "n": 5
+            },
+            "cached": {
+              "mean": 22579,
+              "min": 19200,
+              "max": 25472,
+              "n": 5
+            },
+            "output": {
+              "mean": 6665,
+              "min": 4339,
+              "max": 8054,
+              "n": 5
+            },
+            "reasoning": {
+              "mean": 4720,
+              "min": 2192,
+              "max": 5998,
+              "n": 5
+            },
+            "requests": {
+              "mean": 5,
+              "min": 4,
+              "max": 5,
+              "n": 5
+            }
+          },
+          "elapsedSec": {
+            "mean": 41,
+            "min": 31,
+            "max": 47,
+            "n": 5
+          },
+          "skillReads": [
+            [],
+            [
+              "write-article"
+            ],
+            [],
+            [],
+            []
+          ],
+          "firstRequest": [
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            },
+            {
+              "instructions": 1616,
+              "tools": 5462,
+              "message:developer": 992,
+              "message:user": 596
+            }
+          ]
+        }
+      },
+      "pairs": []
+    }
+  ],
+  "judgeUsage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "passed": false
+}
