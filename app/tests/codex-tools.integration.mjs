@@ -35,7 +35,7 @@ test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重�
   const provider = await responsesFixture(root, body => {
     const specs = toolSpecs(body), names = specs.map(tool => tool.name);
     assert.ok(JSON.stringify(body).includes("ROLE_ASSEMBLY_FIXTURE"), "角色没有进入原生模型请求");
-    assert.ok(!names.some(name => /exec_command|shell_command|apply_patch|search_web|read_webpage/.test(name || "")));
+    assert.ok(!names.some(name => /exec_command|shell_command|apply_patch|read_webpage/.test(name || "")));
     const plan = [
       ["write_file", { path: "outputs/article.md", content: "文章：测试观点与证据。" }],
       ["read_file", { path: "outputs/article.md" }], null,
@@ -62,7 +62,7 @@ test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重�
   const turn = app.sessions.snapshot(session.id).turns.at(-1);
   assert.equal(Object.keys(turn.tools).length, 2);
   assert.equal(Object.keys(turn.artifacts).length, 1, "可信工具写入事件应关联到原生 turn");
-  assert.equal((await app.tools.registry.call({ tool: "search_web", arguments: { query: "bypass" } })).success, false);
+  assert.equal((await app.tools.registry.call({ tool: "read_webpage", arguments: { url: "https://example.com" } })).success, false);
   const oldRun = app.runtime.runDir, workspaceDir = app.runtime.workspaceDir;
   const descriptor = app.agent.descriptor.hash;
   await app.close();

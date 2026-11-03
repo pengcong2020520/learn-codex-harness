@@ -20,8 +20,8 @@
     "ollama": { "type": "ollama", "baseUrlEnv": "OLLAMA_BASE_URL", "note": "本地部署的 Ollama（compose 里的 ollama 服务，地址 http://ollama:11434），不需要密钥；填了 OLLAMA_BASE_URL 才启用。" }
   },
   "models": {
-    "kimi/kimi-k2.7-code": { "purposes": ["chat"], "displayName": "Kimi K2.7 Code", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["deepseek/deepseek-flash"], "verified": "2026-11-02" },
-    "kimi/kimi-k2.6": { "purposes": ["chat"], "displayName": "Kimi K2.6", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "verified": "2026-11-02" },
+    "kimi/kimi-k2.7-code": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.7 Code", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["deepseek/deepseek-flash"], "verified": "2026-11-02" },
+    "kimi/kimi-k2.6": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.6", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "verified": "2026-11-02" },
     "deepseek/deepseek-flash": { "purposes": ["chat"], "displayName": "DeepSeek Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"], "reasoningLevels": ["low", "high", "max"], "defaultReasoningLevel": "high", "supportsImageDetailOriginal": true, "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["kimi/kimi-k2.7-code"], "verified": "2026-10-31" },
     "deepseek/deepseek-v4-pro": { "purposes": ["chat"], "displayName": "DeepSeek V4 Pro", "contextWindow": 1048576, "inputModalities": ["text", "image"], "fallbacks": ["deepseek/deepseek-flash"] },
     "zhipu/glm-5.3": { "purposes": ["chat"], "displayName": "GLM-5.3", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text"], "fallbacks": ["zhipu/glm-5.3-flash"] },

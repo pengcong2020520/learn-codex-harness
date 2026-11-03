@@ -342,7 +342,7 @@ Agent 定义描述角色与能力要求，部署绑定将资源引用解析到�
 ```
 
 **字段说明补充：**
-- `tools.allow` 中仅列出现有确切工具名；可选扩展（`search_web`、`read_webpage`）如需可添加
+- `tools.allow` 中仅列出现有确切工具名；网页读取扩展（`read_webpage`）如需可添加；联网搜索由支持的模型自带能力提供，不列入 tools.allow
 - `requiredChecks` 的 `format` 检查文件扩展名/格式合规性，不检查语义真实性；引用（`references`）可作为可选的手工审查扩展
 - `required: false` 的可选技能在语法已知时支持降级；未知字段或声明启用但不支持的操作须被拒绝
 - `memory.contribute: false` 仅关闭未来贡献资格，不停止已排队的异步生成，不禁用读取

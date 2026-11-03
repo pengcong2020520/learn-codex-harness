@@ -82,7 +82,7 @@ export async function runOnce({ label, agentDir, scenario, index, env, out, time
       if (message.method === "thread/tokenUsage/updated") { usage.total = params.tokenUsage.total; usage.requests++; }
       if (message.method === "item/completed" && ["dynamicToolCall", "mcpToolCall"].includes(params.item?.type)) {
         const { tool, status, success, arguments: args } = params.item;
-        tools.push({ tool, status, success: success ?? null, args: tool === "skill_read" || tool === "read_file" || tool === "write_file" || tool === "search_web"
+        tools.push({ tool, status, success: success ?? null, args: tool === "skill_read" || tool === "read_file" || tool === "write_file"
           ? Object.fromEntries(Object.entries(args || {}).filter(([key]) => key !== "content")) : undefined });
       }
     });

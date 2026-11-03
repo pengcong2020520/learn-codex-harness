@@ -55,6 +55,12 @@ export function validateRegistry(registry) {
     if (!Array.isArray(purposes) || !purposes.length || purposes.some(item => !PURPOSES.includes(item)) || new Set(purposes).size !== purposes.length) {
       fail(`模型 ${id} 的 purposes 必须是不重复的用途：${PURPOSES.join("、")}。`);
     }
+    if (spec.nativeTools !== undefined) {
+      if (!purposes.includes("chat")) fail(`模型 ${id} 的 nativeTools 只能用于 purposes 含 chat 的模型。`);
+      if (!Array.isArray(spec.nativeTools) || spec.nativeTools.some(tool => tool !== "web_search") || new Set(spec.nativeTools).size !== spec.nativeTools.length) {
+        fail(`模型 ${id} 的 nativeTools 必须是不重复的字符串数组，目前只允许 web_search。`);
+      }
+    }
     const positive = (name, required) => {
       if (spec[name] === undefined ? required : !Number.isSafeInteger(spec[name]) || spec[name] < 1) fail(`模型 ${id} 的 ${name} 必须是正整数。`);
     };

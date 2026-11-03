@@ -160,7 +160,7 @@ const article = { id: "article", label: "写文章", skill: "outline", steps: [
   { id: "final", goal: "完成研究、写作与核查并定稿", writes: ["research", "drafts", "outputs"], checks: ["file-exists", "format"] }] };
 
 test("按步骤选模型：网关模式下每一轮都带上模型，写了场景的步骤用场景里的模型，其余回到默认；写错或没开网关在启动时报错", async t => {
-  const gateway = { DEMO_TIMEOUT_MS: "3000", AGENT_GATEWAY_KEY: "sk-bf-unit-test", KIMI_API_KEY: "k-unit", DEEPSEEK_API_KEY: "d-unit" };
+  const gateway = { AGENT_WEB_SEARCH: "off", DEMO_TIMEOUT_MS: "3000", AGENT_GATEWAY_KEY: "sk-bf-unit-test", KIMI_API_KEY: "k-unit", DEEPSEEK_API_KEY: "d-unit" };
   const staged = { ...article, steps: [{ ...article.steps[0], model: "fast" }, article.steps[1]] };
   const r = await messageRig(t, [staged], undefined, gateway);
   assert.equal(r.rpc.calls.find(call => call.method === "thread/start").params.model, "kimi/kimi-k2.7-code", "新会话用默认模型（routes.chat 的第一个可用）");
