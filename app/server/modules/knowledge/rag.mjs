@@ -38,14 +38,15 @@ export function fuse(...lists) {
   return [...scores].sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id, score]) => ({ id, score }));
 }
 export class Embeddings {
-  constructor(config) {
+  constructor(config, usage) {
+    this.usage = usage;
     Object.assign(this, config);
     const endpoint = new URL(config.url);
     if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
       (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && (['127.0.0.1', 'localhost'].includes(endpoint.hostname) || !endpoint.hostname.includes('.'))))) throw new Error('Embedding 地址必须使用 HTTPS，或本机、容器名的 HTTP。');
     if (!this.model || !Number.isInteger(this.dimensions) || this.dimensions < 1 || this.dimensions > 65536) throw new Error('必须配置 embedding 模型和向量维数。');
   }
-  async generate(input) {
+  async generate(input, { threadId = null, turnId = null, taskId = null } = {}) {
     const response = await fetch(this.url.replace(/\/$/, '') + '/embeddings', {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(45000),
       headers: { 'content-type': 'application/json', ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}) },
@@ -59,7 +60,10 @@ export class Embeddings {
       blocks.push(block);
     }
     const text = Buffer.concat(blocks).toString('utf8');
-    const data = JSON.parse(text).data;
+    const result = JSON.parse(text), data = result.data;
+    if (result.usage) await this.usage?.record({ source: 'embedding', threadId, turnId, taskId, model: this.model.includes('/') ? this.model : `direct/${this.model}`,
+      inputTokens: result.usage.prompt_tokens ?? result.usage.total_tokens ?? 0,
+      totalTokens: result.usage.total_tokens ?? result.usage.prompt_tokens ?? 0 });
     if (!Array.isArray(data) || data.length !== input.length) throw new Error('Embedding 条目数量无效。');
     const vectors = data.sort((a,b) => a.index - b.index).map((item, i) => {
       if (item.index !== i || !Array.isArray(item.embedding) || item.embedding.length !== this.dimensions || item.embedding.some(n => !Number.isFinite(n))) throw new Error('Embedding 维数、顺序或数值无效。');
@@ -68,7 +72,7 @@ export class Embeddings {
     return vectors;
   }
 }
-export async function createRag(config, directory) {
+export async function createRag(config, directory, usage) {
   if (!config?.chromaUrl && !config?.url) return null;
   if (!config.chromaUrl || !config.url) throw new Error(config.unavailable ? `已配置 CHROMA_URL，但没有可用的向量模型：${config.unavailable}` : 'RAG 必须同时配置 CHROMA_URL 和 EMBEDDING_BASE_URL。');
   const { ChromaClient } = await import('chromadb');
@@ -86,7 +90,7 @@ export async function createRag(config, directory) {
     async getCollection(options) { return collection(options.name); },
     async deleteCollection(options) { return connect().deleteCollection(options); }
   };
-  return new RagIndex({ client, embeddings: new Embeddings(config), directory });
+  return new RagIndex({ client, embeddings: new Embeddings(config, usage), directory });
 }
 export class RagIndex {
   constructor({ client, embeddings, directory }) {
@@ -122,7 +126,7 @@ export class RagIndex {
       for (let offset = 0; offset < documents.length; offset += 32) {
         await service.kb(kbId, 'index');
         const batch = documents.slice(offset, offset + 32);
-        const vectors = await this.embeddings.generate(batch.map(d => d.content));
+        const vectors = await this.embeddings.generate(batch.map(d => d.content), service.gate?.current());
         await service.kb(kbId, 'index');
         await collection.add({ ids: batch.map(d => d.id), embeddings: vectors,
           metadatas: batch.map(d => ({ kbId, ownerId: service.ownerId, resourceId: d.resourceId, versionId: d.versionId, indexRevision: revision })) });
@@ -161,7 +165,7 @@ export class RagIndex {
     const raw = fs.readFileSync(filename, 'utf8');
     if (createHash('sha256').update(raw).digest('hex') !== manifest.bm25Hash) throw new Error('BM25 索引校验失败。');
     const { documents } = JSON.parse(raw);
-    const [vector] = await this.embeddings.generate([query]);
+    const [vector] = await this.embeddings.generate([query], service.gate?.current());
     const collection = await this.client.getCollection({ name: manifest.collection, embeddingFunction: null });
     const result = await collection.query({ queryEmbeddings: [vector], nResults: Math.min(40, documents.length),
       where: { $and: [{ kbId: kb.id }, { ownerId: service.ownerId }, { indexRevision: manifest.revision }] }, include: [] });

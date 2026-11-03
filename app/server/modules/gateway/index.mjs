@@ -2,6 +2,7 @@
 // 这里读模型清单（config/models.json）、推导连接参数、生成网关配置；按用途和场景挑模型见 router.mjs。
 import fs from "node:fs";
 import path from "node:path";
+import { limitValue } from "../usage/config.mjs";
 
 export const GATEWAY_DEFAULT_PORT = 4330;
 // 用途：对话由 Codex 使用，其余由工具层（如知识检索、生图）经网关调用。看图、长上下文是对话模型的能力，不单列用途。
@@ -32,6 +33,7 @@ function checkBaseUrl(value, label, fail) {
 export function validateRegistry(registry) {
   const fail = message => { throw new Error(`config/models.json：${message}`); };
   if (registry?.schemaVersion !== 1) fail("schemaVersion 必须是 1。");
+  if (registry.currency !== undefined && !["CNY", "USD"].includes(registry.currency)) fail("currency 必须是 CNY 或 USD。默认是 CNY。");
   const providers = registry.providers || {}, models = registry.models || {};
   const envNames = new Set();
   for (const [id, provider] of Object.entries(providers)) {
@@ -51,6 +53,14 @@ export function validateRegistry(registry) {
   for (const [id, spec] of Object.entries(models)) {
     const { provider, model } = splitModelId(id);
     if (!providers[provider] || !model) fail(`模型 ${id} 必须写成“服务商/模型名”，且服务商已在 providers 中登记。`);
+    if (spec.pricing !== undefined) {
+      if (!spec.pricing || typeof spec.pricing !== "object" || Array.isArray(spec.pricing)) fail(`模型 ${id} 的 pricing 必须是价格对象。`);
+      for (const field of ["input", "cachedInput", "output"]) {
+        const value = spec.pricing[field];
+        if (field === "cachedInput" && value === undefined) continue;
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail(`模型 ${id} 的 pricing.${field} 必须是非负数字，单位是每百万 token 的价格。`);
+      }
+    }
     const purposes = spec.purposes;
     if (!Array.isArray(purposes) || !purposes.length || purposes.some(item => !PURPOSES.includes(item)) || new Set(purposes).size !== purposes.length) {
       fail(`模型 ${id} 的 purposes 必须是不重复的用途：${PURPOSES.join("、")}。`);
@@ -149,6 +159,9 @@ export function buildModelParameters(registry, environment) {
 }
 
 export function buildGatewayConfig(registry, environment) {
+  const daily = limitValue(environment, "AGENT_BUDGET_DAILY_TOKENS", true);
+  const gatewayLimit = limitValue(environment, "AGENT_GATEWAY_DAILY_TOKENS", true) ?? (daily === null ? null : Math.ceil(daily * 1.5));
+  if (gatewayLimit !== null && !Number.isSafeInteger(gatewayLimit)) throw new Error("网关每日 token 上限超出安全整数范围，请用 AGENT_GATEWAY_DAILY_TOKENS 指定。");
   const enabled = enabledProviders(registry, environment);
   if (!enabled.size) throw new Error("没有启用任何模型服务商：在 .env 里至少填一家的密钥（如 KIMI_API_KEY），见 docs/model-gateway.md。");
   const providers = {};
@@ -189,7 +202,9 @@ export function buildGatewayConfig(registry, environment) {
     providers,
     governance: {
       // Codex 和工具用 AGENT_GATEWAY_KEY 访问网关；没有这把钥匙的请求一律 401。
-      virtual_keys: [{ id: "codex-harness", name: "codex-harness", value: "env.AGENT_GATEWAY_KEY", is_active: true, allow_all_providers: true }],
+      virtual_keys: [{ id: "codex-harness", name: "codex-harness", value: "env.AGENT_GATEWAY_KEY", is_active: true, allow_all_providers: true,
+        ...(gatewayLimit === null ? {} : { rate_limit_id: "codex-harness-daily" }) }],
+      ...(gatewayLimit === null ? {} : { rate_limits: [{ id: "codex-harness-daily", token_max_limit: gatewayLimit, token_reset_duration: "1d", calendar_aligned: true }] }),
       routing_rules: routingRules,
     },
   };

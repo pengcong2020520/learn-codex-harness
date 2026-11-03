@@ -1,4 +1,5 @@
 // 配置模块：只在服务端读取模型密钥，不向客户端返回完整环境变量。
+import { budgetConfig } from "../usage/config.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { selectAgentFile } from "../agents/selection.mjs";
@@ -78,7 +79,8 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_PORT 必须是 1 到 65535 的整数。");
   const turnTimeoutMs = Number(environment.AGENT_TURN_TIMEOUT_MS || 600_000);
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
-  const launch = buildRestrictedLaunch(environment, { registry: loadModelRegistry(root) });
+  const registry = loadModelRegistry(root), budget = budgetConfig(environment);
+  const launch = buildRestrictedLaunch(environment, { registry });
   const rag = { chromaUrl: environment.CHROMA_URL, url: environment.EMBEDDING_BASE_URL,
     apiKey: environment.EMBEDDING_API_KEY, model: environment.EMBEDDING_MODEL,
     dimensions: Number(environment.EMBEDDING_DIMENSIONS) };
@@ -113,5 +115,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
   const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
   if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
-  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag };
+  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget };
 }

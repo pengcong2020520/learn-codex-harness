@@ -28,7 +28,7 @@ function authenticated(request, token) {
 }
 
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
-export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files }) {
+export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage = sessions.usage }) {
   const streams = new Set();
   // 同一个事件推给多个 SSE 连接时，只序列化、脱敏一次。
   const encoded = new WeakMap();
@@ -77,6 +77,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         const body = await readBody(request);
         await data.repository.setPreference(body.key, body.value); return json(200, { saved: true, injectedIntoContext: false });
       }
+      if (route === "GET /usage") return json(200, await usage.summary(url.searchParams.get("period") || "today"));
       if (route === "GET /memory") return json(200, memory.snapshot());
       if (route === "GET /memory/summary") return json(200, memory.summary());
       if (route === "POST /memory/contribution") {
@@ -86,7 +87,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
       }
       if (route === "GET /tools") return json(200, tools.snapshot());
       if (route === "GET /health") return json(messages.failure || tools?.broken || data?.queue?.healthy === false ? 503 : 200, { status: messages.failure || tools?.broken || data?.queue?.healthy === false ? "degraded" : "ready", model: config.launch.model, queueBackend: messages.backend,
-        tools: tools?.snapshot(),
+        budget: await usage.budgetStatus(), tools: tools?.snapshot(),
         ...(messages.failure ? { error: { message: "Codex 连接已失效，请重启服务并核对任务状态。" } } : {}) });
       if (route === "GET /sessions") return json(200, { sessions: await sessions.list(url.searchParams.get("q") || "") });
       if (route === "POST /sessions") { await readBody(request); return json(201, await sessions.create()); }

@@ -145,6 +145,76 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 - 网关不记录请求内容（`disable_content_logging`，日志库关闭）。配置库放在容器的临时目录，重启即清空，每次都以生成的配置文件为准。
 - **对外连接**：除了转发给各家模型，Bifrost 每天会从 getbifrost.ai 下载一次公开的模型价格表，用于成本统计；这个同步不能关闭，只能拉长间隔，下载时不发送请求内容。模型参数表改用本地文件，MCP 目录同步已关闭。
 
+## 用量与预算
+
+### 账本和估算口径
+
+升级后先运行 `npm run data:migrate`。迁移 `006-usage.sql` 创建 PostgreSQL 用量账本，按 `instance_id`、`owner_id` 隔离，按时间索引；不存提示词、回答或密钥。每条记录包括时间、Thread、Turn、任务 ID（有任务时）、来源 `chat / embedding / image / video`、模型 ID、输入、缓存输入、输出、推理输出、总 token、可空的 `units`、币种和估算花费。
+
+- **对话**：监听 `thread/tokenUsage/updated`。Thread 的 `total.totalTokens` 只用来去重：比上次大才记账，金额和 token 取本次 `last`。相等或更小的通知跳过；服务重启后第一条直接取 `last`，不把 Thread 历史累计量再记一遍。停止服务期间的调用不会补账。
+- **模型与任务**：在 `turn/start` 前绑定本轮路由选出的模型和任务 ID，通知早于 RPC 响应也能定位；工作流换步骤时重新选模型，每一步仍归属原任务。直连模型没有服务商前缀时记为 `direct/模型名`；无法识别则为 `direct/unknown`。Codex 的通知不含 Bifrost 最终备用模型，网关内部故障切换只能归属到本轮提交的路由模型，相关花费是估算，不能用来核对供应商账单。
+- **向量**：每次成功取得 embedding 响应就按 `usage.prompt_tokens`（缺失时取 `total_tokens`）记输入，总量取 `total_tokens`（缺失时取 `prompt_tokens`）。响应不含 usage 时不猜测；响应已报告用量但向量校验失败，仍记已消耗的用量。检索发生在任务内时带上 Thread、Turn 和任务 ID；后台索引可以为空。
+- `inputTokens` 已含缓存输入，`outputTokens` 已含推理输出，**两者都不再重复相加**。总 token 取协议的 `totalTokens`；工具不传总量时默认输入加输出。
+- 后续生图、生视频可调用同一个 `usage.record({ source, model, inputTokens, outputTokens, units, threadId, turnId, taskId })`，`units` 可记录张数或秒数。数量的单位由来源约定，不应把跨来源的数量合计当作同一种计费量；当前价格表只计算 token 花费，不计算按张、按秒收费。
+
+生产服务必须连接 PostgreSQL，不会在数据库故障时回退到内存。独立模块或无数据库测试使用内存账本，查询返回 `storage: "memory"`，客户端会提示重启清空；生产返回 `storage: "postgres"`。账本写入失败会停止派发，不能按空账本继续运行。预算查询等待已收到的用量写入后再计算。
+
+### 价格表
+
+清单顶层可写 `"currency": "CNY"` 或 `"USD"`，省略时是 CNY。每个模型可写 `pricing`，单位均为**每百万 token 的价格**：`input`、`output` 必填，`cachedInput` 可选，省略时等于 input。所有价格必须是有限的非负数字；0 表示已确认免费，未填写表示未定价。
+
+以下仅为格式示例，数字是虚构的，不代表任何真实模型价格；仓库的 `config/models.json` 不预填价格：
+
+```json
+{
+  "currency": "CNY",
+  "models": {
+    "example/model": {
+      "purposes": ["chat"],
+      "contextWindow": 128000,
+      "pricing": { "input": 2, "cachedInput": 0.5, "output": 8 }
+    }
+  }
+}
+```
+
+估算花费 = `((输入 − 缓存输入) × input + 缓存输入 × cachedInput + 输出 × output) / 1000000`。推理输出不另收费，缓存写入不另设价格。未定价记录不计入金额，但计入 token 总量，并在查询的 `unpricedRequests` 中标出，客户端显示“未计价”。
+
+金额在记录时按当时的清单计算并落库；以后补价格不会追溯改写历史。更改币种后，旧币种记录仍计入 token，但在当前币种的金额汇总中标为未计价，避免把 CNY 与 USD 直接相加。价格或币种修改后需重启服务。
+
+### 配置和超限行为
+
+```bash
+AGENT_BUDGET_DAILY_TOKENS=1000000
+AGENT_BUDGET_MONTHLY_TOKENS=20000000
+AGENT_BUDGET_DAILY_COST=10
+AGENT_BUDGET_MONTHLY_COST=200
+AGENT_BUDGET_TIMEZONE=Asia/Shanghai
+# 可选，优先指定网关兜底的每日 token 数
+AGENT_GATEWAY_DAILY_TOKENS=1500000
+```
+
+四个预算变量都可留空，留空不限；token 必须为非负安全整数，金额必须为有限非负数字。0 表示停止派新任务。非法值在启动时报中文错误。时区默认取服务进程的系统时区，决定“今天”“本月”的起止，支持夏令时；修改时区也需重启服务。设了金额上限但默认对话模型未定价时，启动打印一行提醒，不阻止启动。
+
+任一日/月 token 或金额累计量**达到上限**时，`dispatch()` 不把 queued 改为 starting，任务保留排队。正在执行的轮次允许完成，追加到执行中轮次的 `steer` 不拦，`proposed` 提议照常记录；追加到已结束轮次需要新开一轮，因此也检查预算。多个会话已在执行时都可以完成，预算不预估或预留未来消耗，可能超出设定值。
+
+服务每隔最多 3 分钟复查，接近恢复时间时在下一个当地自然日/月开始复查，恢复后自动派发，不需要 `/continue`。同时达到日/月上限时，`resetsAt` 取所有超限项中最晚的恢复时间；0 上限仍会在复查时保持阻塞。手动暂停或故障暂停仍沿用原有恢复规则。
+
+`publish()` 队列快照、`/state` 的 `queue.budget`、`/health` 都包含 `budget: { exceeded, reason, resetsAt, ... }`，reason 是中文；达到预算不会把健康状态改成故障。未超限时 reason、resetsAt 为 null。
+
+### 查看用量
+
+- 终端 `/usage` 看今日，`/usage month` 看本月，中文表格展示合计、模型、来源、日期、估算花费和未计价条数。
+- 认证后的 `GET /usage?period=today|month` 默认 today，其他 period 返回 400。返回 `total`、`byModel`、`bySource`、`byDay`、`budget`、`currency`、`timezone`、`storage` 和周期 `start/end`。金额单位由 currency 指定，`estimatedCost` 只含已定价部分；日期按预算时区分组。预算状态始终同时包含当日和当月，不随查询 period 改变。
+
+### 网关兜底及局限
+
+设置 `AGENT_BUDGET_DAILY_TOKENS` 时，`buildGatewayConfig()` 生成 `governance.rate_limits[]`，`token_max_limit` 为每日预算的 **1.5 倍向上取整**，`token_reset_duration: "1d"`、`calendar_aligned: true`，`codex-harness` 虚拟密钥通过 `rate_limit_id` 引用它。`AGENT_GATEWAY_DAILY_TOKENS` 有值时优先使用，即使没有配置服务端每日预算也能单独限流。更新后需重新生成配置并重建网关容器。
+
+这里只用 token 限流，不使用 Bifrost 按美元计价的 budgets。网关计数涵盖共享虚拟密钥的所有请求（包括独立自检等未进入本服务账本的调用），自然日由网关自身的日历计数规则决定，不保证与 `AGENT_BUDGET_TIMEZONE` 相同。配置库位于容器临时目录，重启后计数清零，因此只是兜底，长期预算以 PostgreSQL 账本为准。兜底耗尽时，正在执行轮次的后续模型请求也可能被拒绝；1.5 倍只是预留余量，不能保证任意长轮次完成。
+
+单元测试覆盖记录、去重、工作流换模型、向量 usage、时区边界、预算阻塞与恢复、HTTP 和客户端。`npm run test:data` 额外验证真实 PostgreSQL 持久化和归属隔离；`npm run test:gateway` 的限流用例会启动真实 Bifrost 容器，验证首个请求耗尽额度后第二个请求返回 429。
+
 ## 资源
 
 运行时约 150–180 MB 内存。服务器部署前的检查把可用内存门槛从 600 MB 提到 800 MB，并检查 4330 端口。

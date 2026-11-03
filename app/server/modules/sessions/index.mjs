@@ -1,3 +1,4 @@
+import { UsageService } from "../usage/index.mjs";
 import { EventEmitter } from "node:events";
 import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from "./history.mjs";
 import { AppError, requireId } from "../../../shared/errors.mjs";
@@ -11,10 +12,12 @@ const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { 
   tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] });
 
 export class SessionService extends EventEmitter {
-  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval = 100 }) {
+  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, usage = new UsageService({ registry: config.registry, budget: config.budget }), publishInterval = 100 }) {
     super();
-    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, publishInterval });
+    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, usage, publishInterval });
     this.sessions = new Map();
+    this.starting = new Map();
+    this.turnUsage = new WeakMap();
     this.timers = new Map();
     // 每个会话尚未推送的回复增量：同一条回复在一个推送周期内合并成一段。
     this.deltas = new Map();
@@ -107,12 +110,21 @@ export class SessionService extends EventEmitter {
   getTurn(threadId, turnId) { return this.sessions.get(threadId)?.turns.get(turnId); }
   persistTurn(threadId, turn) { return this.repository?.recordArtifacts(threadId, turn); }
 
+  // 在 RPC 前绑定，覆盖 turn/started、用量通知先于 RPC 响应的情况。
+  prepareUsage(threadId, context) { this.starting.set(threadId, context); }
+  finishUsageStart(threadId) { this.starting.delete(threadId); }
+
   recordTurn(threadId, turn) {
     const session = this.sessions.get(threadId);
     if (!session || !turn?.id) return;
     let record = session.turns.get(turn.id);
     if (!record) {
       record = { id: turn.id, status: turn.status || "inProgress", answers: {}, tools: {}, artifacts: {}, revisions: {}, messages: [], error: null };
+      const context = this.starting.get(threadId);
+      if (context && (!context.turnId || context.turnId === turn.id)) {
+        context.turnId = turn.id;
+        this.turnUsage.set(record, { model: context.model, taskId: context.taskId });
+      }
       session.turns.set(turn.id, record);
       this.forgetOldTurns(session);
     }
@@ -183,6 +195,17 @@ export class SessionService extends EventEmitter {
       turn ||= this.recordTurn(threadId, { id: turnId, status: "inProgress" });
       if (message.method === "item/agentMessage/delta") rewritten = this.appendDelta(threadId, turn, params.itemId, params.delta);
       if (["item/started", "item/completed"].includes(message.method) && params.item) this.applyItem(turn, params.item);
+    }
+    if (message.method === "thread/tokenUsage/updated") {
+      const session = this.sessions.get(threadId);
+      const context = this.turnUsage.get(turn);
+      const selected = context?.model || session.model || this.config.launch.model || "unknown";
+      const model = selected.includes("/") ? selected : `direct/${selected}`;
+      // 同步排入写入链，预算会等待它；写入失败停止派发，不能静默漏账。
+      try {
+        void this.usage.recordChat(params, { model, taskId: context?.taskId || null }).catch(error => this.emit("usageError", error));
+      } catch (error) { this.emit("usageError", error); }
+      return;
     }
     if (message.method === "turn/completed") this.flushStreams(turn);
     // 增量只追加一条回复的文字，合并到下一个推送周期；其他状态变化立即推送这一轮。

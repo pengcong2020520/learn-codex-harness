@@ -135,3 +135,45 @@ test("模型网关：没有访问密钥一律拒绝；主模型余额不足时�
   assert.ok(codexRequests[1].body.input.some(item => item.type === "function_call_output"), "工具结果随第二次请求转过去");
   assert.ok(record.usage.requests >= 2, "token 用量经网关回到 Codex");
 });
+
+test("模型网关：每日 token 限流使用真实 Bifrost，首个请求耗尽额度后第二个请求被拒绝", { skip: !docker && "需要 Docker", timeout: 120000 }, async t => {
+  const mock = await upstream(t, (request, response, body) => {
+    // 网关启动时会探测上游（如列模型），这类请求没有请求体，不算模型调用。
+    if (!request.url.endsWith("/responses")) { response.writeHead(404); response.end(); return; }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ id: "resp_limit", object: "response", status: "completed", model: body.model,
+      output: [answer("好")], usage: { input_tokens: 20, output_tokens: 2, total_tokens: 22 } }));
+  });
+  const registry = validateRegistry({ schemaVersion: 1, providers: { beta: { type: "openai", keyEnv: "BETA_API_KEY" } },
+    models: { "beta/model-b": { purposes: ["chat"], contextWindow: 1000 } }, routes: { chat: ["beta/model-b"] } });
+  const gatewayKey = `sk-bf-test-${randomBytes(8).toString("hex")}`;
+  const environment = { AGENT_GATEWAY_KEY: gatewayKey, BETA_API_KEY: "sk-test-only", AGENT_GATEWAY_DAILY_TOKENS: "10" };
+  const config = buildGatewayConfig(registry, environment);
+  config.providers.beta.network_config = { base_url: mock.url, allow_private_network: true, max_retries: 0 };
+  fs.mkdirSync(path.join(app, ".runs"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(app, ".runs", "gateway-limit-test-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify(config), { mode: 0o644 });
+  fs.writeFileSync(path.join(dir, "model-parameters.json"), JSON.stringify(buildModelParameters(registry, environment)), { mode: 0o644 });
+  const name = `codex-harness-limit-test-${randomBytes(4).toString("hex")}`;
+  execFileSync("docker", ["run", "-d", "--rm", "--name", name, "--add-host", "host.docker.internal:host-gateway",
+    "-e", `AGENT_GATEWAY_KEY=${gatewayKey}`, "-e", "BETA_API_KEY=sk-test-only", "--tmpfs", "/app/data:uid=1000,gid=0,mode=0770",
+    "-v", `${path.join(dir, "config.json")}:/app/data/config.json:ro`, "-v", `${path.join(dir, "model-parameters.json")}:/app/data/model-parameters.json:ro`,
+    "-p", "127.0.0.1::8080", image], { stdio: "ignore" });
+  t.after(() => spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" }));
+  const port = Number(execFileSync("docker", ["port", name, "8080/tcp"], { encoding: "utf8" }).trim().split(":").at(-1));
+  const base = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 60; i++) {
+    if (await fetch(`${base}/health`).then(r => r.ok, () => false)) break;
+    if (i === 59) assert.fail("网关未就绪");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  const ask = () => fetch(`${base}/v1/responses`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${gatewayKey}` },
+    body: JSON.stringify({ model: "beta/model-b", input: "好", stream: false }) });
+  const first = await ask(); assert.equal(first.status, 200, await first.clone().text()); await first.json();
+  // 网关在响应后的统计钩子里更新计数，给它完成写入的时间。
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  const second = await ask();
+  assert.equal(second.status, 429, await second.clone().text());
+  assert.equal(mock.requests.filter(request => request.path.endsWith("/responses")).length, 1, "第二个请求在网关被拦，不到模型服务");
+});
