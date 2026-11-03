@@ -13,6 +13,11 @@ export class PermissionGate {
     const context = Object.freeze({ threadId: null, turnId: null, ...fields, userId: this.scope.ownerId, ownerId: this.scope.ownerId, agentId: this.agent.definition.agent.id });
     this.#contexts.add(context); return context;
   }
+  // 持久化媒体任务只授权其预先通过 create 检查的单个路径，不延长原轮次授权。
+  media(job) {
+    if (job.agentId !== this.agent.definition.agent.id) denied();
+    return this.issue({ kind: 'media', path: job.path, threadId: job.context.threadId, turnId: job.context.turnId, taskId: job.context.taskId });
+  }
   operator() { return this.issue({ kind: 'operator' }); }
   user() { return this.issue({ kind: 'user' }); }
   submission() { return this.#storage.getStore() ? this.current() : this.user(); }
@@ -67,6 +72,7 @@ export class PermissionGate {
     const context = this.current();
     if (!['read','create','list','update','index','tool.call'].includes(action)) denied();
     if (target.ownerId && target.ownerId !== context.ownerId) denied();
+    if (context.kind === 'media' && !((action === 'create' && target.path === context.path) || (action === 'tool.call' && target.name === 'generate_video'))) denied();
     if (action === 'tool.call') { if (!this.agent.allowsTool(target.name)) denied(); return; }
     if (target.kbId) return this.mount(target.kbId, action);
     if (typeof target.path === 'string') {

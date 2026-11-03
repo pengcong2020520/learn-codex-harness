@@ -24,6 +24,8 @@ import { createRag } from './modules/knowledge/rag.mjs';
 import { KnowledgeWorker } from './modules/knowledge/worker.mjs';
 import { UsageService } from "./modules/usage/index.mjs";
 import { pricingWarning } from "./modules/usage/config.mjs";
+import { MediaService } from "./modules/media/index.mjs";
+import { MediaJobs } from "./modules/media/store.mjs";
 import { openData } from "./modules/data/index.mjs";
 
 // 主流程只组装模块：配置 → 独占锁 → 数据服务 → Codex → 业务模块 → HTTP → 就绪。
@@ -37,7 +39,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     let databaseFailure;
     let messages;
     let engine;
-    const data = await dataFactory(config, { onLost: error => { databaseFailure = error; void messages?.fail(error); void engine?.close(); } });
+    let media;
+    const data = await dataFactory(config, { onLost: error => { databaseFailure = error; void messages?.fail(error); void engine?.close(); void media?.close(); } });
     lifecycle.defer(() => data.close());
     const usage = new UsageService({ pool: data.pool, scope: data.scope, registry: config.registry, budget: config.budget });
     lifecycle.defer(() => usage.pending);
@@ -73,11 +76,14 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
         });
         return result;
       }])) } : localFiles;
+    media = data.pool && resources ? new MediaService({ router: config.launch.router, endpoint: config.media?.endpoint,
+      store: new MediaJobs(data.pool, data.scope), files: resources, usage, gate, agent, redact, log: safeLog }) : null;
+    lifecycle.defer(() => media?.close());
     const boundary = new ExecutionBoundary();
     // 提议任务的工具在消息服务就绪后才可用；之前调用会明确报错。
     const tasks = { propose: (context, args) => { if (!messages) throw new Error("任务服务尚未就绪。"); return messages.propose(context, args); } };
     const skillReader = { read: (name, file) => agent.readSkill(name, file) };
-    const tools = new ToolManager({ config, runtime, files, agent, gate, knowledge, tasks, skills: skillReader, boundary, log: safeLog, redact });
+    const tools = new ToolManager({ config, runtime, files, agent, gate, knowledge, tasks, skills: skillReader, media, boundary, log: safeLog, redact });
     lifecycle.defer(() => tools.close());
     await tools.open();
     installSkills(agent, prepareCodexConfig(config, tools.configuration()).home);
@@ -103,6 +109,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     // Prepare the verified descriptor without consuming queues or publishing an HTTP endpoint.
     // Upgrade preflight must not fail queued legacy jobs before a compatibility mapping exists.
     if (validationOnly) return { config, agent, runtime, rpc, sessions, tools, memory, data, resources, gate, knowledge, usage, close: () => lifecycle.close() };
+    if (media?.endpoint) media.open();
     for (const warning of agent.warnings) safeLog(warning);
     safeLog(`记忆配置：${config.memory.enabled ? "已开启" : "关闭"}（不代表已生成）；状态目录：.data/codex/memories`);
     if (config.memory.enabled && memory.generationBlocked) safeLog(memory.snapshot().generationWarning);

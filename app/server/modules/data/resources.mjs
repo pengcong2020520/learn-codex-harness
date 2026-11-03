@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
+import { MAX_MEDIA_BYTES, mediaFormat } from "./files.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
 const hash = (content) => createHash("sha256").update(content).digest("hex");
@@ -91,10 +92,12 @@ export class Resources extends Repository {
     );
   }
   blob(content) {
-    if (typeof content !== "string" || Buffer.byteLength(content) > 256 * 1024)
-      throw new AppError("正文必须是不超过 256 KiB 的文本。");
+    const binary = Buffer.isBuffer(content), limit = binary ? MAX_MEDIA_BYTES : 256 * 1024;
+    if ((!binary && typeof content !== "string") || Buffer.byteLength(content) > limit)
+      throw new AppError(binary ? "二进制正文不能超过 128 MiB。" : "正文必须是不超过 256 KiB 的文本。");
     const revision = hash(content),
-      file = path.join(this.blobDir, revision + ".txt");
+      extension = binary ? ".bin" : ".txt",
+      file = path.join(this.blobDir, revision + extension);
     try {
       fs.writeFileSync(file, content, { flag: "wx", mode: 0o600, flush: true });
     } catch (error) {
@@ -105,13 +108,13 @@ export class Resources extends Repository {
       !stat.isFile() ||
       stat.isSymbolicLink() ||
       stat.nlink !== 1 ||
-      stat.size > 256 * 1024 ||
+      stat.size > limit ||
       hash(fs.readFileSync(file)) !== revision
     )
       throw new Error("正文版本校验失败。");
     return {
       revision,
-      blob: revision + ".txt",
+      blob: revision + extension,
       bytes: Buffer.byteLength(content),
     };
   }
@@ -203,7 +206,7 @@ export class Resources extends Repository {
     for (const source of upstream) {
       let output;
       try {
-        output = this.files.read_file({
+        output = this.files[/\.(png|jpeg|webp|mp4)$/i.test(source.locator) ? "read_binary" : "read_file"]({
           path: source.locator,
           max_chars: 256 * 1024,
         });
@@ -245,8 +248,48 @@ export class Resources extends Repository {
     }
     return { ...result, entries };
   }
-  async write_file({ path: locator, content, source_versions = [] }) {
-    if (fs.existsSync(this.files.check(locator, "create")))
+  check_binary(locator) {
+    this.source(locator, 'create');
+    return this.files.check_binary(locator);
+  }
+  async read_binary({ path: locator }) {
+    const row = await this.row(locator);
+    await this.readable(row);
+    const output = this.files.read_binary({ path: locator });
+    const version = (await this.query('SELECT revision FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [row.current_version])).rows[0];
+    if (hash(output.content) !== version?.revision) throw new Error('媒体版本正文已变化。');
+    await this.readable(await this.row(locator));
+    this.files.check_binary(locator, 'read');
+    return { ...output, resourceId: row.id, versionId: row.current_version, revision: version.revision };
+  }
+  async write_binary(args) {
+    this.check_binary(args.path);
+    if (!Buffer.isBuffer(args.content) || !args.content.length || args.content.length > MAX_MEDIA_BYTES || mediaFormat(args.content) !== path.extname(args.path).slice(1).toLowerCase())
+      throw new Error('媒体正文大小或格式与文件扩展名不符。');
+    return this.write_file(args);
+  }
+  async write_file({ path: locator, content, source_versions = [], operationId = null }) {
+    const binary = Buffer.isBuffer(content);
+    this.source(locator, 'create');
+    const target = binary ? this.check_binary(locator) : this.files.check(locator, 'create');
+    // 仅后台任务的同一个资源 ID 可以恢复已预留的二进制版本；普通调用仍是 create-only。
+    if (binary && operationId) {
+      const previous = await this.row(locator);
+      if (previous) {
+        if (previous.id !== operationId || previous.owner_id !== this.ownerId || !['pending', 'ready'].includes(previous.state)) throw new Error('媒体路径已有其他资源，未覆盖。');
+        const version = (await this.query('SELECT revision FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [previous.current_version])).rows[0];
+        if (version?.revision !== hash(content)) throw new Error('恢复正文与预留版本不同。');
+        this.check_binary(locator);
+        if (fs.existsSync(target)) {
+          const stat = fs.lstatSync(target);
+          if (stat.size !== content.length || hash(fs.readFileSync(target)) !== version.revision) throw new Error('已保存的媒体内容不匹配，未覆盖。');
+        } else this.files.write_binary({ path: locator, content });
+        this.gate?.check('create', { path: locator });
+        if (previous.state === 'pending') await this.finish(previous.id, version.revision);
+        return { path: locator, artifact: { resourceId: previous.id, versionId: previous.current_version, revision: version.revision } };
+      }
+    }
+    if (fs.existsSync(target))
       throw new AppError("文件已存在，未覆盖。请使用新版本文件名。", 409);
     if (!Array.isArray(source_versions) || source_versions.length > 50)
       throw new AppError("最多引用 50 个资料版本。");
@@ -269,7 +312,7 @@ export class Resources extends Repository {
           `INSERT INTO agent_data.resources(instance_id,id,owner_id,source_id,locator,kind,state)
         VALUES($1,$3,$2,$4,$5,$6,'pending') RETURNING *`,
           [
-            randomUUID(),
+            operationId || randomUUID(),
             this.source(locator, "create"),
             locator,
             covers(this.outputs.directory, locator) ? "artifact" : "knowledge",
@@ -300,7 +343,7 @@ export class Resources extends Repository {
         );
     });
     this.gate?.check("create", { path: locator });
-    const output = this.files.write_file({ path: locator, content });
+    const output = this.files[binary ? "write_binary" : "write_file"]({ path: locator, content });
     await this.finish(row.id, body.revision);
     return {
       ...output,
@@ -325,7 +368,7 @@ export class Resources extends Repository {
   async readById(id, args = {}) {
     const row = await this.get(id);
     await this.readable(row);
-    return this.read_file({ ...args, path: row.locator });
+    return /\.(png|jpeg|webp|mp4)$/i.test(row.locator) ? this.read_binary({ path: row.locator }) : this.read_file({ ...args, path: row.locator });
   }
   async finish(id, revision) {
     return this.locked(async (client) => {
@@ -381,7 +424,7 @@ export class Resources extends Repository {
     const row = await this.get(id);
     await this.readable(row);
     this.source(locator, "read");
-    const output = this.files.read_file({
+    const output = this.files[/\.(png|jpeg|webp|mp4)$/i.test(locator) ? "read_binary" : "read_file"]({
       path: locator,
       max_chars: 256 * 1024,
     });
@@ -418,7 +461,7 @@ export class Resources extends Repository {
     const result = [];
     for (const row of rows) {
       try {
-        const content = this.files.read_file({
+        const content = this.files[/\.(png|jpeg|webp|mp4)$/i.test(row.locator) ? "read_binary" : "read_file"]({
           path: row.locator,
           max_chars: 256 * 1024,
         }).content;

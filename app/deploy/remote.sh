@@ -20,7 +20,7 @@ remote() { ssh -o BatchMode=yes "$DEPLOY_HOST" "$@"; }
 forwards=(-L "$AGENT_LOCAL:127.0.0.1:4317" -L "$WEB_PORT:127.0.0.1:$WEB_PORT")
 die() { echo "$1" >&2; exit 1; }
 # 各家模型的密钥变量，与 config/models.json、compose.yaml 里的列表一致。
-PROVIDER_KEYS='KIMI_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GEMINI_API_KEY|XAI_API_KEY|ZHIPU_API_KEY|HUGGINGFACE_API_KEY'
+PROVIDER_KEYS='ARK_API_KEY|KIMI_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GEMINI_API_KEY|XAI_API_KEY|ZHIPU_API_KEY|HUGGINGFACE_API_KEY'
 need() { for tool in "$@"; do command -v "$tool" >/dev/null 2>&1 || die "本机缺少 ${tool}。"; done; }
 reach() {
   need ssh

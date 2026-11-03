@@ -41,7 +41,7 @@ test("向量等其他用途：本地 Ollama 填了地址才启用；没有可用
   assert.deepEqual([embedding.id, embedding.spec.dimensions], ["ollama/qwen3-embedding:0.6b", 1024]);
   assert.throws(() => createModelRouter(registry, deepseekOnly).resolve({ purpose: "embedding" }), error =>
     error.code === "MODEL_UNAVAILABLE" && /没有可用的向量模型（routes.embedding）.*缺 OLLAMA_BASE_URL/.test(error.message));
-  assert.throws(() => createModelRouter(registry, deepseekOnly).resolve({ purpose: "image" }), /没有可用的生图模型（routes.image）。没有登记候选/);
+  assert.throws(() => createModelRouter(registry, deepseekOnly).resolve({ purpose: "image" }), /没有可用的生图模型（routes.image）。.*缺 ARK_API_KEY/);
 });
 
 test("Codex 的模型目录：网关模式下放所有可用的对话模型，默认的排第一，向量模型不进目录", () => {

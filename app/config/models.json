@@ -2,13 +2,16 @@
   "schemaVersion": 1,
   "routes": {
     "chat": ["kimi/kimi-k2.7-code", "deepseek/deepseek-flash", "zhipu/glm-5.3-flash"],
-    "embedding": ["ollama/qwen3-embedding:0.6b"]
+    "embedding": ["ollama/qwen3-embedding:0.6b"],
+    "image": ["byteplus/doubao-seedream-5-0-flash-260915", "byteplus/doubao-seedream-5-0-pro-260628"],
+    "video": ["byteplus/doubao-seedance-2-0-mini-260615", "byteplus/doubao-seedance-2-0-fast-260128"]
   },
   "scenes": {
     "fast": ["deepseek/deepseek-flash", "zhipu/glm-5.3-flash", "kimi/kimi-k2.7-code"],
     "strong": ["deepseek/deepseek-v4-pro", "kimi/kimi-k2.7-code", "zhipu/glm-5.3"]
   },
   "providers": {
+    "byteplus": { "type": "byteplus", "baseUrl": "https://ark.cn-beijing.volces.com", "keyEnv": "ARK_API_KEY" },
     "kimi": { "type": "openai", "baseUrl": "https://api.moonshot.cn", "keyEnv": "KIMI_API_KEY", "note": "Kimi 国内站。国内站与国际站账号不通用：国际站（platform.moonshot.ai）的密钥把 baseUrl 改成 https://api.moonshot.ai" },
     "deepseek": { "type": "deepseek", "keyEnv": "DEEPSEEK_API_KEY" },
     "openai": { "type": "openai", "keyEnv": "OPENAI_API_KEY" },
@@ -20,6 +23,11 @@
     "ollama": { "type": "ollama", "baseUrlEnv": "OLLAMA_BASE_URL", "note": "本地部署的 Ollama（compose 里的 ollama 服务，地址 http://ollama:11434），不需要密钥；填了 OLLAMA_BASE_URL 才启用。" }
   },
   "models": {
+    "byteplus/doubao-seedream-5-0-flash-260915": { "purposes": ["image"] },
+    "byteplus/doubao-seedream-5-0-pro-260628": { "purposes": ["image"] },
+    "byteplus/doubao-seedance-2-0-mini-260615": { "purposes": ["video"] },
+    "byteplus/doubao-seedance-2-0-fast-260128": { "purposes": ["video"] },
+
     "kimi/kimi-k2.7-code": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.7 Code", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["deepseek/deepseek-flash"], "verified": "2026-11-02" },
     "kimi/kimi-k2.6": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.6", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "verified": "2026-11-02" },
     "deepseek/deepseek-flash": { "purposes": ["chat"], "displayName": "DeepSeek Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"], "reasoningLevels": ["low", "high", "max"], "defaultReasoningLevel": "high", "supportsImageDetailOriginal": true, "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["kimi/kimi-k2.7-code"], "verified": "2026-10-31" },

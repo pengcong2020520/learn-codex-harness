@@ -6,7 +6,7 @@ import { selectAgentFile } from "../agents/selection.mjs";
 import { parseEnv } from "node:util";
 import { PROJECT_ROOT } from "../../../shared/paths.mjs";
 import { buildRestrictedLaunch } from "../codex/launch.mjs";
-import { loadModelRegistry, modelEndpoint } from "../gateway/index.mjs";
+import { loadModelRegistry, modelEndpoint, gatewayEndpoint } from "../gateway/index.mjs";
 export { buildAppServerLaunch, buildModelCatalog } from "../codex/launch.mjs";
 
 function booleanValue(environment, name, fallback) {
@@ -115,5 +115,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
   const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
   if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
-  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget };
+  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
 }

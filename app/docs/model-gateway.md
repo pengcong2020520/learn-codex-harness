@@ -1,6 +1,6 @@
 # 模型网关
 
-所有模型调用走同一层：一份模型清单、一个路由、一个网关。Codex（对话）和我们的工具（向量检索，以后的生图、语音等）只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
+所有模型调用走同一层：一份模型清单、一个路由、一个网关。Codex（对话）和我们的工具（向量检索、生图、生视频等）只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
 
 ```
 Codex（对话）────────────┐   模型路由：按用途 / 场景 / 能力挑模型
@@ -145,6 +145,32 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 - 网关不记录请求内容（`disable_content_logging`，日志库关闭）。配置库放在容器的临时目录，重启即清空，每次都以生成的配置文件为准。
 - **对外连接**：除了转发给各家模型，Bifrost 每天会从 getbifrost.ai 下载一次公开的模型价格表，用于成本统计；这个同步不能关闭，只能拉长间隔，下载时不发送请求内容。模型参数表改用本地文件，MCP 目录同步已关闭。
 
+## 生图与生视频
+
+`routes.image` 默认先选 `byteplus/doubao-seedream-5-0-flash-260915`，再选 `byteplus/doubao-seedream-5-0-pro-260628`；`routes.video` 默认先选 `byteplus/doubao-seedance-2-0-mini-260615`，再选 `byteplus/doubao-seedance-2-0-fast-260128`。路由选第一个服务商已启用的模型，不按账户开通状态探测；请先在火山方舟控制台开通要使用的模型。未启用服务商时，对应生成工具不进入目录；视频不可用时也隐藏 `media_status`。
+
+火山方舟使用 Bifrost 2.4.0 内置服务商，必须登记为 `byteplus`：
+
+```json
+"byteplus": {
+  "type": "byteplus",
+  "baseUrl": "https://ark.cn-beijing.volces.com",
+  "keyEnv": "ARK_API_KEY"
+}
+```
+
+这里不能改名成自定义服务商；`baseUrl` 只写域名，网关自己补 `/api/v3/...`。`.env.example` 提供 `ARK_API_KEY` 占位，compose 和部署脚本同步传入网关。应用只持有 `gatewayEndpoint()` 返回的网关地址和访问密钥，不把方舟密钥传给工具或 Codex。升级先运行 `npm run data:migrate` 安装 `007-media.sql`，配置后重新运行 `npm run gateway:up`。
+
+- `generate_image`：prompt 最多 8000 字符，n 为 1–4，默认一张、`2048x2048`。调用网关 `/v1/images/generations`，固定 `response_format: "b64_json"`，直接拿图片正文；默认 URL 响应的链接 24 小时后过期，不适合长期产物。返回工作区路径、模型、请求尺寸和版本信息。默认按时间加随机 ID 命名；多张在文件名后加 `-1`、`-2` 等序号。
+- `generate_video`：prompt 最多 8000 字符，seconds 为 2–15 的整数，默认 5 秒、`1280x720`。向 `/v1/videos` 提交后立即返回本地持久化任务 `id` 和远端 `providerId`；无需等待生成。`media_status({id})` 使用本地 ID 查询 `queued / in_progress / completed / failed`，完成返回路径与版本，失败返回原因。
+- 后台每 10 秒查询 `/v1/videos/{providerId}`，最长等待 20 分钟；完成后经 `/content` 下载 MP4，保存到工作区。服务商任务保留 7 天、下载链接有效 24 小时，所以后台完成即下载。短暂网络故障继续重试查询；超时、服务商失败、权限撤销或文件冲突记为失败。重启继续数据库里的未完成任务，并沿用原截止时间；任务提交期间崩溃而未拿到远端 ID 时标记“结果未确认”，不自动重提以免重复收费。本地超时不代表远端取消，仍可能产生供应商费用。
+- 二进制只允许写到当前 Agent 的 outputs 目录，格式必须在 outputs.formats 声明（png / jpeg / webp / mp4）。默认子目录是 `outputs/media/`；自定义 outputs 时跟随该目录。单个正文最多 128 MiB，检查格式签名、路径和链接，不覆盖已有文件；资源正文按哈希留存不可变版本。普通 `read_file` / `write_file` 仍只对模型开放文本，二进制通过媒体服务保存，资源服务支持读取二进制版本。
+- 提交前检查当前轮次的 create 门禁（包括 workflow.writes）。后台授权只保留这一任务的单个输出路径，每次保存重新检查当前 Agent 的目录、格式和工具权限，不借用已结束轮次的授权。任务按实例、owner 隔离，查询还检查 Agent 身份。后台同一任务恢复写入时只接受相同资源 ID 和相同正文哈希。
+
+`generate_image`、`generate_video` 调用前检查 `budgetStatus()`，预算已超则拒绝并说明原因；`media_status` 只是查询、不产生费用，超预算时照常可用；描述明确要求“只在用户明确要求生成时调用，生成会产生费用”。已提交视频仍跟进和落盘，不因之后预算耗尽而丢弃结果。每次生图按响应张数记一条 image 用量，带上响应中的 token；每个完成的视频按请求秒数记一条 video 用量，有 usage 同样记录，使用任务 ID 去重。生成成功但本地保存失败仍记消耗；服务商未报告的失败消耗无法估算。没有价格不等于免费，清单不预填真实价格；请按自己的计费约定填写 pricing。预算不预留未来费用，并发生成可能超额。
+
+`tests/media-http.test.mjs` 使用本地假 HTTP 网关验证图片请求与视频异步链路；`tests/media.test.mjs` 另用注入的 Response 覆盖相同状态机、参数、门禁、预算与无可用模型。`npm run test:data` 验证真实 PostgreSQL 的任务恢复、二进制版本和记账去重；不调用真实生成服务。
+
 ## 用量与预算
 
 ### 账本和估算口径
@@ -155,13 +181,13 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 - **模型与任务**：在 `turn/start` 前绑定本轮路由选出的模型和任务 ID，通知早于 RPC 响应也能定位；工作流换步骤时重新选模型，每一步仍归属原任务。直连模型没有服务商前缀时记为 `direct/模型名`；无法识别则为 `direct/unknown`。Codex 的通知不含 Bifrost 最终备用模型，网关内部故障切换只能归属到本轮提交的路由模型，相关花费是估算，不能用来核对供应商账单。
 - **向量**：每次成功取得 embedding 响应就按 `usage.prompt_tokens`（缺失时取 `total_tokens`）记输入，总量取 `total_tokens`（缺失时取 `prompt_tokens`）。响应不含 usage 时不猜测；响应已报告用量但向量校验失败，仍记已消耗的用量。检索发生在任务内时带上 Thread、Turn 和任务 ID；后台索引可以为空。
 - `inputTokens` 已含缓存输入，`outputTokens` 已含推理输出，**两者都不再重复相加**。总 token 取协议的 `totalTokens`；工具不传总量时默认输入加输出。
-- 后续生图、生视频可调用同一个 `usage.record({ source, model, inputTokens, outputTokens, units, threadId, turnId, taskId })`，`units` 可记录张数或秒数。数量的单位由来源约定，不应把跨来源的数量合计当作同一种计费量；当前价格表只计算 token 花费，不计算按张、按秒收费。
+- 生图、生视频调用同一个 `usage.record({ source, model, inputTokens, outputTokens, units, threadId, turnId, taskId })`，`units` 可记录张数或秒数。数量的单位由来源约定，不应把跨来源的数量合计当作同一种计费量；价格表同时计算 token 花费与按张、按秒的费用。
 
 生产服务必须连接 PostgreSQL，不会在数据库故障时回退到内存。独立模块或无数据库测试使用内存账本，查询返回 `storage: "memory"`，客户端会提示重启清空；生产返回 `storage: "postgres"`。账本写入失败会停止派发，不能按空账本继续运行。预算查询等待已收到的用量写入后再计算。
 
 ### 价格表
 
-清单顶层可写 `"currency": "CNY"` 或 `"USD"`，省略时是 CNY。每个模型可写 `pricing`，单位均为**每百万 token 的价格**：`input`、`output` 必填，`cachedInput` 可选，省略时等于 input。所有价格必须是有限的非负数字；0 表示已确认免费，未填写表示未定价。
+清单顶层可写 `"currency": "CNY"` 或 `"USD"`，省略时是 CNY。每个模型可写 `pricing`：`input`、`output`、`cachedInput` 的单位为**每百万 token 的价格**，`cachedInput` 省略时等于 input。非媒体模型的 input、output 必填；纯媒体模型可只填 `perImage`（每张）或 `perVideoSecond`（每秒），也可同时填 token 单价。所有价格必须是有限的非负数字；0 表示已确认免费，未填写表示未定价。
 
 以下仅为格式示例，数字是虚构的，不代表任何真实模型价格；仓库的 `config/models.json` 不预填价格：
 
@@ -178,7 +204,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 }
 ```
 
-估算花费 = `((输入 − 缓存输入) × input + 缓存输入 × cachedInput + 输出 × output) / 1000000`。推理输出不另收费，缓存写入不另设价格。未定价记录不计入金额，但计入 token 总量，并在查询的 `unpricedRequests` 中标出，客户端显示“未计价”。
+估算花费 = `((输入 − 缓存输入) × input + 缓存输入 × cachedInput + 输出 × output) / 1000000`。媒体还要加上 `units × perImage` 或 `units × perVideoSecond`；只填张/秒单价时，token 只统计数量、不另估价；只填 token 单价时，不额外按张/秒估价，两种价格都填则相加。完全没有适用价格的记录标为未计价。推理输出不另收费，缓存写入不另设价格。未定价记录不计入金额，但计入 token 总量，并在查询的 `unpricedRequests` 中标出，客户端显示“未计价”。
 
 金额在记录时按当时的清单计算并落库；以后补价格不会追溯改写历史。更改币种后，旧币种记录仍计入 token，但在当前币种的金额汇总中标为未计价，避免把 CNY 与 USD 直接相加。价格或币种修改后需重启服务。
 

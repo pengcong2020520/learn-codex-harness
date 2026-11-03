@@ -38,6 +38,7 @@ export function validateRegistry(registry) {
   const envNames = new Set();
   for (const [id, provider] of Object.entries(providers)) {
     if (!NAME.test(id)) fail(`服务商名 ${id} 只能用小写字母、数字、- 和 _。`);
+    if (provider.type === "byteplus" && id !== "byteplus") fail("byteplus 是内置服务商，名称必须是 byteplus。");
     if (!NAME.test(provider.type || "")) fail(`服务商 ${id} 缺少 type（网关里的接口类型，如 openai、anthropic）。`);
     // 启用条件：keyEnv（密钥）和 baseUrlEnv（地址，如本地部署的 Ollama）里声明的变量都有值。至少要有一项。
     if (!provider.keyEnv && !provider.baseUrlEnv) fail(`服务商 ${id} 至少要有 keyEnv 或 baseUrlEnv。`);
@@ -55,10 +56,12 @@ export function validateRegistry(registry) {
     if (!providers[provider] || !model) fail(`模型 ${id} 必须写成“服务商/模型名”，且服务商已在 providers 中登记。`);
     if (spec.pricing !== undefined) {
       if (!spec.pricing || typeof spec.pricing !== "object" || Array.isArray(spec.pricing)) fail(`模型 ${id} 的 pricing 必须是价格对象。`);
-      for (const field of ["input", "cachedInput", "output"]) {
+      const mediaOnly = Array.isArray(spec.purposes) && spec.purposes.every(purpose => ["image", "video"].includes(purpose));
+      if (!Object.keys(spec.pricing).length) fail(`模型 ${id} 的 pricing 不能为空。`);
+      for (const field of ["input", "cachedInput", "output", "perImage", "perVideoSecond"]) {
         const value = spec.pricing[field];
-        if (field === "cachedInput" && value === undefined) continue;
-        if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail(`模型 ${id} 的 pricing.${field} 必须是非负数字，单位是每百万 token 的价格。`);
+        if (value === undefined && (mediaOnly || ["cachedInput", "perImage", "perVideoSecond"].includes(field))) continue;
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail(`模型 ${id} 的 pricing.${field} 必须是非负数字，token 按每百万、perImage 按张、perVideoSecond 按秒计价。`);
       }
     }
     const purposes = spec.purposes;
