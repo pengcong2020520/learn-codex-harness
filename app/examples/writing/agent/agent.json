@@ -14,7 +14,10 @@
         "kb_list",
         "kb_read",
         "kb_search",
-        "kb_submit_revision"
+        "kb_submit_revision",
+        "generate_image",
+        "generate_video",
+        "media_status"
       ]
     },
     "dataBindings": [
@@ -70,7 +73,11 @@
       "directory": "outputs",
       "formats": [
         "md",
-        "txt"
+        "txt",
+        "png",
+        "jpeg",
+        "webp",
+        "mp4"
       ],
       "writeMode": "create-only",
       "requiredChecks": [

@@ -31,7 +31,7 @@ export function readToolSources(root) {
   return { files, version: hash.digest("hex") };
 }
 
-export async function createToolService(root, { source = readToolSources(root), snapshotDir, nodeEnv = "development", runWeb, files, agent, gate, knowledge, tasks, skills, workspaceDir } = {}) {
+export async function createToolService(root, { source = readToolSources(root), snapshotDir, nodeEnv = "development", runWeb, files, agent, gate, knowledge, tasks, skills, media, workspaceDir } = {}) {
   const policy = files ? null : agent || new AgentDefinition(root);
   const fileService = files || createFileTools(root, { workspaceDir: workspaceDir || policy.workspacePath, sources: policy.sources, outputs: policy.outputs });
   const ajv = new Ajv({ strict: true, allErrors: false, validateFormats: false });
@@ -85,14 +85,18 @@ export async function createToolService(root, { source = readToolSources(root), 
     const module = await import(pathToFileURL(path.join(moduleRoot, group.module)).href);
     const factory = module[group.factory || "createTools"];
     if (typeof factory !== "function") throw new Error(`工具模块没有工厂函数：${group.module}`);
-    const handlers = await factory({ root, nodeEnv, runWeb, files: fileService, knowledge, tasks, skills });
+    const handlers = await factory({ root, nodeEnv, runWeb, files: fileService, knowledge, tasks, skills, media });
     for (const { name } of group.tools) {
       if (!Object.hasOwn(handlers, name) || typeof handlers[name] !== "function") throw new Error(`缺少工具执行函数：${name}`);
       entries.get(name).execute = handlers[name];
     }
   }
   for (const name of agent?.definition.agent.tools.allow || []) if (!entries.has(name)) throw new Error(`Agent 允许的必需工具未注册：${name}`);
-  const specs = [...entries.values()].filter(({ spec }) => !agent || agent.allowsTool(spec.name)).map(({ spec }) => ({
+  const available = name => {
+    const purpose = { generate_image: 'image', generate_video: 'video', media_status: 'video' }[name];
+    return !purpose || Boolean(media?.available(purpose));
+  };
+  const specs = [...entries.values()].filter(({ spec }) => available(spec.name) && (!agent || agent.allowsTool(spec.name))).map(({ spec }) => ({
     name: spec.name, title: spec.label, description: spec.description, inputSchema: spec.inputSchema,
     annotations: { readOnlyHint: spec.readOnly }
   }));
@@ -102,7 +106,7 @@ export async function createToolService(root, { source = readToolSources(root), 
     label: name => entries.get(name)?.spec.label || name,
     validate(name, args) {
       const entry = entries.get(name);
-      if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
+      if (!entry || !available(name) || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
       if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
       return entry;
     },

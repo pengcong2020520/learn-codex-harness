@@ -4,6 +4,14 @@ import { createHash } from "node:crypto";
 
 
 const MAX_BYTES = 256 * 1024;
+export const MAX_MEDIA_BYTES = 128 * 1024 * 1024;
+export function mediaFormat(content) {
+  if (content.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return 'png';
+  if (content[0] === 255 && content[1] === 216 && content[2] === 255) return 'jpeg';
+  if (content.toString('ascii', 0, 4) === 'RIFF' && content.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (content.toString('ascii', 4, 8) === 'ftyp') return 'mp4';
+  throw new Error('媒体正文不是支持的 png / jpeg / webp / mp4 格式。');
+}
 
 // 这是受限文件工具，不是隔离同机恶意进程的 OS 沙箱。
 // 不跟随符号链接，不覆盖文件；同步检查和操作之间不让出 JS 执行权。
@@ -64,7 +72,7 @@ export function createFileTools(
 
   function resolve(
     relative = "",
-    { createParents = false, file = false } = {},
+    { createParents = false, file = false, binary = false } = {},
   ) {
     if (
       typeof relative !== "string" ||
@@ -87,8 +95,8 @@ export function createFileTools(
         "路径不能包含隐藏目录、上级目录或空路径段。",
       );
     }
-    if (file && (parts.length < 2 || !/\.(md|txt)$/i.test(relative)))
-      throw new Error("当前只支持 .md 和 .txt 文件。");
+    if (file && (parts.length < 2 || !(binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt)$/i).test(relative)))
+      throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md 和 .txt 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
       current = path.join(current, part);
@@ -111,12 +119,14 @@ export function createFileTools(
 
   return {
     workspace: base,
-    check(relative, action) {
+    check(relative, action, { binary = false } = {}) {
       assertCurrent();
       if (!(action === "create" ? writable(relative) : readable(relative)))
         throw new Error("未授权访问这个资料范围。");
+      if (binary && (!outputs || !covers(outputs.directory, relative) || !outputs.formats.includes(path.extname(relative).slice(1).toLowerCase())))
+        throw new Error("媒体只能写入 outputs 目录且格式必须声明。");
       return resolve(relative, {
-        file: true,
+        binary, file: true,
         createParents: action === "create",
       });
     },
@@ -195,6 +205,25 @@ export function createFileTools(
         fs.closeSync(fd);
       }
     },
+    check_binary(relative, action = 'create') { return this.check(relative, action, { binary: true }); },
+    read_binary({ path: relative }) {
+      const file = this.check_binary(relative, 'read');
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try {
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile() || stat.nlink !== 1 || stat.size > MAX_MEDIA_BYTES) throw new Error('媒体超过 128 MiB 或不是普通文件。');
+        const content = Buffer.alloc(stat.size + 1);
+        const length = fs.readSync(fd, content, 0, content.length, 0);
+        if (length !== stat.size) throw new Error('读取期间媒体已变化。');
+        return { path: relative, content: content.subarray(0, length) };
+      } finally { fs.closeSync(fd); }
+    },
+    write_binary({ path: relative, content }) {
+      this.check_binary(relative);
+      if (!Buffer.isBuffer(content) || !content.length || content.length > MAX_MEDIA_BYTES) throw new Error('媒体正文必须是 1 字节到 128 MiB 的 Buffer。');
+      if (mediaFormat(content) !== path.extname(relative).slice(1).toLowerCase()) throw new Error('媒体正文与文件扩展名不符。');
+      return this.write_file({ path: relative, content });
+    },
     write_file({ path: relative, content }) {
       assertCurrent();
       if (!writable(relative)) throw new Error("未授权写入这个资料范围。");
@@ -203,9 +232,14 @@ export function createFileTools(
         !outputs.formats.includes(path.extname(relative).slice(1).toLowerCase())
       )
         throw new Error("产物格式不在允许列表中。");
-      if (Buffer.byteLength(content, "utf8") > MAX_BYTES)
-        throw new Error("写入内容不能超过 256 KiB。");
-      const file = resolve(relative, { file: true, createParents: true });
+      const binary = Buffer.isBuffer(content);
+      if (binary) {
+        this.check_binary(relative);
+        if (!content.length || mediaFormat(content) !== path.extname(relative).slice(1).toLowerCase()) throw new Error('媒体正文与文件扩展名不符。');
+      }
+      if (Buffer.byteLength(content, "utf8") > (binary ? MAX_MEDIA_BYTES : MAX_BYTES))
+        throw new Error(binary ? "媒体正文不能超过 128 MiB。" : "写入内容不能超过 256 KiB。");
+      const file = resolve(relative, { file: true, createParents: true, binary });
       try {
         fs.writeFileSync(file, content, {
           flag: "wx",

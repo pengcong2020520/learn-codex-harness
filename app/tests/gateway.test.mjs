@@ -25,7 +25,7 @@ test("内置模型清单合法；每家的密钥变量在 compose 与部署脚�
   assert.equal(listed.length, keyEnvs.length);
   // 每个模型都标了用途；路由表里每种用途的候选都存在。
   for (const [id, spec] of Object.entries(registry.models)) assert.ok(spec.purposes.length, id);
-  assert.deepEqual(Object.keys(registry.routes).sort(), ["chat", "embedding"]);
+  assert.deepEqual(Object.keys(registry.routes).sort(), ["chat", "embedding", "image", "video"]);
 });
 
 test("模型清单校验：写错的服务商、密钥变量、备用模型和推理档位都会被拦下", () => {

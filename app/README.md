@@ -63,6 +63,7 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 | 变量 | 说明 | 默认值 |
 |---|---|---|
 | `AGENT_GATEWAY_KEY` | 访问本机模型网关的密钥（`sk-bf-` 开头，`npm run gateway:key` 生成）；设置后 Codex 只连网关 | — |
+| `ARK_API_KEY` | 火山方舟 API Key；先在控制台开通 Seedream / Seedance 模型，用于生图与异步生视频 | — |
 | `KIMI_API_KEY` 等 | 各家模型的密钥，只交给网关；填了哪家就启用哪家（清单见 `config/models.json`） | — |
 | `CODEX_MODEL` | 默认的对话模型；网关模式写成“服务商/模型名”，不填时按 `config/models.json` 的 `routes.chat` 取第一个可用的 | 见 `.env.example` |
 | `AGENT_WEB_SEARCH` | `auto` 按网关默认模型的 nativeTools 开启联网搜索；`off` 强制关闭；直连始终关闭 | `auto` |
@@ -281,4 +282,6 @@ npm run check:server
 工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；Skill 与 Workflow 的设计和实施计划见 [skill-workflow-design.md](docs/skill-workflow-design.md)；独立教学版本见 [s03–s05 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
 
 
-用量与预算：首次升级先运行 `npm run data:migrate` 安装迁移 006，再启动服务。终端输入 `/usage` 查看今天，`/usage month` 查看本月；也可访问认证后的 `GET /usage?period=today|month`。价格表、计费边界和超预算行为见 [模型网关：用量与预算](docs/model-gateway.md#用量与预算)。
+媒体生成：写作 Agent 提供 `generate_image`、`generate_video`、`media_status`，只在用户明确要求生成时使用，会产生费用。配置 `ARK_API_KEY` 前，先在火山方舟控制台开通清单中的模型，再重建网关；没有可用模型时隐藏相应工具。图片、视频以不可变版本保存到 `outputs/media/`；视频任务由数据库持久化，重启继续跟进，见 [生图与生视频](docs/model-gateway.md#生图与生视频)。
+
+用量与预算：首次升级先运行 `npm run data:migrate` 安装迁移 006、007，再启动服务。终端输入 `/usage` 查看今天，`/usage month` 查看本月；也可访问认证后的 `GET /usage?period=today|month`。价格表、计费边界和超预算行为见 [模型网关：用量与预算](docs/model-gateway.md#用量与预算)。

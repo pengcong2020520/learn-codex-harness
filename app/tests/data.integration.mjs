@@ -555,3 +555,78 @@ test("真实 PG：迁移 006 用量持久化、按时区汇总与实例/owner �
   for (const scope of [{ ...r.scope, ownerId: randomUUID() }, { ...r.scope, instanceId: randomUUID() }])
     assert.equal((await new UsageService({ ...options, scope }).summary()).total.requests, 0);
 });
+
+// 媒体集成测试只使用本地假网关，不访问真实生成服务。
+test('真实 PG：二进制不可变版本、create-only、格式/目录/门禁与中断恢复', async t => {
+  const { png, mp4 } = await import('./media-fixture.mjs');
+  const { PermissionGate } = await import('../server/modules/permissions/index.mjs');
+  const r = await setup(t);
+  r.outputs.formats.push('png','mp4');
+  const agent = { definition: { agent: { id: 'media-test' }, bindings: {} }, outputs: r.outputs, sources: r.sources, assertCurrent() {}, allowsTool: () => true };
+  const gate = new PermissionGate({ scope: r.scope, agent }); r.resources.gate = gate;
+  const run = fn => gate.run(gate.operator(), fn);
+  const result = await run(() => r.resources.write_binary({ path: 'outputs/media/test.png', content: png }));
+  const read = await run(() => r.resources.readById(result.artifact.resourceId));
+  assert.deepEqual(read.content, png); assert.equal(read.versionId, result.artifact.versionId);
+  const version = (await r.repo.query('SELECT * FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [read.versionId])).rows[0];
+  assert.equal(version.bytes, png.length); assert.match(version.blob, /\.bin$/);
+  await assert.rejects(run(() => r.resources.write_binary({ path: result.path, content: png })), /已存在/);
+  await assert.rejects(run(() => r.resources.write_binary({ path: 'research/test.png', content: png })), /outputs/);
+  await assert.rejects(run(() => r.resources.write_binary({ path: 'outputs/test.webp', content: png })), /格式/);
+  await assert.rejects(r.resources.write_binary({ path: 'outputs/denied.png', content: png }), /未授权/);
+  const operationId = randomUUID(), args = { path: 'outputs/media/resume.mp4', content: mp4, operationId };
+  const original = r.resources.finish.bind(r.resources);
+  r.resources.finish = () => { throw new Error('模拟写完文件后崩溃'); };
+  await assert.rejects(run(() => r.resources.write_binary(args)), /模拟/);
+  r.resources.finish = original;
+  const resumed = await run(() => r.resources.write_binary(args));
+  assert.equal(resumed.artifact.resourceId, operationId);
+  const again = await run(() => r.resources.write_binary(args));
+  assert.deepEqual(again, resumed);
+  const versions = await r.repo.query('SELECT * FROM agent_data.resource_versions WHERE instance_id=$1 AND resource_id=$3 AND $2::uuid IS NOT NULL', [operationId]);
+  assert.equal(versions.rowCount, 1);
+  await assert.rejects(run(() => r.resources.write_binary({ ...args, content: Buffer.concat([mp4, Buffer.from('changed')]) })), /预留版本不同/);
+});
+
+test('真实 PG + 假 HTTP：重启继续视频任务、产物落盘后恢复、记账去重与归属隔离', async t => {
+  const http = await import('node:http');
+  const { MediaService } = await import('../server/modules/media/index.mjs');
+  const { MediaJobs } = await import('../server/modules/media/store.mjs');
+  const { UsageService } = await import('../server/modules/usage/index.mjs');
+  const { PermissionGate } = await import('../server/modules/permissions/index.mjs');
+  const { createModelRouter } = await import('../server/modules/gateway/router.mjs');
+  const { registry, mp4 } = await import('./media-fixture.mjs');
+  const r = await setup(t); r.outputs.formats.push('mp4');
+  let posts = 0, completed = false;
+  const server = http.createServer(async (req, res) => {
+    for await (const _ of req) { /* 消费请求体。 */ }
+    if (req.method === 'POST') { posts++; res.end(JSON.stringify({ id: 'remote-persisted' })); }
+    else if (req.url.endsWith('/content')) res.end(mp4);
+    else res.end(JSON.stringify({ status: completed ? 'completed' : 'queued' }));
+  });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  cleanup(r.root, () => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
+  const agent = { definition: { agent: { id: 'media-test' }, bindings: {} }, sources: r.sources, outputs: r.outputs, assertCurrent() {}, allowsTool: () => true };
+  const gate = new PermissionGate({ scope: r.scope, agent }); r.resources.gate = gate;
+  const options = { endpoint: { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKey: 'sk-bf-test-only' },
+    router: createModelRouter(registry, { ARK_API_KEY: 'test-only' }), store: new MediaJobs(r.pool,r.scope), files: r.resources, gate, agent,
+    usage: new UsageService({ pool: r.pool, scope: r.scope, registry }) };
+  const first = new MediaService(options);
+  const job = await gate.run(gate.operator(), () => first.generateVideo({ prompt: 'test' }, { context: { threadId: 'thread-1', turnId: 'turn-1', taskId: 'task' } }));
+  await first.close(); completed = true;
+  const store = new MediaJobs(r.pool, r.scope), persisted = await store.get(job.id);
+  assert.equal(persisted.providerId, 'remote-persisted');
+  for (const scope of [{ ...r.scope, ownerId: randomUUID() }, { ...r.scope, instanceId: randomUUID() }]) {
+    assert.equal(await new MediaJobs(r.pool, scope).get(job.id), undefined);
+    assert.deepEqual(await new MediaJobs(r.pool, scope).pending(), []);
+  }
+  // 模拟进程在文件版本已确认、任务完成状态尚未写入时退出。
+  await gate.run(gate.media(persisted), () => r.resources.write_binary({ path: persisted.path, content: mp4, operationId: job.id }));
+  await options.usage.record({ source: 'video', model: persisted.model, units: 5, eventKey: `video:${job.id}` });
+  const usage = new UsageService({ pool: r.pool, scope: r.scope, registry });
+  const resumed = new MediaService({ ...options, store, usage }); cleanup(r.root, () => resumed.close());
+  await resumed.tick();
+  assert.equal((await resumed.status(job)).status, 'completed'); assert.equal(posts, 1);
+  assert.deepEqual(fs.readFileSync(path.join(r.files.workspace, persisted.path)), mp4);
+  assert.equal((await usage.summary()).total.requests, 1); assert.equal((await usage.summary()).total.estimatedCost, 0.5);
+});

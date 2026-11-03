@@ -31,7 +31,7 @@ const schema = object({
     knowledge: array(object({ kbId: { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$" }, mode: choices(["wiki", "rag"]), actions: array(choices(["read", "update", "index"])) })),
     executionRef: text,
     memory: object({ use: { type: "boolean" }, contribute: { type: "boolean" } }),
-    outputs: object({ directory: text, formats: array(choices(["md", "txt"])), writeMode: { const: "create-only" }, requiredChecks: array(choices(["file-exists", "format"])) }),
+    outputs: object({ directory: text, formats: array(choices(["md", "txt", "png", "jpeg", "webp", "mp4"])), writeMode: { const: "create-only" }, requiredChecks: array(choices(["file-exists", "format"])) }),
     workflows: { type: "array", items: workflow, maxItems: 20 }
   }, ["id", "version", "instructions", "skills", "tools", "dataBindings", "executionRef", "memory", "outputs"]),
   bindings: object({
