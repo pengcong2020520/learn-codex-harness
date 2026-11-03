@@ -104,14 +104,17 @@ export class UsageService {
     const today = dayKey(now, this.budget.timezone);
     const daily = this.totals(rows.filter(row => row.day === today)), monthly = this.totals(rows);
     const violations = [];
+    let downgraded = false;
     for (const [period, label, total, tokenLimit, costLimit] of [
       ['today', '今日', daily, this.budget.dailyTokens, this.budget.dailyCost],
       ['month', '本月', monthly, this.budget.monthlyTokens, this.budget.monthlyCost],
     ]) {
-      for (const [used, limit, unit] of [[total.totalTokens, tokenLimit, 'token'], [total.estimatedCost, costLimit, `金额（${this.currency}）`]])
+      for (const [used, limit, unit] of [[total.totalTokens, tokenLimit, 'token'], [total.estimatedCost, costLimit, `金额（${this.currency}）`]]) {
+        if (limit !== null && this.budget.downgradeAt != null && used >= limit * this.budget.downgradeAt) downgraded = true;
         if (limit !== null && used >= limit) violations.push({ reason: `${label} ${unit} 已用 ${used}，上限 ${limit}`, reset: periodBounds(period, now, this.budget.timezone).end });
+      }
     }
-    return { exceeded: violations.length > 0, reason: violations.map(item => item.reason).join('；') || null,
+    return { downgraded, downgradeScene: this.budget.downgradeScene || "fast", exceeded: violations.length > 0, reason: violations.map(item => item.reason).join('；') || null,
       resetsAt: violations.length ? new Date(Math.max(...violations.map(item => item.reset))).toISOString() : null,
       timezone: this.budget.timezone, currency: this.currency, limits: this.budget, daily, monthly };
   }

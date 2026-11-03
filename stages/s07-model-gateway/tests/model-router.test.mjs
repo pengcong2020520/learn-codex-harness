@@ -53,7 +53,7 @@ test("Codex 的模型目录：网关模式下放所有可用的对话模型，�
   assert.equal(launch.model, "kimi/kimi-k2.7-code");
   assert.deepEqual(launch.catalog.models.map(entry => [entry.slug, entry.priority]), [["kimi/kimi-k2.7-code", 1], ["kimi/kimi-k2.6", 2], ["deepseek/deepseek-flash", 3], ["deepseek/deepseek-v4-pro", 4]]);
   assert.deepEqual(launch.catalog.models[2].supported_reasoning_levels.map(level => level.effort), ["low", "high", "max"], "每个模型用自己的能力信息");
-  assert.equal(launch.router.resolve({ model: "fast" }).id, "deepseek/deepseek-flash");
+  assert.equal(launch.router.resolve({ model: "fast" }).id, "kimi/kimi-k2.7-code");
 });
 
 test("RAG 的向量模型经网关：配了向量库才接；地址和密钥用网关的，模型和维数来自路由；挑不到时说明原因", async t => {

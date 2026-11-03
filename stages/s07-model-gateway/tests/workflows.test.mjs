@@ -92,7 +92,7 @@ async function messageRig(t, workflows, gate, environment = fixture) {
   cleanup(root, async () => { await messages.close(); sessions.close(); });
   const submit = (id, fields = {}) => messages.submit({ threadId: session.id, clientMessageId: id, text: `正文 ${id}`, ...fields });
   const started = async count => { await until(() => rpc.calls.filter(call => call.method === "turn/start").length >= count); return rpc.calls.filter(call => call.method === "turn/start")[count - 1].params.input; };
-  return { root, rpc, store, messages, sessions, session, submit, started };
+  return { root, agent, rpc, store, messages, sessions, session, submit, started };
 }
 
 test("按 workflow 入队与派发：注入任务说明和 Skill，旧 knowledge 字段等价于知识维护，追加不能换 workflow", async t => {
@@ -195,7 +195,11 @@ test("按步骤选模型：网关模式下每一轮都带上模型，写了场�
     /Workflow article 的步骤 outline：没有名为 fastest 的场景/);
   await assert.rejects(messageRig(t, [{ ...article, steps: [{ ...article.steps[0], model: "zhipu/glm-5.3" }, article.steps[1]] }], undefined, gateway),
     /步骤 outline：.*缺 ZHIPU_API_KEY/, "服务商没启用也在启动时发现");
-  await assert.rejects(messageRig(t, [staged]), /按步骤切换模型需要启用模型网关/);
+  // 直连只有一个模型：步骤写场景时提醒后忽略，同一个 Agent 包照常能用；写死具体模型才报错。
+  const directScene = await messageRig(t, [staged]);
+  assert.ok(directScene.agent.warnings.some(warning => /未启用模型网关.*步骤 outline.*不生效/.test(warning)));
+  await assert.rejects(messageRig(t, [{ ...article, steps: [{ ...article.steps[0], model: "deepseek/deepseek-flash" }, article.steps[1]] }]),
+    /指定了模型 deepseek\/deepseek-flash；按步骤切换具体模型需要启用模型网关/);
   const direct = await messageRig(t, [article]);
   await direct.submit("d1", { workflow: "article" });
   await direct.started(1);

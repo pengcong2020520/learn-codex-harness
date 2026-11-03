@@ -12,17 +12,17 @@ const registry = loadModelRegistry(app);
 const keys = { KIMI_API_KEY: "sk-kimi-secret-123", DEEPSEEK_API_KEY: "sk-deepseek-secret-456" };
 const gatewayEnv = { AGENT_GATEWAY_KEY: "sk-bf-local-789", CODEX_MODEL: "kimi/kimi-k2.7-code", CODEX_MODEL_CATALOG_ENABLED: "true", ...keys };
 
-test("内置模型清单合法；每家的密钥变量在 compose 与部署脚本里都有登记", () => {
+test("内置模型清单合法；每家的密钥变量只在 compose 网关服务里登记", () => {
   assert.ok(registry.models["kimi/kimi-k2.7-code"] && registry.models["deepseek/deepseek-flash"]);
-  const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8"), remote = fs.readFileSync(path.join(app, "deploy/remote.sh"), "utf8");
-  const listed = remote.match(/^PROVIDER_KEYS='([^']+)'/m)[1].split("|");
+  const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8");
+  const gateway = compose.match(/^  gateway:\n([\s\S]*?)(?=^  [a-z]+:)/m)[1];
+  const outside = compose.replace(gateway, "");
   // 密钥用环境变量引用传进网关；不需要密钥的服务（如本地 Ollama）只有地址，地址直接写进生成的配置。
   const keyEnvs = Object.values(registry.providers).map(provider => provider.keyEnv).filter(Boolean);
   for (const keyEnv of keyEnvs) {
-    assert.match(compose, new RegExp(`^\\s+${keyEnv}: \\$\\{${keyEnv}:-\\}$`, "m"), `compose.yaml 的网关要传入 ${keyEnv}`);
-    assert.ok(listed.includes(keyEnv), `remote.sh 的 PROVIDER_KEYS 要包含 ${keyEnv}`);
+    assert.match(gateway, new RegExp(`^\\s+${keyEnv}: \\$\\{${keyEnv}:-\\}$`, "m"), `compose.yaml 的网关要传入 ${keyEnv}`);
+    assert.doesNotMatch(outside, new RegExp(`^\\s+${keyEnv}:`, "m"), "服务商密钥只能传给网关");
   }
-  assert.equal(listed.length, keyEnvs.length);
   // 每个模型都标了用途；路由表里每种用途的候选都存在。
   for (const [id, spec] of Object.entries(registry.models)) assert.ok(spec.purposes.length, id);
   assert.deepEqual(Object.keys(registry.routes).sort(), ["chat", "embedding", "image", "video"]);
@@ -44,7 +44,7 @@ test("模型清单校验：写错的服务商、密钥变量、备用模型和�
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["ollama/qwen3-embedding:0.6b"]; }, /要能做它的全部用途/],
     [r => { r.routes.embedding = ["kimi/kimi-k2.7-code"]; }, /routes.embedding 里的 kimi\/kimi-k2.7-code 必须是清单里用途包含 embedding 的模型/],
     [r => { r.routes.painting = ["kimi/kimi-k2.7-code"]; }, /不是已知用途/],
-    [r => { r.scenes.fast = ["ollama/qwen3-embedding:0.6b"]; }, /必须是清单里的对话模型/],
+    [r => { r.scenes.fast = ["unknown/model"]; }, /必须是清单里的模型/],
     [r => { r.scenes["Fast/1"] = ["kimi/kimi-k2.7-code"]; }, /场景名/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["kimi/kimi-k2.7-code"]; }, /备用模型/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["openai/none"]; }, /备用模型/],

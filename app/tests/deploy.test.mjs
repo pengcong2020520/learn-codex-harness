@@ -278,3 +278,12 @@ test("server-setup：从旧版部署（宿主 Node + 三个单元）升级时先
   assert.match(fs.readFileSync(path.join(units, "codex-harness.service"), "utf8"), /docker compose up -d --wait/, "同名单元换成容器版");
   assert.ok(!fs.existsSync(path.join(target, "node_modules")), "宿主不再需要依赖目录");
 });
+
+
+test("部署脚本登记清单中每家服务商的密钥变量", () => {
+  const registry = JSON.parse(fs.readFileSync(path.join(app, "config/models.json"), "utf8"));
+  const remote = fs.readFileSync(path.join(app, "deploy/remote.sh"), "utf8");
+  const listed = remote.match(/^PROVIDER_KEYS='([^']+)'/m)[1].split("|");
+  const keys = Object.values(registry.providers).map(provider => provider.keyEnv).filter(Boolean);
+  assert.deepEqual(listed.sort(), keys.sort());
+});

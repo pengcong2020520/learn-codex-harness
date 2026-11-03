@@ -20,7 +20,13 @@ export function budgetConfig(environment = {}) {
   const dailyCost = limitValue(environment, 'AGENT_BUDGET_DAILY_COST');
   const monthlyCost = limitValue(environment, 'AGENT_BUDGET_MONTHLY_COST');
   limitValue(environment, 'AGENT_GATEWAY_DAILY_TOKENS', true);
-  return { timezone, dailyTokens, monthlyTokens, dailyCost, monthlyCost };
+  const raw = environment.AGENT_BUDGET_DOWNGRADE_AT?.trim();
+  const downgradeAt = raw === undefined || raw === "" ? null : Number(raw);
+  if (downgradeAt !== null && (!/^0?\.\d+$/.test(raw) || !(downgradeAt > 0 && downgradeAt < 1)))
+    throw new Error('AGENT_BUDGET_DOWNGRADE_AT 必须是大于 0、小于 1 的小数。');
+  const downgradeScene = environment.AGENT_BUDGET_DOWNGRADE_SCENE?.trim() || 'fast';
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(downgradeScene)) throw new Error('AGENT_BUDGET_DOWNGRADE_SCENE 必须是合法场景名。');
+  return { timezone, dailyTokens, monthlyTokens, dailyCost, monthlyCost, downgradeAt, downgradeScene };
 }
 
 export function pricingWarning(registry, model, budget) {

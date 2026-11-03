@@ -2,7 +2,7 @@ import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
-const columns = `$2::uuid AS "userId",t.workflow,t.params,t.checks,t.step,t.note,t.reason,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
+const columns = `$2::uuid AS "userId",t.model,t.selected_model AS "selectedModel",t.model_source AS "modelSource",t.workflow,t.params,t.checks,t.step,t.note,t.reason,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
   t.turn_id AS "turnId",t.agent_hash AS "agentHash",t.status,t.error,t.created_at::float8 AS "createdAt"`;
 const owned = `t.instance_id=$1 AND EXISTS(SELECT 1 FROM agent_data.conversations c
   WHERE c.instance_id=t.instance_id AND c.id=t.thread_id AND c.owner_id=$2)`;
@@ -61,8 +61,8 @@ export class PostgresJobs extends Repository {
       if (count.rows[0].n >= 100)
         throw new AppError("本会话最多保留 100 条待执行消息。", 429);
       await this.query(
-        `INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error,workflow,params,reason)
-        SELECT $1,$3,$4,$5,$6,$7,NULL,$8,$12,$9,NULL,$10,$11,$13 WHERE $2::uuid IS NOT NULL`,
+        `INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error,workflow,params,reason,model)
+        SELECT $1,$3,$4,$5,$6,$7,NULL,$8,$12,$9,NULL,$10,$11,$13,$14 WHERE $2::uuid IS NOT NULL`,
         [
           job.id,
           job.threadId,
@@ -75,6 +75,7 @@ export class PostgresJobs extends Repository {
           job.params ? JSON.stringify(job.params) : null,
           job.status === "proposed" ? "proposed" : "queued",
           job.reason || null,
+          job.model || null,
         ],
         client,
       );
@@ -89,7 +90,7 @@ export class PostgresJobs extends Repository {
     });
   }
   async patch(id, fields, expected) {
-    const mapping = { status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note" };
+    const mapping = { selectedModel: "selected_model", modelSource: "model_source", status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note" };
     // checks 是数组：显式序列化，避免驱动把它当成 PostgreSQL 数组。
     const entries = Object.entries(fields).filter(([key]) => mapping[key])
       .map(([key, value]) => [key, key === "checks" && value != null ? JSON.stringify(value) : value]);

@@ -8,6 +8,7 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /workflow ID [键=值 ...] 内容  按 Workflow 提交新任务，如 /workflow knowledge-maintain kbId=general 整理新资料
 /confirm [补充说明]  确认等待中的 Workflow 步骤，或执行 Agent 的任务提议
 /reject             结束等待确认的 Workflow 任务，或忽略 Agent 的提议
+/model [场景|服务商/模型名|default]  查看模型；选择本会话后续任务的模型；default 恢复默认
 /queue              查看队列
 /usage [month]      查看今日用量和预算；month 查看本月
 /tools              查看已加载工具和更新状态
@@ -38,12 +39,15 @@ export function formatUsage(usage) {
     table("模型", usage.byModel.map(row => [row.model, row])),
     table("来源", usage.bySource.map(row => [labels[row.source] || row.source, row])),
     table("日期", usage.byDay.map(row => [row.day, row])),
+    usage.budget.downgraded ? `预算降级：场景 ${usage.budget.downgradeScene}` : "预算降级：未启用或未触发",
     usage.budget.exceeded ? `预算已达上限：${usage.budget.reason}；额度重置：${usage.budget.resetsAt}` : "预算：未达上限",
   ].join("\n\n");
 }
 
 export async function runChat(api, terminal) {
   let current = null;
+  const modelSelections = new Map();
+  let pendingModel = null;
   let subscription = null;
   let choices = null;
   let chain = Promise.resolve();
@@ -120,6 +124,11 @@ export async function runChat(api, terminal) {
         queuePaused = queue.paused;
         // Workflow 任务结束后报告一次验收结果；快照里的历史任务只记下，不重复刷屏。
         for (const job of queue.jobs) {
+          const modelKey = `model:${job.id}:${job.step || 0}:${job.selectedModel}`;
+          if (job.selectedModel && ["starting", "running", "steering"].includes(job.status) && !reported.has(modelKey)) {
+            reported.add(modelKey);
+            terminal.write(`模型：${job.selectedModel}（${job.modelSource}）`);
+          }
           const key = `${job.id}:${job.status}:${job.step || 0}`;
           if (reported.has(key) || !(["waiting", "proposed"].includes(job.status) || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
           reported.add(key);
@@ -139,6 +148,26 @@ export async function runChat(api, terminal) {
     if (!text || exiting) return;
     if (text === "/exit") { exiting = true; terminal.close(); return; }
     if (text === "/help") return terminal.write(HELP);
+    if (/^\/model(?:\s|$)/.test(text)) {
+      const selection = text.slice(6).trim();
+      if (selection === "default") {
+        if (current) modelSelections.delete(current.id); else pendingModel = null;
+        return terminal.write("后续消息使用默认路由。");
+      }
+      const catalog = await api.request("/models");
+      if (!selection) {
+        terminal.write(`当前选择：${(current ? modelSelections.get(current.id) : pendingModel) || "默认路由"}；联网搜索：${catalog.webSearch === "live" ? "开启" : "关闭"}`);
+        for (const [purpose, models] of Object.entries(catalog.models)) for (const model of models)
+          terminal.write(`${purpose}：${model.id}；上下文 ${model.contextWindow ?? "—"}；${model.image ? "能看图" : "不能看图"}；原生能力 ${model.nativeTools.join("、") || "无"}；${model.priced ? "已定价" : "未定价"}${catalog.defaults[purpose] === model.id ? "（默认）" : ""}`);
+        for (const [scene, candidates] of Object.entries(catalog.scenes)) terminal.write(`场景 ${scene}：${candidates.join(" → ")}`);
+        return;
+      }
+      const chat = catalog.models.chat || [];
+      const candidates = selection.includes("/") ? [selection] : Object.hasOwn(catalog.scenes, selection) ? catalog.scenes[selection] : [];
+      if (!candidates.some(id => chat.some(model => model.id === id))) return terminal.write(`没有可用的对话模型或场景：${selection}；用 /model 查看。`);
+      if (current) modelSelections.set(current.id, selection); else pendingModel = selection;
+      return terminal.write(`后续消息选择：${selection}；工作流步骤自己的 model 优先。`);
+    }
     if (/^\/usage(?:\s|$)/.test(text)) {
       const period = text.slice(6).trim() || "today";
       if (!["today", "month"].includes(period)) return terminal.write("用法：/usage 或 /usage month");
@@ -185,13 +214,13 @@ export async function runChat(api, terminal) {
       choices.forEach(session => terminal.write(`${session.name || session.preview || "未命名"}\nThread id: ${session.id}`));
       return terminal.write("输入完整 Thread id 恢复；/cancel 返回；/exit 退出。");
     }
-    if (text === "/new") { subscription?.close(); terminal.endStream(); current = null; displayed.clear(); renderingTurnId = null; return terminal.write("下一条普通消息将创建新会话。旧任务不会取消。"); }
+    if (text === "/new") { subscription?.close(); terminal.endStream(); current = null; pendingModel = null; displayed.clear(); renderingTurnId = null; return terminal.write("下一条普通消息将创建新会话。旧任务不会取消。"); }
     if (text === "/queue") {
       if (!current) return terminal.write("尚未选择会话。");
       const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
       renderSession(state.session);
       terminal.write(`队列${state.queue.paused ? "（暂停）" : ""}：`);
-      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.workflow && job.workflow !== "chat" ? `[${job.workflow}${progress(job)}] ` : ""}${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}${job.status === "needs-review" ? `；验收未通过：${failedChecks(job)}` : ""}`);
+      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.workflow && job.workflow !== "chat" ? `[${job.workflow}${progress(job)}] ` : ""}${job.text.slice(0,100)}${job.selectedModel ? `；模型：${job.selectedModel}（${job.modelSource}）` : ""}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}${job.status === "needs-review" ? `；验收未通过：${failedChecks(job)}` : ""}`);
       if (!state.queue.jobs.length) terminal.write("暂无消息。");
       return;
     }
@@ -238,9 +267,14 @@ export async function runChat(api, terminal) {
     } else if (text.startsWith("/")) return terminal.write("未知命令，请使用 /help。");
     if (!content) return terminal.write("请输入消息内容。");
     if (mode === "append" && !targetTurnId) return terminal.write("当前没有可追加的目标轮次；先发送普通消息。");
-    if (!current) await select(await api.request("/sessions", {}));
+    if (!current) {
+      await select(await api.request("/sessions", {}));
+      if (pendingModel) modelSelections.set(current.id, pendingModel);
+      pendingModel = null;
+    }
+    const model = modelSelections.get(current.id);
     const clientMessageId = randomUUID();
-    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId, ...workflow });
+    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId, ...workflow, ...(model ? { model } : {}) });
     // UUID 仅用于服务端幂等处理，不作为聊天界面的编号展示。
     if (["failed", "unconfirmed"].includes(result.status)) terminal.write(`消息状态：${result.status}${result.error ? `；${result.error}` : ""}`);
   }

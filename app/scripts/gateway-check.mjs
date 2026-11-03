@@ -50,7 +50,7 @@ export async function checkGateway({ environment, registry, model, search = fals
     const web = search ? await probe(endpoint, id, true, timeoutMs) : null;
     const declared = registry.models[id].nativeTools?.includes("web_search") || false;
     const usages = [chat.usage, web?.usage].filter(Boolean);
-    rows.push({ model: id, chat: chat.ok, search: web?.ok ?? null, declared, elapsedMs: Math.round(performance.now() - start),
+    rows.push({ model: id, fallbacks: (registry.models[id].fallbacks || []).filter(target => enabled.has(splitModelId(target).provider)), chat: chat.ok, search: web?.ok ?? null, declared, elapsedMs: Math.round(performance.now() - start),
       inputTokens: usages.length ? usages.reduce((sum, usage) => sum + (usage.input_tokens || 0), 0) : null,
       outputTokens: usages.length ? usages.reduce((sum, usage) => sum + (usage.output_tokens || 0), 0) : null });
     if (!chat.ok) messages.push(`${id}：对话失败（${chat.reason}）。`);
@@ -71,8 +71,8 @@ export async function main(args = process.argv.slice(2), { environment, registry
     }
     const report = await checkGateway({ environment: environment ?? loadEnvironment(PROJECT_ROOT),
       registry: registry ?? loadModelRegistry(PROJECT_ROOT), model, search, timeoutMs });
-    log("| 模型 | 对话 | 联网搜索 | 清单声明 | 耗时 | 用量（输入 / 输出 token） |\n|---|---|---|---|---|---|");
-    for (const row of report.rows) log(`| ${row.model} | ${row.chat ? "✓" : "✗"} | ${row.search === null ? "未测" : row.search ? "✓" : "✗"} | ${row.declared ? "web_search" : "无"} | ${row.elapsedMs} ms | ${row.inputTokens ?? "未知"} / ${row.outputTokens ?? "未知"} |`);
+    log("| 模型 | 备用链 | 对话 | 联网搜索 | 清单声明 | 耗时 | 用量（输入 / 输出 token） |\n|---|---|---|---|---|---|---|");
+    for (const row of report.rows) log(`| ${row.model} | ${row.fallbacks.join(" → ") || "无"} | ${row.chat ? "✓" : "✗"} | ${row.search === null ? "未测" : row.search ? "✓" : "✗"} | ${row.declared ? "web_search" : "无"} | ${row.elapsedMs} ms | ${row.inputTokens ?? "未知"} / ${row.outputTokens ?? "未知"} |`);
     for (const message of report.messages) log(`提示：${message}`);
     log("用量为本次对话与搜索请求返回的 usage 合计；失败且未返回 usage 的请求不计入。连接失败时请检查网关并运行 npm run gateway:up。");
     return report.exitCode;

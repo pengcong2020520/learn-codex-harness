@@ -99,11 +99,11 @@ export function validateRegistry(registry) {
     if (!Array.isArray(candidates) || !candidates.length) fail(`routes.${purpose} 必须是非空的模型列表。`);
     for (const id of candidates) if (!models[id]?.purposes.includes(purpose)) fail(`routes.${purpose} 里的 ${id} 必须是清单里用途包含 ${purpose} 的模型。`);
   }
-  // 场景：给工作流步骤用的对话模型候选，如 fast（快而便宜）、strong（更强）。
+  // 场景可混合用途，解析时先按本次用途过滤候选。
   for (const [scene, candidates] of Object.entries(registry.scenes || {})) {
     if (!SCENE.test(scene)) fail(`场景名 ${scene} 只能用小写字母、数字和 -，以字母开头。`);
     if (!Array.isArray(candidates) || !candidates.length) fail(`scenes.${scene} 必须是非空的模型列表。`);
-    for (const id of candidates) if (!models[id]?.purposes.includes("chat")) fail(`scenes.${scene} 里的 ${id} 必须是清单里的对话模型。`);
+    for (const id of candidates) if (!models[id]) fail(`scenes.${scene} 里的 ${id} 必须是清单里的模型。`);
   }
   return registry;
 }
@@ -211,4 +211,23 @@ export function buildGatewayConfig(registry, environment) {
       routing_rules: routingRules,
     },
   };
+}
+
+// 只检查会进入网关的备用链；能力损失提醒不阻止启动。
+export function fallbackWarnings(registry, environment) {
+  const enabled = enabledProviders(registry, environment), warnings = [];
+  for (const [id, spec] of Object.entries(registry.models)) {
+    if (!spec.purposes.includes("chat") || !enabled.has(splitModelId(id).provider)) continue;
+    for (const fallback of spec.fallbacks || []) {
+      if (!enabled.has(splitModelId(fallback).provider)) continue;
+      const target = registry.models[fallback];
+      for (const tool of spec.nativeTools || []) if (!target.nativeTools?.includes(tool)) {
+        const label = tool === "web_search" ? "联网搜索" : tool;
+        warnings.push(`${id} 的备用 ${fallback} 不支持${label}：切到备用时那一轮没有${tool === "web_search" ? "搜索" : label}`);
+      }
+      if (spec.inputModalities?.includes("image") && !target.inputModalities?.includes("image"))
+        warnings.push(`${id} 的备用 ${fallback} 不能看图：切到备用时那一轮无法处理图片`);
+    }
+  }
+  return warnings;
 }

@@ -13,7 +13,7 @@ npm run lesson -- s07-registry
 | 课时 | 测试文件 | 主要断言 |
 | --- | --- | --- |
 | s07-registry | gateway、native-search、usage、media | 用途、能力、价格校验，服务商密钥隔离 |
-| s07-routing | model-router、workflows、gateway | 用途/场景/能力路由、步骤换模型、RAG、备用链配置 |
+| s07-routing | model-router、workflows、gateway、routing-policy | needs/搜索筛选、任务模型与来源、模型目录与 CLI、预算降级、媒体 quality、步骤 effort、备用链提醒和 RAG |
 | s07-native-search | native-search | 默认模型开关、禁止按轮覆盖、内存假网关自检 |
 | s07-budget | usage | 去重、时区、预算停派与恢复、token 兜底配置 |
 | s07-media | media（复用 media-fixture） | 任务 ID、后台保存、重启恢复、收费前校验 |
@@ -33,11 +33,11 @@ npm run lesson -- s07-gateway --integration
 
 ## 本次沙箱验证（2026-11-03）
 
-- `node stages/verify.mjs --docs-only` 通过；`npm run lesson -- list` 列出六课。
-- 五节离线课分别通过 7、8、5、11、7 项断言，共执行 38 项（课间存在复用）。
-- `npm ci --offline` 因依赖缓存缺失失败；验证临时使用 app 的依赖，交付前移除依赖链接，锁文件保持与 app 完全一致。
-- 全量测试中的端口用例遇到 `listen EPERM`；排除这些名称后，同一测试集的沙箱子集通过 211 项。媒体的 HTTP 与内存用例同名，过滤时一并排除，内存版本由 `s07-media` 单独通过。
-- 真 Bifrost 集成课未运行；需要 Docker 和本机端口。未执行其他需要 PostgreSQL、Redis、Chroma 或真实 Codex 的集成脚本。
+- `npm run lesson -- list` 列出六课；`node stages/verify.mjs --docs-only` 当前被本章 README 的旧路由代码摘录阻挡。README 与 docs/design.md 按任务约束保留，待同步 README 摘录后复验。
+- 五节离线课分别通过 7、21、5、11、7 项断言，共执行 51 项（课间存在复用）。
+- 使用工作目录已有依赖验证，未安装新依赖，未改锁文件。
+- 全量测试 251 项中 226 项通过，25 项端口用例遇到 `listen EPERM`。离线复跑排除媒体 HTTP 文件，并按完整名称跳过其余端口用例，保留同名的内存媒体测试。
+- 真 Bifrost 集成课未运行；需要 Docker 和本机端口。未执行其他需要 PostgreSQL、Redis、Chroma 或真实 Codex 的集成脚本；新增任务模型及选择来源的真实 PostgreSQL 持久化测试已写入 `tests/data.integration.mjs`，待在允许的环境运行 `npm run test:data`。
 
 以下 25 项需在允许本机端口的环境运行 `npm test` 复验，未因沙箱限制从快照删除：
 

@@ -75,7 +75,7 @@ npm run server
 
 `AGENT_WEB_SEARCH=auto`（默认）时，网关模式按路由选中的默认对话模型决定开关，`CODEX_MODEL` 覆盖同样生效：声明了搜索就向 Codex 配置 `web_search="live"`，否则为 `"disabled"`。`AGENT_WEB_SEARCH=off` 强制关闭，适合省钱或排查问题；直连模式始终关闭，其他取值启动报错。启动日志会显示联网搜索状态。
 
-Codex 0.154 只通过 Responses API 请求模型；开启搜索后，每个请求的 tools 都会带 `{"type":"web_search","external_web_access":true}`。`thread/start`、`thread/resume` 支持配置覆盖，`turn/start` 不支持，所以只能按会话或整个服务开关，不能在同一会话里按轮切换。本项目在服务启动时统一确定开关；开启后，任何工作流步骤指定的模型（含场景解析出的模型）都必须声明搜索能力，否则启动报错。解决办法是换成支持搜索的模型，或设置 `AGENT_WEB_SEARCH=off`，重启服务并新建会话。
+Codex 0.154 只通过 Responses API 请求模型；开启搜索后，每个请求的 tools 都会带 `{"type":"web_search","external_web_access":true}`。`thread/start`、`thread/resume` 支持配置覆盖，`turn/start` 不支持，所以只能按会话或整个服务开关，不能在同一会话里按轮切换。本项目在服务启动时统一确定开关；开启后，所有对话路由自动要求 `nativeTools: ["web_search"]`，场景和路由表会跳过不支持搜索的候选，只有全部候选不满足时才报错；具体模型不支持则直接报错。步骤在 configure 时校验，任务选择在提交时校验，派发和预算降级时也执行相同约束。可换成支持搜索的模型，或设置 `AGENT_WEB_SEARCH=off`，重启服务并新建会话。
 
 网页读取仍由 `read_webpage` 提供，受 Agent 的 `tools.allow` 控制。失效的 Google 抓取搜索工具已移除；模型原生搜索不在这个工具目录中。搜索不可用时应如实说明并请用户提供链接。
 
@@ -87,7 +87,7 @@ npm run gateway:check -- --search
 npm run gateway:check -- --model kimi/kimi-k2.7-code --search
 ```
 
-脚本复用项目的 `.env` 读取方式（终端变量优先），地址与密钥取 `gatewayEndpoint()`。请求的输入写成与 Codex 完全相同的消息格式（`type: message` + `input_text`）：网关会把纯字符串输入改写成简写的 `{ role, content }`，而 Kimi 收到简写格式时不会触发搜索，用字符串测会得出错误结论。每个请求限时 60 秒，对话以返回文本为成功；`--search` 另发带 `tools: [{"type":"web_search"}]` 的请求，以 `output` 中出现 `web_search_call` 为成功，不能用“回答声称搜过”代替。表格列出对话、搜索、清单声明、总耗时和两次请求返回的输入/输出 token 合计；不输出密钥或上游正文。
+脚本复用项目的 `.env` 读取方式（终端变量优先），地址与密钥取 `gatewayEndpoint()`。请求的输入写成与 Codex 完全相同的消息格式（`type: message` + `input_text`）：网关会把纯字符串输入改写成简写的 `{ role, content }`，而 Kimi 收到简写格式时不会触发搜索，用字符串测会得出错误结论。每个请求限时 60 秒，对话以返回文本为成功；`--search` 另发带 `tools: [{"type":"web_search"}]` 的请求，以 `output` 中出现 `web_search_call` 为成功，不能用“回答声称搜过”代替。表格列出每个模型已启用的备用链、对话、搜索、清单声明、总耗时和两次请求返回的输入/输出 token 合计；不输出密钥或上游正文。
 
 声明了搜索但实测失败会提示并返回非零退出码；实测成功但未声明会提示补充清单。对话失败同样返回非零退出码；未声明的搜索失败仅提示，未加 `--search` 则标为“未测”。自检会产生真实模型用量，`AGENT_WEB_SEARCH=off` 只控制服务启动，不阻止显式的 `--search` 自检。
 
@@ -95,21 +95,51 @@ npm run gateway:check -- --model kimi/kimi-k2.7-code --search
 
 ## 按用途和场景挑模型
 
-模型路由（`server/modules/gateway/router.mjs`）根据三样东西挑模型：用途、场景或具体模型、需要的能力（要看图、要多长的上下文）。挑不到时报错说明每个候选为什么不行，例如“kimi/kimi-k2.7-code：服务商未启用（.env 里缺 KIMI_API_KEY）”。
+模型路由（`server/modules/gateway/router.mjs`）按用途、场景或具体模型、能力要求挑选候选。场景可以同时包含对话、生图、生视频等用途；先按用途过滤，再依次检查服务商是否启用和能力是否满足。过滤后为空时报“场景 X 里没有能做 Y 的模型”；候选全部不满足时逐个列出原因。
 
-- **对话**：新会话用默认模型。Codex 的模型目录里放所有可用的对话模型，按轮切换时它有正确的能力信息。
-- **工作流步骤**：在 Agent 配置的步骤里写 `model`，可以是场景名或具体模型：
+### 步骤能力与推理档位
 
-  ```json
-  "steps": [
-    { "id": "outline", "goal": "确定立意与大纲", "writes": ["drafts"], "confirm": true, "model": "fast" },
-    { "id": "final", "goal": "研究、写作、核查并定稿", "writes": ["research", "drafts", "outputs"] }
-  ]
-  ```
+工作流步骤支持以下可选字段；`needs` 的字段也都可省略：
 
-  服务启动时就解析一遍，写错的场景名、没启用的服务商当场报错。**每一轮都会明确带上模型**：Codex 的 `turn/start` 指定的模型会沿用到后面的轮次，没写 `model` 的步骤和普通对话要明确回到默认模型。按步骤切换模型需要网关模式。
-- **向量（RAG）**：配了向量库（`CHROMA_URL`）而没有单独配 `EMBEDDING_BASE_URL` 时，知识检索按 `routes.embedding` 挑向量模型、经网关调用，维数取自清单。挑不到可用的向量模型时启动报错，说明缺什么。
-- **以后的生图、语音等工具**：同样向路由要“当前的生图模型”，不写死模型。网关已有对应接口（`/v1/images/...`、`/v1/audio/...`、`/v1/videos` 等），支持哪些取决于厂商。
+```json
+{
+  "id": "outline",
+  "goal": "确定立意与大纲",
+  "model": "fast",
+  "needs": { "image": true, "contextTokens": 200000 },
+  "effort": "high"
+}
+```
+
+`image` 表示需要看图，`contextTokens` 是正整数，表示需要的上下文长度。configure 和 dispatch 都把 needs 传给路由。路由还接受 `needs.nativeTools` 字符串数组；搜索开启时自动合并 `web_search`，不允许步骤取消这项要求。只有清单声明的能力参与选择，不根据厂商名称猜测，也不会从用户文本自动估算上下文或判断有没有图片。
+
+`effort` 可选 `none / minimal / low / medium / high / xhigh / max / ultra`。configure 时检查选中模型的 `reasoningLevels`；没有声明就报“不支持调推理档位”，未包含所选值也报错。dispatch 在任务选择或预算降级之后再次核验，把 effort 传给 `turn/start`。未指定时使用当前模型声明的默认推理档位或 null，避免继承上一步的参数。上例需选中的模型支持 high；例如搜索开启选到未声明 reasoningLevels 的 Kimi 时，应移除 effort。按步骤选模型、声明 needs 或 effort 都需要网关模式。
+
+写作 Agent 的 `write-article` 用 `fast` 生成大纲、`strong` 写成稿。默认 Kimi 开启搜索时，两个场景均跳过不支持搜索的候选而选 Kimi；默认 DeepSeek 关闭搜索时，分别选 DeepSeek Flash 和 V4 Pro。`examples/writing/agent/agent.json` 是不含写文章步骤的精简示例，未添加这个工作流。
+
+### 任务选择、模型目录与决策记录
+
+`POST /messages` 接受可选 `model`：场景名或“服务商/模型名”。提交时由路由校验，未知、用途不符、未启用或不满足搜索要求均返回 400 和原因；相同消息 ID 更换 model 返回幂等冲突。选择存入 tasks 的 `model` 字段。每轮优先级为：**步骤 model > 任务 model > 默认路由**，默认对话仍支持 `CODEX_MODEL` 覆盖。每次 `turn/start` 都明确传模型，避免沿用上一轮。
+
+认证后的 `GET /models` 返回 `models`（按用途分组的已启用模型）、`scenes`（完整候选顺序）、`defaults`（各用途当前默认模型；没有可用模型为 null）、`webSearch`（live / disabled）。每个模型带 `id`、`contextWindow`、`image`、`nativeTools`、`reasoningLevels` 和 `priced`。目录展示已启用模型，不保证它满足当前搜索或特定步骤要求，最终以提交和派发校验为准。直连模式只返回当前默认模型 ID，不能切换模型。
+
+终端 `/model` 列出模型和场景；`/model strong` 或 `/model 服务商/模型名` 为本客户端当前会话的后续消息设置选择；尚未建会话时应用于下一次创建的会话。`/model default` 恢复默认，`/new` 使用默认，恢复旧会话时恢复该客户端记住的选择。客户端重启后选择不保留，已提交任务不受后续修改影响。
+
+派发决策保存为 `selectedModel` 和 `modelSource`（数据库列为 `selected_model`、`model_source`），多步任务每步更新。来源如“步骤指定：场景 strong”“任务指定：场景 fast”“默认路由”“预算降级：场景 fast”。`GET /state` 的 `queue.jobs` 与队列事件都带这两个字段，终端在开始执行时显示“模型：xxx（来源）”，`/queue` 也可回看。追加到仍在执行的轮次无法换模型，记录为“沿用当前轮次”；追加目标已结束、需要新开一轮时，使用该追加任务的选择。决策记录表示提交给 Codex 的模型，并非网关实际作答模型。
+
+### 预算降级与备用链
+
+设置 `AGENT_BUDGET_DOWNGRADE_AT=0.8`，并至少设置一项日/月 token 或金额上限后，用量达到任一上限的 80% 时启用降级。比例必须大于 0、小于 1，留空关闭；场景由 `AGENT_BUDGET_DOWNGRADE_SCENE` 指定，默认 `fast`。变量格式非法时启动报错；开关实际生效时也在启动校验降级场景可用于对话。没有预算上限时不启用降级，也不要求网关。
+
+先按步骤、任务、默认的优先级确定选择；最终选择是具体模型时不降级，场景或默认选择则替换为降级场景。needs、搜索约束和 effort 不会因降级而放宽，选不到满足要求的模型仍报错。`/usage`、`/health` 和队列预算状态带 `downgraded`、`downgradeScene`；这表示全局预算状态，具体模型任务仍可豁免。额度重置后重新计算；达到完整预算上限时仍停止派发新轮次，不用降级绕过上限。
+
+网关备用链负责请求失败后的切换。服务启动时检查已启用对话模型及其已启用备用：备用缺少主模型的 nativeTools，或主模型能看图而备用不能时，打印中文提醒，不阻止启动。`npm run gateway:check` 的每一行也列出实际启用的备用链。提醒只比较清单能力，不表示已探测服务商运行状态。
+
+### 其他用途
+
+RAG 配了 `CHROMA_URL` 且没有单独配 `EMBEDDING_BASE_URL` 时，按 `routes.embedding` 挑向量模型，经网关调用，维数取自清单。
+
+`generate_image` 和 `generate_video` 支持可选 `quality: "fast" | "strong"`，分别从对应场景里过滤出生图或生视频候选。不写 quality 就使用 `routes.image` 或 `routes.video`。fast 的媒体候选是 Seedream Flash、Seedance Mini；strong 是 Seedream Pro、Seedance Fast。quality 只控制路由，不作为服务商生成参数；媒体仍遵守完整预算上限，当前不应用对话任务的预算降级规则。
 
 **按复杂度自动选模型暂不做**：中途换模型会让缓存失效、推理衔接不上；Bifrost 的复杂度路由在请求已写明模型时不生效（[#7609](https://github.com/maximhq/bifrost/issues/7609)）。需要时可以参考 LiteLLM 的规则式打分在路由里加，并用 `app/eval/role` 的评估工具量化效果。
 
@@ -226,7 +256,7 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
 
 服务每隔最多 3 分钟复查，接近恢复时间时在下一个当地自然日/月开始复查，恢复后自动派发，不需要 `/continue`。同时达到日/月上限时，`resetsAt` 取所有超限项中最晚的恢复时间；0 上限仍会在复查时保持阻塞。手动暂停或故障暂停仍沿用原有恢复规则。
 
-`publish()` 队列快照、`/state` 的 `queue.budget`、`/health` 都包含 `budget: { exceeded, reason, resetsAt, ... }`，reason 是中文；达到预算不会把健康状态改成故障。未超限时 reason、resetsAt 为 null。
+`publish()` 队列快照、`/state` 的 `queue.budget`、`/health` 都包含 `budget: { exceeded, reason, resetsAt, downgraded, downgradeScene, ... }`，reason 是中文；达到预算不会把健康状态改成故障。未超限时 reason、resetsAt 为 null。
 
 ### 查看用量
 
@@ -284,3 +314,5 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
   - 主模型返回 402 时改用备用；
   - 备用服务收到的是它自己的模型名，访问密钥不会转给模型服务；
   - Codex 经网关完成带工具调用的任务，token 用量能回到 Codex。
+
+已知局限：网关备用链触发后，实际作答的模型无法从 Codex 的用量通知里得知，账本仍记提交的模型。

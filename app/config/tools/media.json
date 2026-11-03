@@ -31,6 +31,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 4
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "strong"
+            ],
+            "description": "fast 快速档，strong 高质量档；省略使用该用途默认路由。"
           }
         },
         "required": [
@@ -68,6 +76,14 @@
             "type": "integer",
             "minimum": 2,
             "maximum": 15
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "strong"
+            ],
+            "description": "fast 快速档，strong 高质量档；省略使用该用途默认路由。"
           }
         },
         "required": [

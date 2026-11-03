@@ -122,7 +122,8 @@
             "writes": [
               "drafts"
             ],
-            "confirm": true
+            "confirm": true,
+            "model": "fast"
           },
           {
             "id": "final",
@@ -135,7 +136,8 @@
             "checks": [
               "file-exists",
               "format"
-            ]
+            ],
+            "model": "strong"
           }
         ]
       }

@@ -1,3 +1,4 @@
+import { validateEffort } from "../gateway/router.mjs";
 import { randomUUID } from "node:crypto";
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
@@ -55,11 +56,18 @@ export class MessageService {
   async submit(body) {
     if (this.closed || this.failure)
       throw new AppError("执行服务不可用；请核对状态，不要盲目重发。", 503);
-    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","workflow","params","knowledge"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
+    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","workflow","params","knowledge","model"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
     const principal = this.gate?.submission();
     const threadId = requireId(body.threadId, "会话 ID"),
       id = requireId(body.clientMessageId, "消息 ID"),
       text = requireText(body.text);
+    const model = body.model ?? null;
+    if (body.model !== undefined) {
+      if (typeof model !== "string" || !model.trim() || model.length > 200) throw new AppError("model 必须是场景名或服务商/模型名。", 400);
+      if (!this.config.launch.router) throw new AppError("按任务选模型需要启用模型网关。", 400);
+      try { this.config.launch.router.resolve({ model }); }
+      catch (error) { throw new AppError(error.message, 400, error.code); }
+    }
     const workflow = this.resolve(this.legacyWorkflow(body));
     if (workflow.grants.length && this.gate) await this.gate.run(principal, () => this.gate.authorize(workflow.grants));
     const mode = body.mode || "enqueue";
@@ -80,6 +88,7 @@ export class MessageService {
           existing.threadId !== threadId ||
           existing.text !== text ||
           existing.mode !== mode ||
+          (existing.model || null) !== model ||
           existing.targetTurnId !== targetTurnId ||
           (existing.workflow || "chat") !== workflow.id ||
           JSON.stringify(existing.params || null) !== JSON.stringify(workflow.params)
@@ -103,6 +112,7 @@ export class MessageService {
           targetTurnId,
           workflow: workflow.id,
           params: workflow.params,
+          model,
           step: 0,
           agentHash: this.config.agent?.descriptor?.hash,
           createdAt: Date.now(),
@@ -243,7 +253,7 @@ export class MessageService {
     }
     clearTimeout(this.budgetTimers.get(threadId));
     this.budgetTimers.delete(threadId);
-    if (!(await this.store.patch(job.id, { status: "starting" }, ["queued"])))
+    if (!(await this.store.patch(job.id, { status: "starting", selectedModel: null, modelSource: null }, ["queued"])))
       return;
     await this.publish(threadId);
     let sent = false;
@@ -271,17 +281,28 @@ export class MessageService {
           workflow.id === "chat" ? null : workflow,
           step.index,
         );
+        // 优先级：步骤 > 任务 > 默认；预算只替换场景或默认选择，能力要求继续生效。
+        const router = this.config.launch.router;
+        let selection = step.model || job.model || null;
+        let modelSource = step.model ? "步骤指定" : job.model ? "任务指定" : "默认路由";
+        if (router && budget?.downgraded && !selection?.includes("/")) {
+          selection = budget.downgradeScene;
+          modelSource = "预算降级";
+        }
+        if (selection) modelSource += `：${selection.includes("/") ? "" : "场景 "}${selection}`;
+        const chosen = router?.resolve({ model: selection, needs: step.needs });
+        if (chosen) validateEffort(chosen, step.effort);
+        const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
+        await this.store.patch(job.id, { selectedModel: model, modelSource });
+        await this.publish(threadId);
         this.gate?.start(job, workflow.grants, step.writes);
         sent = true;
-        // 每一轮都明确带上模型：Codex 的 turn/start 指定的模型会沿用到后面的轮次，不写就会一直用上一步的。
-        const router = this.config.launch.router;
-        const model = router ? router.resolve({ model: step.model || null }).id : this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
         this.sessions.prepareUsage(threadId, { model, taskId: job.id });
         const result = await this.rpc.request("turn/start", {
           threadId,
           clientUserMessageId: job.id,
           input: prepared,
-          ...(router ? { model } : {}),
+          ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),
         });
         const turn = this.sessions.recordTurn(threadId, result.turn);
         await this.bind(job.id, result.turn.id);
@@ -316,6 +337,9 @@ export class MessageService {
         job.text,
         job.agentHash,
       );
+      const original = (await this.store.list(job.threadId)).find(item => item.turnId === job.targetTurnId && item.selectedModel);
+      await this.store.patch(job.id, { selectedModel: original?.selectedModel || this.sessions.snapshot(job.threadId).model,
+        modelSource: "沿用当前轮次" });
       sent = true;
       const result = await this.rpc.request("turn/steer", {
         threadId: job.threadId,

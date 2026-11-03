@@ -44,7 +44,7 @@ test("模型清单校验：写错的服务商、密钥变量、备用模型和�
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["ollama/qwen3-embedding:0.6b"]; }, /要能做它的全部用途/],
     [r => { r.routes.embedding = ["kimi/kimi-k2.7-code"]; }, /routes.embedding 里的 kimi\/kimi-k2.7-code 必须是清单里用途包含 embedding 的模型/],
     [r => { r.routes.painting = ["kimi/kimi-k2.7-code"]; }, /不是已知用途/],
-    [r => { r.scenes.fast = ["ollama/qwen3-embedding:0.6b"]; }, /必须是清单里的对话模型/],
+    [r => { r.scenes.fast = ["unknown/model"]; }, /必须是清单里的模型/],
     [r => { r.scenes["Fast/1"] = ["kimi/kimi-k2.7-code"]; }, /场景名/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["kimi/kimi-k2.7-code"]; }, /备用模型/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["openai/none"]; }, /备用模型/],

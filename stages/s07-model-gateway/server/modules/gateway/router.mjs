@@ -5,11 +5,11 @@ import { PURPOSES, enabledProviders, splitModelId } from "./index.mjs";
 
 const LABELS = { chat: "对话", embedding: "向量", rerank: "重排序", image: "生图", video: "生视频", tts: "语音合成", asr: "语音识别" };
 
-export function createModelRouter(registry, environment = {}) {
+export function createModelRouter(registry, environment = {}, { webSearch = false } = {}) {
   const enabled = enabledProviders(registry, environment);
   const override = environment.CODEX_MODEL?.trim() || null;
 
-  // needs：image 需要能看图；contextTokens 需要的上下文长度。
+  // needs：看图、上下文长度和原生工具；搜索开关由启动时的默认模型决定。
   const unmet = (id, purpose, needs) => {
     const spec = registry.models[id];
     if (!spec?.purposes.includes(purpose)) return `不能做${LABELS[purpose]}`;
@@ -17,6 +17,8 @@ export function createModelRouter(registry, environment = {}) {
     if (!enabled.has(splitModelId(id).provider)) return `服务商未启用（.env 里缺 ${[provider.keyEnv, provider.baseUrlEnv].filter(Boolean).join("、")}）`;
     if (needs.image && !(spec.inputModalities || ["text"]).includes("image")) return "不能看图";
     if (needs.contextTokens && (spec.contextWindow || 0) < needs.contextTokens) return `上下文只有 ${spec.contextWindow || 0}`;
+    const missing = (needs.nativeTools || []).filter(tool => !spec.nativeTools?.includes(tool));
+    if (missing.length) return `不支持原生能力 ${missing.map(tool => tool === "web_search" ? "联网搜索（web_search）" : tool).join("、")}`;
     return null;
   };
 
@@ -33,13 +35,16 @@ export function createModelRouter(registry, environment = {}) {
   // model：具体模型（含 “/”）或场景名；都不写就用这个用途的默认模型。
   function resolve({ purpose = "chat", model = null, needs = {} } = {}) {
     if (!PURPOSES.includes(purpose)) throw new AppError(`未知的模型用途：${purpose}`, 400);
+    if (purpose === "chat" && webSearch) needs = { ...needs, nativeTools: [...new Set([...(needs.nativeTools || []), "web_search"])] };
     if (model?.includes("/")) {
       if (!registry.models[model]) throw new AppError(`模型 ${model} 不在 config/models.json 里。`, 400, "MODEL_UNKNOWN");
       return pick([model], purpose, needs, `指定模型 ${model}`);
     }
     if (model) {
-      if (purpose !== "chat" || !registry.scenes?.[model]) throw new AppError(`没有名为 ${model} 的场景（config/models.json 的 scenes）。`, 400, "MODEL_UNKNOWN");
-      return pick(registry.scenes[model], purpose, needs, `场景 ${model}`);
+      if (!Object.hasOwn(registry.scenes || {}, model)) throw new AppError(`没有名为 ${model} 的场景（config/models.json 的 scenes）。`, 400, "MODEL_UNKNOWN");
+      const candidates = registry.scenes[model].filter(id => registry.models[id].purposes.includes(purpose));
+      if (!candidates.length) throw new AppError(`场景 ${model} 里没有能做${LABELS[purpose]}的模型。`, 400, "MODEL_UNAVAILABLE");
+      return pick(candidates, purpose, needs, `场景 ${model}`);
     }
     // 对话的默认模型可以用 .env 的 CODEX_MODEL 覆盖（本机测试和服务器可以各用各的）。
     if (purpose === "chat" && override) return pick([override], purpose, needs, "CODEX_MODEL");
@@ -48,10 +53,29 @@ export function createModelRouter(registry, environment = {}) {
 
   return {
     resolve,
+    catalog() {
+      const models = Object.fromEntries(PURPOSES.map(purpose => [purpose, Object.entries(registry.models)
+        .filter(([id, spec]) => enabled.has(splitModelId(id).provider) && spec.purposes.includes(purpose))
+        .map(([id, spec]) => ({ id, contextWindow: spec.contextWindow || null,
+          image: (spec.inputModalities || []).includes("image"), nativeTools: spec.nativeTools || [],
+          reasoningLevels: spec.reasoningLevels || [], priced: Boolean(spec.pricing) }))]));
+      const defaults = Object.fromEntries(PURPOSES.map(purpose => {
+        try { return [purpose, resolve({ purpose }).id]; }
+        catch { return [purpose, null]; }
+      }));
+      return { models, scenes: registry.scenes || {}, defaults, webSearch: webSearch ? "live" : "disabled" };
+    },
     // 可用的对话模型（默认的排第一）：写进 Codex 的模型目录，按轮切换模型时 Codex 才有正确的能力信息。
     chatModels() {
       const first = resolve().id;
       return [first, ...Object.keys(registry.models).filter(id => id !== first && !unmet(id, "chat", {}))];
     },
   };
+}
+
+// 推理档位属于选中模型的参数，不能假定未声明的模型支持。
+export function validateEffort(chosen, effort) {
+  if (!effort) return;
+  if (!chosen.spec.reasoningLevels?.length) throw new AppError(`模型 ${chosen.id} 不支持调推理档位（未声明 reasoningLevels）。`, 400);
+  if (!chosen.spec.reasoningLevels.includes(effort)) throw new AppError(`模型 ${chosen.id} 不支持推理档位 ${effort}；支持：${chosen.spec.reasoningLevels.join("、")}。`, 400);
 }

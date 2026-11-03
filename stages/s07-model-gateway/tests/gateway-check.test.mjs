@@ -77,7 +77,7 @@ test("--model 只测一个模型，--search 检查调用标记并汇总用量，
   assert.match(report.messages.join("\n"), /实测支持 web_search，但清单未声明/);
   const result = await run(["--model", "sample/declared", "--search"], environment);
   assert.equal(result.exitCode, 0);
-  assert.match(result.output, /sample\/declared \| ✓ \| ✓ \| web_search/);
+  assert.match(result.output, /sample\/declared \| 无 \| ✓ \| ✓ \| web_search/, "第二列是备用链");
   assert.doesNotMatch(result.output, /sample\/undeclared/);
 });
 
@@ -105,7 +105,7 @@ test("对话无文本、HTTP 错误、无效 JSON 和超时都失败，不打印
     const { environment } = await gateway(t, handler);
     const result = await run(["--model", "sample/declared"], environment, { timeoutMs });
     assert.equal(result.exitCode, 1);
-    assert.match(result.output, /sample\/declared \| ✗ \| 未测/);
+    assert.match(result.output, /sample\/declared \| 无 \| ✗ \| 未测/);
     assert.doesNotMatch(result.output, /sk-bf-test-only|provider-test-only/);
     assert.match(result.output, /对话失败/);
     assert.match(result.output, reason);

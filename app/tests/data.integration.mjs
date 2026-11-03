@@ -666,3 +666,18 @@ test("真实 PG：路径与 ID 混合引用保存当前版本，逐项区分错�
   for (const directory of ["inputs", "inputs/", "./inputs", "./inputs/"])
     assert.deepEqual((await r.resources.list_files({ path: directory })).entries.map(entry => entry.name), ["path-source.md"]);
 });
+
+test("真实 PG：任务模型选择与路由决策持久化，旧任务默认留空", async t => {
+  const r = await setup(t);
+  await r.jobs.create({ ...job('routing'), model: 'strong' });
+  await r.jobs.patch('routing', { status: 'starting', selectedModel: 'kimi/kimi-k2.7-code', modelSource: '预算降级：场景 fast' }, ['queued']);
+  const reopened = new PostgresJobs(r.pool, r.scope);
+  const stored = await reopened.get('routing');
+  assert.equal(stored.model, 'strong');
+  assert.equal(stored.selectedModel, 'kimi/kimi-k2.7-code');
+  assert.equal(stored.modelSource, '预算降级：场景 fast');
+  assert.equal((await reopened.list('thread-1'))[0].selectedModel, stored.selectedModel);
+  await reopened.create(job('default-model'));
+  const plain = await reopened.get('default-model');
+  assert.equal(plain.model, null); assert.equal(plain.selectedModel, null); assert.equal(plain.modelSource, null);
+});
