@@ -14,10 +14,12 @@ if ([...options].some(option => !["--integration", "--docs-only", "--rag"].inclu
   throw new Error("用法：node verify.mjs [--integration [--rag] | --docs-only]");
 }
 const report = { verifiedAt: new Date().toISOString(), modelProvider: "local simulated Responses", embeddingProvider: options.has("--rag") ? "local deterministic 3D fixture" : null, semanticQualityVerified: false, docs: [], checks: [] };
-// 章节 README 参照 learn-claude-code：问题 → 解决方案 → 工作原理 → 试一下 → 接下来；
-// docs/design.md 保留原有的设计原理 → 架构改进 → 技术实现流程 → 核心代码（伪代码）。
+// 章节 README 先讲概念与分工，再动手、看代码：要回答的问题 → 核心概念 → 分工 → 跑起来看看 → 关键代码 → 小结 → 下一章；
+// 每章标出对应导论里"六个问题"中的哪几个。docs/design.md 保留原有的设计原理 → 架构改进 → 技术实现流程 → 核心代码（伪代码）。
+const CHAPTER_HEADINGS = ["要回答的问题", "核心概念", "分工：Codex 做什么，我们做什么", "跑起来看看", "关键代码", "小结", "下一章"];
 const docs = [
   ["README.md", "overview"],
+  ["introduction.md", "introduction"],
   ...CHAPTERS.map(dir => [`${dir}/README.md`, "chapter"]),
   ...Object.values(STAGES).map(dir => [`${dir}/docs/design.md`, "design"]),
   ["s00-sdk-quickstart/docs/guide.md", "reference"],
@@ -51,10 +53,18 @@ for (const [name, kind] of docs) {
     const stage = name.split("/")[0], id = stage.slice(0, 3);
     assert.ok(doc.startsWith(`# ${id}: `), `${name} 标题应以「${id}: 」开头`);
     assert.ok(doc.includes(`\`${id}\` → `) || doc.includes(`→ \`${id}\``), `${name} 缺少章节导航`);
-    for (const heading of ["问题", "解决方案", "工作原理", "试一下", "接下来"]) {
+    for (const heading of CHAPTER_HEADINGS) {
       assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
     }
+    assert.match(doc, /^> \*\*对应六个问题\*\*：/m, `${name} 缺少「对应六个问题」`);
+    assert.ok(doc.includes("[导论](../introduction.md)"), `${name} 的章节导航缺少导论`);
     assertExcerpts(stage, doc, name);
+  }
+  if (kind === "introduction") {
+    assert.ok(doc.startsWith("# 导论："), `${name} 标题应以「导论：」开头`);
+    for (const question of ["① 我是谁？", "② 要做什么，做到什么算完？", "③ 之前聊过什么？", "④ 依据什么资料？", "⑤ 能用什么？", "⑥ 谁说了算？"]) {
+      assert.ok(doc.includes(question), `${name} 缺少六个问题之一：${question}`);
+    }
   }
   if (kind === "design") {
     for (const heading of ["设计原理", "架构改进", "技术实现流程", "核心代码"]) {
