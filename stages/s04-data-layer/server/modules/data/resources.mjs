@@ -228,7 +228,7 @@ export class Resources extends Repository {
     const result = this.files.list_files(args);
     const entries = [];
     for (const entry of result.entries) {
-      const locator = args.path ? `${args.path}/${entry.name}` : entry.name;
+      const locator = result.path === "." ? entry.name : `${result.path}/${entry.name}`;
       const row = await this.row(locator);
       if (row) {
         try {
@@ -240,6 +240,50 @@ export class Resources extends Repository {
       entries.push(entry);
     }
     return { ...result, entries };
+  }
+  async sourceVersion(reference, index, client) {
+    try {
+      if (!reference || typeof reference !== "object" || Array.isArray(reference))
+        throw new AppError("请填写 {path} 或 {resourceId, versionId}。");
+      let source, versionId;
+      // 保留直接传入 read_file 元数据的旧用法；有 ID 时仍按指定版本校验。
+      if ("resourceId" in reference || "versionId" in reference) {
+        for (const field of ["resourceId", "versionId"]) {
+          if (typeof reference[field] !== "string" || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(reference[field]))
+            throw new AppError(`${field} 格式不正确，可能是号码抄错了。`);
+        }
+        source = (await this.query(
+          "SELECT * FROM agent_data.resources WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL",
+          [reference.resourceId], client,
+        )).rows[0];
+        if (!source) throw new AppError("resourceId 不存在，可能是号码抄错了。", 404);
+        versionId = reference.versionId;
+      } else {
+        if (typeof reference.path !== "string" || !reference.path)
+          throw new AppError("path 必须是非空字符串，或填写 resourceId 和 versionId。");
+        this.source(reference.path, "read");
+        this.files.check(reference.path, "read");
+        source = await this.row(reference.path, client);
+        if (!source) throw new AppError("路径尚未登记，请先通过 read_file 读取该路径。", 404);
+        versionId = source.current_version;
+      }
+      if (source.owner_id !== this.ownerId) throw new AppError("没有读权限。", 403);
+      await this.readable(source, client);
+      const version = (await this.query(
+        "SELECT resource_id FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND resource_id=$4 AND $2::uuid IS NOT NULL",
+        [versionId, source.id], client,
+      )).rows[0];
+      if (!version) throw new AppError("versionId 不属于这个资源，可能是号码抄错了。", 404);
+      if (source.current_version !== versionId)
+        throw new AppError("版本已过期：资料已有更新，请重新读取。", 409);
+      return { resourceId: source.id, versionId };
+    } catch (error) {
+      const reason = error.code === "ENOENT" ? "路径不存在。"
+        : error.code === "ENOTDIR" ? "路径中有非目录项。"
+        : error.code === "EACCES" || error.status === 403 || /未授权|无权/.test(error.message) ? "没有读权限。"
+        : /^E[A-Z]+$/.test(error.code || "") ? `来源文件检查失败（${error.code}）。` : error.message;
+      throw new AppError(`source_versions 第 ${index + 1} 项：${reason}`, error.status || 400);
+    }
   }
   async write_file({ path: locator, content, source_versions = [] }) {
     if (fs.existsSync(this.files.check(locator, "create")))
@@ -254,11 +298,10 @@ export class Resources extends Repository {
           "路径已有资料或未确认的写入记录；不会覆盖或盲目重试。",
           409,
         );
-      for (const reference of source_versions) {
-        const source = await this.get(reference.resourceId, client);
-        await this.readable(source, client);
-        if (source.current_version !== reference.versionId)
-          throw new AppError("引用的资料版本已过期。", 409);
+      const references = [];
+      for (const [index, reference] of source_versions.entries()) {
+        const resolved = await this.sourceVersion(reference, index, client);
+        if (!references.some(item => item.resourceId === resolved.resourceId)) references.push(resolved);
       }
       row = (
         await this.query(
@@ -287,7 +330,7 @@ export class Resources extends Repository {
         client,
       );
       row.current_version = versionId;
-      for (const reference of source_versions)
+      for (const reference of references)
         await this.query(
           `INSERT INTO agent_data.dependencies(instance_id,derived_id,source_id,source_version)
         SELECT $1,$3,$4,$5 WHERE $2::uuid IS NOT NULL`,

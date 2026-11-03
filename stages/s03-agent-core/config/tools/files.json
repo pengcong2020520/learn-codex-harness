@@ -6,7 +6,7 @@
       "name": "list_files",
       "label": "查看文件",
       "readOnly": true,
-      "description": "列出配置工作区内获准读取的目录。省略 path 返回允许范围的入口，不递归；不显示范围外文件。",
+      "description": "列出配置工作区内获准读取的目录。支持 inputs/、./inputs 等目录写法；省略 path 返回允许范围的入口，不递归；不显示范围外文件。",
       "inputSchema": {
         "type": "object",
         "properties": {

@@ -62,32 +62,32 @@ export function createFileTools(
     if (!info.isDirectory()) throw new Error(`资料源不是目录：${source.id}`);
   }
 
+  // 只去掉目录的 ./ 前缀和末尾 /，不折叠内部空段或 ..。
+  function normalize(relative, directory = false) {
+    if (typeof relative !== "string") throw new Error("路径必须是字符串。");
+    if (relative.length > 500) throw new Error("路径不能超过 500 个字符。");
+    if (relative.includes("\\")) throw new Error("路径里有反斜杠，不允许；请使用 /。");
+    if (/[\x00-\x1f\x7f]/.test(relative)) throw new Error("路径里有控制字符，不允许。");
+    if (path.posix.isAbsolute(relative) || path.win32.isAbsolute(relative))
+      throw new Error("不允许绝对路径，请使用 workspace 内的相对路径。");
+    if (directory) relative = relative.replace(/^(?:\.\/)+/, "").replace(/\/+$/, "");
+    const parts = relative ? relative.split("/") : [];
+    if (parts.includes("..")) throw new Error("路径里有上级目录 ..，不允许。");
+    if (parts.some(part => part.startsWith("."))) throw new Error("路径里有隐藏目录或点路径段，不允许。");
+    if (parts.some(part => !part)) throw new Error("路径里有空路径段，不允许。");
+    if (parts.some(part => part.includes(":"))) throw new Error("路径里有冒号，不允许。");
+    if (parts.length > 12) throw new Error("路径不能超过 12 层。");
+    return relative;
+  }
+
   function resolve(
     relative = "",
     { createParents = false, file = false } = {},
   ) {
-    if (
-      typeof relative !== "string" ||
-      relative.length > 500 ||
-      /[\\\x00-\x1f\x7f]/.test(relative) ||
-      path.isAbsolute(relative)
-    ) {
-      throw new Error(
-        "请使用 workspace 内的相对路径，例如 drafts/article-v1.md。",
-      );
-    }
+    relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (
-      parts.length > 12 ||
-      parts.some(
-        (part) => !part || part.startsWith(".") || part.includes(":"),
-      ) ||
-      (parts.length && !AREAS.includes(parts[0]))
-    ) {
-      throw new Error(
-        "路径只能位于 inputs、research、drafts、outputs，不能包含隐藏路径或上级目录。",
-      );
-    }
+    if (parts.length && !AREAS.includes(parts[0]))
+      throw new Error("路径只能位于 inputs、research、drafts、outputs。");
     if (file && (parts.length < 2 || !/\.(md|txt)$/i.test(relative)))
       throw new Error("当前只支持 .md 和 .txt 文件。");
     if (createParents && parts[0] === "inputs")
@@ -127,7 +127,11 @@ export function createFileTools(
     },
     list_files({ path: relative = "" }) {
       assertCurrent();
-      if (!browsable(relative)) throw new Error("未授权浏览这个资料范围。");
+      relative = normalize(relative, true);
+      if (!browsable(relative)) {
+        const ranges = sources?.filter(source => source.actions.includes("read")).map(source => source.locator) || [];
+        throw new Error(`${relative || "."} 不在可浏览的范围内（未授权），可浏览的有：${ranges.join("、") || "无"}。`);
+      }
       const entries = fs.readdirSync(resolve(relative), {
         withFileTypes: true,
       });
