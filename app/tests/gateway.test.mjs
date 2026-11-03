@@ -179,3 +179,16 @@ test("生成网关配置文件与访问密钥：文件不含密钥；密钥只�
   assert.equal(ensureGatewayKey(fresh), true);
   assert.equal(fs.statSync(path.join(fresh, ".env")).mode & 0o777, 0o600, "新建的 .env 只允许本人读写");
 });
+
+test("放进容器：网关地址可以指到容器名；容器名走 http 允许，外部地址的 http 仍拒绝；监听地址只能是本机或全部网卡", async t => {
+  const { loadServerConfig } = await import("../server/modules/config/index.mjs");
+  assert.equal(gatewayEndpoint({ AGENT_GATEWAY_KEY: "sk-bf-k", AGENT_GATEWAY_URL: "http://gateway:8080/v1" }).baseUrl, "http://gateway:8080/v1");
+  assert.throws(() => gatewayEndpoint({ AGENT_GATEWAY_KEY: "sk-bf-k", AGENT_GATEWAY_URL: "http://gateway.example.com/v1" }), /AGENT_GATEWAY_URL 必须是 https/);
+  const launch = buildAppServerLaunch({ ...gatewayEnv, AGENT_GATEWAY_URL: "http://gateway:8080/v1" }, "", { registry });
+  assert.ok(launch.args.includes('model_providers.project_api.base_url="http://gateway:8080/v1"'));
+  assert.throws(() => buildAppServerLaunch({ CODEX_API_KEY: "k", CODEX_BASE_URL: "http://provider.example/v1", CODEX_MODEL: "m" }), /只有本机回环地址或容器名允许 HTTP/);
+  const root = tempRoot(t);
+  assert.equal(loadServerConfig(root, { AGENT_LISTEN_HOST: "0.0.0.0" }).host, "0.0.0.0");
+  assert.equal(loadServerConfig(root, {}).host, "127.0.0.1");
+  assert.throws(() => loadServerConfig(root, { AGENT_LISTEN_HOST: "10.0.0.5" }), /AGENT_LISTEN_HOST 只能是/);
+});

@@ -42,7 +42,7 @@ export class Embeddings {
     Object.assign(this, config);
     const endpoint = new URL(config.url);
     if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
-      (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(endpoint.hostname)))) throw new Error('Embedding 地址必须使用 HTTPS 或本机 HTTP。');
+      (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && (['127.0.0.1', 'localhost'].includes(endpoint.hostname) || !endpoint.hostname.includes('.'))))) throw new Error('Embedding 地址必须使用 HTTPS，或本机、容器名的 HTTP。');
     if (!this.model || !Number.isInteger(this.dimensions) || this.dimensions < 1 || this.dimensions > 65536) throw new Error('必须配置 embedding 模型和向量维数。');
   }
   async generate(input) {

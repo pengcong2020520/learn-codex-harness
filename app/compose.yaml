@@ -63,6 +63,41 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
+  # 智能体服务与 Web 工作台（profile app，服务器部署用；本机开发直接 npm run server / npm run web）。
+  # 两者共用一个镜像；工作台共用智能体的网络，按原来的方式经 127.0.0.1 读取连接信息。端口只发布到宿主的 127.0.0.1，经 SSH 隧道访问。
+  # 数据、运行记录和工作区挂载到宿主目录，便于备份和迁移；容器里以 node（uid 1000）运行。
+  agent:
+    build:
+      context: .
+      args: { NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org}", APT_MIRROR: "${APT_MIRROR:-}", APP_DIR: "${CONTAINER_APP_DIR:-/app}" }
+    image: codex-harness-app:local
+    profiles: ["app"]
+    env_file: .env
+    environment:
+      AGENT_LISTEN_HOST: 0.0.0.0
+      AGENT_PORT: "4317"
+      AGENT_GATEWAY_URL: http://gateway:8080/v1
+      DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:-}@postgres:5432/agent
+      REDIS_URL: redis://redis:6379/0
+    ports: ["127.0.0.1:${AGENT_PORT:-4317}:4317", "127.0.0.1:${WORKBENCH_PORT:-14320}:14320"]
+    # 容器里的项目路径（CONTAINER_APP_DIR）在服务器上设成与部署路径相同，迁移过来的 Codex 历史记录路径不变。
+    volumes: ["./.data:${CONTAINER_APP_DIR:-/app}/.data", "./.runs:${CONTAINER_APP_DIR:-/app}/.runs", "./workspace:${CONTAINER_APP_DIR:-/app}/workspace"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      gateway: { condition: service_healthy }
+    restart: unless-stopped
+  web:
+    image: codex-harness-app:local
+    profiles: ["app"]
+    command: ["node", "web/server.mjs"]
+    network_mode: "service:agent"
+    environment:
+      WORKBENCH_HOST: 0.0.0.0
+      WORKBENCH_PORT: "14320"
+    volumes: ["./.data:${CONTAINER_APP_DIR:-/app}/.data:ro"]
+    depends_on: [agent]
+    restart: unless-stopped
   chroma:
     image: chromadb/chroma:1.5.0
     profiles: ["rag"]

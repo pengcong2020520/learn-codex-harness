@@ -92,7 +92,9 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
       res.writeHead(200,{'content-type':mime[path.extname(requested)],'cache-control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(file));
     }catch(error){if(!res.headersSent)send(error.status||(error.code==='ENOENT'?404:500),{error:{message:error.status?error.message:'页面或服务暂不可用。'}});else res.end();}
   });
-  return {server,async listen(){await new Promise((ok,no)=>{server.once('error',no);server.listen(port,'127.0.0.1',ok);});origin=`http://127.0.0.1:${server.address().port}`;return origin;},async close(){for(const stream of streams)stream.end();await new Promise(ok=>{server.close(ok);server.closeAllConnections();});}};
+  // 默认只监听本机；放进容器时 WORKBENCH_HOST=0.0.0.0，对外仍只发布到宿主的 127.0.0.1。Host 校验不变。
+  const host=process.env.WORKBENCH_HOST||'127.0.0.1';if(!['127.0.0.1','0.0.0.0'].includes(host))throw Error('WORKBENCH_HOST 只能是 127.0.0.1 或 0.0.0.0。');
+  return {server,async listen(){await new Promise((ok,no)=>{server.once('error',no);server.listen(port,host,ok);});origin=`http://127.0.0.1:${server.address().port}`;return origin;},async close(){for(const stream of streams)stream.end();await new Promise(ok=>{server.close(ok);server.closeAllConnections();});}};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
   const value=Number(process.env.WORKBENCH_PORT||4320);if(!Number.isInteger(value)||value<1||value>65535)throw Error('WORKBENCH_PORT 无效。');

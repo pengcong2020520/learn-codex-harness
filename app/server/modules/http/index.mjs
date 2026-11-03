@@ -165,7 +165,8 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         server.once("error", reject);
         server.listen(config.port, config.host, () => { server.off("error", reject); resolve(); });
       });
-      return `http://${config.host}:${server.address().port}`;
+      // 监听全部网卡（容器里）时本机地址同样可达；连接信息统一写 127.0.0.1，工作台只认这个。
+      return `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${server.address().port}`;
     },
     async close() {
       for (const stream of streams) stream.end();

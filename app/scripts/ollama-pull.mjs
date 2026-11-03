@@ -1,5 +1,6 @@
 // 下载模型清单里登记的 Ollama 模型（compose 的 ollama 服务要先启动：npm run ollama:up）。
-// npm run ollama:pull
+// npm run ollama:pull            下载
+// node scripts/ollama-pull.mjs --list   只列出模型名
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadModelRegistry, splitModelId } from "../server/modules/gateway/index.mjs";
@@ -7,6 +8,8 @@ import { loadModelRegistry, splitModelId } from "../server/modules/gateway/index
 const root = fileURLToPath(new URL("../", import.meta.url));
 const registry = loadModelRegistry(root);
 const models = Object.keys(registry?.models || {}).filter(id => registry.providers[splitModelId(id).provider]?.type === "ollama").map(id => splitModelId(id).model);
+// --list：只列出模型名（每行一个），服务器部署脚本据此在 ollama 容器里下载。
+if (process.argv.includes("--list")) { if (models.length) console.log(models.join("\n")); process.exit(0); }
 if (!models.length) { console.log("config/models.json 里没有登记 Ollama 模型。"); process.exit(0); }
 for (const model of models) {
   console.log(`下载 ${model} ……`);

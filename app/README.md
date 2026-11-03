@@ -49,7 +49,7 @@ npm run chat
 
 ## 部署到服务器
 
-把服务常驻部署到 Linux 服务器（systemd 管理、Docker 运行数据服务、只监听 127.0.0.1、SSH 隧道访问）见 [deploy/README.md](deploy/README.md)：
+把服务常驻部署到 Linux 服务器（全部服务在 Docker 里、宿主只需要 Docker，端口只发布到 127.0.0.1、SSH 隧道访问）见 [deploy/README.md](deploy/README.md)：
 
 ```bash
 export DEPLOY_HOST=root@<服务器地址>

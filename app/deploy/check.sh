@@ -11,17 +11,21 @@ if command -v docker >/dev/null 2>&1; then
   else bad "Docker 守护进程没有运行" "systemctl enable --now docker"; fi
   if docker compose version >/dev/null 2>&1; then ok "$(docker compose version)"
   else bad "缺少 docker compose v2" "安装 docker-compose-plugin：https://docs.docker.com/compose/install/linux/"; fi
-else bad "没有 Docker" "安装 Docker Engine：https://docs.docker.com/engine/install/"; fi
-major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
-if [ "$major" -ge 24 ]; then ok "Node.js $(node -v)"
-else bad "需要 Node.js 24+（当前：$(node -v 2>/dev/null || echo 未安装)）" "https://nodejs.org/en/download；RHEL 系：curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && dnf install -y nodejs；Debian / Ubuntu：curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y nodejs"; fi
+else bad "没有 Docker" "安装 Docker Engine：https://docs.docker.com/engine/install/（国内服务器可用云厂商的 Docker 软件源，并在 /etc/docker/daemon.json 配置 registry-mirrors 加速拉取镜像）"; fi
+# 全部服务都在容器里（智能体与工作台用镜像里的 Node），宿主不需要装 Node。
 command -v rsync >/dev/null 2>&1 && ok "rsync" || bad "没有 rsync" "dnf install -y rsync 或 apt-get install -y rsync"
+# 服务器 .env 里填了 OLLAMA_BASE_URL（启用本地向量模型）时，磁盘和内存要求更高。
+ollama=no
+grep -qE '^OLLAMA_BASE_URL=["'\'']?[^"'\''[:space:]]' "${APP_DIR:-/opt/learn-codex-harness/app}/.env" 2>/dev/null && ollama=yes
+if [ "$ollama" = yes ]; then disk_need=12 mem_need=1500; else disk_need=6 mem_need=800; fi
 avail=$(df --output=avail -BG / 2>/dev/null | tail -1 | tr -dc 0-9)
-if [ "${avail:-0}" -ge 3 ]; then ok "磁盘剩余 ${avail} GB"; else bad "磁盘剩余 ${avail:-?} GB" "至少需要 3 GB（数据库镜像与依赖约 1.5 GB）"; fi
+if [ "${avail:-0}" -ge "$disk_need" ]; then ok "磁盘剩余 ${avail} GB"
+else bad "磁盘剩余 ${avail:-?} GB" "至少需要 ${disk_need} GB（应用镜像约 0.9 GB，数据库与网关镜像约 1 GB，构建缓存与数据另算$([ "$ollama" = yes ] && echo "；Ollama 镜像与向量模型约 7 GB")）"; fi
 mem=$(free -m 2>/dev/null | awk '/^Mem:/{print $7}')
 [ -n "$mem" ] || mem=$(awk '/^MemAvailable:/{print int($2 / 1024)}' /proc/meminfo 2>/dev/null)
 if [ -z "$mem" ]; then :
-elif [ "$mem" -ge 800 ]; then ok "可用内存 ${mem} MB"; else bad "可用内存 ${mem} MB" "服务运行约需 600–800 MB（其中模型网关约 200 MB）；先停掉不用的服务"; fi
+elif [ "$mem" -ge "$mem_need" ]; then ok "可用内存 ${mem} MB"
+else bad "可用内存 ${mem} MB" "至少需要 ${mem_need} MB：服务空闲约 350 MB，处理请求时约 600–800 MB$([ "$ollama" = yes ] && echo "；本地向量模型（Ollama）加载时还要约 1.1 GB")。先停掉不用的服务，或加内存"; fi
 # 端口被本服务自己占着（重复部署）不算冲突：进程属于 codex-harness*.service 单元，或是本项目 compose 容器发布的端口。
 # 不按进程名判断：Node 24 的主线程名是 MainThread，换个启动方式名字也会变。
 ours() {

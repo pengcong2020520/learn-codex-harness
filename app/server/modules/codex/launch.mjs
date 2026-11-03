@@ -162,9 +162,10 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   let endpoint;
   try { endpoint = new URL(values.CODEX_BASE_URL); }
   catch { throw new Error("CODEX_BASE_URL 必须是完整的 API 基础地址。"); }
-  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
-  if (endpoint.protocol !== "https:" && !(endpoint.protocol === "http:" && loopback)) {
-    throw new Error("CODEX_BASE_URL 必须使用 HTTPS；只有本机回环地址允许 HTTP。");
+  // 容器名（不含点，如 http://gateway:8080）属于同一台机器的内部网络，和本机回环一样允许 HTTP。
+  const internal = ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname) || !endpoint.hostname.includes(".");
+  if (endpoint.protocol !== "https:" && !(endpoint.protocol === "http:" && internal)) {
+    throw new Error("CODEX_BASE_URL 必须使用 HTTPS；只有本机回环地址或容器名允许 HTTP。");
   }
   if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw new Error("CODEX_BASE_URL 不能包含用户名、密码、查询参数或片段。");
