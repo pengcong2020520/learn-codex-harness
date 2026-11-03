@@ -44,6 +44,25 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+  # 本地向量模型（Ollama）：用到 RAG 时才启动（npm run ollama:up）。网关经容器名 http://ollama:11434 访问，不对宿主开放端口。
+  # 同时只加载一个模型，空闲 5 分钟卸载以释放内存；模型文件存在数据卷里，下载用 npm run ollama:pull。
+  ollama:
+    image: ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
+    profiles: ["embedding"]
+    environment:
+      OLLAMA_KEEP_ALIVE: 5m
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      # 向量模型的输入是切好的文本块（几百到一千多词元），不需要模型支持的最大上下文；按最大上下文预留缓存会多占数百 MB 内存。
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-2048}
+    volumes: ["ollama-data:/root/.ollama"]
+    mem_limit: ${OLLAMA_MEMORY_LIMIT:-1536m}
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
   chroma:
     image: chromadb/chroma:1.5.0
     profiles: ["rag"]
@@ -53,3 +72,4 @@ volumes:
   postgres-data:
   redis-data:
   chroma-data:
+  ollama-data:

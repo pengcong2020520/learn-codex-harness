@@ -16,11 +16,16 @@ test("内置模型清单合法；每家的密钥变量在 compose 与部署脚�
   assert.ok(registry.models["kimi/kimi-k2.7-code"] && registry.models["deepseek/deepseek-flash"]);
   const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8"), remote = fs.readFileSync(path.join(app, "deploy/remote.sh"), "utf8");
   const listed = remote.match(/^PROVIDER_KEYS='([^']+)'/m)[1].split("|");
-  for (const { keyEnv } of Object.values(registry.providers)) {
+  // 密钥用环境变量引用传进网关；不需要密钥的服务（如本地 Ollama）只有地址，地址直接写进生成的配置。
+  const keyEnvs = Object.values(registry.providers).map(provider => provider.keyEnv).filter(Boolean);
+  for (const keyEnv of keyEnvs) {
     assert.match(compose, new RegExp(`^\\s+${keyEnv}: \\$\\{${keyEnv}:-\\}$`, "m"), `compose.yaml 的网关要传入 ${keyEnv}`);
     assert.ok(listed.includes(keyEnv), `remote.sh 的 PROVIDER_KEYS 要包含 ${keyEnv}`);
   }
-  assert.equal(listed.length, Object.keys(registry.providers).length);
+  assert.equal(listed.length, keyEnvs.length);
+  // 每个模型都标了用途；路由表里每种用途的候选都存在。
+  for (const [id, spec] of Object.entries(registry.models)) assert.ok(spec.purposes.length, id);
+  assert.deepEqual(Object.keys(registry.routes).sort(), ["chat", "embedding"]);
 });
 
 test("模型清单校验：写错的服务商、密钥变量、备用模型和推理档位都会被拦下", () => {
@@ -28,9 +33,19 @@ test("模型清单校验：写错的服务商、密钥变量、备用模型和�
   const cases = [
     [r => { r.providers.Kimi = r.providers.kimi; }, /服务商名 Kimi/],
     [r => { r.providers.kimi.keyEnv = "CODEX_API_KEY"; }, /keyEnv 必须形如/],
-    [r => { r.providers.openai.keyEnv = "KIMI_API_KEY"; }, /重复/],
-    [r => { r.providers.kimi.baseUrl = "http://api.moonshot.cn"; }, /必须是 https/],
-    [r => { r.models["nobody/x"] = { contextWindow: 1 }; }, /服务商已在 providers 中登记/],
+    [r => { r.providers.openai.keyEnv = "KIMI_API_KEY"; }, /被多个服务商使用/],
+    [r => { r.providers.kimi.baseUrl = "http://api.moonshot.cn"; }, /必须是 https；只有容器名或本机地址可以用 http/],
+    [r => { delete r.providers.kimi.keyEnv; }, /至少要有 keyEnv 或 baseUrlEnv/],
+    [r => { r.providers.ollama.baseUrlEnv = "OLLAMA_API_KEY"; }, /baseUrlEnv 必须是大写变量名，且不能以 _API_KEY 结尾/],
+    [r => { r.models["nobody/x"] = { purposes: ["chat"], contextWindow: 1 }; }, /服务商已在 providers 中登记/],
+    [r => { delete r.models["kimi/kimi-k2.6"].purposes; }, /purposes 必须是不重复的用途/],
+    [r => { r.models["kimi/kimi-k2.6"].purposes = ["chat", "painting"]; }, /purposes 必须是不重复的用途/],
+    [r => { delete r.models["ollama/qwen3-embedding:0.6b"].dimensions; }, /dimensions 必须是正整数/],
+    [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["ollama/qwen3-embedding:0.6b"]; }, /要能做它的全部用途/],
+    [r => { r.routes.embedding = ["kimi/kimi-k2.7-code"]; }, /routes.embedding 里的 kimi\/kimi-k2.7-code 必须是清单里用途包含 embedding 的模型/],
+    [r => { r.routes.painting = ["kimi/kimi-k2.7-code"]; }, /不是已知用途/],
+    [r => { r.scenes.fast = ["ollama/qwen3-embedding:0.6b"]; }, /必须是清单里的对话模型/],
+    [r => { r.scenes["Fast/1"] = ["kimi/kimi-k2.7-code"]; }, /场景名/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["kimi/kimi-k2.7-code"]; }, /备用模型/],
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["openai/none"]; }, /备用模型/],
     [r => { r.models["deepseek/deepseek-flash"].defaultReasoningLevel = "xhigh"; }, /defaultReasoningLevel/],
@@ -67,12 +82,15 @@ test("网关配置：只启用填了密钥的服务商，配置里只有环境�
   assert.deepEqual(priorities, priorities.map((_, index) => index + 1), "优先级在同一范围内不能重复");
 });
 
-test("网关配置：备用模型的服务商没有密钥时不写进备用链；默认模型没有密钥或不在清单里会报错", () => {
+test("网关配置：备用模型的服务商没有密钥时不写进备用链；一家都没启用会报错；本地 Ollama 按地址启用、不需要密钥", () => {
   const onlyKimi = buildGatewayConfig(registry, { ...gatewayEnv, DEEPSEEK_API_KEY: "" });
   assert.deepEqual(Object.keys(onlyKimi.providers), ["kimi"]);
   assert.deepEqual(onlyKimi.governance.routing_rules, [], "deepseek 未启用，kimi 没有可用的备用");
-  assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, KIMI_API_KEY: "" }), /KIMI_API_KEY/);
-  assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, CODEX_MODEL: "kimi-k2.7-code" }), /服务商\/模型名/);
+  assert.throws(() => buildGatewayConfig(registry, { AGENT_GATEWAY_KEY: "sk-bf-x" }), /没有启用任何模型服务商/);
+  const withOllama = buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://ollama:11434" });
+  assert.deepEqual(withOllama.providers.ollama, { keys: [{ name: "ollama", value: "", models: ["qwen3-embedding:0.6b"], weight: 1, ollama_key_config: { url: "http://ollama:11434" } }],
+    network_config: { base_url: "http://ollama:11434", allow_private_network: true } }, "容器名地址属于内网，要显式放行");
+  assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://ollama.example.com" }), /OLLAMA_BASE_URL 必须是 https/);
   const withClaude = buildGatewayConfig(registry, { ...gatewayEnv, ANTHROPIC_API_KEY: "sk-ant-x" });
   assert.deepEqual(withClaude.providers.anthropic.keys[0].models, ["claude-sonnet-5-5"]);
   // 智谱没有 OpenAI 新接口，按 Claude 格式接入：自定义服务商、接口类型 anthropic、地址指向它的 Claude 兼容接口。

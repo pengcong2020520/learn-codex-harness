@@ -64,8 +64,9 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 |---|---|---|
 | `AGENT_GATEWAY_KEY` | 访问本机模型网关的密钥（`sk-bf-` 开头，`npm run gateway:key` 生成）；设置后 Codex 只连网关 | — |
 | `KIMI_API_KEY` 等 | 各家模型的密钥，只交给网关；填了哪家就启用哪家（清单见 `config/models.json`） | — |
-| `CODEX_MODEL` | 使用的模型；网关模式写成“服务商/模型名”，如 `kimi/kimi-k2.7-code` | 见 `.env.example` |
+| `CODEX_MODEL` | 默认的对话模型；网关模式写成“服务商/模型名”，不填时按 `config/models.json` 的 `routes.chat` 取第一个可用的 | 见 `.env.example` |
 | `AGENT_GATEWAY_PORT` | 网关在本机的端口 | `4330` |
+| `OLLAMA_BASE_URL` | 本地 Ollama 的地址（`npm run ollama:up` 启动后填 `http://ollama:11434`），填了才启用本地向量模型 | — |
 | `CODEX_API_KEY` / `CODEX_BASE_URL` | 不用网关、直连某一家时填写（接口须支持 Responses API）；与 `AGENT_GATEWAY_KEY` 二选一 | — |
 | `AGENT_PORT` | HTTP 服务监听端口 | `4317` |
 | `AGENT_DEFINITION` | Agent 配置文件路径（相对服务根） | 读取 `config/runtime/project.json` |
@@ -187,6 +188,7 @@ Workflow 规定一类任务的边界和终点：本任务额外的授权、注�
 - **派发**：服务端在用户原文之前加一段任务说明（目标、授权、验收），注入 Workflow 指定的 Skill；权限门为本任务签发 `grants`，任务结束即失效。追加消息沿用当前任务的授权，不能更换 Workflow。
 - **验收**：只看结果——`file-exists`、`format`、`sources-cited`、`wiki-effective`。不通过的任务记为 `needs-review` 并推送给客户端，不暂停队列、不自动重试。
 - **多步与确认点**：`steps` 只在权限要变或需要人拍板的地方切步骤，每步是同一会话里的一轮。`writes` 收窄本步可新建文件的位置（由权限门执行），`confirm` 表示本步完成后进入 `waiting`。确认用 `POST /tasks/confirm`（可带补充说明作为下一步输入）或 CLI `/confirm`；结束用 `POST /tasks/cancel` 或 `/reject`。等待期间普通对话照常执行。
+- **按步骤换模型**：步骤可写 `model`（场景名如 `fast`、`strong`，或具体模型 `服务商/模型名`），本步用这个对话模型，没写的步骤和普通对话用默认模型；启动时就校验，需要网关模式。见 [模型网关](docs/model-gateway.md#按用途和场景挑模型)。
 - **提议**：Agent 在 `tools.allow` 里允许 `propose_task` 时，模型发现需要某个 Workflow 而当前任务没有授权，可以提议。提议记录为 `proposed`，不排队、不授权；用户确认（`/confirm`、工作台"执行提议"）后才在用户身份下核对授权并排队，`/reject` 忽略。每个会话最多 3 个待确认提议。需要数据层的任务身份。
 - **升级**：任务表新增 `workflow`、`params`、`checks`、`step`、`note`、`reason` 列（迁移 003–005），升级后先运行 `npm run data:migrate`。
 

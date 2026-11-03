@@ -70,8 +70,9 @@ test("任务说明只写目标、授权和验收；验收只看产物和生效�
   assert.deepEqual(check({}), { "file-exists": false, format: false, "sources-cited": false, "wiki-effective": false }, "没有产物不能算通过");
 });
 
-async function messageRig(t, workflows, gate) {
+async function messageRig(t, workflows, gate, environment = fixture) {
   const root = installToolFixture(tempRoot(t), { knowledge: true });
+  fs.cpSync(path.join(import.meta.dirname, "../config/models.json"), path.join(root, "config/models.json"));
   fs.mkdirSync(path.join(root, "agents/writing/skills/outline"), { recursive: true });
   fs.writeFileSync(path.join(root, "agents/writing/skills/outline/SKILL.md"), "---\nname: outline\n---\n提纲方法\n");
   const file = path.join(root, "agents/writing/agent.json"), definition = JSON.parse(fs.readFileSync(file));
@@ -79,7 +80,7 @@ async function messageRig(t, workflows, gate) {
   definition.bindings.skills.outline = { path: "skills/outline/SKILL.md" };
   definition.agent.workflows = workflows;
   fs.writeFileSync(file, JSON.stringify(definition));
-  const config = loadServerConfig(root, fixture);
+  const config = loadServerConfig(root, environment);
   const runtime = await prepareRun(config.launch, root);
   const agent = new AgentDefinition(root); agent.configure(config, runtime); agent.activate("unit-tools");
   // 模拟 verifySkills 的结果：两个 Skill 都已被 Codex 发现并启用。
@@ -157,6 +158,36 @@ test("workflows 需要 schemaVersion 1.2；参数 schema 只允许扁平字符�
 const article = { id: "article", label: "写文章", skill: "outline", steps: [
   { id: "outline", goal: "确定立意与大纲，保存到 drafts/", writes: ["drafts"], confirm: true },
   { id: "final", goal: "完成研究、写作与核查并定稿", writes: ["research", "drafts", "outputs"], checks: ["file-exists", "format"] }] };
+
+test("按步骤选模型：网关模式下每一轮都带上模型，写了场景的步骤用场景里的模型，其余回到默认；写错或没开网关在启动时报错", async t => {
+  const gateway = { DEMO_TIMEOUT_MS: "3000", AGENT_GATEWAY_KEY: "sk-bf-unit-test", KIMI_API_KEY: "k-unit", DEEPSEEK_API_KEY: "d-unit" };
+  const staged = { ...article, steps: [{ ...article.steps[0], model: "fast" }, article.steps[1]] };
+  const r = await messageRig(t, [staged], undefined, gateway);
+  assert.equal(r.rpc.calls.find(call => call.method === "thread/start").params.model, "kimi/kimi-k2.7-code", "新会话用默认模型（routes.chat 的第一个可用）");
+  await r.submit("a1", { workflow: "article" });
+  await r.started(1);
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("a1").status === "waiting");
+  await r.submit("chat-1");
+  await r.started(2);
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("chat-1").status === "completed");
+  await r.messages.confirm({ threadId: r.session.id, taskId: "a1" });
+  await r.started(3);
+  // Codex 的 turn/start 指定的模型会沿用到后面的轮次，所以每一轮都要明确写上。
+  assert.deepEqual(r.rpc.calls.filter(call => call.method === "turn/start").map(call => call.params.model),
+    ["deepseek/deepseek-flash", "kimi/kimi-k2.7-code", "kimi/kimi-k2.7-code"], "大纲用 fast 场景；插进来的普通对话和定稿回到默认");
+
+  await assert.rejects(messageRig(t, [{ ...article, steps: [{ ...article.steps[0], model: "fastest" }, article.steps[1]] }], undefined, gateway),
+    /Workflow article 的步骤 outline：没有名为 fastest 的场景/);
+  await assert.rejects(messageRig(t, [{ ...article, steps: [{ ...article.steps[0], model: "zhipu/glm-5.3" }, article.steps[1]] }], undefined, gateway),
+    /步骤 outline：.*缺 ZHIPU_API_KEY/, "服务商没启用也在启动时发现");
+  await assert.rejects(messageRig(t, [staged]), /按步骤切换模型需要启用模型网关/);
+  const direct = await messageRig(t, [article]);
+  await direct.submit("d1", { workflow: "article" });
+  await direct.started(1);
+  assert.equal(direct.rpc.calls.find(call => call.method === "turn/start").params.model, undefined, "直连模式只有一个模型，不带 model");
+});
 
 test("步骤声明：最后一步不能要求确认，写入范围不能超出基础权限，有 steps 时 checks 写在步骤上", () => {
   const writable = ["research", "drafts", "outputs"];

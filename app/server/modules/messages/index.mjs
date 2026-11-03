@@ -263,10 +263,13 @@ export class MessageService {
         );
         this.gate?.start(job, workflow.grants, step.writes);
         sent = true;
+        // 每一轮都明确带上模型：Codex 的 turn/start 指定的模型会沿用到后面的轮次，不写就会一直用上一步的。
+        const router = this.config.launch.router;
         const result = await this.rpc.request("turn/start", {
           threadId,
           clientUserMessageId: job.id,
           input: prepared,
+          ...(router ? { model: router.resolve({ model: step.model || null }).id } : {}),
         });
         const turn = this.sessions.recordTurn(threadId, result.turn);
         await this.bind(job.id, result.turn.id);

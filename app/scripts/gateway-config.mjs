@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnvironment } from "../server/modules/config/index.mjs";
 import { buildGatewayConfig, buildModelParameters, gatewayEndpoint, loadModelRegistry } from "../server/modules/gateway/index.mjs";
+import { createModelRouter } from "../server/modules/gateway/router.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -17,6 +18,12 @@ export function writeGatewayConfig(projectRoot = root, inherited = process.env) 
   const registry = loadModelRegistry(projectRoot);
   if (!registry) throw new Error("缺少 config/models.json。");
   const config = buildGatewayConfig(registry, environment);
+  // 先确认能选出默认的对话模型（服务启动时也要用）；其他用途选不出来不影响网关，只在摘要里说明。
+  const router = createModelRouter(registry, environment);
+  const routes = { chat: router.resolve().id };
+  for (const purpose of Object.keys(registry.routes || {}).filter(purpose => purpose !== "chat")) {
+    try { routes[purpose] = router.resolve({ purpose }).id; } catch (error) { if (error.code !== "MODEL_UNAVAILABLE") throw error; routes[purpose] = null; }
+  }
   const file = path.join(projectRoot, ".data/gateway/config.json");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   // 容器里的网关进程（非 root）要能读；两个文件里都没有密钥。
@@ -25,7 +32,7 @@ export function writeGatewayConfig(projectRoot = root, inherited = process.env) 
     fs.writeFileSync(target, JSON.stringify(content, null, 2) + "\n", { mode: 0o644 });
     fs.chmodSync(target, 0o644);
   }
-  return { file, config, model: environment.CODEX_MODEL.trim() };
+  return { file, config, routes, model: routes.chat };
 }
 
 // 已有值就不动；有空的 AGENT_GATEWAY_KEY= 行就填进去，否则追加。文件不存在时新建并只允许本人读写。
@@ -46,10 +53,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(ensureGatewayKey() ? "已在 .env 写入新的 AGENT_GATEWAY_KEY。" : ".env 里已有 AGENT_GATEWAY_KEY，未改动。");
       process.exit(0);
     }
-    const { file, config, model } = writeGatewayConfig();
+    const { file, config, routes } = writeGatewayConfig();
+    const labels = { chat: "对话", embedding: "向量", rerank: "重排序", image: "生图", video: "生视频", tts: "语音合成", asr: "语音识别" };
     console.log(`已生成 ${path.relative(root, file)}`);
     console.log(`启用的服务商：${Object.keys(config.providers).join("、")}`);
-    console.log(`默认模型：${model}`);
+    for (const [purpose, id] of Object.entries(routes)) console.log(`${labels[purpose]}：${id || "没有可用模型（见 config/models.json 的 routes）"}`);
     for (const rule of config.governance.routing_rules) console.log(`备用：${rule.name}`);
   } catch (error) {
     console.error(error.message);

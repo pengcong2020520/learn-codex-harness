@@ -1,13 +1,15 @@
 # 模型网关
 
-Codex 只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再把请求转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
+所有模型调用走同一层：一份模型清单、一个路由、一个网关。Codex（对话）和我们的工具（向量检索，以后的生图、语音等）只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
 
 ```
-Codex ──Responses API──▶ 本机网关 127.0.0.1:4330 ──┬─▶ Kimi（原样转发）
-       （只拿网关访问密钥）  （拿着各家密钥）          ├─▶ DeepSeek
-                                                  ├─▶ OpenAI / Grok（原样转发）
-                                                  └─▶ Claude / Gemini / 智谱 GLM（转换成各自的协议）
+Codex（对话）────────────┐   模型路由：按用途 / 场景 / 能力挑模型
+工具层（知识检索的向量…）──┴──▶ 本机网关 127.0.0.1:4330 ──┬─▶ Kimi / DeepSeek / OpenAI / Grok（原样或转成对话接口）
+        （只拿网关访问密钥）     （拿着各家密钥）              ├─▶ Claude / Gemini / 智谱 GLM（转换成各自的协议）
+                                                          └─▶ 本地 Ollama（向量模型）
 ```
+
+分工：**“这一步该用哪个模型”由脚手架的模型路由决定**（网关看不到任务语义，Codex 也没法按场景给请求加标签）；**网关负责“选定的模型出错时改用谁”和协议转换**。
 
 ## 为什么需要网关
 
@@ -37,7 +39,11 @@ Codex 自己能登记多个服务商、按会话选模型，但每个服务商�
 登记服务商和模型，网关配置与 Codex 的模型目录都从这里生成：
 
 - `providers`：服务商名 → `type`（接口类型，同名表示 Bifrost 内置，如 `openai`、`anthropic`、`gemini`、`xai`、`deepseek`；不同名表示自定义，如 `kimi` 走 `openai` 接口）、`keyEnv`（.env 里的密钥变量）、可选 `baseUrl`（只写到域名，网关自己加 `/v1/...`）。
-- `models`：`服务商/模型名` → 上下文长度、最大输出（`maxOutputTokens`）、输入类型、推理档位、`fallbacks`（备用链）。`verified` 是实测通过的日期；没有这一项的模型，参数来自官方文档，还没有用真实密钥跑过。
+- `providers` 里不需要密钥的服务（如本地 Ollama）用 `baseUrlEnv` 代替 `keyEnv`：.env 里填了这个地址变量才启用。容器名或本机地址可以用 http。
+- `models`：`服务商/模型名` → `purposes`（用途，必填）、上下文长度、最大输出（`maxOutputTokens`）、向量维数（`dimensions`，向量模型必填）、输入类型、推理档位、`fallbacks`（备用链，只能指向用途相同的模型）。`verified` 是实测通过的日期；没有这一项的模型，参数来自官方文档，还没有用真实密钥跑过。
+- 用途：`chat`（对话）、`embedding`（向量）、`rerank`（重排序）、`image`（生图）、`video`（生视频）、`tts`（语音合成）、`asr`（语音识别）。看图、长上下文是对话模型的能力（`inputModalities`、`contextWindow`），不单列用途。
+- `routes`：每种用途的候选，按优先顺序排，第一个服务商已启用的就是默认。对话的默认可以用 .env 的 `CODEX_MODEL` 覆盖。
+- `scenes`：给工作流步骤用的对话模型候选，如 `fast`（快而便宜）、`strong`（更强），同样按顺序取第一个可用的。
 - **走 Claude 格式接口的服务商（`type: "anthropic"`，如 Claude、智谱）必须填 `maxOutputTokens`。** Claude 格式要求每次请求带输出上限，Codex 不发；网关翻译时去查模型参数表，查不到就用 4096（[Bifrost #5331](https://github.com/maximhq/bifrost/issues/5331)）。思考型模型先把额度用掉，写长文件时工具参数会被截断成不完整的 JSON，之后每次请求都在网关报 500。现在 `npm run gateway:config` 按清单生成本地参数表 `.data/gateway/model-parameters.json`，网关只认这张表，不再从官网下载那张约 26 MB 的公开表。
 
 ### 2. `.env`
@@ -63,9 +69,42 @@ npm run server
 
 改了模型或密钥后，重新运行 `npm run gateway:up`，再重启服务。服务器上运行 `remote.sh gateway`，它会重新生成配置、重建网关并重启服务。
 
+## 按用途和场景挑模型
+
+模型路由（`server/modules/gateway/router.mjs`）根据三样东西挑模型：用途、场景或具体模型、需要的能力（要看图、要多长的上下文）。挑不到时报错说明每个候选为什么不行，例如“kimi/kimi-k2.7-code：服务商未启用（.env 里缺 KIMI_API_KEY）”。
+
+- **对话**：新会话用默认模型。Codex 的模型目录里放所有可用的对话模型，按轮切换时它有正确的能力信息。
+- **工作流步骤**：在 Agent 配置的步骤里写 `model`，可以是场景名或具体模型：
+
+  ```json
+  "steps": [
+    { "id": "outline", "goal": "确定立意与大纲", "writes": ["drafts"], "confirm": true, "model": "fast" },
+    { "id": "final", "goal": "研究、写作、核查并定稿", "writes": ["research", "drafts", "outputs"] }
+  ]
+  ```
+
+  服务启动时就解析一遍，写错的场景名、没启用的服务商当场报错。**每一轮都会明确带上模型**：Codex 的 `turn/start` 指定的模型会沿用到后面的轮次，没写 `model` 的步骤和普通对话要明确回到默认模型。按步骤切换模型需要网关模式。
+- **向量（RAG）**：配了向量库（`CHROMA_URL`）而没有单独配 `EMBEDDING_BASE_URL` 时，知识检索按 `routes.embedding` 挑向量模型、经网关调用，维数取自清单。挑不到可用的向量模型时启动报错，说明缺什么。
+- **以后的生图、语音等工具**：同样向路由要“当前的生图模型”，不写死模型。网关已有对应接口（`/v1/images/...`、`/v1/audio/...`、`/v1/videos` 等），支持哪些取决于厂商。
+
+**按复杂度自动选模型暂不做**：中途换模型会让缓存失效、推理衔接不上；Bifrost 的复杂度路由在请求已写明模型时不生效（[#7609](https://github.com/maximhq/bifrost/issues/7609)）。需要时可以参考 LiteLLM 的规则式打分在路由里加，并用 `app/eval/role` 的评估工具量化效果。
+
+## 本地向量模型（Ollama）
+
+```bash
+npm run ollama:up        # 启动 compose 里的 ollama 服务（可选服务，db:up 不会带上它）
+npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3-embedding:0.6b，约 639 MB）
+# .env 里加 OLLAMA_BASE_URL=http://ollama:11434，然后 npm run gateway:up
+```
+
+- 网关经容器名访问 Ollama，Ollama 不对宿主开放端口。
+- 同时只加载一个模型，空闲 5 分钟卸载以释放内存；上下文默认 2048 词元（`OLLAMA_CONTEXT_LENGTH`），足够切好的文本块。内存上限默认 1.5 GB（`OLLAMA_MEMORY_LIMIT`）。
+- **内存实测**（qwen3-embedding:0.6b，CPU）：模型加载后推理进程约 1.1 GB（上下文 4096），上下文 2048、批处理 128 时约 0.9 GB。空闲卸载后约 20 MB。2 GB 内存的服务器放不下，要加内存、加交换空间，或在服务器上改用云端向量模型。
+- 官方镜像带显卡加速库，压缩后约 2.7–3.2 GB。没有显卡的机器上也能用，只是镜像偏大。
+
 ## 加一家服务商或一个模型
 
-1. 在 `config/models.json` 的 `providers` 和 `models` 里登记。模型参数（上下文长度、推理档位）以官方文档为准。
+1. 在 `config/models.json` 的 `providers` 和 `models` 里登记，标好 `purposes`；要作为某种用途的默认就加进 `routes`。模型参数（上下文长度、推理档位、向量维数）以官方文档为准。
 2. 新的密钥变量要同时加进 `compose.yaml` 网关的 `environment` 和 `deploy/remote.sh` 的 `PROVIDER_KEYS`。`npm test` 会检查三处是否一致。
 3. 在 .env 填密钥，运行 `npm run gateway:up`。
 

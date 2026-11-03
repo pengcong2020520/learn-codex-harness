@@ -5,7 +5,7 @@ import { selectAgentFile } from "../agents/selection.mjs";
 import { parseEnv } from "node:util";
 import { PROJECT_ROOT } from "../../../shared/paths.mjs";
 import { buildRestrictedLaunch } from "../codex/launch.mjs";
-import { loadModelRegistry } from "../gateway/index.mjs";
+import { loadModelRegistry, modelEndpoint } from "../gateway/index.mjs";
 export { buildAppServerLaunch, buildModelCatalog } from "../codex/launch.mjs";
 
 function booleanValue(environment, name, fallback) {
@@ -82,6 +82,17 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   const rag = { chromaUrl: environment.CHROMA_URL, url: environment.EMBEDDING_BASE_URL,
     apiKey: environment.EMBEDDING_API_KEY, model: environment.EMBEDDING_MODEL,
     dimensions: Number(environment.EMBEDDING_DIMENSIONS) };
+  // 网关模式下，配置了向量库（CHROMA_URL）而没有单独配置 EMBEDDING_BASE_URL 时，向量模型也经网关调用：
+  // 模型由路由按 routes.embedding 挑，维数取自清单。挑不到可用的向量模型（如没部署 Ollama）时知识检索保持“未配置”。
+  if (rag.chromaUrl && !rag.url && launch.router) {
+    try {
+      const chosen = launch.router.resolve({ purpose: "embedding" }), gateway = modelEndpoint(environment);
+      Object.assign(rag, { url: gateway.baseUrl, apiKey: gateway.apiKey, model: chosen.id, dimensions: chosen.spec.dimensions });
+    } catch (error) {
+      if (error.code !== "MODEL_UNAVAILABLE") throw error;
+      rag.unavailable = error.message;
+    }
+  }
   const data = { databaseUrl: environment.DATABASE_URL, redisUrl: environment.REDIS_URL };
   // Product credentials must not leak into Codex, model tool subprocesses or protocol logs.
   for (const key of Object.keys(launch.env)) if (/^(DATABASE_URL|REDIS_URL|PG[A-Z_]+|EMBEDDING_[A-Z_]+|CHROMA_[A-Z_]+)$/.test(key)) delete launch.env[key];
