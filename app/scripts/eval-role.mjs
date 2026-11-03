@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
 import { startAgentServer } from "../server/main.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
+import { modelEndpoint } from "../server/modules/gateway/index.mjs";
 import { captureProxy, composition } from "./eval/capture-proxy.mjs";
 
 const app = fileURLToPath(new URL("../", import.meta.url));
@@ -62,8 +63,10 @@ async function waitFor(server, id, timeoutMs) {
 
 export async function runOnce({ label, agentDir, scenario, index, env, out, timeoutMs, dataFactory, capture = false }) {
   const { root, workspace } = prepareRoot(agentDir, scenario);
-  const proxy = capture ? await captureProxy(env.CODEX_BASE_URL) : null;
-  const config = loadServerConfig(root, proxy ? { ...env, CODEX_BASE_URL: proxy.url } : env);
+  const endpoint = modelEndpoint(env);
+  const proxy = capture ? await captureProxy(endpoint.baseUrl) : null;
+  // 采集时让 Codex 直连代理，代理再原样转给模型网关或模型服务。
+  const config = loadServerConfig(root, proxy ? { ...env, AGENT_GATEWAY_KEY: "", CODEX_BASE_URL: proxy.url, CODEX_API_KEY: endpoint.apiKey } : env);
   config.port = 0;
   const started = Date.now(), usage = { total: null, requests: 0 }, tools = [];
   let server;

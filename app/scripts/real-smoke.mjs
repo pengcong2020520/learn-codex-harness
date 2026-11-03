@@ -17,7 +17,7 @@ import { installToolFixture } from "../tests/helpers.mjs";
 if (!process.env.DATA_TEST_DATABASE_URL || !process.env.DATA_TEST_REDIS_URL)
   throw new Error("请用 npm run smoke:real 启动隔离依赖。");
 const credentials = loadEnvironment(PROJECT_ROOT),
-  redact = createLogRedactor(credentials.CODEX_API_KEY);
+  redact = createLogRedactor(credentials.CODEX_API_KEY, [credentials.AGENT_GATEWAY_KEY]);
 const report = {
   date: new Date().toISOString(),
   model: credentials.CODEX_MODEL,

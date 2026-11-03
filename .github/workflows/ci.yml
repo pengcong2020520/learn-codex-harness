@@ -1,4 +1,4 @@
-# 只运行离线检查：不调用真实模型，不依赖 PostgreSQL / Redis。
+# 只运行离线检查：不调用真实模型，不依赖 PostgreSQL / Redis。模型网关测试用 Docker 拉起锁定版本的 Bifrost，模型服务是本机模拟的。
 name: CI
 
 on:
@@ -46,6 +46,9 @@ jobs:
         run: |
           npm run test:web
           npm run course:check
+      - name: 模型网关（真 Bifrost 容器 + 模拟模型服务 + 真 Codex）
+        if: matrix.package == 'app'
+        run: npm run test:gateway
 
   docs:
     name: 文档、结构与隐私

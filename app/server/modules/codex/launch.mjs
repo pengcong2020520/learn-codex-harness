@@ -1,3 +1,5 @@
+import { gatewayEndpoint } from "../gateway/index.mjs";
+
 function booleanValue(environment, name, fallback) {
   const value = environment[name]?.trim() || String(fallback);
   if (!["true", "false"].includes(value)) throw new Error(`${name} 必须为 true 或 false。`);
@@ -5,8 +7,9 @@ function booleanValue(environment, name, fallback) {
 }
 
 // 模型参数来自部署配置，角色由调用方显式传入；不按厂商名分支。
-// 这些 CODEX_MODEL_* 是本脚手架的配置项，最终转换成 Codex 0.154.0 的目录格式。
-export function buildModelCatalog(environment, instructions = "") {
+// 模型能力：模型清单（config/models.json）里有 CODEX_MODEL 就以清单为准，否则读 .env 里的 CODEX_MODEL_*；
+// 工具输出上限、上下文可用比例等属于本脚手架的设置，始终读 .env。最终转换成 Codex 0.154.0 的目录格式。
+export function buildModelCatalog(environment, instructions = "", registry = null) {
   const text = (name, fallback = "") => environment[name]?.trim() || fallback;
   const required = name => {
     const value = text(name);
@@ -41,55 +44,66 @@ export function buildModelCatalog(environment, instructions = "") {
   }
   if (!boolean("CODEX_MODEL_CATALOG_ENABLED")) return null;
   const model = required("CODEX_MODEL");
-  const contextWindow = integer("CODEX_MODEL_CONTEXT_WINDOW");
-  const maxContextWindow = integer("CODEX_MODEL_MAX_CONTEXT_WINDOW", contextWindow);
-  if (maxContextWindow < contextWindow) throw new Error("CODEX_MODEL_MAX_CONTEXT_WINDOW 不能小于 CODEX_MODEL_CONTEXT_WINDOW。");
-  const modalities = list("CODEX_MODEL_INPUT_MODALITIES", ["text", "image", "audio"], "text");
-  const reasoningLevels = list("CODEX_MODEL_REASONING_LEVELS", ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
-  const defaultReasoning = text("CODEX_MODEL_DEFAULT_REASONING_LEVEL") || null;
-  if (defaultReasoning && !reasoningLevels.includes(defaultReasoning)) {
+  const listed = registry?.models?.[model];
+  const spec = listed ? {
+    displayName: listed.displayName || model, description: listed.description || null,
+    contextWindow: listed.contextWindow, maxContextWindow: listed.maxContextWindow || listed.contextWindow,
+    modalities: listed.inputModalities || ["text"], reasoningLevels: listed.reasoningLevels || [],
+    defaultReasoning: listed.defaultReasoningLevel || null, reasoningSummary: listed.reasoningSummary || "none",
+    originalImages: Boolean(listed.supportsImageDetailOriginal),
+    supportVerbosity: Boolean(listed.supportVerbosity), verbosity: listed.defaultVerbosity || "",
+  } : {
+    displayName: text("CODEX_MODEL_DISPLAY_NAME", model), description: text("CODEX_MODEL_DESCRIPTION") || null,
+    contextWindow: integer("CODEX_MODEL_CONTEXT_WINDOW"), maxContextWindow: null,
+    modalities: list("CODEX_MODEL_INPUT_MODALITIES", ["text", "image", "audio"], "text"),
+    reasoningLevels: list("CODEX_MODEL_REASONING_LEVELS", ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]),
+    defaultReasoning: text("CODEX_MODEL_DEFAULT_REASONING_LEVEL") || null,
+    reasoningSummary: choice("CODEX_MODEL_REASONING_SUMMARY", ["none", "auto", "concise", "detailed"], "none"),
+    originalImages: boolean("CODEX_MODEL_SUPPORTS_IMAGE_DETAIL_ORIGINAL"),
+    supportVerbosity: boolean("CODEX_MODEL_SUPPORT_VERBOSITY"), verbosity: choice("CODEX_MODEL_DEFAULT_VERBOSITY", ["", "low", "medium", "high"]),
+  };
+  if (!listed) spec.maxContextWindow = integer("CODEX_MODEL_MAX_CONTEXT_WINDOW", spec.contextWindow);
+  if (spec.maxContextWindow < spec.contextWindow) throw new Error("CODEX_MODEL_MAX_CONTEXT_WINDOW 不能小于 CODEX_MODEL_CONTEXT_WINDOW。");
+  if (spec.defaultReasoning && !spec.reasoningLevels.includes(spec.defaultReasoning)) {
     throw new Error("CODEX_MODEL_DEFAULT_REASONING_LEVEL 必须包含在 CODEX_MODEL_REASONING_LEVELS 中。");
   }
-  const originalImages = boolean("CODEX_MODEL_SUPPORTS_IMAGE_DETAIL_ORIGINAL");
-  if (originalImages && !modalities.includes("image")) {
+  if (spec.originalImages && !spec.modalities.includes("image")) {
     throw new Error("启用 CODEX_MODEL_SUPPORTS_IMAGE_DETAIL_ORIGINAL 时，INPUT_MODALITIES 必须包含 image。");
   }
-  const verbosity = choice("CODEX_MODEL_DEFAULT_VERBOSITY", ["", "low", "medium", "high"]);
-  const supportVerbosity = boolean("CODEX_MODEL_SUPPORT_VERBOSITY");
-  if (verbosity && !supportVerbosity) throw new Error("设置 DEFAULT_VERBOSITY 时，CODEX_MODEL_SUPPORT_VERBOSITY 必须为 true。");
+  if (spec.verbosity && !spec.supportVerbosity) throw new Error("设置 DEFAULT_VERBOSITY 时，CODEX_MODEL_SUPPORT_VERBOSITY 必须为 true。");
   const patchType = choice("CODEX_MODEL_APPLY_PATCH_TOOL_TYPE", ["none", "freeform"], "none");
 
   // 白名单映射：绝不把整个 environment 写进模型目录。
   return {
     models: [{
       slug: model,
-      display_name: text("CODEX_MODEL_DISPLAY_NAME", model),
-      description: text("CODEX_MODEL_DESCRIPTION") || null,
-      default_reasoning_level: defaultReasoning,
-      supported_reasoning_levels: reasoningLevels.map(effort => ({ effort, description: `${effort} reasoning effort` })),
+      display_name: spec.displayName,
+      description: spec.description,
+      default_reasoning_level: spec.defaultReasoning,
+      supported_reasoning_levels: spec.reasoningLevels.map(effort => ({ effort, description: `${effort} reasoning effort` })),
       shell_type: choice("CODEX_MODEL_SHELL_TYPE", ["disabled", "unified_exec"], "disabled"),
       visibility: "list",
       supported_in_api: true,
       priority: 1,
-      support_verbosity: supportVerbosity,
-      default_verbosity: verbosity || null,
-      default_reasoning_summary: choice("CODEX_MODEL_REASONING_SUMMARY", ["none", "auto", "concise", "detailed"], "none"),
+      support_verbosity: spec.supportVerbosity,
+      default_verbosity: spec.verbosity || null,
+      default_reasoning_summary: spec.reasoningSummary,
       apply_patch_tool_type: patchType === "none" ? null : patchType,
       truncation_policy: { mode: "tokens", limit: integer("CODEX_MODEL_TOOL_OUTPUT_LIMIT", 10000) },
-      context_window: contextWindow,
-      max_context_window: maxContextWindow,
+      context_window: spec.contextWindow,
+      max_context_window: spec.maxContextWindow,
       effective_context_window_percent: integer("CODEX_MODEL_EFFECTIVE_CONTEXT_WINDOW_PERCENT", 95, 100),
-      input_modalities: modalities,
-      supports_image_detail_original: originalImages,
+      input_modalities: spec.modalities,
+      supports_image_detail_original: spec.originalImages,
       experimental_supported_tools: [],
       model_messages: { instructions_template: instructions }
     }]
   };
 }
 
-export function buildRestrictedLaunch(environment) {
+export function buildRestrictedLaunch(environment, options = {}) {
   const launch = buildAppServerLaunch({ ...environment,
-    CODEX_MODEL_SHELL_TYPE: "disabled", CODEX_MODEL_APPLY_PATCH_TOOL_TYPE: "none" });
+    CODEX_MODEL_SHELL_TYPE: "disabled", CODEX_MODEL_APPLY_PATCH_TOOL_TYPE: "none" }, "", options);
   // goals：线程目标会让 Codex 绕过任务队列自动连续发起轮次；project_doc_max_bytes=0：workspace
   // 及其上级目录的 AGENTS.md 是用户数据，不能进入模型指令（角色指令走 instructions_template）。
   launch.args.push("-c", "features.goals=false", "-c", "project_doc_max_bytes=0",
@@ -98,17 +112,23 @@ export function buildRestrictedLaunch(environment) {
   return launch;
 }
 
-export function buildAppServerLaunch(environment, instructions = "") {
+export function buildAppServerLaunch(environment, instructions = "", { registry = null } = {}) {
   const args = ["app-server", "--listen", "stdio://"];
+  // 网关模式：Codex 的接口地址和密钥换成本机网关的，后面按直连同样校验。
+  const gateway = gatewayEndpoint(environment);
+  if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey };
   const env = { ...environment };
-  for (const key of Object.keys(env)) if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|PG[A-Z_]+)$/.test(key)) delete env[key];
+  // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。
+  for (const key of Object.keys(env)) {
+    if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|AGENT_GATEWAY_KEY|PG[A-Z_]+)$/.test(key) || (/_API_KEY$/.test(key) && key !== "CODEX_API_KEY")) delete env[key];
+  }
   const model = environment.CODEX_MODEL?.trim() || undefined;
   if (model && /[\u0000-\u001f\u007f]/.test(model)) throw new Error("CODEX_MODEL 不能包含控制字符。");
   const timeoutMs = Number(environment.DEMO_TIMEOUT_MS || 180_000);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) {
     throw new Error("DEMO_TIMEOUT_MS 必须是 1 到 2147483647 之间的整数。");
   }
-  const catalog = buildModelCatalog(environment, instructions);
+  const catalog = buildModelCatalog(environment, instructions, registry);
   // 本示例不依赖服务商的内置联网搜索能力。
   args.push("-c", 'web_search="disabled"');
 
@@ -148,5 +168,5 @@ export function buildAppServerLaunch(environment, instructions = "") {
   );
   // 密钥只通过子进程环境传递，不进入启动参数。
   env.CODEX_API_KEY = values.CODEX_API_KEY;
-  return { args, env, model, catalog, timeoutMs, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey" };
+  return { args, env, model, catalog, timeoutMs, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway) };
 }

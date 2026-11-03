@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
 import { mainDocument, runChecks, stats, writtenPaths } from "./eval/checks.mjs";
 import { loadScenarios } from "./eval-role.mjs";
+import { modelEndpoint } from "../server/modules/gateway/index.mjs";
 
 const app = fileURLToPath(new URL("../", import.meta.url));
 const DIMENSIONS = ["需求符合", "准确与有据", "结构与可读", "完整性", "表达与风格"];
@@ -116,7 +117,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     "judge-model": { type: "string", default: "deepseek-v4-pro" }, env: { type: "string", default: path.join(app, ".env") }, "no-judge": { type: "boolean", default: false } } });
   const dir = path.resolve(values.dir);
   const env = { ...parseEnv(fs.readFileSync(values.env, "utf8")), ...process.env };
-  const judgeConfig = { base: env.CODEX_BASE_URL, key: env.CODEX_API_KEY, model: values["judge-model"] };
+  const endpoint = modelEndpoint(env);
+  const judgeConfig = { base: endpoint.baseUrl, key: endpoint.apiKey, model: values["judge-model"] };
   const retry = { delayMs: Number(env.EVAL_JUDGE_RETRY_MS || 5000) };
   const labels = [values.baseline, values.candidate];
   const result = { dir: path.basename(dir), baseline: values.baseline, candidate: values.candidate, judgeModel: values["no-judge"] ? null : judgeConfig.model, scenarios: [] };

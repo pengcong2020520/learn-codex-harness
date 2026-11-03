@@ -5,6 +5,7 @@ import { selectAgentFile } from "../agents/selection.mjs";
 import { parseEnv } from "node:util";
 import { PROJECT_ROOT } from "../../../shared/paths.mjs";
 import { buildRestrictedLaunch } from "../codex/launch.mjs";
+import { loadModelRegistry } from "../gateway/index.mjs";
 export { buildAppServerLaunch, buildModelCatalog } from "../codex/launch.mjs";
 
 function booleanValue(environment, name, fallback) {
@@ -77,7 +78,7 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_PORT 必须是 1 到 65535 的整数。");
   const turnTimeoutMs = Number(environment.AGENT_TURN_TIMEOUT_MS || 600_000);
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
-  const launch = buildRestrictedLaunch(environment);
+  const launch = buildRestrictedLaunch(environment, { registry: loadModelRegistry(root) });
   const rag = { chromaUrl: environment.CHROMA_URL, url: environment.EMBEDDING_BASE_URL,
     apiKey: environment.EMBEDDING_API_KEY, model: environment.EMBEDDING_MODEL,
     dimensions: Number(environment.EMBEDDING_DIMENSIONS) };

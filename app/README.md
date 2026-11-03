@@ -8,7 +8,7 @@
 
 知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s05 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
 
-运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。第三方模型端点必须支持 Responses API；只有 Chat Completions 接口不能直接接入，生成模型目录 JSON 不会转换协议。
+运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。Codex 只认 Responses API；默认经本机**模型网关**（Bifrost）接模型，Kimi、DeepSeek、OpenAI、Claude、Gemini、Grok 填了密钥就能用，网关负责协议转换和失败时改用备用模型，见 [模型网关](docs/model-gateway.md)。
 
 ## 五个阶段的教学与 Web 工作台
 
@@ -25,7 +25,10 @@ npm ci
 
 # 2. 准备环境变量（已有 .env 则跳过，不覆盖）
 test -f .env || cp .env.example .env
-# 编辑 .env，填写模型配置，以及 DATABASE_URL、REDIS_URL
+# 编辑 .env：填至少一家模型的密钥（如 KIMI_API_KEY）、CODEX_MODEL，以及 DATABASE_URL、REDIS_URL
+# 生成访问模型网关的密钥并启动网关（Docker，详见 docs/model-gateway.md）：
+npm run gateway:key
+npm run gateway:up
 # 启动 PostgreSQL / Redis（Docker，详见 docs/data-layer.md），再初始化：
 npm run db:up
 npm run data:migrate
@@ -59,9 +62,11 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `CODEX_API_KEY` | 模型 API 密钥，API Key 接入时必填 | — |
-| `CODEX_BASE_URL` | 模型 API 基础 URL | 见 `.env.example` |
-| `CODEX_MODEL` | 使用的模型名称 | 见 `.env.example` |
+| `AGENT_GATEWAY_KEY` | 访问本机模型网关的密钥（`sk-bf-` 开头，`npm run gateway:key` 生成）；设置后 Codex 只连网关 | — |
+| `KIMI_API_KEY` 等 | 各家模型的密钥，只交给网关；填了哪家就启用哪家（清单见 `config/models.json`） | — |
+| `CODEX_MODEL` | 使用的模型；网关模式写成“服务商/模型名”，如 `kimi/kimi-k2.7-code` | 见 `.env.example` |
+| `AGENT_GATEWAY_PORT` | 网关在本机的端口 | `4330` |
+| `CODEX_API_KEY` / `CODEX_BASE_URL` | 不用网关、直连某一家时填写（接口须支持 Responses API）；与 `AGENT_GATEWAY_KEY` 二选一 | — |
 | `AGENT_PORT` | HTTP 服务监听端口 | `4317` |
 | `AGENT_DEFINITION` | Agent 配置文件路径（相对服务根） | 读取 `config/runtime/project.json` |
 | `DATABASE_URL` | PostgreSQL 业务数据库地址，正常服务必填 | — |
@@ -70,7 +75,7 @@ app/deploy/remote.sh tunnel                                     # 浏览器打�
 | `AGENT_MEMORY_USE` | 服务级读记忆开关 | `true` |
 | `AGENT_MEMORY_GENERATE` | 后台摘要生成独立开关 | `true` |
 
-> `.env` 不被 Git 追踪；`.env.example` 保留全部可用变量及注释。模板中 `CODEX_BASE_URL` 预设 DeepSeek 兼容端点，但 DeepSeek 对 Responses 协议的完整兼容性需自行核实。
+> `.env` 不被 Git 追踪；`.env.example` 保留全部可用变量及注释。各家模型的密钥不会传给 Codex 进程：Codex 只拿到访问网关（或直连时那一家）的密钥。
 
 ## Agent 配置：Agent 包 `agents/writing/`
 
@@ -243,6 +248,9 @@ npm run test:codex-tools
 
 # 真实 Codex + 本机模拟 Responses 记忆限制测试
 npm run test:codex-memory
+
+# 真 Bifrost 网关容器 + 两家模拟模型服务 + 真 Codex（需要 Docker）
+npm run test:gateway
 
 # 静态检查（不请求模型）
 npm run check

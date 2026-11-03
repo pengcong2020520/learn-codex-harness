@@ -54,11 +54,11 @@ const server = {
 };
 for (const [name, body] of Object.entries(server)) stub(name, body);
 const all = Object.keys(server);
-// 服务器上已经部署过：Agent 与工作台由 systemd 单元运行（Node 24 进程名是 MainThread），数据库端口由本项目容器发布。
+// 服务器上已经部署过：Agent 与工作台由 systemd 单元运行（Node 24 进程名是 MainThread），数据库与模型网关端口由本项目容器发布。
 const deployed = {
-  PORTS: "4317=MainThread 14320=MainThread 5432=docker-proxy 6379=docker-proxy",
+  PORTS: "4317=MainThread 14320=MainThread 5432=docker-proxy 6379=docker-proxy 4330=docker-proxy",
   UNITS: "4317=codex-harness.service 14320=codex-harness-web.service",
-  COMPOSE_PORTS: "127.0.0.1:5432->5432/tcp 127.0.0.1:6379->6379/tcp"
+  COMPOSE_PORTS: "127.0.0.1:5432->5432/tcp 127.0.0.1:6379->6379/tcp 127.0.0.1:4330->8080/tcp"
 };
 const check = path.join(app, "deploy/check.sh");
 
@@ -80,15 +80,16 @@ test("部署前检查：端口被别的程序或别的项目的容器占着才�
   assert.equal(other.code, 1);
   assert.match(other.out, /端口 4317 被 MainThread（PID 4317）占用/);
   assert.match(other.out, /端口 5432 被 docker-proxy（PID 5432）占用/);
+  assert.match(other.out, /端口 4330 被 docker-proxy（PID 4330）占用/, "模型网关的端口也要检查");
   assert.doesNotMatch(other.out, /端口 (14320|6379)/);
 });
 
 test("部署前检查：逐项说明缺什么、怎么处理，而不是部署到一半失败", t => {
   const { bin } = sandbox(t, all.filter(name => !["systemctl", "docker", "rsync"].includes(name)));
-  const result = run(check, [], bin, { NODE_MAJOR: "20", DISK_GB: "2", MEM_MB: "300", PORTS: "5432=postgres" });
+  const result = run(check, [], bin, { NODE_MAJOR: "20", DISK_GB: "2", MEM_MB: "700", PORTS: "5432=postgres" });
   assert.equal(result.code, 1);
   for (const expected of [/没有 systemd/, /没有 Docker\n.*docs\.docker\.com\/engine\/install/, /需要 Node\.js 24\+（当前：v20\.11\.0）/,
-    /没有 rsync/, /磁盘剩余 2 GB/, /可用内存 300 MB/, /端口 5432 被 postgres（PID 5432）占用/]) {
+    /没有 rsync/, /磁盘剩余 2 GB/, /可用内存 700 MB.*\n.*其中模型网关约 200 MB/, /端口 5432 被 postgres（PID 5432）占用/]) {
     assert.match(result.out, expected);
   }
   assert.doesNotMatch(result.out, /满足部署条件/);
@@ -128,34 +129,40 @@ function initEnv(t, envFile, env = {}) {
   return { ...result, commands: read(log), sent: read(sent) };
 }
 const local = [
-  "CODEX_API_KEY=sk-local-secret", "CODEX_BASE_URL=https://provider.example/v1", "CODEX_MODEL=unit-model", "CODEX_MODEL_CONTEXT_WINDOW=200000",
+  "KIMI_API_KEY=sk-local-kimi", "DEEPSEEK_API_KEY=sk-local-deepseek", "CODEX_MODEL=kimi/kimi-k2.7-code", "CODEX_MODEL_CONTEXT_WINDOW=200000",
+  "AGENT_GATEWAY_KEY=sk-bf-local-gateway", "CODEX_API_KEY=sk-old-direct", "EMBEDDING_API_KEY=sk-embedding",
   "AGENT_MEMORY_ENABLED=true", "DEMO_TIMEOUT_MS=90000",
   "AGENT_DB_PASSWORD=local-db-password", "DATABASE_URL=postgresql://agent:local-db-password@127.0.0.1:55432/agent",
   "REDIS_URL=redis://127.0.0.1:56379/0", "AGENT_PG_PORT=55432", ""
 ].join("\n");
 
-test("init-env：只把模型与 Agent 配置发到服务器，本机数据库密码与端口不外传", t => {
+test("init-env：只把模型、各家密钥与 Agent 配置发到服务器；本机数据库配置与网关访问密钥不外传，服务器上新生成", t => {
   const result = initEnv(t, local);
   assert.equal(result.code, 0, result.out);
   assert.match(result.out, /已生成服务器/);
-  for (const line of ["CODEX_API_KEY=sk-local-secret", "CODEX_MODEL_CONTEXT_WINDOW=200000", "AGENT_MEMORY_ENABLED=true", "DEMO_TIMEOUT_MS=90000"]) {
+  for (const line of ["KIMI_API_KEY=sk-local-kimi", "DEEPSEEK_API_KEY=sk-local-deepseek", "CODEX_MODEL=kimi/kimi-k2.7-code", "CODEX_MODEL_CONTEXT_WINDOW=200000", "AGENT_MEMORY_ENABLED=true", "DEMO_TIMEOUT_MS=90000"]) {
     assert.ok(result.sent.includes(line), line);
   }
   assert.doesNotMatch(result.sent, /local-db-password|DATABASE_URL|REDIS_URL|AGENT_PG_PORT|55432/);
-  assert.doesNotMatch(result.out, /sk-local-secret/);
+  assert.doesNotMatch(result.sent, /sk-bf-local-gateway|CODEX_API_KEY|sk-embedding/, "网关访问密钥在服务器上新生成；直连密钥与网关模式冲突，不带过去");
+  assert.doesNotMatch(result.out, /sk-local-kimi/);
   assert.match(result.commands, /umask 077/);
   assert.match(result.commands, /\/dev\/urandom/);
+  assert.match(result.commands, /AGENT_GATEWAY_KEY=sk-bf-%s/);
 });
 
 test("init-env：本机配置不完整时在连服务器之前就停下；服务器已有 .env 时不覆盖", t => {
-  const empty = initEnv(t, local.replace("CODEX_API_KEY=sk-local-secret", "CODEX_API_KEY="));
-  assert.equal(empty.code, 1);
-  assert.match(empty.out, /CODEX_API_KEY 为空/);
-  assert.equal(empty.commands, "");
+  const noKeys = initEnv(t, local.replace("KIMI_API_KEY=sk-local-kimi", "KIMI_API_KEY=").replace("DEEPSEEK_API_KEY=sk-local-deepseek", 'DEEPSEEK_API_KEY=""'));
+  assert.equal(noKeys.code, 1);
+  assert.match(noKeys.out, /没有任何模型服务商的密钥/);
+  assert.equal(noKeys.commands, "");
 
-  const quoted = initEnv(t, local.replace("CODEX_MODEL=unit-model", 'CODEX_MODEL=""'));
-  assert.equal(quoted.code, 1);
-  assert.match(quoted.out, /CODEX_MODEL 为空/);
+  for (const model of ['CODEX_MODEL=""', "CODEX_MODEL=kimi-k2.7-code"]) {
+    const bad = initEnv(t, local.replace("CODEX_MODEL=kimi/kimi-k2.7-code", model));
+    assert.equal(bad.code, 1, model);
+    assert.match(bad.out, /服务商\/模型名/);
+    assert.equal(bad.commands, "");
+  }
 
   const missing = initEnv(t, undefined);
   assert.equal(missing.code, 1);
@@ -201,6 +208,9 @@ test("server-setup：先停服务再装依赖和迁移（重复部署时迁移�
   assert.ok(stop < at(/npm ci/));
   assert.ok(at(/npm ci/) < at(/npm run -s agent:init/));
   assert.ok(at(/^systemctl start codex-harness-db\.service/) < at(/npm run -s data:migrate/));
+  assert.ok(at(/npm run -s agent:init/) < at(/node scripts\/gateway-config\.mjs/), "每次部署都重新生成网关配置");
+  assert.ok(at(/node scripts\/gateway-config\.mjs/) < at(/^systemctl start codex-harness-db\.service/));
+  assert.match(calls[at(/node scripts\/gateway-config\.mjs/)], /^runuser -u codex -- env HOME=\/var\/lib\/codex node/, "以运行用户生成，文件归 codex 所有");
   assert.ok(at(/npm run -s data:migrate/) < at(/^systemctl start codex-harness\.service codex-harness-web\.service/));
   assert.match(calls[at(/npm ci/)], /^runuser -u codex -- env HOME=\/var\/lib\/codex npm ci/);
   assert.equal(fs.statSync(path.join(target, ".env")).mode & 0o777, 0o600);
@@ -208,7 +218,9 @@ test("server-setup：先停服务再装依赖和迁移（重复部署时迁移�
   // 单元文件装进 UNIT_DIR，node / docker 换成这台机器上 command -v 找到的路径。
   assert.deepEqual(fs.readdirSync(units).sort(), ["codex-harness-db.service", "codex-harness-web.service", "codex-harness.service"]);
   assert.match(fs.readFileSync(path.join(units, "codex-harness.service"), "utf8"), new RegExp(`^ExecStart=${bin}/node server/main\\.mjs$`, "m"));
-  assert.match(fs.readFileSync(path.join(units, "codex-harness-db.service"), "utf8"), new RegExp(`^ExecStop=${bin}/docker compose stop`, "m"));
+  const db = fs.readFileSync(path.join(units, "codex-harness-db.service"), "utf8");
+  assert.match(db, new RegExp(`^ExecStop=${bin}/docker compose stop postgres redis gateway$`, "m"));
+  assert.match(db, new RegExp(`^ExecStart=${bin}/docker compose up -d --wait postgres redis gateway$`, "m"));
   for (const unit of fs.readdirSync(path.join(app, "deploy/systemd"))) {
     const body = fs.readFileSync(path.join(app, "deploy/systemd", unit), "utf8");
     for (const [, command] of body.matchAll(/^Exec\w+=(\S+)/gm)) assert.match(command, /^\/usr\/bin\/(node|docker)$/, unit);

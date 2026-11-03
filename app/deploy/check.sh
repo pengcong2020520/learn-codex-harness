@@ -21,7 +21,7 @@ if [ "${avail:-0}" -ge 3 ]; then ok "磁盘剩余 ${avail} GB"; else bad "磁盘
 mem=$(free -m 2>/dev/null | awk '/^Mem:/{print $7}')
 [ -n "$mem" ] || mem=$(awk '/^MemAvailable:/{print int($2 / 1024)}' /proc/meminfo 2>/dev/null)
 if [ -z "$mem" ]; then :
-elif [ "$mem" -ge 600 ]; then ok "可用内存 ${mem} MB"; else bad "可用内存 ${mem} MB" "服务运行约需 400–600 MB；先停掉不用的服务"; fi
+elif [ "$mem" -ge 800 ]; then ok "可用内存 ${mem} MB"; else bad "可用内存 ${mem} MB" "服务运行约需 600–800 MB（其中模型网关约 200 MB）；先停掉不用的服务"; fi
 # 端口被本服务自己占着（重复部署）不算冲突：进程属于 codex-harness*.service 单元，或是本项目 compose 容器发布的端口。
 # 不按进程名判断：Node 24 的主线程名是 MainThread，换个启动方式名字也会变。
 ours() {
@@ -29,13 +29,13 @@ ours() {
   docker ps --filter label=com.docker.compose.project=codex-harness-app --format '{{.Ports}}' 2>/dev/null | grep -q ":$2->"
 }
 if command -v ss >/dev/null 2>&1; then
-  for port in 4317 14320 5432 6379; do
+  for port in 4317 14320 5432 6379 4330; do
     line=$(ss -ltnpH "sport = :$port" 2>/dev/null | head -1)
     [ -n "$line" ] || continue
     pid=$(printf '%s' "$line" | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
     [ -n "$pid" ] && ours "$pid" "$port" && continue
     name=$(printf '%s' "$line" | grep -o 'users:(("[^"]*' | cut -d'"' -f2)
-    bad "端口 $port 被 ${name:-其他进程}${pid:+（PID ${pid}）}占用" "停掉占用的服务，或修改 compose.yaml 端口 / AGENT_PORT / 工作台单元的 WORKBENCH_PORT"
+    bad "端口 $port 被 ${name:-其他进程}${pid:+（PID ${pid}）}占用" "停掉占用的服务，或修改 compose.yaml 端口 / AGENT_PORT / AGENT_GATEWAY_PORT / 工作台单元的 WORKBENCH_PORT"
   done
 fi
 [ "$fail" -eq 0 ] && echo "  服务器满足部署条件。"

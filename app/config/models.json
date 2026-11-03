@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "providers": {
+    "kimi": { "type": "openai", "baseUrl": "https://api.moonshot.cn", "keyEnv": "KIMI_API_KEY",
+      "note": "Kimi 国内站。国内站与国际站账号不通用：国际站（platform.moonshot.ai）的密钥把 baseUrl 改成 https://api.moonshot.ai" },
+    "deepseek": { "type": "deepseek", "keyEnv": "DEEPSEEK_API_KEY" },
+    "openai": { "type": "openai", "keyEnv": "OPENAI_API_KEY" },
+    "anthropic": { "type": "anthropic", "keyEnv": "ANTHROPIC_API_KEY" },
+    "gemini": { "type": "gemini", "keyEnv": "GEMINI_API_KEY" },
+    "xai": { "type": "xai", "keyEnv": "XAI_API_KEY" }
+  },
+  "models": {
+    "kimi/kimi-k2.7-code": {
+      "displayName": "Kimi K2.7 Code", "contextWindow": 262144, "inputModalities": ["text", "image"],
+      "supportVerbosity": true, "defaultVerbosity": "low",
+      "fallbacks": ["deepseek/deepseek-flash"], "verified": "2026-11-02"
+    },
+    "kimi/kimi-k2.6": {
+      "displayName": "Kimi K2.6", "contextWindow": 262144, "inputModalities": ["text", "image"],
+      "supportVerbosity": true, "defaultVerbosity": "low", "verified": "2026-11-02"
+    },
+    "deepseek/deepseek-flash": {
+      "displayName": "DeepSeek Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"],
+      "reasoningLevels": ["low", "high", "max"], "defaultReasoningLevel": "high", "supportsImageDetailOriginal": true,
+      "supportVerbosity": true, "defaultVerbosity": "low",
+      "fallbacks": ["kimi/kimi-k2.7-code"], "verified": "2026-10-31"
+    },
+    "openai/gpt-6.1-terra": { "displayName": "GPT-6.1 Terra", "contextWindow": 1050000, "inputModalities": ["text", "image"] },
+    "anthropic/claude-sonnet-5-5": { "displayName": "Claude Sonnet 5.5", "contextWindow": 1000000, "inputModalities": ["text", "image"] },
+    "gemini/gemini-3-flash-preview": { "displayName": "Gemini 3 Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"] },
+    "xai/grok-4.7": { "displayName": "Grok 4.7", "contextWindow": 500000, "inputModalities": ["text", "image"] }
+  }
+}

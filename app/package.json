@@ -37,6 +37,11 @@
     "test:protocol:research": "node scripts/test-research-protocol.mjs",
     "db:up": "docker compose up -d --wait postgres redis",
     "db:down": "docker compose stop postgres redis",
+    "gateway:key": "node scripts/gateway-config.mjs --ensure-key",
+    "gateway:config": "node scripts/gateway-config.mjs",
+    "gateway:up": "node scripts/gateway-config.mjs && docker compose up -d --wait gateway",
+    "gateway:down": "docker compose stop gateway",
+    "test:gateway": "node --test --test-concurrency=1 tests/gateway.integration.mjs",
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs"
   },

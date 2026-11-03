@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 在服务器上以 root 运行（由 remote.sh deploy 调用），可以重复执行：
-# 建运行用户 → 安装 systemd 单元 → 停服务 → 安装依赖 → 建工作区目录 → 启动数据服务 → 迁移 → 启动常驻服务 → 等健康检查通过。
+# 建运行用户 → 安装 systemd 单元 → 停服务 → 安装依赖 → 建工作区目录 → 生成网关配置 → 启动数据服务与网关 → 迁移 → 启动常驻服务 → 等健康检查通过。
 set -euo pipefail
 APP_DIR=${APP_DIR:-/opt/learn-codex-harness/app}
 UNIT_DIR=${UNIT_DIR:-/etc/systemd/system}
@@ -29,7 +29,10 @@ echo "== 安装依赖"
 as_user npm ci --no-audit --no-fund --loglevel=error
 echo "== 准备工作区目录（只建 Agent 定义里声明的目录，不覆盖已有文件）"
 as_user npm run -s agent:init
-echo "== 启动数据服务并迁移"
+echo "== 生成模型网关配置，启动数据服务与网关并迁移"
+as_user node scripts/gateway-config.mjs
+# 数据服务单元是一次性启动：已在运行时 start 不会重做，网关要单独重建才会读到新配置。
+if systemctl is-active -q codex-harness-db.service; then docker compose up -d --wait --force-recreate gateway; fi
 systemctl start codex-harness-db.service
 as_user npm run -s data:migrate
 echo "== 启动常驻服务"

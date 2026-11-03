@@ -1,6 +1,7 @@
-# PostgreSQL 与 Redis 容器（compose.yaml）。只绑定 127.0.0.1；数据在 Docker 数据卷里，停止服务不会删除数据。
+# PostgreSQL、Redis 与模型网关容器（compose.yaml）。只绑定 127.0.0.1；数据在 Docker 数据卷里，停止服务不会删除数据。
+# 网关配置 .data/gateway/config.json 由部署脚本生成；改了 .env 里的模型或密钥后运行 remote.sh gateway 生效。
 [Unit]
-Description=learn-codex-harness 数据服务（PostgreSQL / Redis）
+Description=learn-codex-harness 数据服务与模型网关（PostgreSQL / Redis / Bifrost）
 Requires=docker.service
 After=docker.service network-online.target
 
@@ -8,8 +9,8 @@ After=docker.service network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/learn-codex-harness/app
-ExecStart=/usr/bin/docker compose up -d --wait postgres redis
-ExecStop=/usr/bin/docker compose stop postgres redis
+ExecStart=/usr/bin/docker compose up -d --wait postgres redis gateway
+ExecStop=/usr/bin/docker compose stop postgres redis gateway
 TimeoutStartSec=300
 
 [Install]
