@@ -1,4 +1,4 @@
-// 生成模型网关（Bifrost）的配置：读 config/models.json 和 .env，写 .data/gateway/config.json。
+// 生成模型网关（Bifrost）的配置：读 config/models.json 和 .env，写 .data/gateway/config.json 与 model-parameters.json。
 // 配置里只有环境变量引用（如 env.KIMI_API_KEY），不含密钥本身；密钥由 compose 在启动容器时传入。
 // npm run gateway:config        生成并显示启用了哪些服务商、默认模型和备用链
 // npm run gateway:key           .env 里还没有 AGENT_GATEWAY_KEY 时生成一把写进去（不在终端显示）
@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnvironment } from "../server/modules/config/index.mjs";
-import { buildGatewayConfig, gatewayEndpoint, loadModelRegistry } from "../server/modules/gateway/index.mjs";
+import { buildGatewayConfig, buildModelParameters, gatewayEndpoint, loadModelRegistry } from "../server/modules/gateway/index.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -19,9 +19,12 @@ export function writeGatewayConfig(projectRoot = root, inherited = process.env) 
   const config = buildGatewayConfig(registry, environment);
   const file = path.join(projectRoot, ".data/gateway/config.json");
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  // 容器里的网关进程（非 root）要能读；文件里没有密钥。
-  fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o644 });
-  fs.chmodSync(file, 0o644);
+  // 容器里的网关进程（非 root）要能读；两个文件里都没有密钥。
+  for (const [name, content] of [["config.json", config], ["model-parameters.json", buildModelParameters(registry, environment)]]) {
+    const target = path.join(path.dirname(file), name);
+    fs.writeFileSync(target, JSON.stringify(content, null, 2) + "\n", { mode: 0o644 });
+    fs.chmodSync(target, 0o644);
+  }
   return { file, config, model: environment.CODEX_MODEL.trim() };
 }
 

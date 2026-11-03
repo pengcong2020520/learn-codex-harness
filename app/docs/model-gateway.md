@@ -6,7 +6,7 @@ Codex 只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost
 Codex ──Responses API──▶ 本机网关 127.0.0.1:4330 ──┬─▶ Kimi（原样转发）
        （只拿网关访问密钥）  （拿着各家密钥）          ├─▶ DeepSeek
                                                   ├─▶ OpenAI / Grok（原样转发）
-                                                  └─▶ Claude / Gemini（转换成各自的协议）
+                                                  └─▶ Claude / Gemini / 智谱 GLM（转换成各自的协议）
 ```
 
 ## 为什么需要网关
@@ -37,7 +37,8 @@ Codex 自己能登记多个服务商、按会话选模型，但每个服务商�
 登记服务商和模型，网关配置与 Codex 的模型目录都从这里生成：
 
 - `providers`：服务商名 → `type`（接口类型，同名表示 Bifrost 内置，如 `openai`、`anthropic`、`gemini`、`xai`、`deepseek`；不同名表示自定义，如 `kimi` 走 `openai` 接口）、`keyEnv`（.env 里的密钥变量）、可选 `baseUrl`（只写到域名，网关自己加 `/v1/...`）。
-- `models`：`服务商/模型名` → 上下文长度、输入类型、推理档位、`fallbacks`（备用链）。`verified` 是实测通过的日期；没有这一项的模型，参数来自官方文档，还没有用真实密钥跑过。
+- `models`：`服务商/模型名` → 上下文长度、最大输出（`maxOutputTokens`）、输入类型、推理档位、`fallbacks`（备用链）。`verified` 是实测通过的日期；没有这一项的模型，参数来自官方文档，还没有用真实密钥跑过。
+- **走 Claude 格式接口的服务商（`type: "anthropic"`，如 Claude、智谱）必须填 `maxOutputTokens`。** Claude 格式要求每次请求带输出上限，Codex 不发；网关翻译时去查模型参数表，查不到就用 4096（[Bifrost #5331](https://github.com/maximhq/bifrost/issues/5331)）。思考型模型先把额度用掉，写长文件时工具参数会被截断成不完整的 JSON，之后每次请求都在网关报 500。现在 `npm run gateway:config` 按清单生成本地参数表 `.data/gateway/model-parameters.json`，网关只认这张表，不再从官网下载那张约 26 MB 的公开表。
 
 ### 2. `.env`
 
@@ -54,7 +55,7 @@ CODEX_MODEL=kimi/kimi-k2.7-code    # 写成“服务商/模型名”
 
 ```bash
 npm run gateway:key      # 只在第一次：生成访问密钥写进 .env（不在终端显示）
-npm run gateway:up       # 生成 .data/gateway/config.json 并启动网关容器
+npm run gateway:up       # 生成 .data/gateway/ 下的配置与模型参数表，并（重新）启动网关容器
 npm run server
 ```
 
@@ -79,7 +80,7 @@ npm run server
 - 网关只监听 `127.0.0.1`。没有访问密钥或密钥不对的请求一律 401（集成测试覆盖）。
 - Codex 子进程的环境里去掉所有 `*_API_KEY`，只留 `CODEX_API_KEY`（网关访问密钥）。启动参数、模型目录里也没有密钥。
 - 网关不记录请求内容（`disable_content_logging`，日志库关闭）。配置库放在容器的临时目录，重启即清空，每次都以生成的配置文件为准。
-- **对外连接**：除了转发给各家模型，Bifrost 每天会从 getbifrost.ai 下载一次公开的模型价格表，用于成本统计；这个同步不能关闭，只能拉长间隔，下载时不发送请求内容。它的 MCP 目录同步已关闭。
+- **对外连接**：除了转发给各家模型，Bifrost 每天会从 getbifrost.ai 下载一次公开的模型价格表，用于成本统计；这个同步不能关闭，只能拉长间隔，下载时不发送请求内容。模型参数表改用本地文件，MCP 目录同步已关闭。
 
 ## 资源
 
@@ -87,11 +88,16 @@ npm run server
 
 ## 已验证与未验证
 
-- **已用真实密钥验证**：Kimi K2.7 原样转发；转成 Claude 协议和 Chat Completions；DeepSeek 返回 402 时改用 Kimi。
+- **已用真实密钥验证**：
+  - Kimi K2.7 原样转发；转成 Claude 协议和 Chat Completions；DeepSeek 返回 402 时改用 Kimi。
+  - DeepSeek V4 快速版（`deepseek/deepseek-flash`，网关转成它的对话接口；不填上限时实测可输出 6700 多词元，不会被截断）：“写汇报材料”完整任务 25 秒，8/8 项检查通过。
+  - 智谱 GLM-5.3 Flash（转成 Claude 格式）：同一任务 5 分钟，8/8 项检查通过；补上输出上限之前，它在写文件时被截断而失败。
 - **未用真实密钥验证**：OpenAI、Claude、Gemini、Grok 的真实接口。清单里的模型名和上下文长度来自各家 2026 年 10 月的官方文档，第一次启用时建议先跑一个简单任务。
 
 ## 常见问题
 
+- **智谱 GLM**：没有 OpenAI 新接口（`/responses` 返回 404），清单里按 Claude 格式接入（`https://open.bigmodel.cn/api/anthropic`，国际站 Z.ai 用 `https://api.z.ai/api/anthropic`）。
+- **长文章写到一半断掉、随后网关一直报 500**：走 Claude 格式的模型没填 `maxOutputTokens`，见上文“模型清单”。
 - **Kimi 返回 401 Invalid Authentication**：国内站和国际站账号不通用，platform.moonshot.cn 的密钥只能用 `api.moonshot.cn`。国际站密钥要把 `config/models.json` 里 kimi 的 `baseUrl` 改成 `https://api.moonshot.ai`。
 - **网关返回 "virtual key is required"**：访问密钥不是 `sk-bf-` 开头。删掉 .env 里的 `AGENT_GATEWAY_KEY` 后重新运行 `npm run gateway:key`。
 - **启动服务时报 CODEX_MODEL 不在清单里**：网关模式要写成 `服务商/模型名`，并且在 `config/models.json` 里登记过。

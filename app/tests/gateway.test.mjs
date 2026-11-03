@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { buildAppServerLaunch } from "../server/modules/codex/launch.mjs";
-import { buildGatewayConfig, gatewayEndpoint, loadModelRegistry, modelEndpoint, validateRegistry } from "../server/modules/gateway/index.mjs";
+import { buildGatewayConfig, buildModelParameters, gatewayEndpoint, loadModelRegistry, modelEndpoint, validateRegistry } from "../server/modules/gateway/index.mjs";
 import { ensureGatewayKey, writeGatewayConfig } from "../scripts/gateway-config.mjs";
 import { tempRoot } from "./helpers.mjs";
 
@@ -35,6 +35,8 @@ test("模型清单校验：写错的服务商、密钥变量、备用模型和�
     [r => { r.models["kimi/kimi-k2.7-code"].fallbacks = ["openai/none"]; }, /备用模型/],
     [r => { r.models["deepseek/deepseek-flash"].defaultReasoningLevel = "xhigh"; }, /defaultReasoningLevel/],
     [r => { r.models["kimi/kimi-k2.6"].contextWindow = 0; }, /contextWindow/],
+    [r => { delete r.models["zhipu/glm-5.3"].maxOutputTokens; }, /走 Claude 格式接口，必须填 maxOutputTokens/],
+    [r => { r.models["kimi/kimi-k2.6"].maxOutputTokens = 1.5; }, /maxOutputTokens 必须是正整数/],
   ];
   for (const [mutate, message] of cases) {
     const r = base(); mutate(r);
@@ -47,7 +49,7 @@ test("网关配置：只启用填了密钥的服务商，配置里只有环境�
   assert.deepEqual(Object.keys(config.providers).sort(), ["deepseek", "kimi"]);
   assert.deepEqual(config.providers.kimi, { keys: [{ name: "kimi", value: "env.KIMI_API_KEY", models: ["kimi-k2.7-code", "kimi-k2.6"], weight: 1 }],
     network_config: { base_url: "https://api.moonshot.cn" }, custom_provider_config: { base_provider_type: "openai" } });
-  assert.deepEqual(config.providers.deepseek, { keys: [{ name: "deepseek", value: "env.DEEPSEEK_API_KEY", models: ["deepseek-flash"], weight: 1 }] }, "内置服务商不需要自定义配置");
+  assert.deepEqual(config.providers.deepseek, { keys: [{ name: "deepseek", value: "env.DEEPSEEK_API_KEY", models: ["deepseek-flash", "deepseek-v4-pro"], weight: 1 }] }, "内置服务商不需要自定义配置");
   assert.equal(config.governance.virtual_keys[0].value, "env.AGENT_GATEWAY_KEY");
   assert.equal(config.source_of_truth, "config.json");
   assert.equal(config.client.disable_content_logging, true);
@@ -59,7 +61,10 @@ test("网关配置：只启用填了密钥的服务商，配置里只有环境�
   assert.equal(rules["kimi-k2.7-code"].cel_expression, 'provider == "kimi" && model == "kimi-k2.7-code"');
   assert.deepEqual(rules["kimi-k2.7-code"].fallbacks, ["deepseek/deepseek-flash"]);
   assert.deepEqual(rules["deepseek-flash"].fallbacks, ["kimi/kimi-k2.7-code"]);
-  assert.deepEqual(config.governance.routing_rules.map(rule => rule.priority), [1, 2], "优先级在同一范围内不能重复");
+  assert.deepEqual(rules["deepseek-v4-pro"].fallbacks, ["deepseek/deepseek-flash"]);
+  assert.equal(rules["glm-5.3"], undefined, "智谱没有密钥，它的备用规则不写进去");
+  const priorities = config.governance.routing_rules.map(rule => rule.priority);
+  assert.deepEqual(priorities, priorities.map((_, index) => index + 1), "优先级在同一范围内不能重复");
 });
 
 test("网关配置：备用模型的服务商没有密钥时不写进备用链；默认模型没有密钥或不在清单里会报错", () => {
@@ -70,6 +75,20 @@ test("网关配置：备用模型的服务商没有密钥时不写进备用链�
   assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, CODEX_MODEL: "kimi-k2.7-code" }), /服务商\/模型名/);
   const withClaude = buildGatewayConfig(registry, { ...gatewayEnv, ANTHROPIC_API_KEY: "sk-ant-x" });
   assert.deepEqual(withClaude.providers.anthropic.keys[0].models, ["claude-sonnet-5-5"]);
+  // 智谱没有 OpenAI 新接口，按 Claude 格式接入：自定义服务商、接口类型 anthropic、地址指向它的 Claude 兼容接口。
+  const withGlm = buildGatewayConfig(registry, { ...gatewayEnv, ZHIPU_API_KEY: "zhipu-x" });
+  assert.deepEqual(withGlm.providers.zhipu, { keys: [{ name: "zhipu", value: "env.ZHIPU_API_KEY", models: ["glm-5.3", "glm-5.3-flash"], weight: 1 }],
+    network_config: { base_url: "https://open.bigmodel.cn/api/anthropic" }, custom_provider_config: { base_provider_type: "anthropic" } });
+});
+
+test("模型参数表：只放已启用服务商的模型，键是“服务商/模型名”；网关用本地参数表，长输出不再被默认的 4096 截断", () => {
+  const params = buildModelParameters(registry, { ...gatewayEnv, ZHIPU_API_KEY: "zhipu-x" });
+  assert.deepEqual(Object.keys(params).sort(), ["deepseek/deepseek-flash", "deepseek/deepseek-v4-pro", "kimi/kimi-k2.6", "kimi/kimi-k2.7-code", "zhipu/glm-5.3", "zhipu/glm-5.3-flash"]);
+  assert.deepEqual(params["zhipu/glm-5.3-flash"], { provider: "zhipu", mode: "chat", max_input_tokens: 1000000, max_output_tokens: 65536, max_tokens: 65536 });
+  assert.equal(params["kimi/kimi-k2.7-code"].max_output_tokens, undefined, "原样转发的模型不用填，网关不替它设上限");
+  assert.equal(buildGatewayConfig(registry, gatewayEnv).framework.pricing.model_parameters_url, "file:///app/data/model-parameters.json");
+  const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8");
+  assert.match(compose, /\.\/\.data\/gateway\/model-parameters\.json:\/app\/data\/model-parameters\.json:ro/, "参数表要挂进网关容器");
 });
 
 test("连接参数：网关模式指向本机网关；与直连的三项同时设置会报错", () => {
@@ -131,6 +150,9 @@ test("生成网关配置文件与访问密钥：文件不含密钥；密钥只�
   const { file, config } = writeGatewayConfig(root, { KIMI_API_KEY: "sk-kimi-only" });
   assert.equal(path.relative(root, file), ".data/gateway/config.json");
   assert.equal(fs.statSync(file).mode & 0o777, 0o644);
+  const params = path.join(root, ".data/gateway/model-parameters.json");
+  assert.equal(fs.statSync(params).mode & 0o777, 0o644);
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(params, "utf8"))), ["kimi/kimi-k2.7-code", "kimi/kimi-k2.6"]);
   assert.deepEqual(Object.keys(config.providers), ["kimi"]);
   const written = fs.readFileSync(file, "utf8");
   assert.ok(!written.includes("sk-kimi-only") && !written.includes(env.match(/sk-bf-\w+/)[0]));
