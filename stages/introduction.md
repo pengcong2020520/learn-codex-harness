@@ -199,9 +199,10 @@ Item 的生命周期设计得很实用：`started` 时界面就能开始画，`d
 | 把 Codex 当 MCP 服务器（`codex mcp-server`） | 已经有基于 MCP 的工作流，想把 Codex 当成一个可调用的工具 | 只能拿到 MCP 暴露的内容，文件差异这类更丰富的会话语义映射不清楚 |
 | 跨厂商的智能体协议 | 需要一层抽象来编排多家模型和运行时 | 往往趋同于通用子集，丰富的交互难以表达 |
 | CLI 脚本模式（`codex exec`） | 一次性任务、CI 流水线 | 非交互，一条命令跑到底 |
-| TypeScript SDK | 服务端工具想用原生库接口，不想写 JSON-RPC 客户端 | 比 App Server 发布得早，支持的语言更少，覆盖面也更小 |
+| TypeScript SDK（`@openai/codex-sdk`） | Node 程序里几行代码调用 Codex；底层是 `codex exec`，一轮一个进程 | 与 CLI 脚本模式相同：事件单向流出，处理不了审批，也不能把工具调用接回自己的程序 |
+| Python SDK（`openai-codex`） | Python 程序；底层就是 App Server 的 JSON-RPC 客户端 | 高层接口用起来方便；底层能力与 App Server 一致 |
 
-官方说 App Server 是他们今后首要维护的集成方案，默认也推荐用它。本教程的安排是：s00 先用 SDK 体验一下，s01 起直接对接 App Server 协议。
+官方说 App Server 是他们今后首要维护的集成方案，默认也推荐用它。注意两个官方 SDK 底下不一样：TypeScript SDK 包的是脚本模式，Python SDK 包的是 App Server。本教程主线用 Node：s00 先用 TypeScript SDK 体验一下（另有一个 Python SDK 的选读示例），s01 起直接对接 App Server 协议。
 
 ---
 
