@@ -29,7 +29,7 @@
 
 ![SDK 调用链](images/sdk-flow.svg)
 
-官方 TypeScript SDK 会在本机启动一个 Codex 子进程，通过 stdio 和它通信。推理 → 调工具 → 看结果 → 继续，这整个循环都在 Codex 内部完成。你的程序只是说一句"去做这件事"，然后等结果，或者一路看着它做。
+官方 TypeScript SDK 会在本机启动一个 Codex 子进程（`codex exec`），通过 stdio 和它通信。推理 → 调工具 → 看结果 → 继续，这整个循环都在 Codex 内部完成。你的程序只是说一句"去做这件事"，然后等结果，或者一路看着它做。
 
 这就是[导论](../introduction.md)里那个公式的第一次落地：**Agent = 模型 + harness**。模型决定下一步，harness 去执行。
 
@@ -41,15 +41,22 @@
 | Turn | 你交代的一次任务，以及随后的整个执行过程 | `thread.run()` / `thread.runStreamed()` |
 | Item | 执行过程中的一步：一条消息、一次命令、一次文件变更 | 事件里的 `event.item` |
 
-这三个概念就是 App Server 协议的三个原语。SDK 帮你包了一层，到 s01 你会直接和它们打交道。
+这三个概念和 App Server 协议的三个原语是同一套。到 s01，你会直接在 App Server 协议上和它们打交道。
 
 ### 权限由你给
 
 Codex 能做多少事，由你开 Thread 时给的沙箱决定：只聊天用 `read-only`，要改代码才给 `workspace-write`。harness 会执行模型提出的操作，但**能碰到哪里，是你说了算**。
 
-### SDK 在官方版图里的位置
+### 两个官方 SDK，底下不一样
 
-官方对 SDK 的定位是：适合想要原生库接口、不想自己写 JSON-RPC 客户端的服务端工具。它比 App Server 发布得早，支持的语言更少，覆盖面也更小。所以本教程只在这一章用它体验，从 s01 开始直接对接 App Server。
+官方有两个 SDK，名字都叫 SDK，底下驱动 Codex 的方式却不同：
+
+| SDK | 底层 | 特点 |
+|-----|------|------|
+| TypeScript SDK（`@openai/codex-sdk`，本章的 Node 示例） | 每次 `run()` 启动一个 `codex exec --experimental-json` 子进程，这一轮跑完就退出；接着聊时带上 `resume <对话 ID>` | 官方说的"脚本模式"：一轮一个进程，事件只从 Codex 流向你，适合 CI 这类一次性任务 |
+| Python SDK（`openai-codex`） | 启动一个常驻的 `codex app-server`，用 JSON-RPC 双向通信 | 就是一个现成的 App Server 客户端，和 s01 起我们自己写的客户端在同一层 |
+
+Thread、Turn、Item 这三个概念两边是一样的。本教程主线用 Node：这一章用 TypeScript SDK 先体验，从 s01 开始直接对接 App Server。想先看看官方 Python SDK 怎么驱动 App Server，见下面"跑起来看看"里的选读。
 
 ---
 
@@ -111,6 +118,16 @@ s00-sdk-quickstart/
 
 完整的环境准备、VS Code 断点调试、API Key 路线和排错见 [新手集成与调试指南](docs/guide.md)。
 
+**选读：用官方 Python SDK 驱动 App Server**（需要 Python 3.10+，不装也不影响主线）：
+
+```sh
+python3 -m venv .venv-python
+.venv-python/bin/pip install -r examples/python/requirements.txt
+.venv-python/bin/python examples/python/app_server_hello.py "用一句话解释什么是 harness"
+```
+
+[`examples/python/app_server_hello.py`](examples/python/app_server_hello.py) 和 Node 示例读同一个 `.env`：没填 API Key 就复用本机的 Codex 登录，填了就直连。运行完会打印这一轮收到的通知，比如 `turn/started`、`item/agentMessage/delta`、`item/completed`、`thread/tokenUsage/updated`、`turn/completed`。这些就是 App Server 推来的 JSON-RPC 通知，s01 里你会亲手处理它们，s07 的用量账本记的就是 `thread/tokenUsage/updated`。Python SDK 自带它自己的 Codex 程序（`requirements.txt` 固定为实测过的 0.163.0），和 Node 示例锁定的 0.154.0 互不影响。对比一下 Node 示例的 `events.jsonl`：那里的事件叫 `item.completed`、`turn.completed`，因为它们来自 `codex exec`，是另一套接口。
+
 ---
 
 ## 关键代码
@@ -163,11 +180,12 @@ if (after.error || after.status !== 0) {
 - 几十行代码，你的程序就能把任务交给 Codex。循环由 harness 来转，你不用写一行"调模型、解析工具调用"的代码。
 - 你的程序要管的是三件事：在哪做、给多大权限、做完怎么验收。
 - Thread、Turn、Item 三个概念第一次出现。历史不在你的程序里，而在 Codex 的状态目录里。
+- 两个官方 SDK 底下不一样：TypeScript SDK 是一轮一个进程的 `codex exec`，Python SDK 是常驻的 App Server。
 
 ---
 
 ## 下一章
 
-SDK 把协议藏起来了，`run()` 一行就拿到答案。但我们要做的是一个云端 Agent：要实时显示模型正在输出的文字、管理多个会话、接入自己的工具、换成自己选的模型，这些都要直接和 App Server 对话。
+SDK 把协议藏起来了，`run()` 一行就拿到答案。但 Node 示例用的是脚本模式：一轮一个进程，事件只从 Codex 流向你。我们要做的是一个云端 Agent：要实时显示模型正在输出的文字、管理多个会话、接入自己的工具、换成自己选的模型，这些都要换到 App Server。
 
-[s01 单轮问答](../s01-single-turn/) → 去掉 SDK，自己接上模型，在 stdio 上说 JSON-RPC。stdout 里一行行 JSON，哪条才是这次请求的回答？拿到 `turn/start` 的回包，能宣布任务完成了吗？
+[s01 单轮问答](../s01-single-turn/) → 从脚本模式换到 App Server，自己接上模型，在 stdio 上说 JSON-RPC。stdout 里一行行 JSON，哪条才是这次请求的回答？拿到 `turn/start` 的回包，能宣布任务完成了吗？

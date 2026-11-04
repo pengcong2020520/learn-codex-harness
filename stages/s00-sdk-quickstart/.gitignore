@@ -4,3 +4,7 @@ node_modules/
 !.env.example
 .runs/
 .DS_Store
+
+# Python 选读示例的虚拟环境
+.venv-python/
+__pycache__/
