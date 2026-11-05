@@ -31,7 +31,7 @@ test('机制动画：下一步高亮源码、送出消息、更新状态；上�
   return out;`);
  assert.equal(r.start,'0 个');assert.ok(r.prevDisabled);
  assert.deepEqual(r.hl,['4']);
- assert.equal(r.proc,'1 个');assert.equal(r.codex,'运行中');assert.equal(r.packet,'启动子进程');assert.ok(r.packetShown&&r.changed);
+ assert.equal(r.proc,'1 个');assert.equal(r.codex,'运行中');assert.equal(r.packet,'启动一个 Codex 进程');assert.ok(r.packetShown&&r.changed);
  assert.equal(r.back,'0 个','回退后状态也要回到上一步');
  assert.equal(r.end,'0 个');assert.ok(r.takeaway);assert.match(r.count,/^(\d+) \/ \1$/);
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
