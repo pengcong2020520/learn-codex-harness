@@ -57,6 +57,8 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }
+      // 只读的 Workflow 目录：工作台据此渲染选择器与参数表单；提交仍走 POST /messages 的 workflow + params。
+      if (route === 'GET /workflows') return json(200, { workflows: config.agent?.workflows?.catalog() || [] });
       if (route === 'GET /workspace' && files) return json(200, await files.list_files({ path: url.searchParams.get('path') || '' }));
       if (route === 'GET /workspace/read' && files) return json(200, await files.read_file({ path: url.searchParams.get('path'), max_chars: 262144 }));
       if (route === 'GET /knowledge/pages' && knowledge) return json(200, await knowledge.pages(url.searchParams.get('kbId')));

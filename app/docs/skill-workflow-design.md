@@ -139,6 +139,8 @@ POST /messages { threadId, text, workflow, params }
   → 有下一步：confirm 则停在 waiting，否则直接发下一步；没有下一步：completed 或 needs-review
 ```
 
+发起入口：CLI 用 `/workflow ID 键=值 内容`；工作台对话页的"选择 Workflow"先读只读接口 `GET /workflows`，按返回的参数 schema 渲染表单，再走同一个 `POST /messages`。`GET /workflows` 只返回 `{ id, label, description, params: { required, properties }, steps: [{ id, goal, confirm }] }`（不含 `chat`），不暴露授权、Skill、写入范围和步骤模型；`description` 可在 workflow 定义里写，缺省时由各步 goal 拼成。注意：`GET /workflows` 只是给界面用的目录，不是权限边界——同一令牌的 `GET /workbench` 里 `agent.workflows` 仍含步骤的 model、needs、effort、checks；真正的授权与校验始终在 `POST /messages` 解析 workflow 时完成。
+
 追加消息（`mode: "append"`）沿用当前任务的 workflow 与授权，不能更换 workflow，也不能扩大授权（推广现有"知识维护不能用追加提交"的规则）。
 
 ### 5.3 授权类型

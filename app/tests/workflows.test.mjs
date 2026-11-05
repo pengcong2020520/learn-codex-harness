@@ -51,6 +51,21 @@ test("workflow 解析：参数按 schema 校验，授权落到具体知识库，
   assert.equal(workflows.resolve().id, "chat");
 });
 
+test("Workflow 目录只给界面填表需要的字段：不含 chat、授权、Skill、写入范围与步骤模型", () => {
+  const article = { id: "article", label: "写文章", skill: "outline",
+    params: { type: "object", additionalProperties: false, required: ["tone"], properties: { tone: { type: "string", enum: ["正式", "轻松"], description: "语气" }, topic: { type: "string", maxLength: 80 } } },
+    steps: [{ id: "outline", goal: "先列大纲", writes: ["drafts"], confirm: true, model: "fast" }, { id: "final", goal: "完成定稿", checks: ["file-exists"] }] };
+  const catalog = defineWorkflows({ ...base, workflows: [{ id: "knowledge-maintain" }, article] }, { writable: ["drafts"] }).catalog();
+  assert.deepEqual(catalog.map(item => item.id), ["knowledge-maintain", "article"]);
+  assert.equal(catalog[0].label, "知识库维护"); assert.match(catalog[0].description, /Wiki/);
+  assert.deepEqual(catalog[0].params, { required: ["kbId"], properties: { kbId: { type: "string", description: "要维护的知识库", pattern: "^[a-z][a-z0-9-]{0,47}$" } } });
+  assert.deepEqual(catalog[1], { id: "article", label: "写文章", description: "先列大纲；完成定稿",
+    params: { required: ["tone"], properties: { tone: { type: "string", description: "语气", enum: ["正式", "轻松"] }, topic: { type: "string", maxLength: 80 } } },
+    steps: [{ id: "outline", goal: "先列大纲", confirm: true }, { id: "final", goal: "完成定稿", confirm: false }] });
+  assert.doesNotMatch(JSON.stringify(catalog), /grants|skill|writes|fast|knowledge\.update/);
+  assert.deepEqual(defineWorkflows({ ...base, workflows: [] }).catalog(), []);
+});
+
 test("任务说明只写目标、授权和验收；验收只看产物和生效的修订", t => {
   const workflows = defineWorkflows({ ...base, workflows: [{ id: "knowledge-maintain" }] });
   assert.equal(describe(workflows.resolve("chat")), null);

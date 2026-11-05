@@ -12,7 +12,7 @@ const CHECK_LABELS = { "file-exists": "产物文件存在", format: "产物格�
 const BUILTIN = Object.freeze({
   chat: { id: "chat", label: "普通对话" },
   "knowledge-maintain": {
-    id: "knowledge-maintain", label: "知识库维护", skill: "knowledge",
+    id: "knowledge-maintain", label: "知识库维护", description: "把原始资料整理进指定知识库的 Wiki，带来源版本。", skill: "knowledge",
     params: { type: "object", required: ["kbId"], additionalProperties: false,
       properties: { kbId: { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$", description: "要维护的知识库" } } },
     grants: [{ type: "knowledge.update", kbId: { param: "kbId" } }],
@@ -59,6 +59,12 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
   return freeze({
     list: () => [...workflows.values()].map(({ id, label, params, checks, steps }) => ({ id, label, params: params || null, checks: checks || [],
       steps: steps ? steps.map(({ id: step, goal, confirm, checks, model, needs, effort }) => ({ id: step, goal, confirm: confirm === true, checks: checks || [], model: model || null, ...(needs ? { needs } : {}), ...(effort ? { effort } : {}) })) : null })),
+    // 给用户界面用的目录：只暴露填表需要的字段，不含授权、Skill、写入范围和步骤模型。
+    catalog: () => [...workflows.values()].filter(item => item.id !== "chat").map(({ id, label, description, params, steps }) => ({
+      id, label, description: description || (steps ? steps.map(step => step.goal).join("；") : null),
+      params: params ? { required: [...(params.required || [])], properties: Object.fromEntries(Object.entries(params.properties).map(([key, { type, description: hint, enum: options, pattern, maxLength }]) =>
+        [key, { type, ...(hint ? { description: hint } : {}), ...(options ? { enum: [...options] } : {}), ...(pattern ? { pattern } : {}), ...(maxLength ? { maxLength } : {}) }])) } : null,
+      steps: steps ? steps.map(step => ({ id: step.id, goal: step.goal, confirm: step.confirm === true })) : null })),
     resolve(id = "chat", params = null) {
       const workflow = workflows.get(id);
       if (typeof id !== "string" || !workflow) throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
