@@ -236,6 +236,6 @@ npm run lesson -- s11-gateway --integration   # 真实网关（需要 Docker）�
 
 云端 Agent 的能力已经齐了，但它还跑在你自己的电脑上。
 
-s08 上云部署（规划中）→ 把 Agent、数据库、Redis、模型网关全部放进 Docker，一条命令部署到服务器，开机自启，用 SSH 隧道从本机连上去。完整项目 [app](../../app/README.md) 已经有了这套部署（见 [部署到服务器](../../app/deploy/README.md)）。
+s12 上云部署（规划中）→ 把 Agent、数据库、Redis、模型网关全部放进 Docker，一条命令部署到服务器，开机自启，用 SSH 隧道从本机连上去。完整项目 [app](../../app/README.md) 已经有了这套部署（见 [部署到服务器](../../app/deploy/README.md)）。
 
-再往后的路线：s09 多用户（认证、按用户隔离运行环境、配额）→ s10 多 Agent 协作 → s11 多主机调度。
+再往后的路线：s13 多用户（认证、按用户隔离运行环境、配额）→ s14 多 Agent 协作 → s15 多主机调度。
