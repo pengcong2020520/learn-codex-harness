@@ -36,12 +36,12 @@ test('Workflow 选择器：列出目录、按 schema 渲染参数、提交请求
   // 枚举 + 文本参数。
   pick('brief');await until(()=>$('select[data-param="tone"]'));
   out.toneOptions=$$('select[data-param="tone"] option').map(o=>o.value);out.topicMax=$('input[data-param="topic"]').maxLength;
-  $('select[data-param="tone"]').value='轻松';type($('input[data-param="topic"]'),'季度复盘');type($('#message'),'写一份简报');
-  // 不合规的编号：JS 按 u 标志校验，拦下并给提示。
+  $('select[data-param="tone"]').value='轻松';
   // 必填文本参数为空：浏览器原生校验拦下，不发请求。
   type($('#message'),'写一份简报');document.querySelector('#composer button[type=submit]').click();await sleep(200);
   out.requiredBlocked=bodies.length;out.valueMissing=$('input[data-param="topic"]').validity.valueMissing;
-  type($('input[data-param="topic"]'),'季度复盘');type($('#message'),'写一份简报');type($('input[data-param="code"]'),'9bad_ID');document.querySelector('#composer button[type=submit]').click();await sleep(200);
+  // 不合规的编号：JS 按 u 标志校验，拦下并给提示。
+  type($('input[data-param="topic"]'),'季度复盘');type($('input[data-param="code"]'),'9bad_ID');document.querySelector('#composer button[type=submit]').click();await sleep(200);
   out.patternBlocked=bodies.length;out.patternMessage=$('input[data-param="code"]').validationMessage;
   type($('input[data-param="code"]'),'');
   $('#composer').requestSubmit();await until(()=>bodies.length===1&&$$('.task-row').length===1,4000);
