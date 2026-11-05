@@ -137,6 +137,16 @@ test("认证令牌私有保存；拒绝未认证、跨源和错误 JSON 请求",
   assert.equal(existsSync(path.join(root, ".data", "server.lock")), false);
 });
 
+test("Workflow 目录是只读接口，复用认证，只返回界面需要的字段", async t => {
+  const { app, api } = await appFixture(t);
+  const { workflows } = await api.request("/workflows");
+  assert.ok(Array.isArray(workflows));
+  assert.deepEqual(workflows.map(item => item.id), app.config.agent.workflows.list().filter(item => item.id !== "chat").map(item => item.id));
+  for (const item of workflows) assert.deepEqual(Object.keys(item), ["id", "label", "description", "params", "steps"]);
+  assert.equal((await fetch(app.url + "/workflows")).status, 401);
+  assert.equal((await fetch(app.url + "/workflows", { method: "POST", headers: { authorization: `Bearer ${app.token}`, "content-type": "application/json" }, body: "{}" })).status, 404);
+});
+
 test("重复启动同项目会明确拒绝，不出现两个调度器", async t => {
   const { app } = await appFixture(t);
   await assert.rejects(startAgentServer({ dataFactory: testDataFactory, config: app.config, log: () => {} }), /已有 Agent 服务/);
