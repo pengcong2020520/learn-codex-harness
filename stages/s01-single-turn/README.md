@@ -7,6 +7,8 @@
 
 ---
 
+![本阶段在整体架构中的位置](images/architecture.svg)
+
 ## 要回答的问题
 
 云端 Agent 最核心的是一条链路：**我们的程序 → App Server → 模型**。后面加的会话、工具、数据、门禁，全都挂在这条链路上，所以第一步先把它打通。
@@ -63,8 +65,6 @@ App Server 的连接是**双向**的。stdout 上的每一行都是一条 JSON-R
 | 无 `id` | 通知：`item/*`、`turn/completed` 等 | 交给当前这一轮，按 threadId + turnId 对号入座 |
 
 ### 第五步：一轮的完整流程
-
-![单轮协议闭环](images/protocol.svg)
 
 ```text
 启动 App Server → initialize 请求 + initialized 通知（握手）→ thread/start（开对话）
