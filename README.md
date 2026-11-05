@@ -32,7 +32,7 @@ flowchart LR
 | [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
 | [s10-skill-workflow](stages/s10-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
 | [s11-model-gateway](stages/s11-model-gateway/README.md) | 模型网关 | 线上不止一个模型：Codex 只连网关，统一协议、按用途和场景协调多个模型、记账并按预算停派 | 实验 6 节（5 节离线、1 节真实网关；暂未接入互动课程） |
-| [app](app/README.md) | 完整项目 | 在 s11 之上持续开发：全部服务放进 Docker 部署到服务器（即规划中的 s08）、Web 工作台、互动课程 | — |
+| [app](app/README.md) | 完整项目 | 在 s11 之上持续开发：全部服务放进 Docker 部署到服务器（即规划中的 s12）、Web 工作台、互动课程 | — |
 
 每章 README 先讲概念再动手，按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织，配一张机制图，并标出对应导论里六个问题中的哪几个；关键代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
