@@ -33,7 +33,7 @@
 ```
 
 - 类型：`feat` `fix` `docs` `refactor` `test` `chore` `perf`
-- 范围：`app` `web` `course` `stages` `s00`–`s05` `ci` 等，可省略
+- 范围：`app` `web` `course` `stages` `s00`–`s09` `ci` 等，可省略
 - 示例：`fix(app): steer 失败时不再撤销活动轮次的权限门禁`
 
 ## 提交前检查

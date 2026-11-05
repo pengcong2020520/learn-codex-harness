@@ -14,11 +14,11 @@ flowchart LR
   s00 --> s01["s01 单轮问答<br/>接上模型 / JSON-RPC"]
   s01 --> s02["s02 多轮会话<br/>FIFO 输入 / 原生历史"]
   s02 --> s03["s03 Agent 核心<br/>配置装配 / Skills / MCP 工具"]
-  s03 --> s04["s04 数据层<br/>PG outbox / Redis 调度 / 资源版本"]
-  s04 --> s05["s05 知识层<br/>可信门禁 / Wiki / RAG"]
-  s05 --> s06["s06 Skill 与 Workflow<br/>Agent 包 / 确认点 / 提议"]
-  s06 --> s07["s07 模型网关<br/>统一协议 / 多模型协调 / 用量与预算"]
-  s07 --> app["app 完整项目<br/>Docker 部署 / Web 工作台"]
+  s03 --> s08["s08 数据层<br/>PG outbox / Redis 调度 / 资源版本"]
+  s08 --> s09["s09 知识层<br/>可信门禁 / Wiki / RAG"]
+  s09 --> s10["s10 Skill 与 Workflow<br/>Agent 包 / 确认点 / 提议"]
+  s10 --> s11["s11 模型网关<br/>统一协议 / 多模型协调 / 用量与预算"]
+  s11 --> app["app 完整项目<br/>Docker 部署 / Web 工作台"]
 ```
 
 | 阶段 | 主题 | 解决的问题 | 机制课 |
@@ -28,11 +28,11 @@ flowchart LR
 | [s01-single-turn](stages/s01-single-turn/README.md) | 单轮问答 | 接上模型；不用 SDK，直接说 App Server 协议；怎样判断一轮真的结束了 | 2 |
 | [s02-multi-turn](stages/s02-multi-turn/README.md) | 多轮会话 | Thread 与 Turn；连续输入不丢、不抢跑；恢复会话而不是重新拼历史 | 2 |
 | [s03-agent-core](stages/s03-agent-core/README.md) | 可配置 Agent | 角色、工具、记忆、Skill 和工作区由一份配置装配，权限与能力一起生效 | 5 |
-| [s04-data-layer](stages/s04-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
-| [s05-knowledge-layer](stages/s05-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
-| [s06-skill-workflow](stages/s06-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
-| [s07-model-gateway](stages/s07-model-gateway/README.md) | 模型网关 | 线上不止一个模型：Codex 只连网关，统一协议、按用途和场景协调多个模型、记账并按预算停派 | 实验 6 节（5 节离线、1 节真实网关；暂未接入互动课程） |
-| [app](app/README.md) | 完整项目 | 在 s07 之上持续开发：全部服务放进 Docker 部署到服务器（即规划中的 s08）、Web 工作台、互动课程 | — |
+| [s08-data-layer](stages/s08-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
+| [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
+| [s10-skill-workflow](stages/s10-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
+| [s11-model-gateway](stages/s11-model-gateway/README.md) | 模型网关 | 线上不止一个模型：Codex 只连网关，统一协议、按用途和场景协调多个模型、记账并按预算停派 | 实验 6 节（5 节离线、1 节真实网关；暂未接入互动课程） |
+| [app](app/README.md) | 完整项目 | 在 s11 之上持续开发：全部服务放进 Docker 部署到服务器（即规划中的 s08）、Web 工作台、互动课程 | — |
 
 每章 README 先讲概念再动手，按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织，配一张机制图，并标出对应导论里六个问题中的哪几个；关键代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
@@ -67,7 +67,7 @@ cd stages/s01-single-turn && npm ci
 npm run lesson -- s01-transport
 ```
 
-s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](app/docs/data-layer.md)。
+s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](app/docs/data-layer.md)。
 
 ## 互动课程目录
 
@@ -76,8 +76,8 @@ s04 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 | s01 单轮问答 | `s01-transport` 先建立通信，再派发任务 · `s01-lifecycle` 收到请求，不等于完成任务 |
 | s02 多轮会话 | `s02-fifo` 连续输入如何不丢、不抢跑 · `s02-resume` 恢复会话，为何不是重新拼历史 |
 | s03 可配置 Agent | `s03-agent-config` 配置是装配合同，不是临时提示词 · `s03-skills` Skill 给方法，权限仍要单独核验 · `s03-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s03-mcp` MCP 是调用边界，不是一工具一服务 · `s03-workspace` 在工作区里，也不等于有权读写 |
-| s04 数据层 | `s04-persistence` 消息收到了，为什么还需要一条 outbox？ · `s04-dispatch` Redis 丢了，哪条任务还能继续？ · `s04-versions` 原文改了一句，旧产物还能读吗？ |
-| s05 知识层 | `s05-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s05-mounts` 读得到 inputs，不等于读得到所有知识库 · `s05-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s05-rag` 新索引失败，为什么旧索引指针不能先切？ · `s05-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
+| s08 数据层 | `s08-persistence` 消息收到了，为什么还需要一条 outbox？ · `s08-dispatch` Redis 丢了，哪条任务还能继续？ · `s08-versions` 原文改了一句，旧产物还能读吗？ |
+| s09 知识层 | `s09-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s09-mounts` 读得到 inputs，不等于读得到所有知识库 · `s09-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s09-rag` 新索引失败，为什么旧索引指针不能先切？ · `s09-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
 
 课程的源码摘录由 `npm run course:build` 直接从 `stages/` 取出并记录哈希，`npm run course:check` 会在源码变化后提示重建。
 
@@ -92,10 +92,10 @@ learn-codex-harness/
 │   ├── s01-single-turn/        #   s01：单轮问答
 │   ├── s02-multi-turn/         #   s02：多轮会话
 │   ├── s03-agent-core/         #   s03：配置驱动 Agent 核心
-│   ├── s04-data-layer/         #   s04：PostgreSQL + Redis 数据层
-│   ├── s05-knowledge-layer/    #   s05：知识层 + 通用门禁
-│   ├── s06-skill-workflow/     #   s06：Agent 包、Skill 与 Workflow
-│   ├── s07-model-gateway/      #   s07：模型网关（Bifrost、模型路由、用量与预算）
+│   ├── s08-data-layer/         #   s08：PostgreSQL + Redis 数据层
+│   ├── s09-knowledge-layer/    #   s09：知识层 + 通用门禁
+│   ├── s10-skill-workflow/     #   s10：Agent 包、Skill 与 Workflow
+│   ├── s11-model-gateway/      #   s11：模型网关（Bifrost、模型路由、用量与预算）
 │   ├── tests/                  #   跨阶段集成测试
 │   └── verify.mjs              #   阶段文档、结构与测试验证
 ├── app/                        # 完整项目（持续开发）

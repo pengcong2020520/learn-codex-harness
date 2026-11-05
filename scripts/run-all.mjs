@@ -10,10 +10,10 @@ export const packages = [
   "stages/s01-single-turn",
   "stages/s02-multi-turn",
   "stages/s03-agent-core",
-  "stages/s04-data-layer",
-  "stages/s05-knowledge-layer",
-  "stages/s06-skill-workflow",
-  "stages/s07-model-gateway",
+  "stages/s08-data-layer",
+  "stages/s09-knowledge-layer",
+  "stages/s10-skill-workflow",
+  "stages/s11-model-gateway",
   "app",
 ];
 // 只包含不调用真实模型、不依赖 PostgreSQL / Redis 的检查；集成验证见 stages/README.md。

@@ -1,6 +1,6 @@
 # s00: 先体验 — 让 Codex 替你干一件事
 
-[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [s07](../s07-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"模型提出操作，harness 负责执行"* — 先不管协议，用官方 SDK 把一个真实任务交给 Codex，亲眼看看 harness 替你做了哪些事。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？
@@ -69,7 +69,7 @@ Thread、Turn、Item 这三个概念两边是一样的。本教程主线用 Node
 | 在哪个目录工作，给多大权限 | 你的程序（`workingDirectory`、`sandboxMode`） |
 | 判断是不是真的做完了 | 你的程序：自己跑测试验收，不听模型自述 |
 
-最后一行最重要。模型说"已修复"只是一句话，**验收必须由模型之外的程序来做**。这个原则会一直贯穿到 s06 的 Workflow 验收。
+最后一行最重要。模型说"已修复"只是一句话，**验收必须由模型之外的程序来做**。这个原则会一直贯穿到 s10 的 Workflow 验收。
 
 ---
 
@@ -126,7 +126,7 @@ python3 -m venv .venv-python
 .venv-python/bin/python examples/python/app_server_hello.py "用一句话解释什么是 harness"
 ```
 
-[`examples/python/app_server_hello.py`](examples/python/app_server_hello.py) 和 Node 示例读同一个 `.env`：没填 API Key 就复用本机的 Codex 登录，填了就直连。运行完会打印这一轮收到的通知，比如 `turn/started`、`item/agentMessage/delta`、`item/completed`、`thread/tokenUsage/updated`、`turn/completed`。这些就是 App Server 推来的 JSON-RPC 通知，s01 里你会亲手处理它们，s07 的用量账本记的就是 `thread/tokenUsage/updated`。Python SDK 自带它自己的 Codex 程序（`requirements.txt` 固定为实测过的 0.163.0），和 Node 示例锁定的 0.154.0 互不影响。对比一下 Node 示例的 `events.jsonl`：那里的事件叫 `item.completed`、`turn.completed`，因为它们来自 `codex exec`，是另一套接口。
+[`examples/python/app_server_hello.py`](examples/python/app_server_hello.py) 和 Node 示例读同一个 `.env`：没填 API Key 就复用本机的 Codex 登录，填了就直连。运行完会打印这一轮收到的通知，比如 `turn/started`、`item/agentMessage/delta`、`item/completed`、`thread/tokenUsage/updated`、`turn/completed`。这些就是 App Server 推来的 JSON-RPC 通知，s01 里你会亲手处理它们，s11 的用量账本记的就是 `thread/tokenUsage/updated`。Python SDK 自带它自己的 Codex 程序（`requirements.txt` 固定为实测过的 0.163.0），和 Node 示例锁定的 0.154.0 互不影响。对比一下 Node 示例的 `events.jsonl`：那里的事件叫 `item.completed`、`turn.completed`，因为它们来自 `codex exec`，是另一套接口。
 
 ---
 

@@ -18,12 +18,12 @@
 通过对 Codex 官方公开文档、开源 Harness 运行时 Rust 源码（0.154.0 发布标签与主分支跟踪切片）以及本地已安装工具链的定向代码审计与静态交叉核验，本报告得出如下核心事实：
 
 1. **机制本质**：Codex 内置记忆（Memories）采用**主要分离的生成与读取路径**。在本地专用检索实现中，未发现嵌入向量（Embedding）计算或向量数据库检索，而是基于 Markdown 文件组织、本地 SQLite 任务状态追踪以及规范化的字符子串包含（Contains）匹配。
-2. **触发与执行路径**：自动记忆生成既不是每轮对话结束后的同步写入，也不是系统后台常驻的固定定时器（如每隔 6 小时自动轮询一次）。其真实触发点位于请求处理流水线（`turn_processor.rs` [s40]）：**仅当客户端提交非空输入并成功开启新一轮交互（Turn）、且主执行环境已完成配置时，系统才尝试拉起后台异步记忆处理任务**。随后，启动检查模块（`start.rs` [s05]）进一步核验非临时会话、特性总开关、根智能体等前置条件。同一会话的后续有效轮次同样可能触发该流程，但单独创建空会话或仅调用 `thread/start` 不会触发。
+2. **触发与执行路径**：自动记忆生成既不是每轮对话结束后的同步写入，也不是系统后台常驻的固定定时器（如每隔 6 小时自动轮询一次）。其真实触发点位于请求处理流水线（`turn_processor.rs` [s40]）：**仅当客户端提交非空输入并成功开启新一轮交互（Turn）、且主执行环境已完成配置时，系统才尝试拉起后台异步记忆处理任务**。随后，启动检查模块（`start.rs` [s09]）进一步核验非临时会话、特性总开关、根智能体等前置条件。同一会话的后续有效轮次同样可能触发该流程，但单独创建空会话或仅调用 `thread/start` 不会触发。
 3. **关键边界与约束**：
    - 特性总开关 `features.memories`（在源码特性表中标识为 `Feature::MemoryTool` [s37]）处于稳定阶段（Stable），但**源码默认值为关闭（`false`）**。
    - 自动提炼候选池具有严格的交互来源白名单（`INTERACTIVE_SESSION_SOURCES` [s09]），明确排除了单次命令式执行来源（`SessionSource::Exec` [s22]）。这意味着通过官方 TypeScript SDK 默认执行方式发起的任务，其会话日志不会被自动选为提炼候选。
    - CLI 终端界面（TUI）的实际行为与官方文档存在实质差异：文档称 `/memories` 仅作会话级选择且不改动全局配置，但 CLI TUI 源码证实该操作会通过批量配置写入（`write_config_batch` [s41]、[s42]）将修改持久化落盘至配置文件，并影响后续创建的会话。
-   - 负责全局整合的合并智能体在受管权限（`PermissionProfile::Managed`）下具备工作区写入范围与命令网络限制；但若父级处于外部权限（`PermissionProfile::External`）或禁用权限（`PermissionProfile::Disabled`），将继承父级权限，**不存在无条件的物理沙箱与离线保证** [s07]。
+   - 负责全局整合的合并智能体在受管权限（`PermissionProfile::Managed`）下具备工作区写入范围与命令网络限制；但若父级处于外部权限（`PermissionProfile::External`）或禁用权限（`PermissionProfile::Disabled`），将继承父级权限，**不存在无条件的物理沙箱与离线保证** [s11]。
    - 官方配置参考手册与源码之间存在两项关键默认值冲突（每次启动提取批次与候选会话有效年龄）。
 
 ---
@@ -133,7 +133,7 @@ Codex 记忆系统通过生成与读取两条主要分离的流程实现闭环�
    - `turn_has_input == true`：即 `params.input` 包含非空内容；
    - `started == true`：必须为全新开始的轮次（若会话处于被转向引导的 `Steered` 状态，不计为 `started`）；
    - `config_snapshot.is_primary_environment_configured()`：主执行环境已正确配置就绪。
-3. 进入 `memories/write/src/start.rs` 中的具体实现 [s05]：
+3. 进入 `memories/write/src/start.rs` 中的具体实现 [s09]：
    - 会话非临时（`config.ephemeral == false`）；
    - 特性总开关已开启（`features.memories == true`）；
    - 当前会话发起者非子智能体或衍生任务（必须为根智能体）；
@@ -148,7 +148,7 @@ Codex 记忆系统通过生成与读取两条主要分离的流程实现闭环�
 系统将“功能发布标记”与“用户功能配置”分层管理：
 
 - 在 `features/src/lib.rs` 中，`Feature::MemoryTool` 处于稳定阶段（Stable），但其硬编码默认值为 `false` [s37]。
-- 在配置结构体 `MemoriesConfig` 中，`generate_memories` 与 `use_memories` 的结构体反序列化默认值均为 `true` [s03]、[s04]。
+- 在配置结构体 `MemoriesConfig` 中，`generate_memories` 与 `use_memories` 的结构体反序列化默认值均为 `true` [s03]、[s08]。
 
 其生效逻辑为：**只有生效配置中的 `features.memories = true` 时，下层的生成与使用逻辑才可能生效；可由配置文件或支持的配置覆盖入口设置，不限于全局文件**。当总开关关闭时，后台处理流水线根本不会启动。
 
@@ -190,7 +190,7 @@ pub static INTERACTIVE_SESSION_SOURCES: LazyLock<Vec<SessionSource>> = LazyLock:
 
 ### 4.4 外部上下文污染判定机制
 
-为了防止不可信的第三方数据混入长期记忆，系统提供了配置项 `disable_on_external_context`（旧版别名 `no_memories_if_mcp_or_web_search`，默认值 `false`）[s03]、[s04]。
+为了防止不可信的第三方数据混入长期记忆，系统提供了配置项 `disable_on_external_context`（旧版别名 `no_memories_if_mcp_or_web_search`，默认值 `false`）[s03]、[s08]。
 
 当该开关开启时，若检测到会话中执行了网络搜索或产生了受判定的外部工具输出，系统会把当前会话标记为受污染状态：
 
@@ -205,17 +205,17 @@ UPDATE threads SET memory_mode = 'polluted' WHERE id = ?;
 
 ### 4.5 Phase 1：单会话提炼与结构化输出
 
-Phase 1 负责对单个候选会话的原始记录（Rollout）进行提炼 [s06]：
+Phase 1 负责对单个候选会话的原始记录（Rollout）进行提炼 [s10]：
 
-- **输入装载与清洗**：解析会话日志时，系统在 `rollout_input.rs` [s24] 与 `phase1.rs` [s06] 中执行了输入净化：**明确过滤掉 `developer` 角色消息，并过滤完全包裹的 `AGENTS.md` 规则与技能上下文片段**。这样能有效避免提炼模型将系统设定的工程规范误当成用户的个人习惯或技术偏好。
-- **敏感信息脱敏**：输入给模型的内容以及模型生成的输出，均经过 `redact_secrets` 脱敏逻辑处理 [s06]、[s24]。该脱敏属于规则模式替换，在工程上不能视为绝对无泄漏的安全凭据保护。
-- **Token 预算**：默认按提炼模型有效输入窗口的 70% 规划提炼内容；在模型元数据缺失时，代码预设了 150,000 tokens 的兜底值（并不保证适配每个第三方模型）（Fallback）[s06]。
+- **输入装载与清洗**：解析会话日志时，系统在 `rollout_input.rs` [s24] 与 `phase1.rs` [s10] 中执行了输入净化：**明确过滤掉 `developer` 角色消息，并过滤完全包裹的 `AGENTS.md` 规则与技能上下文片段**。这样能有效避免提炼模型将系统设定的工程规范误当成用户的个人习惯或技术偏好。
+- **敏感信息脱敏**：输入给模型的内容以及模型生成的输出，均经过 `redact_secrets` 脱敏逻辑处理 [s10]、[s24]。该脱敏属于规则模式替换，在工程上不能视为绝对无泄漏的安全凭据保护。
+- **Token 预算**：默认按提炼模型有效输入窗口的 70% 规划提炼内容；在模型元数据缺失时，代码预设了 150,000 tokens 的兜底值（并不保证适配每个第三方模型）（Fallback）[s10]。
 - **并发与批次控制**：Phase 1 内部最大并发任务数为 8，单次扫描深度最高 5,000 条，作业租约过期保护为 1 小时；配置项 `max_rollouts_per_startup`（默认值为 2）定义了单次后台触发实际认领的最大批次上限。
 - **结构化输出约束**：调用提炼模型时，强制采用严格结构化输出模式（Strict JSON Schema）[s23]。模型根据指令 [s38] 提炼高价值偏好、显式纠正与经过验证的操作事实；若判定该会话无长期复用价值，允许返回空内容。
 
 ### 4.6 Phase 2：全局合并与沙箱边界
 
-Phase 1 产出写入 SQLite `stage1_outputs` 表后，Phase 2 启动全局整合流程 [s07]：
+Phase 1 产出写入 SQLite `stage1_outputs` 表后，Phase 2 启动全局整合流程 [s11]：
 
 1. **获取全局租约**：依靠 SQLite 数据库支持的全局作业租约（Lease）协调同一记忆库的合并作业 [s08]。
 2. **多维选拔与资格复核**：函数 `get_phase2_input_selection` 默认选取最多 256 个有效条目（配置上限可达 4,096）[s08]。排序规则为：
@@ -224,13 +224,13 @@ Phase 1 产出写入 SQLite `stage1_outputs` 表后，Phase 2 启动全局整合
    - 再以 `source_updated_at DESC`、`thread_id DESC` 作为后续排序条件。候选还须处于 `max_unused_days` 保留窗口内。
    - **资格核验**：除时间与频次外，系统调用 `enabled_thread_metadata` 复核源会话的当前状态，**要求源会话当前的 `memory_mode` 仍必须为 `enabled`**。这意味着一旦某会话后续被标记为 `disabled` 或 `polluted`，它在下一次 Phase 2 将失去输入资格，进而通过文件同步与合并完成淘汰。
 3. **工作区同步与 Git 基线比对**：将选中的会话摘要同步写入磁盘，物理移除不再入选的摘要；随后利用记忆目录内置的 `.git` 本地仓库执行增量比对（Diff）[s16]。若比对无实质变化且产物完整，**直接跳过模型推理**以节约成本。
-4. **运行合并智能体**：若存在实质变更或产物无效，派生内部智能体执行合并；通过产物检查后更新成功基线与消费状态。格式检查不等于内容正确性检查。即使本轮 Phase 1 没有新结果，也可能因便笺或扩展变更进入 Phase 2 [s07]、[s39]。
+4. **运行合并智能体**：若存在实质变更或产物无效，派生内部智能体执行合并；通过产物检查后更新成功基线与消费状态。格式检查不等于内容正确性检查。即使本轮 Phase 1 没有新结果，也可能因便笺或扩展变更进入 Phase 2 [s11]、[s39]。
 
 #### 合并智能体的权限继承与例外
 
 合并智能体由父级配置克隆而来，关闭了 MCP、外部应用、递归多智能体及自身记忆循环，交互确认设为 `AskForApproval::Never`。
 
-其权限隔离边界取决于父级环境配置 [s07]：
+其权限隔离边界取决于父级环境配置 [s11]：
 
 - **仅当**父级环境处于受管权限（`PermissionProfile::Managed`）时，合并智能体的工作区写入权限才会被硬性限制在记忆根目录下，并将命令行工具网络访问设为禁用（`network = false`）；
 - **如果**父级环境被显式配置为禁用权限（`PermissionProfile::Disabled`）或外部权限（`PermissionProfile::External`），代码将**完整保留其权限模式**。
@@ -282,7 +282,7 @@ Codex 记忆系统采用“文本文件承载语义内容，SQLite 管理状态�
 
 依据读取路径规范（`read_path.md` [s12]），初始化注入路径不会自动加载全量历史或整个 `MEMORY.md`；读取提示词要求按需查阅。智能体采用**自主文件检索（Agentic File Retrieval）策略：先阅读 `memory_summary.md`，遇到特定历史问题时再按需查询 `MEMORY.md` 或读取 `rollout_summaries/`。
 
-工具暴露由配置项 `dedicated_tools`（默认 `false`）决定 [s03]、[s04]：
+工具暴露由配置项 `dedicated_tools`（默认 `false`）决定 [s03]、[s08]：
 
 - **通用工具模式（`dedicated_tools = false`）**：
   不注册专用记忆工具。提示词引导智能体使用标准的文件与目录命令（如查看文件、列表、正则匹配等），直接查阅记忆目录下的文件。
@@ -371,7 +371,7 @@ Codex 底层维护着多层淘汰与修剪逻辑：
 
 下表展示了官方公开配置参考文档、0.154.0 发布版源码与主分支 main 源码之间的详细比对：
 
-| 配置项（TOML 路径） | 官方配置参考文档 [s02] | 0.154.0 源码 [s03] | main 分支源码 [s04] | 判定结论与工程建议 |
+| 配置项（TOML 路径） | 官方配置参考文档 [s02] | 0.154.0 源码 [s03] | main 分支源码 [s08] | 判定结论与工程建议 |
 | :--- | :--- | :--- | :--- | :--- |
 | `features.memories` | 标明默认关闭（未在该条目标 Stable） | `false` | `false` | **一致（默认关闭）**。生效配置须启用该特性；源码另外标记为 Stable。 |
 | `memories.generate_memories` | `true` | `true` | `true` | **一致**。控制新会话默认是否开启记忆生成资格。 |
@@ -448,7 +448,7 @@ min_rollout_idle_hours = 6
 | **Phase 1 产物定义** | 输出 `raw_memory`、`rollout_summary`、`rollout_slug` [s23] | **仅输出 `rollout_summary` 与 `rollout_slug`**（移除了 `raw_memory`） |
 | **提炼字节上限** | 依赖模型提示词估算控制 | 摘要内容施加 **9,000 UTF-8 字节**硬性上限（`phase1_output.rs` [s23]） |
 | **输入清洗分层** | 已有消息过滤、脱敏和输入预算，并非不加筛选 | 按证据来源分层选取（用户输入优先）后恢复时间顺序，省略媒体载荷并裁剪工具输出 [s24] |
-| **Phase 2 整合目标** | 维护详细手册 `MEMORY.md` 和摘要 [s39] | 不再要求产出 `MEMORY.md`，也不重建 `raw_memories.md`，核心目标为 `memory_summary.md` [s07]、[s25] |
+| **Phase 2 整合目标** | 维护详细手册 `MEMORY.md` 和摘要 [s39] | 不再要求产出 `MEMORY.md`，也不重建 `raw_memories.md`，核心目标为 `memory_summary.md` [s11]、[s25] |
 | **生成文件校验 / 注入预算** | 产物需满足 v1 对应结构；读取注入时截断到约 2,500 tokens，不能把它当生成文件硬上限 | 生成文件校验要求小于 **10,000 UTF-8 字节**；读取注入时仍受约 2,500 tokens 预算约束 [s16]、[s34] |
 | **摘要内部结构要求** | 模板已有 `v1` 首行及用户画像、偏好、提示、记忆索引等结构，不是任意自由格式 [s39] | 校验要求 `v1` 首行及 User Profile、User preferences、General Tips、What's in Memory 四个标题 [s16]、[s25] |
 | **检索交互策略** | 先查索引，再搜 `MEMORY.md`，再追溯摘要 | 依赖摘要内精准指针直接定位具体的 `rollout_summary` |
@@ -534,7 +534,7 @@ main 分支在 `app-server` 中增加了 `memory/status` 实验接口 [s26]、[s
 
 Codex 记忆流水线并没有在账号层级设置“仅限官方 ChatGPT 订阅”的排他拦截。请求由通用的 `ModelProvider` 调度发出 [s19]。然而，团队若尝试完全接入第三方模型服务商，需面对以下工程现实：
 
-1. **协议与格式容错**：Phase 1 依赖所配置 provider 对 Responses 请求、流式事件和严格结构化输出（Strict JSON Schema）的支持 [s06]、[s23]；Phase 2 则依赖长文本处理与工具调用能力。仅声称“OpenAI 兼容”，尤其仅兼容 Chat Completions，并不足以保证可用；本次未连接第三方服务实测。
+1. **协议与格式容错**：Phase 1 依赖所配置 provider 对 Responses 请求、流式事件和严格结构化输出（Strict JSON Schema）的支持 [s10]、[s23]；Phase 2 则依赖长文本处理与工具调用能力。仅声称“OpenAI 兼容”，尤其仅兼容 Chat Completions，并不足以保证可用；本次未连接第三方服务实测。
 2. **默认模型回退名称**：在 `provider.rs` 中，代码内置的默认模型映射为：提取模型指向 `gpt-5.6-luna`，合并模型指向 `gpt-5.6-terra` [s19]（此为代码内置代号，非服务商商业承诺）。**只设置主任务的模型名，不能据此推断这两个记忆阶段也使用同一模型**。供应商实现可覆盖其默认值；接入第三方前，应确认最终模型名可用，必要时显式设置 `memories.extract_model` 与 `memories.consolidation_model`。
 3. **配额守卫（Quota Guard）对第三方的放行**：
    在 `guard.rs` 的配额保护逻辑中，代码通过 `auth.uses_codex_backend()` 判定后端类型 [s20]：
@@ -691,7 +691,7 @@ Codex 记忆流水线并没有在账号层级设置“仅限官方 ChatGPT 订�
 | 目标 | 入口 |
 | :--- | :--- |
 | 文档与默认值 | [Memories 指南][s01]、[配置参考][s02]、[发布版配置源码][s03] |
-| 触发及两阶段生成 | [轮次触发][s40] → [启动门控][s05] → [单会话提炼][s06] → [跨会话合并][s07] |
+| 触发及两阶段生成 | [轮次触发][s40] → [启动门控][s09] → [单会话提炼][s10] → [跨会话合并][s11] |
 | 保存与读取 | [数据库选拔和统计][s08]、[摘要组装][s11]、[本地检索][s13] |
 | 用户控制 | [便笺工具][s14]、[CLI 配置持久化][s41]、[管理接口][s18] |
 | SDK 与当前项目 | [SDK 子进程调用][s21]、[Exec 来源][s22]、[本地创建入口](../../lib/common.mjs) |
@@ -701,10 +701,10 @@ Codex 记忆流水线并没有在账号层级设置“仅限官方 ChatGPT 订�
 [s01]: https://learn.chatgpt.com/docs/customization/memories?surface=app "官方公开文档：Memories 使用指南"
 [s02]: https://learn.chatgpt.com/docs/config-file/config-reference "官方公开文档：Config Reference 配置参考手册"
 [s03]: https://github.com/openai/codex/blob/6b9826e3aa83b1a5947db50f4332cb9c65f1b340/codex-rs/config/src/types.rs "0.154.0 发布版配置类型定义"
-[s04]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/config/src/types.rs "main 主分支配置类型定义"
-[s05]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/start.rs "后台记忆提炼启动逻辑与前置条件校验"
-[s06]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/phase1.rs "Phase 1 单会话提炼控制流与预算管理"
-[s07]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/phase2.rs "Phase 2 全局知识合并与智能体权限配置"
+[s08]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/config/src/types.rs "main 主分支配置类型定义"
+[s09]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/start.rs "后台记忆提炼启动逻辑与前置条件校验"
+[s10]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/phase1.rs "Phase 1 单会话提炼控制流与预算管理"
+[s11]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/memories/write/src/phase2.rs "Phase 2 全局知识合并与智能体权限配置"
 [s08]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/state/src/runtime/memories.rs "状态数据库候选查询、模式复核与统计更新"
 [s09]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/rollout/src/lib.rs "Rollout 日志定义与交互来源白名单"
 [s10]: https://github.com/openai/codex/blob/4701aa4b4239c70063ab6f2fcb835324f9c109f4/codex-rs/ext/memories/src/extension.rs "记忆读取扩展挂载与引用事件拦截"

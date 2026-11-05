@@ -192,7 +192,7 @@
     <span class="callout-icon">⚠️</span>
     <div class="callout-content">
       <p class="callout-title">业务状态存 JSON，不存数据库（s03 专属）</p>
-      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s04 引入。</p>
+      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s08 引入。</p>
     </div>
   </div>
 
@@ -229,8 +229,8 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s04。<br>
-        <strong>s03 → s04</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s08。<br>
+        <strong>s03 → s08</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
         s03 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
       </div>
     </div>

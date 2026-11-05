@@ -23,12 +23,12 @@
     {
       "name": "数据层",
       "focus": "持久任务与资源版本",
-      "dir": "stages/s04-data-layer"
+      "dir": "stages/s08-data-layer"
     },
     {
       "name": "知识层",
       "focus": "可信门禁与 Wiki / RAG",
-      "dir": "stages/s05-knowledge-layer"
+      "dir": "stages/s09-knowledge-layer"
     }
   ],
   "lessons": [
@@ -579,7 +579,7 @@
         "explanation": "C 区分外部提交节奏与内部执行。A 会改变用户输入缓冲，却无法限制模型内部调用；B 会破坏一次任务的上下文，也不是当前架构的调度方式。"
       },
       "reference": {
-        "session": "s05",
+        "session": "s09",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s05_todo_write",
         "adaptation": "借用“同样叫任务状态，究竟改变规划还是执行”的分层辨析。参考 todo_write 记录模型计划；我们的 FIFO 是用户输入缓冲，没有引入 TodoManager 或其三轮提醒。"
       }
@@ -1133,7 +1133,7 @@
         "explanation": "C 区分方法说明、工具登记和资源授权。A 不会改变执行层校验；B 的 required 只决定缺失时是否阻止装配，不授予工具权限。"
       },
       "reference": {
-        "session": "s07",
+        "session": "s11",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
         "adaptation": "借用“目录与正文分开、需要时加载”的认知顺序。参考自己解析 YAML 并用 load_skill 返回 tool_result；这里原生 Codex 负责解析与注入，我们教的是发现核验、显式输入与权限边界。"
       }
@@ -1700,7 +1700,7 @@
       }
     },
     {
-      "id": "s04-persistence",
+      "id": "s08-persistence",
       "demo": 4,
       "title": "消息收到了，为什么还需要一条 outbox？",
       "principle": "任务正文和待唤醒记录在同一个 PostgreSQL 事务里提交，才不会留下“已接收却永远没人处理”的任务。",
@@ -1736,7 +1736,7 @@
         "cost": "需要管理数据库迁移与单实例执行器锁。事务只保证产品记录一致，不能宣称模型或工具副作用全局只执行一次。"
       },
       "source": {
-        "file": "stages/s04-data-layer/server/modules/data/jobs.mjs",
+        "file": "stages/s08-data-layer/server/modules/data/jobs.mjs",
         "needle": "`INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error)",
         "before": 2,
         "after": 17,
@@ -1865,15 +1865,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s04-persistence",
-        "action": "在 s04 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
+        "command": "npm run lesson -- s08-persistence",
+        "action": "在 s08 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
         "observe": [
           "迁移重复执行保持幂等，事务失败回滚",
           "归属约束与单实例执行器锁受到真实 PG 断言",
           "真实服务链路重启后仍能检查持久任务状态"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- s04-persistence --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s08 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s08-persistence --integration"
       },
       "quiz": {
         "question": "任务已提交，但 Redis 断开。用户想确认是否需要重新发一条，最合理的依据是什么？",
@@ -1892,7 +1892,7 @@
       }
     },
     {
-      "id": "s04-dispatch",
+      "id": "s08-dispatch",
       "demo": 4,
       "title": "Redis 丢了，哪条任务还能继续？",
       "principle": "Redis 只负责提醒检查某个 Thread；PG 的状态转换决定领取，未知结果不能自动重发。",
@@ -1928,7 +1928,7 @@
         "cost": "某些故障需要操作者核对历史。当前是单实例执行器，不把 Set 包装成高可用分布式工作流系统。"
       },
       "source": {
-        "file": "stages/s04-data-layer/server/modules/data/queue.mjs",
+        "file": "stages/s08-data-layer/server/modules/data/queue.mjs",
         "needle": "const rows = await this.jobs.deliveries();",
         "before": 1,
         "after": 25,
@@ -2057,15 +2057,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s04-dispatch",
-        "action": "在 s04 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
+        "command": "npm run lesson -- s08-dispatch",
+        "action": "在 s08 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
         "observe": [
           "任务提交与 outbox 同事务",
           "重复投递只成功领取一次",
           "Redis 失败后 outbox 可补投"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- s04-dispatch --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s08 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s08-dispatch --integration"
       },
       "quiz": {
         "question": "重启后 A=unconfirmed，B=queued。continue 的正确含义是什么？",
@@ -2084,7 +2084,7 @@
       }
     },
     {
-      "id": "s04-versions",
+      "id": "s08-versions",
       "demo": 4,
       "title": "原文改了一句，旧产物还能读吗？",
       "principle": "资源 ID 指向同一份资料，版本 ID 指向一次内容快照；来源变化应让依赖旧版本的产物失效。",
@@ -2120,7 +2120,7 @@
         "cost": "这是已声明来源的可追溯性检查，不是自动事实核验。模型未声明的依据不会被神奇发现；失效产物需要重新生成。"
       },
       "source": {
-        "file": "stages/s04-data-layer/server/modules/data/resources.mjs",
+        "file": "stages/s08-data-layer/server/modules/data/resources.mjs",
         "needle": "async version(row, body, client, humanEdited = false) {",
         "before": 0,
         "after": 18,
@@ -2249,15 +2249,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s04-versions",
-        "action": "在 s04 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
+        "command": "npm run lesson -- s08-versions",
+        "action": "在 s08 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
         "observe": [
           "更新版本保留稳定资源 ID",
           "移动不改变资料 ID，旧版本引用被拒绝",
           "外部改写或删除来源会使派生内容失效"
         ],
-        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s04 三课共用该组，运行一次即可覆盖，不需逐课重复。",
-        "integrationCommand": "npm run lesson -- s04-versions --integration"
+        "boundary": "集成门禁：默认未运行。显式开启后运行本阶段现有完整 test:data 小组，包含真实临时 PostgreSQL / Redis、文件断言及真实本地 Codex + 假 Responses 服务；无外部模型。s08 三课共用该组，运行一次即可覆盖，不需逐课重复。",
+        "integrationCommand": "npm run lesson -- s08-versions --integration"
       },
       "quiz": {
         "question": "原文已更新，旧摘要文件仍在。哪项足以说明摘要可以继续使用？",
@@ -2276,7 +2276,7 @@
       }
     },
     {
-      "id": "s05-gate",
+      "id": "s09-gate",
       "demo": 5,
       "title": "工具参数里的“我是管理员”为什么不算身份？",
       "principle": "身份由服务端从当前任务和 Turn 绑定产生，模型只能填写业务参数，不能自己授予权限。",
@@ -2312,7 +2312,7 @@
         "cost": "当前是本地操作者及实例 owner 边界，不代表已经实现多租户登录系统。门禁是本项目的具体校验器，不是通用 hooks 插件平台。"
       },
       "source": {
-        "file": "stages/s05-knowledge-layer/server/modules/permissions/index.mjs",
+        "file": "stages/s09-knowledge-layer/server/modules/permissions/index.mjs",
         "needle": "  issue(fields) {",
         "before": 0,
         "after": 18,
@@ -2441,8 +2441,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s05-gate",
-        "action": "在 s05 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
+        "command": "npm run lesson -- s09-gate",
+        "action": "在 s09 目录运行。门禁用例依次尝试伪造身份、普通任务更新、旧 Turn 上下文和已经 abort 的信号。",
         "observe": [
           "伪造上下文与外部 owner 被拒绝",
           "普通任务不能更新 Wiki；合法维护任务可以",
@@ -2467,7 +2467,7 @@
       }
     },
     {
-      "id": "s05-mounts",
+      "id": "s09-mounts",
       "demo": 5,
       "title": "读得到 inputs，不等于读得到所有知识库",
       "principle": "知识库挂载决定可见范围，文件路径入口也必须经过同一边界，不能用宽目录权限绕过窄知识库权限。",
@@ -2503,7 +2503,7 @@
         "cost": "Wiki 目录不能随意用 write_file 修改，必须用带来源与版本检查的提交接口。首版路径约定固定，不支持任意目录挂载。"
       },
       "source": {
-        "file": "stages/s05-knowledge-layer/server/modules/permissions/index.mjs",
+        "file": "stages/s09-knowledge-layer/server/modules/permissions/index.mjs",
         "needle": "for (const [kbId, binding] of Object.entries(this.knowledgeBases || this.agent.definition.bindings.knowledgeBases || {})) {",
         "before": 3,
         "after": 12,
@@ -2632,8 +2632,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s05-mounts",
-        "action": "在 s05 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
+        "command": "npm run lesson -- s09-mounts",
+        "action": "在 s09 目录运行，关注 foreign KB 与 research/private/wiki 的拒绝断言；完整遗漏配置的注册表场景在 npm run test:data 中。",
         "observe": [
           "当前 KB 的读取通过；另一 KB 的直接路径读取被拒绝",
           "未挂载 KB 与错误 owner 被拒绝",
@@ -2658,7 +2658,7 @@
       }
     },
     {
-      "id": "s05-wiki",
+      "id": "s09-wiki",
       "demo": 5,
       "title": "两次更新同时提交，谁能成为当前 Wiki？",
       "principle": "Wiki 提交必须同时证明“我依据的来源仍有效”和“我修改的页面版本仍是当前版本”。",
@@ -2694,7 +2694,7 @@
         "cost": "冲突者需要重新读取并重写。校验保证版本、权限、格式和来源关系，不保证摘要内容必然忠实或完整。"
       },
       "source": {
-        "file": "stages/s05-knowledge-layer/server/modules/knowledge/index.mjs",
+        "file": "stages/s09-knowledge-layer/server/modules/knowledge/index.mjs",
         "needle": "if (page.current_version !== expectedVersion) fail('Wiki 已被其他更新修改，请读取最新版本。', 'VERSION_CONFLICT');",
         "before": 3,
         "after": 9,
@@ -2823,15 +2823,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s05-wiki",
-        "action": "在 s05 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
+        "command": "npm run lesson -- s09-wiki",
+        "action": "在 s09 目录执行，定位“Wiki 自动生效、并发版本冲突、隔离、来源失效与普通文件绕过拒绝”。",
         "observe": [
           "Wiki 提交后可读取，两个并发 expectedVersion 只成功一个",
           "来源改写后不能继续返回旧正文",
           "真实本地 Codex 维护任务带服务端知识权限并调用知识工具"
         ],
         "boundary": "集成门禁：默认未运行。显式开启后运行现有 test:data 小组（data.integration + knowledge.integration）；真实临时 PG/Redis、本地 Codex 与假 Responses 服务。RAG 用例无 Chroma 时明确跳过；不代表 RAG 已通过。",
-        "integrationCommand": "npm run lesson -- s05-wiki --integration"
+        "integrationCommand": "npm run lesson -- s09-wiki --integration"
       },
       "quiz": {
         "question": "页面 current_version 没变，但它引用的原文已经更新。expectedVersion 仍匹配，提交就该成功吗？",
@@ -2850,7 +2850,7 @@
       }
     },
     {
-      "id": "s05-rag",
+      "id": "s09-rag",
       "demo": 5,
       "title": "新索引失败，为什么旧索引指针不能先切？",
       "principle": "向量与关键词索引属于同一个版本；两边完成并核对来源后才推进指针，检索再按名次融合。",
@@ -2886,7 +2886,7 @@
         "cost": "重建暂时占用额外存储；BM25 文件、模型名、维数、pipeline 都需匹配。保留旧指针不代表旧来源或外部服务永远可用，搜索仍会校验。"
       },
       "source": {
-        "file": "stages/s05-knowledge-layer/server/modules/knowledge/rag.mjs",
+        "file": "stages/s09-knowledge-layer/server/modules/knowledge/rag.mjs",
         "needle": "if (await collection.count() !== documents.length) throw new Error('Chroma 分块数量不完整。');",
         "before": 2,
         "after": 11,
@@ -3015,15 +3015,15 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s05-rag",
-        "action": "在 s05 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
+        "command": "npm run lesson -- s09-rag",
+        "action": "在 s09 目录运行。测试使用临时 Chroma、PG、Redis 和本机三维 embedding 夹具，完成索引后注入 embedding 失败。",
         "observe": [
           "真实 Chroma 与 BM25 双索引提交",
           "中文查询经混合召回返回对应来源",
           "失败保留旧索引，源版本变化拒绝陈旧结果"
         ],
         "boundary": "RAG 集成门禁：仅 --rag 显式执行现有完整 test:rag 小组。真实临时 Chroma/PG/Redis，embedding 为本地确定性假服务，无外部 embedding 或模型。",
-        "integrationCommand": "npm run lesson -- s05-rag --rag"
+        "integrationCommand": "npm run lesson -- s09-rag --rag"
       },
       "quiz": {
         "question": "向量列表 [a,b]、关键词列表 [b,c] 做 RRF60，为什么 b 可能排在 a 前面？",
@@ -3042,7 +3042,7 @@
       }
     },
     {
-      "id": "s05-modes",
+      "id": "s09-modes",
       "demo": 5,
       "title": "配置改成 RAG，为什么旧会话不能马上接着聊？",
       "principle": "期望模式、有效模式和 Thread 绑定是不同状态；配置变更经过重启，能力版本变化后新建 Thread。",
@@ -3078,7 +3078,7 @@
         "cost": "切换需要受控重启，版本变化后新建会话。RAG ready 的启动检查不等于对所有外部依赖做永久健康保证，真正查询仍可能失败。"
       },
       "source": {
-        "file": "stages/s05-knowledge-layer/server/modules/knowledge/index.mjs",
+        "file": "stages/s09-knowledge-layer/server/modules/knowledge/index.mjs",
         "needle": "const prepared = mount.mode === 'rag' && kb.index_revision && this.rag && await this.rag.ready(this, kb);",
         "before": 1,
         "after": 11,
@@ -3207,8 +3207,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s05-modes",
-        "action": "在 s05 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
+        "command": "npm run lesson -- s09-modes",
+        "action": "在 s09 目录运行：观察热修改定义后工具立即拒绝、版本变化后排队项不再发送；模式切换的真实索引验证另用 npm run test:rag。",
         "observe": [
           "首次期望 RAG、未就绪时实际仍 Wiki",
           "索引就绪后当前实例不自行切换；重新 open 才选择 RAG",

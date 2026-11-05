@@ -220,7 +220,7 @@ POST /messages { threadId, text, workflow, params }
 | 4 | `feat/workflow-steps` | 多步与确认点、`writes` 收窄、`write-article` | 新能力 |
 | 5 | `feat/propose-task` | `propose_task` 工具与 `proposed` 状态 | 新能力 |
 | 6 | `feat/skill-read-tool` | 隐式触发与多文件 Skill | 新能力 |
-| 7 | `docs/s06` | 冻结 `stages/s06`、章节 README、改写 s05 的"接下来" | 课程 |
+| 7 | `docs/s10` | 冻结 `stages/s10`、章节 README、改写 s09 的"接下来" | 课程 |
 | 后续 | `feat/workflow-goals` | 原生目标接入任务与权限门 | 待定 |
 
 角色提示词瘦身暂缓：第 4 个 PR 只把"写文章"的分步方法写进 `write-article` Skill，角色里保留原有说明。第 6 个 PR 让模型能够自行读取 Skill，但方法移出角色之后，普通对话是否仍按方法做，取决于真实模型会不会主动读取；本机模拟模型无法验证这一点。等用真实模型评估过隐式触发的实际效果，再决定把哪些内容从角色移到 Skill。
@@ -236,4 +236,4 @@ POST /messages { threadId, text, workflow, params }
 | 目标的受控接入 | 需要验证：服务端设置的目标能否在关闭模型侧 `create_goal` 的同时生效；自动轮次能否稳定关联到同一任务上下文 |
 | 多步流程中的会话上下文 | 每步是同一会话的新 Turn，模型能看到前面步骤的历史；确认点之间用户可以追加修改意见，追加不得扩大授权 |
 | 旧会话 | 描述符变化后旧会话需 `sessions:upgrade` 登记映射，否则按现有规则拒绝续用、要求新建会话 |
-| 冻结阶段 | `stages/s03–s05` 同样存在 Q4、Q5；它们是冻结快照，按 CONTRIBUTING 的规则不回补，在 s06 章节中说明 |
+| 冻结阶段 | `stages/s03–s09` 同样存在 Q4、Q5；它们是冻结快照，按 CONTRIBUTING 的规则不回补，在 s10 章节中说明 |

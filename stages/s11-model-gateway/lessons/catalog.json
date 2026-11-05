@@ -1,0 +1,159 @@
+[
+  {
+    "id": "s11-registry",
+    "title": "一份清单登记所有模型",
+    "question": "用途、能力、价格写错时在哪里报错？各家密钥会进入 Codex 吗？",
+    "observations": [
+      "用途、路由、能力和价格字段在加载清单时校验，非法值带模型名报错",
+      "生成的网关配置只含密钥变量引用；Compose 只给网关传入服务商密钥",
+      "Codex 只拿网关访问密钥，服务商密钥不进入子进程环境"
+    ],
+    "why": "把模型差异和价格集中登记，启动时发现错误；访问网关与访问模型服务使用不同密钥。",
+    "boundary": "离线真实清单校验、配置生成和 Codex 启动参数；不证明真实网关鉴权，见 s11-gateway。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(?:内置模型清单合法；每家的密钥变量只在 compose 网关服务里登记|模型清单校验：写错的服务商、密钥变量、备用模型和推理档位都会被拦下|网关配置：只启用填了密钥的服务商，配置里只有环境变量引用、没有密钥本身|网关模式启动 Codex：接口与密钥换成网关的，各家密钥不进 Codex 环境，模型能力取自清单|nativeTools 可省略或为空，仅 chat 模型可声明不重复的 web_search|清单 currency / pricing：默认值、零价、有限非负数字和带模型字段的中文错误|媒体 pricing：张/秒与 token 累加，未定价标记未计价，零价、去重与非法价格)$",
+      "tests/gateway.test.mjs",
+      "tests/native-search.test.mjs",
+      "tests/usage.test.mjs",
+      "tests/media.test.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-registry",
+    "mode": "offline",
+    "offlineOrIntegration": "offline"
+  },
+  {
+    "id": "s11-routing",
+    "title": "这一步该用哪个模型",
+    "question": "用途、场景、能力、任务选择和预算如何共同决定模型？每一步的选择能否追溯？",
+    "observations": [
+      "场景按用途过滤；needs 约束看图和上下文，搜索开启时跳过不支持 web_search 的候选，全部不满足才报错",
+      "任务 model 提交时校验并保存，步骤 > 任务 > 默认；effort 校验清单支持后传给 turn/start",
+      "GET /models 按用途展示能力、场景和默认；终端 /model 为当前会话选择后续任务模型，/state 和任务启动显示来源",
+      "日/月任一预算达到降级比例时，场景和默认选择改用降级场景；具体模型豁免，能力要求不放宽",
+      "生图、生视频 quality 通过 fast/strong 场景选模型，省略时使用各自 routes",
+      "写作 Agent 的 fast/strong 在 Kimi 搜索开启和 DeepSeek 搜索关闭时都能配置",
+      "备用链只包含已启用服务商；缺原生能力或看图能力时启动提醒，自检展示备用链",
+      "RAG 向量按路由经网关访问本地 Ollama，模型与维数来自清单"
+    ],
+    "why": "路由回答本次该用谁，备用链处理上游失败；选择依据与不可用原因都应可解释。",
+    "boundary": "离线真实路由、configure、任务派发、HTTP handler、客户端、预算和媒体服务；RPC、存储和 fetch 为夹具，不监听端口。真实 PostgreSQL 持久化需 test:data，网关备用切换见 s11-gateway。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(?:默认对话模型：按 routes\\.chat 的顺序取第一个服务商已启用的；CODEX_MODEL 可以覆盖|指定模型或场景：工作流步骤写具体模型（带 /）或场景名；写错立即报错并说明原因|按能力挑选：要看图就跳过只能读文字的，要长上下文就跳过上下文不够的|向量等其他用途：本地 Ollama 填了地址才启用；没有可用模型时报错说明缺什么|Codex 的模型目录：网关模式下放所有可用的对话模型，默认的排第一，向量模型不进目录|RAG 的向量模型经网关：配了向量库才接；地址和密钥用网关的，模型和维数来自路由；挑不到时说明原因|按步骤选模型：网关模式下每一轮都带上模型，写了场景的步骤用场景里的模型，其余回到默认；写错或没开网关在启动时报错|网关配置：备用模型的服务商没有密钥时不写进备用链；一家都没启用会报错；本地 Ollama 按地址启用、不需要密钥|路由策略：步骤\\ needs\\ 校验、看图和长上下文挑选与逐候选错误|路由策略：搜索约束覆盖场景、默认路由、具体模型和原生工具要求|路由策略：写作\\ Agent\\ 的\\ fast/strong\\ 在\\ Kimi\\ 搜索开启与\\ DeepSeek\\ 关闭时均可配置|路由策略：effort\\ 启动校验、运行时再校验并传入\\ turn/start|路由策略：POST\\ /messages\\ 校验、存储、幂等、步骤优先级和\\ /state\\ 选择来源|路由策略：GET\\ /models\\ 按用途返回能力、定价、场景、默认模型与搜索开关|路由策略：备用链缺搜索、缺看图分别提醒，相同能力、未启用和非对话不提醒|路由策略：预算比例校验、日月\\ token/金额触发、无上限不触发和周期恢复|路由策略：预算降级默认与步骤场景，具体模型豁免，保留能力约束和来源|路由策略：混合用途场景验证与生图、生视频\\ quality\\ 的请求模型|路由策略：客户端\\ /model\\ 列表、选择、default、会话隔离和执行来源显示|路由策略：在途追加沿用当前模型，追加到已结束轮次使用任务选择|路由策略：gateway:check\\ 展示每个模型已启用的备用链)$",
+      "tests/model-router.test.mjs",
+      "tests/workflows.test.mjs",
+      "tests/gateway.test.mjs",
+      "tests/routing-policy.test.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-routing",
+    "mode": "offline",
+    "offlineOrIntegration": "offline"
+  },
+  {
+    "id": "s11-native-search",
+    "title": "模型自带的搜索怎么开关",
+    "question": "为什么搜索随默认模型开启，却不能在单轮消息里切换？",
+    "observations": [
+      "auto 跟随实际默认模型的 nativeTools；off 与直连模式关闭搜索",
+      "搜索是会话配置，消息接口拒绝单轮覆盖；搜索开启时工作流候选也必须支持搜索",
+      "假网关自检核对 web_search 工具、调用标记与用量；口头声称搜索不算通过"
+    ],
+    "why": "搜索配置不能随 turn/start 切换；换模型必须兼容已启用的会话能力。",
+    "boundary": "离线真实启动配置、工作流校验、消息派发与 gateway-check；假 RPC 和内存 fetch，不监听端口，不证明真实模型搜索质量。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(?:nativeTools 可省略或为空，仅 chat 模型可声明不重复的 web_search|联网搜索跟随实际默认模型，支持 CODEX_MODEL 覆盖、off，直连始终关闭|工作流启动校验：搜索开启时具体模型和场景都必须支持搜索，关闭时允许切换|搜索是会话配置：消息不能按轮覆盖，两轮派发都不携带搜索开关|假网关搜索自检：检查调用标记、请求工具与用量，口头声称搜索不能通过)$",
+      "tests/native-search.test.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-native-search",
+    "mode": "offline",
+    "offlineOrIntegration": "offline"
+  },
+  {
+    "id": "s11-budget",
+    "title": "超预算为什么只停派、不打断",
+    "question": "用量何时入账？超限的排队任务何时恢复？",
+    "observations": [
+      "累计用量用于去重，每次记 last；重复通知与重启不补记历史",
+      "按配置时区划分自然日和月，覆盖夏令时及边界",
+      "超预算保留 queued，在途轮次与追加消息继续，次日或次月恢复派发",
+      "价格决定估算金额；网关每日 token 兜底默认取日预算的 1.5 倍"
+    ],
+    "why": "预算在派发前检查，避免中断已开始的任务；网关另设 token 上限兜底，两者不保证费用精确封顶。",
+    "boundary": "离线真实记账、时区与预算调度；仓储和 RPC 为夹具，不验证真实 PostgreSQL 或 Bifrost 限流。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(?:预算环境变量启动校验、缺省不限、未定价默认模型的一行提醒|网关每日 token 兜底：1\\.5 倍向上取整、显式覆盖和虚拟密钥引用|对话累计只用于去重，每次记 last；重启第一条不补记历史；成本不重复加缓存与推理|真实通知处理：RPC 响应之前记账并绑定任务；多个请求和重复通知不重复入账|向量响应 usage 记账：prompt_tokens 优先，缺失时用 total_tokens，缺 usage 不猜测|时区自然日和自然月：跨 UTC 月份、夏令时 23/25 小时与半小时时差|日/月 token 和金额上限独立生效，所有来源计入；未计价模型不计金额|汇总边界排除昨天与上月，同一天到达多重上限时按最晚恢复时间等待|预算阻止 dispatch，保持 queued；轮次可完成、steer 不拦；到自然日自动恢复|数据库写入排队，预算等待落库；失败不允许继续按空账本派发|月额度在下月恢复；补价格不改历史估算，切币种不混加旧币种金额)$",
+      "tests/usage.test.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-budget",
+    "mode": "offline",
+    "offlineOrIntegration": "offline"
+  },
+  {
+    "id": "s11-media",
+    "title": "生视频为什么不阻塞这一轮",
+    "question": "返回任务 ID 后谁继续跟进？重启会不会重复付费提交？",
+    "observations": [
+      "生图走网关并保存产物；视频提交立即返回任务 ID",
+      "轮次结束后后台查询与保存，media_status 可查询，按张或秒记账",
+      "失败与超时落库，重启继续旧 ID；提交结果不确定时失败并且不重提",
+      "预算、目录、格式和权限在收费请求前校验"
+    ],
+    "why": "长耗时视频任务与对话轮次分开，持久化任务 ID 保证恢复时继续查询。",
+    "boundary": "离线真实媒体服务、权限与记账；内存 fetch 和任务仓储夹具，不请求火山方舟，不证明真实视频生成质量。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(?:生图：网关参数、b64_json、多图保存、张数与 token 记账、create-only|视频：立即返回、轮次结束后后台保存、media_status 与按秒记账|视频失败与超时持久化原因，重启继续旧 ID，不重提|预算：生图、生视频被拒，查询状态不受限；目录、格式和门禁拒绝发生在收费请求前|byteplus 内置服务商、模型用途、候选顺序、base_url 和未定价|后台路径授权限于单个产物；撤销工具后不下载或写入|提交中定时器不误判重启；不确定提交在重启后失败且不重提)$",
+      "tests/media.test.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-media",
+    "mode": "offline",
+    "offlineOrIntegration": "offline"
+  },
+  {
+    "id": "s11-gateway",
+    "title": "真实网关",
+    "question": "真正的 Bifrost 是否执行鉴权、备用链、token 限流，以及生图、生视频的协议转换？",
+    "observations": [
+      "缺少或错误的访问密钥均被拒绝，主模型余额不足后请求改走备用服务",
+      "Responses 转为 Claude 格式，输出上限取模型参数表",
+      "首个请求耗尽 token 额度后，第二个请求返回 429 且不到上游",
+      "生图、生视频经真实网关的 byteplus 通道送达火山方舟格式的服务，图片和视频都保存进工作区并记账"
+    ],
+    "why": "配置生成的断言不能替代网关运行行为，必须通过锁定版本的真实 Bifrost 检验。",
+    "boundary": "集成门禁：默认未运行。真 Bifrost 容器与本机假模型服务；媒体上游是本机模拟的火山方舟，不验证真实生成质量、模型开通或实际计费；不包含角色评估，不验证真实模型质量或 Codex 工具闭环。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=240000",
+      "--test-concurrency=1",
+      "--test-name-pattern=^(?:模型网关：没有访问密钥一律拒绝；主模型余额不足时自动改用备用；Responses 转 Claude 格式|模型网关：每日 token 限流使用真实 Bifrost，首个请求耗尽额度后第二个请求被拒绝|模型网关：生图、生视频经 byteplus 通道转换为火山方舟格式，后台保存并记账)$",
+      "tests/gateway.integration.mjs",
+      "tests/media-gateway.integration.mjs"
+    ],
+    "demo": 7,
+    "command": "npm run lesson -- s11-gateway",
+    "mode": "integration",
+    "offlineOrIntegration": "integration",
+    "requiredFlag": "--integration",
+    "integrationCommand": "npm run lesson -- s11-gateway --integration",
+    "prerequisites": "Node.js 24+、已安装 npm 依赖、Docker 可用并能取得 Compose 锁定的 Bifrost 镜像；允许监听临时本机端口。不读取项目 .env，不调用真实模型。"
+  }
+]

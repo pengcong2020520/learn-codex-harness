@@ -224,7 +224,7 @@ onIdleWindowOpen():
 
 ### 工具清单
 
-`search_web` 已移除：Google 要求执行 JS 后，抓取搜索结果页的实现已失效；需要联网搜索时，见 [s07 的模型自带搜索](../../s07-model-gateway/README.md)。本阶段继续使用 `web_search="disabled"`，网络工具仅保留网页读取。
+`search_web` 已移除：Google 要求执行 JS 后，抓取搜索结果页的实现已失效；需要联网搜索时，见 [s11 的模型自带搜索](../../s11-model-gateway/README.md)。本阶段继续使用 `web_search="disabled"`，网络工具仅保留网页读取。
 
 | 工具 | 作用 | 限制 |
 |------|------|------|
@@ -436,7 +436,7 @@ npm run test:codex-tools
 | write_file 返回权限错误 | 路径越界 / 不支持扩展名 / inputs 只读 | 检查路径是否在 bindings 范围内 |
 | write_file 返回“文件已存在，未覆盖” | 尝试覆盖已有文件 | 使用不同文件名，工具不支持覆盖 |
 | 文件保存到了非预期目录 | 模型生成路径受旧角色规则影响 / 规则更新前旧 Thread | 核对实际工具路径和角色规则；修改过规则需重启并 `/new`，最新规则也不保证模型必然分类正确 |
-| `search_web` 已移除 | Google 要求执行 JS 后失效 | 请用户提供链接并用 `read_webpage` 读取；需要联网搜索时，见 [s07 的模型自带搜索](../../s07-model-gateway/README.md) |
+| `search_web` 已移除 | Google 要求执行 JS 后失效 | 请用户提供链接并用 `read_webpage` 读取；需要联网搜索时，见 [s11 的模型自带搜索](../../s11-model-gateway/README.md) |
 | 模型只声称保存但无工具调用记录 | 可能未调用工具或提供商工具协议不兼容 | 检查 turn.artifacts 和会话事件，不以模型自述为准；检查模型/提供商的 Responses 工具调用兼容性 |
 | 旧 Thread 下一轮调用被拒 | 工具版本更新后描述符不匹配 | 执行 /new 开启新对话 |
 

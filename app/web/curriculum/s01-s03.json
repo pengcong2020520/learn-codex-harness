@@ -537,7 +537,7 @@
       "explanation": "C 区分外部提交节奏与内部执行。A 会改变用户输入缓冲，却无法限制模型内部调用；B 会破坏一次任务的上下文，也不是当前架构的调度方式。"
     },
     "reference": {
-      "session": "s05",
+      "session": "s09",
       "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s05_todo_write",
       "adaptation": "借用“同样叫任务状态，究竟改变规划还是执行”的分层辨析。参考 todo_write 记录模型计划；我们的 FIFO 是用户输入缓冲，没有引入 TodoManager 或其三轮提醒。"
     }
@@ -1080,7 +1080,7 @@
       "explanation": "C 区分方法说明、工具登记和资源授权。A 不会改变执行层校验；B 的 required 只决定缺失时是否阻止装配，不授予工具权限。"
     },
     "reference": {
-      "session": "s07",
+      "session": "s11",
       "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
       "adaptation": "借用“目录与正文分开、需要时加载”的认知顺序。参考自己解析 YAML 并用 load_skill 返回 tool_result；这里原生 Codex 负责解析与注入，我们教的是发现核验、显式输入与权限边界。"
     }

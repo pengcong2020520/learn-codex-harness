@@ -1,6 +1,6 @@
 # s01: 单轮问答 — 接上模型，打通第一条链路
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → `s01` → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s04](../s04-data-layer/) → [s05](../s05-knowledge-layer/) → [s06](../s06-skill-workflow/) → [s07](../s07-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → `s01` → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"收到回包，不等于任务完成"* — 不用 SDK，自己接上模型、启动 App Server、说 JSON-RPC。一轮算不算完成，只看它自己的 `turn/completed`。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？
@@ -34,7 +34,7 @@ CODEX_BASE_URL=https://api.deepseek.com
 CODEX_MODEL=deepseek-flash
 ```
 
-第三方模型也可以，前提是它提供 OpenAI 的 Responses 接口，因为 Codex 只用这套接口跟模型对话。DeepSeek、Kimi 都可以直连。从这一章到 s06，我们都用直连，一个模型就够讲清原理；到 [s07](../s07-model-gateway/)，线上要同时用好几个模型，就要打造一个模型网关（见[导论](../introduction.md#模型怎么接)）。
+第三方模型也可以，前提是它提供 OpenAI 的 Responses 接口，因为 Codex 只用这套接口跟模型对话。DeepSeek、Kimi 都可以直连。从这一章到 s10，我们都用直连，一个模型就够讲清原理；到 [s11](../s11-model-gateway/)，线上要同时用好几个模型，就要打造一个模型网关（见[导论](../introduction.md#模型怎么接)）。
 
 `.env` 里还有一组 `CODEX_MODEL_*`，这是**模型目录**：声明这个模型的上下文有多长、能不能看图、有哪些推理档位。每次运行，程序都会把它写成 `.runs/app-server-*/models.json` 交给 Codex。Codex 靠它认识这个模型，以后换模型也只改这一处。注意，这些都是能力声明，不代表给 Agent 授予任何系统权限。
 
@@ -43,8 +43,8 @@ CODEX_MODEL=deepseek-flash
 s00 的 TypeScript SDK 底层是 `codex exec`：一轮一个进程，跑完就退出，事件只从 Codex 流向你。做一个云端 Agent，需要的东西它给不了：
 
 - **一个常驻的进程**，同时管着多个会话，用户随时连上来；
-- **双向通信**：Codex 执行命令前会反过来向我们要审批，这一轮暂停等答复；工具调用能回到我们自己的程序里执行（s05 的门禁就靠它）；
-- **每一轮都能指定**模型和推理档位（s07 的路由靠它），还能拿到用量、会话列表（s04 的账本、s02 的恢复会话靠它）。
+- **双向通信**：Codex 执行命令前会反过来向我们要审批，这一轮暂停等答复；工具调用能回到我们自己的程序里执行（s09 的门禁就靠它）；
+- **每一轮都能指定**模型和推理档位（s11 的路由靠它），还能拿到用量、会话列表（s08 的账本、s02 的恢复会话靠它）。
 
 这些都是 App Server 的能力。官方的建议也是：做自定义客户端，处理认证、对话历史、审批和流式事件，就用 App Server。官方的 Python SDK 驱动的也是 App Server（见 s00 的选读示例）；我们用 Node，自己写一个客户端，正好把协议看清楚。
 
@@ -213,7 +213,7 @@ await turn.completed.promise;
 
 ## 小结
 
-- 模型接入只要 API Key、Base URL、模型名，外加一份模型目录。支持 Responses 接口的第三方模型可以直连；s01–s06 都用直连，到 s07 再打造模型网关。
+- 模型接入只要 API Key、Base URL、模型名，外加一份模型目录。支持 Responses 接口的第三方模型可以直连；s01–s10 都用直连，到 s11 再打造模型网关。
 - App Server 是一条双向连接：请求换回包，一个请求带出很多条通知，服务端还可能反过来向你要审批。
 - 一轮的成败只看它自己的 `turn/completed`。回包只代表受理。
 - 会话历史存在 Codex 的状态目录里，不在我们的程序里。

@@ -7,10 +7,10 @@
 | [s01](#s01) | 先打通一次问答 | 8 | 2 | 5 | +570 / −233 |
 | [s02](#s02) | 让同一段对话继续下去 | 2 | 4 | 0 | +689 / −9 |
 | [s03](#s03) | 用配置装配一个能做事的 Agent | 35 | 9 | 1 | +3128 / −199 |
-| [s04](#s04) | 让任务与产物有据可查 | 9 | 11 | 0 | +1531 / −112 |
-| [s05](#s05) | 知识层与门禁：依据什么，能碰什么 | 8 | 17 | 0 | +1061 / −111 |
-| [s06](#s06) | Skill 教方法，Workflow 管边界和终点 | 19 | 31 | 1 | +1767 / −337 |
-| [s07](#s07) | 模型网关：Codex 只连网关 | 15 | 24 | 0 | +1639 / −153 |
+| [s08](#s08) | 让任务与产物有据可查 | 9 | 11 | 0 | +1531 / −112 |
+| [s09](#s09) | 知识层与门禁：依据什么，能碰什么 | 8 | 17 | 0 | +1061 / −111 |
+| [s10](#s10) | Skill 教方法，Workflow 管边界和终点 | 19 | 31 | 1 | +1767 / −337 |
+| [s11](#s11) | 模型网关：Codex 只连网关 | 15 | 24 | 0 | +1639 / −153 |
 
 <a id="s01"></a>
 
@@ -119,9 +119,9 @@
 | 新增 | [`server/modules/http/index.mjs`](s03-agent-core/server/modules/http/index.mjs) | HTTP / SSE 接口 | +141 / −0 |
 | 新增 | [`server/modules/tools/mcp-server.mjs`](s03-agent-core/server/modules/tools/mcp-server.mjs) | MCP 工具入口 | +56 / −0 |
 
-<a id="s04"></a>
+<a id="s08"></a>
 
-## s04：让任务与产物有据可查
+## s08：让任务与产物有据可查
 
 相比 [s03-agent-core](s03-agent-core/)：业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。
 
@@ -131,32 +131,32 @@
 
 | 状态 | 文件 | 所属模块 | 行数 |
 |---|---|---|---|
-| 改动 | [`server/main.mjs`](s04-data-layer/server/main.mjs) | 服务入口 | +1 / −1 |
-| 改动 | [`config/tools/files.json`](s04-data-layer/config/tools/files.json) | 工具与资料边界 | +8 / −62 |
-| 改动 | [`server/modules/tools/loader.mjs`](s04-data-layer/server/modules/tools/loader.mjs) | 工具与资料边界 | +6 / −1 |
-| 改动 | [`server/modules/config/index.mjs`](s04-data-layer/server/modules/config/index.mjs) | 基础设施 | +1 / −1 |
-| 新增 | [`scripts/data.mjs`](s04-data-layer/scripts/data.mjs) | 脚本 | +103 / −0 |
-| 新增 | [`scripts/test-data.mjs`](s04-data-layer/scripts/test-data.mjs) | 脚本 | +113 / −0 |
-| 改动 | [`server/modules/data/index.mjs`](s04-data-layer/server/modules/data/index.mjs) | 任务记录 | +61 / −38 |
-| 改动 | [`server/modules/data/jobs.mjs`](s04-data-layer/server/modules/data/jobs.mjs) | 任务记录 | +161 / −0 |
-| 改动 | [`server/modules/messages/index.mjs`](s04-data-layer/server/modules/messages/index.mjs) | 任务与消息 | +2 / −3 |
-| 改动 | [`.env.example`](s04-data-layer/.env.example) | 项目文件 | +5 / −2 |
-| 新增 | [`compose.yaml`](s04-data-layer/compose.yaml) | 项目文件 | +22 / −0 |
-| 改动 | [`package.json`](s04-data-layer/package.json) | 项目文件 | +8 / −2 |
-| 新增 | [`server/modules/data/resources.mjs`](s04-data-layer/server/modules/data/resources.mjs) | 资源版本 | +475 / −0 |
-| 改动 | [`server/modules/agents/index.mjs`](s04-data-layer/server/modules/agents/index.mjs) | Agent 定义 | +1 / −1 |
-| 改动 | [`server/modules/http/index.mjs`](s04-data-layer/server/modules/http/index.mjs) | HTTP / SSE 接口 | +1 / −1 |
-| 新增 | [`server/modules/data/queue.mjs`](s04-data-layer/server/modules/data/queue.mjs) | Outbox + Redis | +86 / −0 |
-| 新增 | [`server/modules/data/database.mjs`](s04-data-layer/server/modules/data/database.mjs) | PostgreSQL | +153 / −0 |
-| 新增 | [`server/modules/data/legacy.mjs`](s04-data-layer/server/modules/data/legacy.mjs) | PostgreSQL | +142 / −0 |
-| 新增 | [`server/modules/data/repository.mjs`](s04-data-layer/server/modules/data/repository.mjs) | PostgreSQL | +98 / −0 |
-| 新增 | [`server/modules/data/schema.sql`](s04-data-layer/server/modules/data/schema.sql) | PostgreSQL | +84 / −0 |
+| 改动 | [`server/main.mjs`](s08-data-layer/server/main.mjs) | 服务入口 | +1 / −1 |
+| 改动 | [`config/tools/files.json`](s08-data-layer/config/tools/files.json) | 工具与资料边界 | +8 / −62 |
+| 改动 | [`server/modules/tools/loader.mjs`](s08-data-layer/server/modules/tools/loader.mjs) | 工具与资料边界 | +6 / −1 |
+| 改动 | [`server/modules/config/index.mjs`](s08-data-layer/server/modules/config/index.mjs) | 基础设施 | +1 / −1 |
+| 新增 | [`scripts/data.mjs`](s08-data-layer/scripts/data.mjs) | 脚本 | +103 / −0 |
+| 新增 | [`scripts/test-data.mjs`](s08-data-layer/scripts/test-data.mjs) | 脚本 | +113 / −0 |
+| 改动 | [`server/modules/data/index.mjs`](s08-data-layer/server/modules/data/index.mjs) | 任务记录 | +61 / −38 |
+| 改动 | [`server/modules/data/jobs.mjs`](s08-data-layer/server/modules/data/jobs.mjs) | 任务记录 | +161 / −0 |
+| 改动 | [`server/modules/messages/index.mjs`](s08-data-layer/server/modules/messages/index.mjs) | 任务与消息 | +2 / −3 |
+| 改动 | [`.env.example`](s08-data-layer/.env.example) | 项目文件 | +5 / −2 |
+| 新增 | [`compose.yaml`](s08-data-layer/compose.yaml) | 项目文件 | +22 / −0 |
+| 改动 | [`package.json`](s08-data-layer/package.json) | 项目文件 | +8 / −2 |
+| 新增 | [`server/modules/data/resources.mjs`](s08-data-layer/server/modules/data/resources.mjs) | 资源版本 | +475 / −0 |
+| 改动 | [`server/modules/agents/index.mjs`](s08-data-layer/server/modules/agents/index.mjs) | Agent 定义 | +1 / −1 |
+| 改动 | [`server/modules/http/index.mjs`](s08-data-layer/server/modules/http/index.mjs) | HTTP / SSE 接口 | +1 / −1 |
+| 新增 | [`server/modules/data/queue.mjs`](s08-data-layer/server/modules/data/queue.mjs) | Outbox + Redis | +86 / −0 |
+| 新增 | [`server/modules/data/database.mjs`](s08-data-layer/server/modules/data/database.mjs) | PostgreSQL | +153 / −0 |
+| 新增 | [`server/modules/data/legacy.mjs`](s08-data-layer/server/modules/data/legacy.mjs) | PostgreSQL | +142 / −0 |
+| 新增 | [`server/modules/data/repository.mjs`](s08-data-layer/server/modules/data/repository.mjs) | PostgreSQL | +98 / −0 |
+| 新增 | [`server/modules/data/schema.sql`](s08-data-layer/server/modules/data/schema.sql) | PostgreSQL | +84 / −0 |
 
-<a id="s05"></a>
+<a id="s09"></a>
 
-## s05：知识层与门禁：依据什么，能碰什么
+## s09：知识层与门禁：依据什么，能碰什么
 
-相比 [s04-data-layer](s04-data-layer/)：身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。
+相比 [s08-data-layer](s08-data-layer/)：身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。
 
 **新增模块**：可信门禁（知识与工作流，服务端签发身份）；Wiki / RAG（知识与工作流，带原文依据的知识）
 
@@ -170,37 +170,37 @@
 
 | 状态 | 文件 | 所属模块 | 行数 |
 |---|---|---|---|
-| 改动 | [`server/main.mjs`](s05-knowledge-layer/server/main.mjs) | 服务入口 | +38 / −10 |
-| 新增 | [`config/tools/knowledge.json`](s05-knowledge-layer/config/tools/knowledge.json) | 工具与资料边界 | +134 / −0 |
-| 改动 | [`server/modules/tools/index.mjs`](s05-knowledge-layer/server/modules/tools/index.mjs) | 工具与资料边界 | +19 / −11 |
-| 改动 | [`server/modules/tools/loader.mjs`](s05-knowledge-layer/server/modules/tools/loader.mjs) | 工具与资料边界 | +10 / −5 |
-| 改动 | [`server/modules/sessions/index.mjs`](s05-knowledge-layer/server/modules/sessions/index.mjs) | 会话与排队 | +1 / −1 |
-| 改动 | [`server/modules/config/index.mjs`](s05-knowledge-layer/server/modules/config/index.mjs) | 基础设施 | +6 / −3 |
-| 新增 | [`scripts/knowledge.mjs`](s05-knowledge-layer/scripts/knowledge.mjs) | 脚本 | +47 / −0 |
-| 改动 | [`scripts/test-data.mjs`](s05-knowledge-layer/scripts/test-data.mjs) | 脚本 | +27 / −2 |
-| 新增 | [`server/modules/permissions/index.mjs`](s05-knowledge-layer/server/modules/permissions/index.mjs) | 可信门禁 | +86 / −0 |
-| 改动 | [`server/modules/data/jobs.mjs`](s05-knowledge-layer/server/modules/data/jobs.mjs) | 任务记录 | +4 / −3 |
-| 改动 | [`server/modules/messages/index.mjs`](s05-knowledge-layer/server/modules/messages/index.mjs) | 任务与消息 | +13 / −4 |
-| 改动 | [`.env.example`](s05-knowledge-layer/.env.example) | 项目文件 | +10 / −3 |
-| 改动 | [`compose.yaml`](s05-knowledge-layer/compose.yaml) | 项目文件 | +8 / −2 |
-| 改动 | [`package.json`](s05-knowledge-layer/package.json) | 项目文件 | +7 / −1 |
-| 改动 | [`server/modules/data/resources.mjs`](s05-knowledge-layer/server/modules/data/resources.mjs) | 资源版本 | +8 / −3 |
-| 改动 | [`agents/writing-agent.json`](s05-knowledge-layer/agents/writing-agent.json) | Agent 定义 | +124 / −16 |
-| 改动 | [`server/modules/agents/index.mjs`](s05-knowledge-layer/server/modules/agents/index.mjs) | Agent 定义 | +3 / −1 |
-| 改动 | [`server/modules/agents/schema.mjs`](s05-knowledge-layer/server/modules/agents/schema.mjs) | Agent 定义 | +4 / −2 |
-| 改动 | [`server/modules/http/index.mjs`](s05-knowledge-layer/server/modules/http/index.mjs) | HTTP / SSE 接口 | +19 / −4 |
-| 改动 | [`server/modules/data/database.mjs`](s05-knowledge-layer/server/modules/data/database.mjs) | PostgreSQL | +18 / −40 |
-| 新增 | [`server/modules/data/migrations/002-knowledge.sql`](s05-knowledge-layer/server/modules/data/migrations/002-knowledge.sql) | PostgreSQL | +42 / −0 |
-| 新增 | [`server/modules/knowledge/index.mjs`](s05-knowledge-layer/server/modules/knowledge/index.mjs) | Wiki / RAG | +215 / −0 |
-| 新增 | [`server/modules/knowledge/rag.mjs`](s05-knowledge-layer/server/modules/knowledge/rag.mjs) | Wiki / RAG | +174 / −0 |
-| 新增 | [`server/modules/knowledge/worker.mjs`](s05-knowledge-layer/server/modules/knowledge/worker.mjs) | Wiki / RAG | +36 / −0 |
-| 新增 | [`server/modules/tools/knowledge.mjs`](s05-knowledge-layer/server/modules/tools/knowledge.mjs) | Wiki / RAG | +8 / −0 |
+| 改动 | [`server/main.mjs`](s09-knowledge-layer/server/main.mjs) | 服务入口 | +38 / −10 |
+| 新增 | [`config/tools/knowledge.json`](s09-knowledge-layer/config/tools/knowledge.json) | 工具与资料边界 | +134 / −0 |
+| 改动 | [`server/modules/tools/index.mjs`](s09-knowledge-layer/server/modules/tools/index.mjs) | 工具与资料边界 | +19 / −11 |
+| 改动 | [`server/modules/tools/loader.mjs`](s09-knowledge-layer/server/modules/tools/loader.mjs) | 工具与资料边界 | +10 / −5 |
+| 改动 | [`server/modules/sessions/index.mjs`](s09-knowledge-layer/server/modules/sessions/index.mjs) | 会话与排队 | +1 / −1 |
+| 改动 | [`server/modules/config/index.mjs`](s09-knowledge-layer/server/modules/config/index.mjs) | 基础设施 | +6 / −3 |
+| 新增 | [`scripts/knowledge.mjs`](s09-knowledge-layer/scripts/knowledge.mjs) | 脚本 | +47 / −0 |
+| 改动 | [`scripts/test-data.mjs`](s09-knowledge-layer/scripts/test-data.mjs) | 脚本 | +27 / −2 |
+| 新增 | [`server/modules/permissions/index.mjs`](s09-knowledge-layer/server/modules/permissions/index.mjs) | 可信门禁 | +86 / −0 |
+| 改动 | [`server/modules/data/jobs.mjs`](s09-knowledge-layer/server/modules/data/jobs.mjs) | 任务记录 | +4 / −3 |
+| 改动 | [`server/modules/messages/index.mjs`](s09-knowledge-layer/server/modules/messages/index.mjs) | 任务与消息 | +13 / −4 |
+| 改动 | [`.env.example`](s09-knowledge-layer/.env.example) | 项目文件 | +10 / −3 |
+| 改动 | [`compose.yaml`](s09-knowledge-layer/compose.yaml) | 项目文件 | +8 / −2 |
+| 改动 | [`package.json`](s09-knowledge-layer/package.json) | 项目文件 | +7 / −1 |
+| 改动 | [`server/modules/data/resources.mjs`](s09-knowledge-layer/server/modules/data/resources.mjs) | 资源版本 | +8 / −3 |
+| 改动 | [`agents/writing-agent.json`](s09-knowledge-layer/agents/writing-agent.json) | Agent 定义 | +124 / −16 |
+| 改动 | [`server/modules/agents/index.mjs`](s09-knowledge-layer/server/modules/agents/index.mjs) | Agent 定义 | +3 / −1 |
+| 改动 | [`server/modules/agents/schema.mjs`](s09-knowledge-layer/server/modules/agents/schema.mjs) | Agent 定义 | +4 / −2 |
+| 改动 | [`server/modules/http/index.mjs`](s09-knowledge-layer/server/modules/http/index.mjs) | HTTP / SSE 接口 | +19 / −4 |
+| 改动 | [`server/modules/data/database.mjs`](s09-knowledge-layer/server/modules/data/database.mjs) | PostgreSQL | +18 / −40 |
+| 新增 | [`server/modules/data/migrations/002-knowledge.sql`](s09-knowledge-layer/server/modules/data/migrations/002-knowledge.sql) | PostgreSQL | +42 / −0 |
+| 新增 | [`server/modules/knowledge/index.mjs`](s09-knowledge-layer/server/modules/knowledge/index.mjs) | Wiki / RAG | +215 / −0 |
+| 新增 | [`server/modules/knowledge/rag.mjs`](s09-knowledge-layer/server/modules/knowledge/rag.mjs) | Wiki / RAG | +174 / −0 |
+| 新增 | [`server/modules/knowledge/worker.mjs`](s09-knowledge-layer/server/modules/knowledge/worker.mjs) | Wiki / RAG | +36 / −0 |
+| 新增 | [`server/modules/tools/knowledge.mjs`](s09-knowledge-layer/server/modules/tools/knowledge.mjs) | Wiki / RAG | +8 / −0 |
 
-<a id="s06"></a>
+<a id="s10"></a>
 
-## s06：Skill 教方法，Workflow 管边界和终点
+## s10：Skill 教方法，Workflow 管边界和终点
 
-相比 [s05-knowledge-layer](s05-knowledge-layer/)：一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。
+相比 [s09-knowledge-layer](s09-knowledge-layer/)：一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。
 
 **新增模块**：Workflow（知识与工作流，步骤、确认与验收）；审批与提权（知识与工作流，可以提议，不能自批）
 
@@ -212,63 +212,63 @@
 
 | 状态 | 文件 | 所属模块 | 行数 |
 |---|---|---|---|
-| 改动 | [`server/check.mjs`](s06-skill-workflow/server/check.mjs) | 服务入口 | +4 / −4 |
-| 改动 | [`server/main.mjs`](s06-skill-workflow/server/main.mjs) | 服务入口 | +13 / −7 |
-| 改动 | [`config/tools/files.json`](s06-skill-workflow/config/tools/files.json) | 工具与资料边界 | +2 / −2 |
-| 新增 | [`config/tools/skills.json`](s06-skill-workflow/config/tools/skills.json) | 工具与资料边界 | +21 / −0 |
-| 新增 | [`config/tools/tasks.json`](s06-skill-workflow/config/tools/tasks.json) | 工具与资料边界 | +23 / −0 |
-| 改动 | [`server/modules/data/files.mjs`](s06-skill-workflow/server/modules/data/files.mjs) | 工具与资料边界 | +6 / −12 |
-| 改动 | [`server/modules/tools/index.mjs`](s06-skill-workflow/server/modules/tools/index.mjs) | 工具与资料边界 | +4 / −4 |
-| 改动 | [`server/modules/tools/loader.mjs`](s06-skill-workflow/server/modules/tools/loader.mjs) | 工具与资料边界 | +15 / −5 |
-| 新增 | [`server/modules/tools/skills.mjs`](s06-skill-workflow/server/modules/tools/skills.mjs) | 工具与资料边界 | +9 / −0 |
-| 新增 | [`shared/session-events.mjs`](s06-skill-workflow/shared/session-events.mjs) | 共享代码 | +32 / −0 |
-| 改动 | [`server/modules/sessions/index.mjs`](s06-skill-workflow/server/modules/sessions/index.mjs) | 会话与排队 | +99 / −18 |
-| 新增 | [`server/modules/codex/compatibility.mjs`](s06-skill-workflow/server/modules/codex/compatibility.mjs) | 基础设施 | +75 / −0 |
-| 改动 | [`server/modules/codex/connection.mjs`](s06-skill-workflow/server/modules/codex/connection.mjs) | 基础设施 | +28 / −9 |
-| 改动 | [`server/modules/codex/launch.mjs`](s06-skill-workflow/server/modules/codex/launch.mjs) | 基础设施 | +5 / −2 |
-| 改动 | [`server/modules/codex/runtime.mjs`](s06-skill-workflow/server/modules/codex/runtime.mjs) | 基础设施 | +6 / −1 |
-| 改动 | [`server/modules/config/index.mjs`](s06-skill-workflow/server/modules/config/index.mjs) | 基础设施 | +35 / −3 |
-| 新增 | [`server/modules/data/paths.mjs`](s06-skill-workflow/server/modules/data/paths.mjs) | 基础设施 | +31 / −0 |
-| 改动 | [`server/modules/codex/skills.mjs`](s06-skill-workflow/server/modules/codex/skills.mjs) | 角色与 Skills | +39 / −3 |
-| 改动 | [`server/modules/role/index.mjs`](s06-skill-workflow/server/modules/role/index.mjs) | 角色与 Skills | +7 / −2 |
-| 改动 | [`scripts/data.mjs`](s06-skill-workflow/scripts/data.mjs) | 脚本 | +2 / −4 |
-| 新增 | [`scripts/init-agent.mjs`](s06-skill-workflow/scripts/init-agent.mjs) | 脚本 | +63 / −0 |
-| 改动 | [`scripts/knowledge.mjs`](s06-skill-workflow/scripts/knowledge.mjs) | 脚本 | +7 / −11 |
-| 新增 | [`scripts/real-smoke.mjs`](s06-skill-workflow/scripts/real-smoke.mjs) | 脚本 | +200 / −0 |
-| 改动 | [`scripts/test-data.mjs`](s06-skill-workflow/scripts/test-data.mjs) | 脚本 | +2 / −2 |
-| 新增 | [`scripts/upgrade-sessions.mjs`](s06-skill-workflow/scripts/upgrade-sessions.mjs) | 脚本 | +99 / −0 |
-| 改动 | [`server/modules/permissions/index.mjs`](s06-skill-workflow/server/modules/permissions/index.mjs) | 可信门禁 | +23 / −13 |
-| 改动 | [`client/modules/chat/index.mjs`](s06-skill-workflow/client/modules/chat/index.mjs) | 客户端 | +54 / −8 |
-| 改动 | [`client/modules/connection/index.mjs`](s06-skill-workflow/client/modules/connection/index.mjs) | 客户端 | +14 / −5 |
-| 新增 | [`config/runtime/project.json`](s06-skill-workflow/config/runtime/project.json) | 配置 | +3 / −0 |
-| 改动 | [`server/modules/data/jobs.mjs`](s06-skill-workflow/server/modules/data/jobs.mjs) | 任务记录 | +16 / −8 |
-| 改动 | [`server/modules/messages/index.mjs`](s06-skill-workflow/server/modules/messages/index.mjs) | 任务与消息 | +121 / −17 |
-| 新增 | [`server/modules/tools/tasks.mjs`](s06-skill-workflow/server/modules/tools/tasks.mjs) | 审批与提权 | +9 / −0 |
-| 改动 | [`server/modules/events/index.mjs`](s06-skill-workflow/server/modules/events/index.mjs) | 事件推送 | +18 / −1 |
-| 改动 | [`.env.example`](s06-skill-workflow/.env.example) | 项目文件 | +4 / −4 |
-| 改动 | [`compose.yaml`](s06-skill-workflow/compose.yaml) | 项目文件 | +2 / −2 |
-| 改动 | [`package.json`](s06-skill-workflow/package.json) | 项目文件 | +5 / −1 |
-| 改动 | [`server/modules/data/resources.mjs`](s06-skill-workflow/server/modules/data/resources.mjs) | 资源版本 | +1 / −1 |
-| 删除 | [`agents/writing-agent.json`](s05-knowledge-layer/agents/writing-agent.json) | Agent 定义 | +0 / −138 |
-| 新增 | [`agents/writing/agent.json`](s06-skill-workflow/agents/writing/agent.json) | Agent 定义 | +181 / −0 |
-| 新增 | [`server/modules/agents/contracts.mjs`](s06-skill-workflow/server/modules/agents/contracts.mjs) | Agent 定义 | +81 / −0 |
-| 改动 | [`server/modules/agents/index.mjs`](s06-skill-workflow/server/modules/agents/index.mjs) | Agent 定义 | +98 / −29 |
-| 改动 | [`server/modules/agents/schema.mjs`](s06-skill-workflow/server/modules/agents/schema.mjs) | Agent 定义 | +19 / −3 |
-| 新增 | [`server/modules/agents/selection.mjs`](s06-skill-workflow/server/modules/agents/selection.mjs) | Agent 定义 | +16 / −0 |
-| 新增 | [`server/modules/agents/upgrade.mjs`](s06-skill-workflow/server/modules/agents/upgrade.mjs) | Agent 定义 | +95 / −0 |
-| 改动 | [`server/modules/http/index.mjs`](s06-skill-workflow/server/modules/http/index.mjs) | HTTP / SSE 接口 | +30 / −10 |
-| 改动 | [`server/modules/data/database.mjs`](s06-skill-workflow/server/modules/data/database.mjs) | PostgreSQL | +1 / −1 |
-| 新增 | [`server/modules/data/migrations/003-workflows.sql`](s06-skill-workflow/server/modules/data/migrations/003-workflows.sql) | PostgreSQL | +9 / −0 |
-| 新增 | [`server/modules/data/migrations/004-workflow-steps.sql`](s06-skill-workflow/server/modules/data/migrations/004-workflow-steps.sql) | PostgreSQL | +6 / −0 |
-| 新增 | [`server/modules/data/migrations/005-task-proposals.sql`](s06-skill-workflow/server/modules/data/migrations/005-task-proposals.sql) | PostgreSQL | +5 / −0 |
-| 改动 | [`server/modules/knowledge/index.mjs`](s06-skill-workflow/server/modules/knowledge/index.mjs) | Wiki / RAG | +9 / −7 |
-| 新增 | [`server/modules/workflows/index.mjs`](s06-skill-workflow/server/modules/workflows/index.mjs) | Workflow | +120 / −0 |
+| 改动 | [`server/check.mjs`](s10-skill-workflow/server/check.mjs) | 服务入口 | +4 / −4 |
+| 改动 | [`server/main.mjs`](s10-skill-workflow/server/main.mjs) | 服务入口 | +13 / −7 |
+| 改动 | [`config/tools/files.json`](s10-skill-workflow/config/tools/files.json) | 工具与资料边界 | +2 / −2 |
+| 新增 | [`config/tools/skills.json`](s10-skill-workflow/config/tools/skills.json) | 工具与资料边界 | +21 / −0 |
+| 新增 | [`config/tools/tasks.json`](s10-skill-workflow/config/tools/tasks.json) | 工具与资料边界 | +23 / −0 |
+| 改动 | [`server/modules/data/files.mjs`](s10-skill-workflow/server/modules/data/files.mjs) | 工具与资料边界 | +6 / −12 |
+| 改动 | [`server/modules/tools/index.mjs`](s10-skill-workflow/server/modules/tools/index.mjs) | 工具与资料边界 | +4 / −4 |
+| 改动 | [`server/modules/tools/loader.mjs`](s10-skill-workflow/server/modules/tools/loader.mjs) | 工具与资料边界 | +15 / −5 |
+| 新增 | [`server/modules/tools/skills.mjs`](s10-skill-workflow/server/modules/tools/skills.mjs) | 工具与资料边界 | +9 / −0 |
+| 新增 | [`shared/session-events.mjs`](s10-skill-workflow/shared/session-events.mjs) | 共享代码 | +32 / −0 |
+| 改动 | [`server/modules/sessions/index.mjs`](s10-skill-workflow/server/modules/sessions/index.mjs) | 会话与排队 | +99 / −18 |
+| 新增 | [`server/modules/codex/compatibility.mjs`](s10-skill-workflow/server/modules/codex/compatibility.mjs) | 基础设施 | +75 / −0 |
+| 改动 | [`server/modules/codex/connection.mjs`](s10-skill-workflow/server/modules/codex/connection.mjs) | 基础设施 | +28 / −9 |
+| 改动 | [`server/modules/codex/launch.mjs`](s10-skill-workflow/server/modules/codex/launch.mjs) | 基础设施 | +5 / −2 |
+| 改动 | [`server/modules/codex/runtime.mjs`](s10-skill-workflow/server/modules/codex/runtime.mjs) | 基础设施 | +6 / −1 |
+| 改动 | [`server/modules/config/index.mjs`](s10-skill-workflow/server/modules/config/index.mjs) | 基础设施 | +35 / −3 |
+| 新增 | [`server/modules/data/paths.mjs`](s10-skill-workflow/server/modules/data/paths.mjs) | 基础设施 | +31 / −0 |
+| 改动 | [`server/modules/codex/skills.mjs`](s10-skill-workflow/server/modules/codex/skills.mjs) | 角色与 Skills | +39 / −3 |
+| 改动 | [`server/modules/role/index.mjs`](s10-skill-workflow/server/modules/role/index.mjs) | 角色与 Skills | +7 / −2 |
+| 改动 | [`scripts/data.mjs`](s10-skill-workflow/scripts/data.mjs) | 脚本 | +2 / −4 |
+| 新增 | [`scripts/init-agent.mjs`](s10-skill-workflow/scripts/init-agent.mjs) | 脚本 | +63 / −0 |
+| 改动 | [`scripts/knowledge.mjs`](s10-skill-workflow/scripts/knowledge.mjs) | 脚本 | +7 / −11 |
+| 新增 | [`scripts/real-smoke.mjs`](s10-skill-workflow/scripts/real-smoke.mjs) | 脚本 | +200 / −0 |
+| 改动 | [`scripts/test-data.mjs`](s10-skill-workflow/scripts/test-data.mjs) | 脚本 | +2 / −2 |
+| 新增 | [`scripts/upgrade-sessions.mjs`](s10-skill-workflow/scripts/upgrade-sessions.mjs) | 脚本 | +99 / −0 |
+| 改动 | [`server/modules/permissions/index.mjs`](s10-skill-workflow/server/modules/permissions/index.mjs) | 可信门禁 | +23 / −13 |
+| 改动 | [`client/modules/chat/index.mjs`](s10-skill-workflow/client/modules/chat/index.mjs) | 客户端 | +54 / −8 |
+| 改动 | [`client/modules/connection/index.mjs`](s10-skill-workflow/client/modules/connection/index.mjs) | 客户端 | +14 / −5 |
+| 新增 | [`config/runtime/project.json`](s10-skill-workflow/config/runtime/project.json) | 配置 | +3 / −0 |
+| 改动 | [`server/modules/data/jobs.mjs`](s10-skill-workflow/server/modules/data/jobs.mjs) | 任务记录 | +16 / −8 |
+| 改动 | [`server/modules/messages/index.mjs`](s10-skill-workflow/server/modules/messages/index.mjs) | 任务与消息 | +121 / −17 |
+| 新增 | [`server/modules/tools/tasks.mjs`](s10-skill-workflow/server/modules/tools/tasks.mjs) | 审批与提权 | +9 / −0 |
+| 改动 | [`server/modules/events/index.mjs`](s10-skill-workflow/server/modules/events/index.mjs) | 事件推送 | +18 / −1 |
+| 改动 | [`.env.example`](s10-skill-workflow/.env.example) | 项目文件 | +4 / −4 |
+| 改动 | [`compose.yaml`](s10-skill-workflow/compose.yaml) | 项目文件 | +2 / −2 |
+| 改动 | [`package.json`](s10-skill-workflow/package.json) | 项目文件 | +5 / −1 |
+| 改动 | [`server/modules/data/resources.mjs`](s10-skill-workflow/server/modules/data/resources.mjs) | 资源版本 | +1 / −1 |
+| 删除 | [`agents/writing-agent.json`](s09-knowledge-layer/agents/writing-agent.json) | Agent 定义 | +0 / −138 |
+| 新增 | [`agents/writing/agent.json`](s10-skill-workflow/agents/writing/agent.json) | Agent 定义 | +181 / −0 |
+| 新增 | [`server/modules/agents/contracts.mjs`](s10-skill-workflow/server/modules/agents/contracts.mjs) | Agent 定义 | +81 / −0 |
+| 改动 | [`server/modules/agents/index.mjs`](s10-skill-workflow/server/modules/agents/index.mjs) | Agent 定义 | +98 / −29 |
+| 改动 | [`server/modules/agents/schema.mjs`](s10-skill-workflow/server/modules/agents/schema.mjs) | Agent 定义 | +19 / −3 |
+| 新增 | [`server/modules/agents/selection.mjs`](s10-skill-workflow/server/modules/agents/selection.mjs) | Agent 定义 | +16 / −0 |
+| 新增 | [`server/modules/agents/upgrade.mjs`](s10-skill-workflow/server/modules/agents/upgrade.mjs) | Agent 定义 | +95 / −0 |
+| 改动 | [`server/modules/http/index.mjs`](s10-skill-workflow/server/modules/http/index.mjs) | HTTP / SSE 接口 | +30 / −10 |
+| 改动 | [`server/modules/data/database.mjs`](s10-skill-workflow/server/modules/data/database.mjs) | PostgreSQL | +1 / −1 |
+| 新增 | [`server/modules/data/migrations/003-workflows.sql`](s10-skill-workflow/server/modules/data/migrations/003-workflows.sql) | PostgreSQL | +9 / −0 |
+| 新增 | [`server/modules/data/migrations/004-workflow-steps.sql`](s10-skill-workflow/server/modules/data/migrations/004-workflow-steps.sql) | PostgreSQL | +6 / −0 |
+| 新增 | [`server/modules/data/migrations/005-task-proposals.sql`](s10-skill-workflow/server/modules/data/migrations/005-task-proposals.sql) | PostgreSQL | +5 / −0 |
+| 改动 | [`server/modules/knowledge/index.mjs`](s10-skill-workflow/server/modules/knowledge/index.mjs) | Wiki / RAG | +9 / −7 |
+| 新增 | [`server/modules/workflows/index.mjs`](s10-skill-workflow/server/modules/workflows/index.mjs) | Workflow | +120 / −0 |
 
-<a id="s07"></a>
+<a id="s11"></a>
 
-## s07：模型网关：Codex 只连网关
+## s11：模型网关：Codex 只连网关
 
-相比 [s06-skill-workflow](s06-skill-workflow/)：网关统一协议、按任务把请求路由到各家模型；每轮记录 token 用量，超出预算就停止派发。
+相比 [s10-skill-workflow](s10-skill-workflow/)：网关统一协议、按任务把请求路由到各家模型；每轮记录 token 用量，超出预算就停止派发。
 
 **新增模块**：生图与生视频（模型网关，异步任务，结果存为产物）；用量与预算（模型网关，超额停止派发）；模型路由（模型网关，统一协议，转给上游）
 
@@ -282,42 +282,42 @@
 
 | 状态 | 文件 | 所属模块 | 行数 |
 |---|---|---|---|
-| 改动 | [`server/main.mjs`](s07-model-gateway/server/main.mjs) | 服务入口 | +23 / −9 |
-| 新增 | [`config/tools/media.json`](s07-model-gateway/config/tools/media.json) | 工具与资料边界 | +115 / −0 |
-| 改动 | [`server/modules/data/files.mjs`](s07-model-gateway/server/modules/data/files.mjs) | 工具与资料边界 | +42 / −8 |
-| 改动 | [`server/modules/tools/index.mjs`](s07-model-gateway/server/modules/tools/index.mjs) | 工具与资料边界 | +3 / −3 |
-| 改动 | [`server/modules/tools/loader.mjs`](s07-model-gateway/server/modules/tools/loader.mjs) | 工具与资料边界 | +8 / −4 |
-| 改动 | [`server/modules/sessions/index.mjs`](s07-model-gateway/server/modules/sessions/index.mjs) | 会话与排队 | +32 / −12 |
-| 改动 | [`server/modules/codex/launch.mjs`](s07-model-gateway/server/modules/codex/launch.mjs) | 基础设施 | +96 / −53 |
-| 改动 | [`server/modules/config/index.mjs`](s07-model-gateway/server/modules/config/index.mjs) | 基础设施 | +23 / −2 |
-| 改动 | [`scripts/data.mjs`](s07-model-gateway/scripts/data.mjs) | 脚本 | +1 / −0 |
-| 新增 | [`scripts/gateway-check.mjs`](s07-model-gateway/scripts/gateway-check.mjs) | 脚本 | +85 / −0 |
-| 新增 | [`scripts/gateway-config.mjs`](s07-model-gateway/scripts/gateway-config.mjs) | 脚本 | +66 / −0 |
-| 新增 | [`scripts/ollama-pull.mjs`](s07-model-gateway/scripts/ollama-pull.mjs) | 脚本 | +19 / −0 |
-| 改动 | [`scripts/real-smoke.mjs`](s07-model-gateway/scripts/real-smoke.mjs) | 脚本 | +1 / −1 |
-| 改动 | [`server/modules/permissions/index.mjs`](s07-model-gateway/server/modules/permissions/index.mjs) | 可信门禁 | +6 / −0 |
-| 改动 | [`client/modules/chat/index.mjs`](s07-model-gateway/client/modules/chat/index.mjs) | 客户端 | +64 / −4 |
-| 新增 | [`server/modules/gateway/index.mjs`](s07-model-gateway/server/modules/gateway/index.mjs) | 模型路由 | +233 / −0 |
-| 新增 | [`server/modules/gateway/router.mjs`](s07-model-gateway/server/modules/gateway/router.mjs) | 模型路由 | +81 / −0 |
-| 新增 | [`config/models.json`](s07-model-gateway/config/models.json) | 配置 | +46 / −0 |
-| 改动 | [`server/modules/data/jobs.mjs`](s07-model-gateway/server/modules/data/jobs.mjs) | 任务记录 | +5 / −4 |
-| 改动 | [`server/modules/messages/index.mjs`](s07-model-gateway/server/modules/messages/index.mjs) | 任务与消息 | +59 / −4 |
-| 新增 | [`server/modules/media/index.mjs`](s07-model-gateway/server/modules/media/index.mjs) | 生图与生视频 | +169 / −0 |
-| 新增 | [`server/modules/media/store.mjs`](s07-model-gateway/server/modules/media/store.mjs) | 生图与生视频 | +16 / −0 |
-| 新增 | [`server/modules/tools/media.mjs`](s07-model-gateway/server/modules/tools/media.mjs) | 生图与生视频 | +8 / −0 |
-| 改动 | [`.env.example`](s07-model-gateway/.env.example) | 项目文件 | +58 / −8 |
-| 改动 | [`compose.yaml`](s07-model-gateway/compose.yaml) | 项目文件 | +54 / −6 |
-| 改动 | [`package.json`](s07-model-gateway/package.json) | 项目文件 | +12 / −1 |
-| 新增 | [`server/modules/usage/config.mjs`](s07-model-gateway/server/modules/usage/config.mjs) | 用量与预算 | +35 / −0 |
-| 新增 | [`server/modules/usage/index.mjs`](s07-model-gateway/server/modules/usage/index.mjs) | 用量与预算 | +135 / −0 |
-| 改动 | [`server/modules/data/resources.mjs`](s07-model-gateway/server/modules/data/resources.mjs) | 资源版本 | +56 / −13 |
-| 改动 | [`agents/writing/agent.json`](s07-model-gateway/agents/writing/agent.json) | Agent 定义 | +13 / −4 |
-| 改动 | [`server/modules/agents/index.mjs`](s07-model-gateway/server/modules/agents/index.mjs) | Agent 定义 | +17 / −0 |
-| 改动 | [`server/modules/agents/schema.mjs`](s07-model-gateway/server/modules/agents/schema.mjs) | Agent 定义 | +5 / −2 |
-| 改动 | [`server/modules/http/index.mjs`](s07-model-gateway/server/modules/http/index.mjs) | HTTP / SSE 接口 | +8 / −3 |
-| 改动 | [`server/modules/data/database.mjs`](s07-model-gateway/server/modules/data/database.mjs) | PostgreSQL | +1 / −1 |
-| 新增 | [`server/modules/data/migrations/006-usage.sql`](s07-model-gateway/server/modules/data/migrations/006-usage.sql) | PostgreSQL | +13 / −0 |
-| 新增 | [`server/modules/data/migrations/007-media.sql`](s07-model-gateway/server/modules/data/migrations/007-media.sql) | PostgreSQL | +12 / −0 |
-| 新增 | [`server/modules/data/migrations/008-task-model-routing.sql`](s07-model-gateway/server/modules/data/migrations/008-task-model-routing.sql) | PostgreSQL | +4 / −0 |
-| 改动 | [`server/modules/knowledge/rag.mjs`](s07-model-gateway/server/modules/knowledge/rag.mjs) | Wiki / RAG | +13 / −9 |
-| 改动 | [`server/modules/workflows/index.mjs`](s07-model-gateway/server/modules/workflows/index.mjs) | Workflow | +2 / −2 |
+| 改动 | [`server/main.mjs`](s11-model-gateway/server/main.mjs) | 服务入口 | +23 / −9 |
+| 新增 | [`config/tools/media.json`](s11-model-gateway/config/tools/media.json) | 工具与资料边界 | +115 / −0 |
+| 改动 | [`server/modules/data/files.mjs`](s11-model-gateway/server/modules/data/files.mjs) | 工具与资料边界 | +42 / −8 |
+| 改动 | [`server/modules/tools/index.mjs`](s11-model-gateway/server/modules/tools/index.mjs) | 工具与资料边界 | +3 / −3 |
+| 改动 | [`server/modules/tools/loader.mjs`](s11-model-gateway/server/modules/tools/loader.mjs) | 工具与资料边界 | +8 / −4 |
+| 改动 | [`server/modules/sessions/index.mjs`](s11-model-gateway/server/modules/sessions/index.mjs) | 会话与排队 | +32 / −12 |
+| 改动 | [`server/modules/codex/launch.mjs`](s11-model-gateway/server/modules/codex/launch.mjs) | 基础设施 | +96 / −53 |
+| 改动 | [`server/modules/config/index.mjs`](s11-model-gateway/server/modules/config/index.mjs) | 基础设施 | +23 / −2 |
+| 改动 | [`scripts/data.mjs`](s11-model-gateway/scripts/data.mjs) | 脚本 | +1 / −0 |
+| 新增 | [`scripts/gateway-check.mjs`](s11-model-gateway/scripts/gateway-check.mjs) | 脚本 | +85 / −0 |
+| 新增 | [`scripts/gateway-config.mjs`](s11-model-gateway/scripts/gateway-config.mjs) | 脚本 | +66 / −0 |
+| 新增 | [`scripts/ollama-pull.mjs`](s11-model-gateway/scripts/ollama-pull.mjs) | 脚本 | +19 / −0 |
+| 改动 | [`scripts/real-smoke.mjs`](s11-model-gateway/scripts/real-smoke.mjs) | 脚本 | +1 / −1 |
+| 改动 | [`server/modules/permissions/index.mjs`](s11-model-gateway/server/modules/permissions/index.mjs) | 可信门禁 | +6 / −0 |
+| 改动 | [`client/modules/chat/index.mjs`](s11-model-gateway/client/modules/chat/index.mjs) | 客户端 | +64 / −4 |
+| 新增 | [`server/modules/gateway/index.mjs`](s11-model-gateway/server/modules/gateway/index.mjs) | 模型路由 | +233 / −0 |
+| 新增 | [`server/modules/gateway/router.mjs`](s11-model-gateway/server/modules/gateway/router.mjs) | 模型路由 | +81 / −0 |
+| 新增 | [`config/models.json`](s11-model-gateway/config/models.json) | 配置 | +46 / −0 |
+| 改动 | [`server/modules/data/jobs.mjs`](s11-model-gateway/server/modules/data/jobs.mjs) | 任务记录 | +5 / −4 |
+| 改动 | [`server/modules/messages/index.mjs`](s11-model-gateway/server/modules/messages/index.mjs) | 任务与消息 | +59 / −4 |
+| 新增 | [`server/modules/media/index.mjs`](s11-model-gateway/server/modules/media/index.mjs) | 生图与生视频 | +169 / −0 |
+| 新增 | [`server/modules/media/store.mjs`](s11-model-gateway/server/modules/media/store.mjs) | 生图与生视频 | +16 / −0 |
+| 新增 | [`server/modules/tools/media.mjs`](s11-model-gateway/server/modules/tools/media.mjs) | 生图与生视频 | +8 / −0 |
+| 改动 | [`.env.example`](s11-model-gateway/.env.example) | 项目文件 | +58 / −8 |
+| 改动 | [`compose.yaml`](s11-model-gateway/compose.yaml) | 项目文件 | +54 / −6 |
+| 改动 | [`package.json`](s11-model-gateway/package.json) | 项目文件 | +12 / −1 |
+| 新增 | [`server/modules/usage/config.mjs`](s11-model-gateway/server/modules/usage/config.mjs) | 用量与预算 | +35 / −0 |
+| 新增 | [`server/modules/usage/index.mjs`](s11-model-gateway/server/modules/usage/index.mjs) | 用量与预算 | +135 / −0 |
+| 改动 | [`server/modules/data/resources.mjs`](s11-model-gateway/server/modules/data/resources.mjs) | 资源版本 | +56 / −13 |
+| 改动 | [`agents/writing/agent.json`](s11-model-gateway/agents/writing/agent.json) | Agent 定义 | +13 / −4 |
+| 改动 | [`server/modules/agents/index.mjs`](s11-model-gateway/server/modules/agents/index.mjs) | Agent 定义 | +17 / −0 |
+| 改动 | [`server/modules/agents/schema.mjs`](s11-model-gateway/server/modules/agents/schema.mjs) | Agent 定义 | +5 / −2 |
+| 改动 | [`server/modules/http/index.mjs`](s11-model-gateway/server/modules/http/index.mjs) | HTTP / SSE 接口 | +8 / −3 |
+| 改动 | [`server/modules/data/database.mjs`](s11-model-gateway/server/modules/data/database.mjs) | PostgreSQL | +1 / −1 |
+| 新增 | [`server/modules/data/migrations/006-usage.sql`](s11-model-gateway/server/modules/data/migrations/006-usage.sql) | PostgreSQL | +13 / −0 |
+| 新增 | [`server/modules/data/migrations/007-media.sql`](s11-model-gateway/server/modules/data/migrations/007-media.sql) | PostgreSQL | +12 / −0 |
+| 新增 | [`server/modules/data/migrations/008-task-model-routing.sql`](s11-model-gateway/server/modules/data/migrations/008-task-model-routing.sql) | PostgreSQL | +4 / −0 |
+| 改动 | [`server/modules/knowledge/rag.mjs`](s11-model-gateway/server/modules/knowledge/rag.mjs) | Wiki / RAG | +13 / −9 |
+| 改动 | [`server/modules/workflows/index.mjs`](s11-model-gateway/server/modules/workflows/index.mjs) | Workflow | +2 / −2 |

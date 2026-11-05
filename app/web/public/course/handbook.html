@@ -909,7 +909,7 @@
     <span class="callout-icon">⚠️</span>
     <div class="callout-content">
       <p class="callout-title">业务状态存 JSON，不存数据库（s03 专属）</p>
-      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s04 引入。</p>
+      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s08 引入。</p>
     </div>
   </div>
 
@@ -946,8 +946,8 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s04。<br>
-        <strong>s03 → s04</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s08。<br>
+        <strong>s03 → s08</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
         s03 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
       </div>
     </div>
@@ -1069,11 +1069,11 @@
       <h2 class="screen-heading">四层架构：谁存什么、谁唤醒谁</h2>
 
       <p>
-        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s04 在此基础上新增关系事务与内容版本追踪。
-        s04 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
+        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s08 在此基础上新增关系事务与内容版本追踪。
+        s08 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="856" alt="S04 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout">
         <div class="callout-text">
@@ -1081,10 +1081,10 @@
         </div>
       </div>
 
-      <div class="flow-steps" aria-label="s04 分层职责">
+      <div class="flow-steps" aria-label="s08 分层职责">
         <div class="flow-step"><strong>01 交互入口</strong><p><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> / <span class="term" tabindex="0" data-definition="命令行客户端；在终端输入命令来调用本地服务。">CLI</span> 收消息，校验本地凭据；返回任务 ID 与事件。</p></div><span class="flow-arrow">→</span>
         <div class="flow-step"><strong>02 装配与调度</strong><p>读取 Agent 配置，写 tasks + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span>；领取任务并驱动 Codex。</p></div><span class="flow-arrow">→</span>
-        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s04 使用它，s05 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s08 使用它，s09 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
         <div class="flow-step"><strong>04 数据与文件</strong><p>PG 管业务事实，Redis 管唤醒，blob 管正文；原生历史另由 Codex 管理。</p></div>
       </div>
       <div class="pattern-cards stagger-children">
@@ -1119,10 +1119,10 @@
 
       <p>
         想象银行转账：从 A 账户扣钱和向 B 账户加钱必须同时成功或同时失败，不能只做一半。
-        s04 把「写任务」和「写调度出口」绑进同一个 <span class="term" data-definition="事务（Transaction）是数据库的承诺：事务里的所有操作要么全部生效，要么全部撤销，中间崩溃不会留下半成品状态。">PG 事务</span>——服务崩溃时，账本要么两条都有，要么两条都没有，不会出现任务存在但调度出口丢失的情况。
+        s08 把「写任务」和「写调度出口」绑进同一个 <span class="term" data-definition="事务（Transaction）是数据库的承诺：事务里的所有操作要么全部生效，要么全部撤销，中间崩溃不会留下半成品状态。">PG 事务</span>——服务崩溃时，账本要么两条都有，要么两条都没有，不会出现任务存在但调度出口丢失的情况。
       </p>
 
-      <p class="pattern-desc">源码：<code>stages/s04-data-layer/server/modules/data/jobs.mjs:75–81</code></p>
+      <p class="pattern-desc">源码：<code>stages/s08-data-layer/server/modules/data/jobs.mjs:75–81</code></p>
 <div class="translation-block" id="m4-m4jobs-code"><div class="translation-code"><span class="translation-label">真实源码 · 7 行</span><pre><code>      <span class="code-keyword">await</span> this.wake(job.threadId, client);
       <span class="code-keyword">await</span> this.query(
         `UPDATE agent_data.conversations SET name=CASE WHEN name='' THEN $4 ELSE name END,updated_at=now()
@@ -1181,7 +1181,7 @@
         任务的权威顺序和状态，永远在 PG。
       </p>
 
-      <p class="pattern-desc">源码：<code>stages/s04-data-layer/server/modules/data/queue.mjs:58–66</code></p>
+      <p class="pattern-desc">源码：<code>stages/s08-data-layer/server/modules/data/queue.mjs:58–66</code></p>
 <div class="translation-block" id="m4-m4queue-code"><div class="translation-code"><span class="translation-label">真实源码 · 9 行</span><pre><code>    <span class="code-keyword">const</span> rows = <span class="code-keyword">await</span> this.jobs.deliveries(); // Database failure stops execution, Redis failure only delays dispatch.
     <span class="code-keyword">for</span> (<span class="code-keyword">const</span> row of rows) {
       <span class="code-keyword">try</span> {
@@ -1318,7 +1318,7 @@
     ═══════════════════════════════════════════════ -->
     <div class="screen" id="m4-screen-blob">
       <h2 class="screen-heading">不可变 Blob：内容寻址与来源追踪</h2>
-<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s04 使用数据库 agent_s04（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s05 使用 agent_s05（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
+<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
 
       <p>
         sha256 是内容指纹，正文按指纹命名保存。内容改动会生成新 blob，已登记版本不被覆盖；这不等于承诺永久保留。
@@ -1350,7 +1350,7 @@
 
       <div class="callout">
         <div class="callout-text">
-          🛠️ <strong>命令实践入口：</strong>以下命令用于验证 PG/Redis 状态和查询任务记录。在 <code>stages/s04-data-layer</code> 中完成依赖安装、环境配置、PG/Redis 启动、<code>npm run data:migrate</code> 与 <code>npm run server</code> 后执行，练习场景入口见 <a href="../../?stage=s04">互动练习</a>。
+          🛠️ <strong>命令实践入口：</strong>以下命令用于验证 PG/Redis 状态和查询任务记录。在 <code>stages/s08-data-layer</code> 中完成依赖安装、环境配置、PG/Redis 启动、<code>npm run data:migrate</code> 与 <code>npm run server</code> 后执行，练习场景入口见 <a href="../../?stage=s08">互动练习</a>。
         </div>
       </div>
 
@@ -1360,7 +1360,7 @@
           <pre><code><span class="code-keyword">npm</span> run data:check
 
 <span class="code-keyword">docker</span> compose exec postgres psql \
-  -U agent -d agent_s04 \
+  -U agent -d agent_s08 \
   -c <span class="code-string">"SELECT id, status, substring(text,1,60) \
   FROM agent_data.tasks \
   ORDER BY created_at DESC LIMIT 5;"</span></code></pre>
@@ -1369,7 +1369,7 @@
           <span class="translation-label">命令说明</span>
           <div class="translation-lines">
             <p class="tl"><code>npm run data:check</code>：运行内置检查脚本，验证 PG 连接是否正常、schema 表结构是否完整、Redis 是否可达。</p>
-            <p class="tl"><code>docker compose exec postgres psql</code>：进入 <span class="term" tabindex="0" data-definition="用容器启动依赖服务的工具；这里用于准备 PG、Redis 和可选 Chroma。">Docker</span> 容器内的 PostgreSQL 命令行，以 <code>agent</code> 用户连接 <code>agent_s04</code> 数据库。</p>
+            <p class="tl"><code>docker compose exec postgres psql</code>：进入 <span class="term" tabindex="0" data-definition="用容器启动依赖服务的工具；这里用于准备 PG、Redis 和可选 Chroma。">Docker</span> 容器内的 PostgreSQL 命令行，以 <code>agent</code> 用户连接 <code>agent_s08</code> 数据库。</p>
             <p class="tl"><code>SELECT id, status, substring(text,1,60) FROM agent_data.tasks</code>：查询最新 5 条任务记录，显示 ID、状态、任务原文前 60 字符。用于排查任务是否入队、是否卡住、是否变为 <code>unconfirmed</code>。</p>
           </div>
         </div>
@@ -1420,7 +1420,7 @@
         <!-- 题 2 -->
         <div class="quiz-question-block"
              data-correct="c"
-             data-explanation-right="正确。status=unconfirmed 是系统在告诉你&quot;执行中服务意外重启了，我不知道任务完成没有，所以我暂停了，等你决定&quot;。s04 不自动重发，需人工判断是否重试。"
+             data-explanation-right="正确。status=unconfirmed 是系统在告诉你&quot;执行中服务意外重启了，我不知道任务完成没有，所以我暂停了，等你决定&quot;。s08 不自动重发，需人工判断是否重试。"
              data-explanation-wrong="A：unconfirmed 不代表任务被拒绝或权限不足；选项中的 Bearer 凭据失败会在入口被拒绝，不能据此解释执行中的不确定状态。B：unconfirmed 不是排队中——排队中的状态是 queued。unconfirmed 明确表示执行过程中发生了不确定性事件（重启），不是正常等待。D：直接重试不是系统建议的操作；需要人工决策，因为任务可能已部分完成，盲目重试可能造成重复操作。">
           <h3 class="quiz-question">
             场景二：一位 AI 程序员告诉你某条任务的 <code>status</code> 是 <code>unconfirmed</code>，问你该怎么处理。你会如何解释这个状态，以及下一步该做什么？
@@ -1498,11 +1498,11 @@
          Screen 1 · 架构总图：五层 + 原生运行时
     ══════════════════════════════════════════════════════════════ -->
     <div class="screen" id="m5-screen-overview">
-      <h2 class="screen-heading">架构总图：s05 新增了什么</h2>
+      <h2 class="screen-heading">架构总图：s09 新增了什么</h2>
 
-      <p>s04 已经能可靠存储业务数据并调度任务。s05 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
+      <p>s08 已经能可靠存储业务数据并调度任务。s09 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="968" alt="S05 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="968" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout" id="m5-callout-arch">
         <div class="callout-text">图为逻辑职责划分。蓝色是我们的程序，绿色是 Codex 原生能力，橙色突出本阶段新增。门禁位于同一服务进程中，不是另起一个网络服务。</div>
@@ -1579,7 +1579,7 @@
 
       <p>来自 <code>server/modules/permissions/index.mjs</code> 的真实代码展示 <code>mount()</code> 如何检查挂载、操作授权与任务维护范围；上下文在任务开始时签发，结束后撤销。</p>
 
-      <p class="pattern-desc">源码：<code>stages/s05-knowledge-layer/server/modules/permissions/index.mjs:51–57</code></p>
+      <p class="pattern-desc">源码：<code>stages/s09-knowledge-layer/server/modules/permissions/index.mjs:51–57</code></p>
 <div class="translation-block" id="m5-m5gate-code"><div class="translation-code"><span class="translation-label">真实源码 · 7 行</span><pre><code>  mount(kbId, action = 'read') {
     <span class="code-keyword">const</span> context = this.current();
     <span class="code-keyword">const</span> mount = (this.agent.definition.agent.knowledge || []).find(m =&gt; m.kbId === kbId);
@@ -1640,7 +1640,7 @@
 
       <p>Wiki 页面提交流程来自 <code>server/modules/knowledge/index.mjs</code>：</p>
 
-      <p class="pattern-desc">源码：<code>stages/s05-knowledge-layer/server/modules/knowledge/index.mjs:153–160</code></p>
+      <p class="pattern-desc">源码：<code>stages/s09-knowledge-layer/server/modules/knowledge/index.mjs:153–160</code></p>
 <div class="translation-block" id="m5-m5submit-code"><div class="translation-code"><span class="translation-label">真实源码 · 8 行</span><pre><code>      <span class="code-keyword">await</span> this.sourceVersions(kb, source_versions, client);
       <span class="code-keyword">await</span> this.query(`INSERT INTO agent_data.wiki_pages(instance_id,kb_id,slug) SELECT $1,$3,$4 WHERE $2::uuid IS NOT NULL ON CONFLICT DO NOTHING`, [kbId, slug], client);
       <span class="code-keyword">const</span> page = (<span class="code-keyword">await</span> this.query('SELECT * FROM agent_data.wiki_pages WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL FOR UPDATE', [kbId, slug], client)).rows[0];
@@ -1788,10 +1788,10 @@
         </div>
       </div>
 
-      <p>以下练习在 <code>stages/s05-knowledge-layer</code> 目录进行。准备知识库时先设置 <code>AGENT_MEMORY_ENABLED=false</code>，执行 <code>npm run knowledge:init</code>，把原文放到 <code>workspace/inputs/general/</code>；维护结束后再读取实际页面。实际运行还需先完成 <code>npm ci</code>、本地环境配置、<code>docker compose up -d postgres redis</code>、<code>npm run data:migrate</code>、<code>npm run server</code>。完整步骤见 <a href="../../?stage=s05">s05 实践环境</a>。</p>
+      <p>以下练习在 <code>stages/s09-knowledge-layer</code> 目录进行。准备知识库时先设置 <code>AGENT_MEMORY_ENABLED=false</code>，执行 <code>npm run knowledge:init</code>，把原文放到 <code>workspace/inputs/general/</code>；维护结束后再读取实际页面。实际运行还需先完成 <code>npm ci</code>、本地环境配置、<code>docker compose up -d postgres redis</code>、<code>npm run data:migrate</code>、<code>npm run server</code>。完整步骤见 <a href="../../?stage=s09">s09 实践环境</a>。</p>
 
-      <div class="callout"><div class="callout-text">本轮新增 Web 外部客户端，s05 与当前项目接入受控上传，s01–s04 保留各自的能力边界。受控原文导入采用 <span class="term" tabindex="0" data-definition="由服务端签发给本地操作者请求的上下文，不来自模型参数。">operator</span> 身份，仅支持 md/txt、单文件 ≤256 KiB，且只创建、不覆盖。Wiki 页面列表通过 GET /knowledge/pages 获取，读取时仍校验来源；教学页默认不连接服务，也不运行模型。</div></div>
-<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s04 使用数据库 agent_s04（schema v1），s05 使用 agent_s05（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
+      <div class="callout"><div class="callout-text">本轮新增 Web 外部客户端，s09 与当前项目接入受控上传，s01–s08 保留各自的能力边界。受控原文导入采用 <span class="term" tabindex="0" data-definition="由服务端签发给本地操作者请求的上下文，不来自模型参数。">operator</span> 身份，仅支持 md/txt、单文件 ≤256 KiB，且只创建、不覆盖。Wiki 页面列表通过 GET /knowledge/pages 获取，读取时仍校验来源；教学页默认不连接服务，也不运行模型。</div></div>
+<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（schema v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
 <table id="m5-limit-table" style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
         <thead>
           <tr><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">限制项</th><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">说明</th></tr>
