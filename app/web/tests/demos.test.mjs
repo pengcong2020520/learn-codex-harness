@@ -6,11 +6,11 @@ import {browser,helpers,chrome} from './browser.mjs';
 
 async function workbench(t){const app=createWorkbench({port:0,targets:[]});const url=await app.listen();t.after(()=>app.close());return url;}
 
-test('阶段演示页：没有内联脚本，不再列代码行数，s00–s02 有机制演示',async t=>{
+test('阶段演示页：没有内联脚本，不再列代码行数，s00–s02、s08–s11 有机制演示',async t=>{
  const url=await workbench(t);const html=await (await fetch(url+'/course/changes.html')).text();
  assert.doesNotMatch(html,/\son[a-z]+=/i);assert.doesNotMatch(html,/<script(?![^>]*\ssrc=)/);
  assert.doesNotMatch(html,/行数|chg-bar|改动文件/);
- for(const id of ['s00','s01','s02'])assert.match(html,new RegExp(`<section class="chg-stage" id="${id}">[\\s\\S]*?<article class="mech"`));
+ for(const id of ['s00','s01','s02','s08','s09','s10','s11'])assert.match(html,new RegExp(`<section class="chg-stage" id="${id}">[\\s\\S]*?<article class="mech"`));
  assert.equal((await fetch(url+'/course/demos.js')).status,200);
 });
 
