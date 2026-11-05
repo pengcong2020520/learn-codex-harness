@@ -17,6 +17,21 @@ export function excerpt(m, read) {
   return lines.slice(m.start - 1, m.end).map((text, i) => ({ no: m.start + i, text, note: m.notes[m.start + i] || "" }));
 }
 
+// 泳道图：每个角色一条竖向泳道，消息是泳道之间的横向箭头，按步骤从上往下排。
+// 常驻的角色（服务、模型）一直亮着；proc 角色（一次性的进程、脚本）只在运行时亮，没运行就变暗。
+function lanes(m) {
+  const n = m.actors.length, x = i => ((i + 0.5) / n) * 100, at = new Map(m.actors.map(([id], i) => [id, i]));
+  const heads = m.actors.map(([id, name, kind]) => `<div class="lane-head" data-actor="${id}"${kind === "proc" ? " data-proc" : ""}><b>${esc(name)}</b><small></small></div>`).join("");
+  const lines = m.actors.map(([id], i) => `<i class="lifeline" data-actor="${id}" style="left:${x(i)}%"></i>`).join("");
+  const rows = m.steps.map((s, i) => {
+    if (!s.flow) return "";
+    const [from, to, label] = s.flow, a = x(at.get(from)), b = x(at.get(to)), warn = s.warn ? " warn" : "";
+    if (from === to) return `<div class="msg self${warn}" data-step="${i + 1}"><span class="arrow" style="left:${a}%"></span><span class="label" style="left:${a}%">${esc(label)}</span></div>`;
+    return `<div class="msg ${b > a ? "right" : "left"}${warn}" data-step="${i + 1}"><span class="arrow" style="left:${Math.min(a, b)}%;width:${Math.abs(b - a)}%"></span><span class="label" style="left:${(a + b) / 2}%">${esc(label)}</span></div>`;
+  }).join("");
+  return `<div class="lanes"><div class="lane-heads" style="grid-template-columns:repeat(${n},1fr)">${heads}</div><div class="lane-body">${lines}${rows}</div></div>`;
+}
+
 function mechanism(m, read) {
   const code = excerpt(m, read);
   const data = { steps: m.steps, state0: m.state0 };
@@ -24,7 +39,7 @@ function mechanism(m, read) {
   <header><h4>${esc(m.title)}</h4><p>${esc(m.question)}</p></header>
   <div class="mech-body">
     <div class="mech-play">
-      <div class="mech-stage">${m.actors.map(([id, name]) => `<div class="mech-actor" data-actor="${id}"><b>${esc(name)}</b><small></small></div>`).join("")}<div class="mech-track" hidden></div><div class="mech-packet" hidden></div></div>
+      ${lanes(m)}
       <p class="mech-say">点「下一步」开始演示。</p>
       <dl class="mech-state">${Object.entries(m.state0).map(([k, v]) => `<div data-key="${esc(k)}"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
       <div class="mech-controls"><button type="button" data-do="prev">上一步</button><button type="button" data-do="next" class="primary">下一步</button><button type="button" data-do="play">自动播放</button><button type="button" data-do="reset">重来</button><span class="mech-count">0 / ${m.steps.length}</span></div>

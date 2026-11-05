@@ -23,7 +23,7 @@ test('机制动画：下一步高亮源码、送出消息、更新状态；上�
   next.click();out.hl=$$('.mech-code li.on',m).map(li=>li.dataset.line);
   for(let i=0;i<3;i++)next.click();
   await sleep(1200);
-  out.proc=state('Codex 进程');out.codex=$('[data-actor="codex"] small',m).textContent;out.packet=$('.mech-packet',m).textContent;out.packetShown=!$('.mech-packet',m).hidden;
+  out.proc=state('Codex 进程');out.codex=$('.lane-head[data-actor="codex"] small',m).textContent;out.packet=$('.msg.now .label',m).textContent;out.packetShown=!$('.msg.now',m).hidden;out.dimBefore=null;
   out.changed=$('.mech-state [data-key="Codex 进程"]',m).classList.contains('changed');
   prev.click();out.back=state('Codex 进程');
   while(!next.disabled)next.click();

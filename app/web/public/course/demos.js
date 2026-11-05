@@ -3,7 +3,7 @@
 for (const root of document.querySelectorAll(".mech")) {
   const { steps, state0 } = JSON.parse(root.dataset.mech);
   const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
-  const stageBox = $(".mech-stage"), packet = $(".mech-packet"), track = $(".mech-track"), say = $(".mech-say"), count = $(".mech-count");
+  const say = $(".mech-say"), count = $(".mech-count");
   const playBtn = $('[data-do="play"]');
   let at = 0, timer = null;
 
@@ -14,37 +14,25 @@ for (const root of document.querySelectorAll(".mech")) {
     return { actors, state };
   }
 
-  // 消息走在角色上方的轨道上：从发出方的正上方移动到接收方的正上方，轨道上的箭头标出方向。
-  const LANE = 26;
-  function centerX(id) {
-    const el = $(`[data-actor="${id}"]`), box = stageBox.getBoundingClientRect(), r = el.getBoundingClientRect();
-    return r.left - box.left + r.width / 2;
-  }
-  function place(x) { packet.style.left = `${x}px`; packet.style.top = `${LANE}px`; }
-
-  function fly(flow, warn) {
-    packet.hidden = track.hidden = true; packet.className = "mech-packet"; track.className = "mech-track";
-    for (const el of $$(".mech-actor")) el.classList.remove("from", "to", "self");
-    if (!flow) return;
-    const [from, to, label] = flow;
-    packet.textContent = label; if (warn) { packet.classList.add("warn"); track.classList.add("warn"); }
-    $(`[data-actor="${from}"]`).classList.add("from");
-    if (from === to) { $(`[data-actor="${to}"]`).classList.add("self"); place(centerX(to)); packet.hidden = false; packet.classList.add("pop"); return; }
-    $(`[data-actor="${to}"]`).classList.add("to");
-    const a = centerX(from), b = centerX(to);
-    track.style.left = `${Math.min(a, b)}px`; track.style.width = `${Math.abs(b - a)}px`; track.style.top = `${LANE}px`;
-    track.classList.add(b > a ? "right" : "left"); track.hidden = false;
-    packet.style.transition = "none"; place(a); packet.hidden = false;
-    // 先放在起点，下一帧再移动到终点，让过渡动画生效。
-    requestAnimationFrame(() => requestAnimationFrame(() => { packet.style.transition = ""; place(b); }));
-  }
+  // 泳道亮暗：常驻角色一直亮；一次性的进程只在运行时亮，未启动或已退出时变暗。
+  const OFF = new Set(["", "未启动", "已退出"]);
+  const lit = (el, status) => !el.hasAttribute("data-proc") || !OFF.has(status);
 
   function render(animate) {
     const step = steps[at - 1], prev = snapshot(at - 1), now = snapshot(at);
-    for (const el of $$(".mech-actor")) {
-      const id = el.dataset.actor;
-      el.querySelector("small").textContent = now.actors[id] || "";
+    for (const el of $$(".lane-head")) {
+      const id = el.dataset.actor, status = now.actors[id] || "", on = lit(el, status);
+      el.querySelector("small").textContent = status;
+      el.classList.toggle("dim", !on);
       el.classList.toggle("changed", at > 0 && (step.actors || {})[id] !== undefined);
+      $(`.lifeline[data-actor="${id}"]`).classList.toggle("dim", !on);
+    }
+    // 已经发生的消息留在泳道上（变淡），当前这一步的消息高亮并播放画线动画。
+    for (const row of $$(".msg")) {
+      const k = Number(row.dataset.step);
+      row.hidden = k > at;
+      row.classList.toggle("now", k === at);
+      if (k === at && animate) { row.classList.remove("draw"); void row.offsetWidth; row.classList.add("draw"); }
     }
     for (const el of $$(".mech-state > div")) {
       const k = el.dataset.key;
@@ -63,7 +51,6 @@ for (const root of document.querySelectorAll(".mech")) {
     $(".mech-takeaway").hidden = at < steps.length;
     $('[data-do="prev"]').disabled = at === 0;
     $('[data-do="next"]').disabled = at === steps.length;
-    if (animate) fly(step?.flow, step?.warn); else fly(null);
   }
 
   function stop() { clearInterval(timer); timer = null; playBtn.textContent = "自动播放"; }
