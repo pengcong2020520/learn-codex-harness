@@ -3,6 +3,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {stageDirs} from './server.mjs';
+import {renderChanges} from './build-changes-page.mjs';
 const project=fileURLToPath(new URL('../',import.meta.url)),repo=path.dirname(project),dir=path.join(project,'web/curriculum');
 const lessons=['s01-s03.json','s04-s05.json'].flatMap(f=>JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')));
 const experiments=new Map(JSON.parse(fs.readFileSync(path.join(dir,'experiment-manifest.json'),'utf8')).lessons.map(x=>[x.id,x]));
@@ -27,5 +28,7 @@ const chapters=fs.readdirSync(path.join(course,'modules')).filter(f=>f.endsWith(
 const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-tooltip="${c.title}" aria-label="${c.title}"></button>`).join('\n      ');
 const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/learning.js'),'utf8'),'learning.css':fs.readFileSync(path.join(project,'web/public/app/learning.css'),'utf8'),'curriculum.json':serialized,'index.html':fs.readFileSync(path.join(course,'_reader.html'),'utf8'),'handbook.html':fs.readFileSync(path.join(course,'_handbook.html'),'utf8').replace('{{dots}}',()=>dots).replace('{{modules}}',()=>chapters.map(c=>c.html.trimEnd()).join('\n\n'))};
 // 课程里的总架构图直接取自各阶段 README 用的同一份生成结果（stages/build-architecture.mjs），不再单独绘制。
-for(const n of [1,2,3,4,5]){const stage=fs.readdirSync(path.join(repo,'stages')).find(d=>d.startsWith(`s0${n}-`));pages[`assets/s0${n}-architecture.svg`]=fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
+for(const n of [1,2,3,4,5,6,7]){const stage=fs.readdirSync(path.join(repo,'stages')).find(d=>d.startsWith(`s0${n}-`));pages[`assets/s0${n}-architecture.svg`]=fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
+// 阶段增量页：数据来自 stages/changes.json（node stages/build-changes.mjs 生成）。
+pages['changes.html']=renderChanges(JSON.parse(fs.readFileSync(path.join(repo,'stages/changes.json'),'utf8')));
 if(process.argv.includes('--check')){for(const [name,body] of Object.entries(pages))if(fs.readFileSync(path.join(course,name),'utf8')!==body)throw Error(`课程 ${name} 不是最新；请运行 npm run course:build`);console.log(`${lessons.length} lessons, ${chapters.length} handbook chapters, source excerpts and experiment links are current.`);}else{for(const [name,body] of Object.entries(pages))fs.writeFileSync(path.join(course,name),body);console.log(`Built ${lessons.length} source-grounded lessons and ${chapters.length} handbook chapters.`);}

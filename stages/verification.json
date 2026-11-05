@@ -1,88 +1,88 @@
 {
-  "verifiedAt": "2026-10-03T17:18:20.873Z",
+  "verifiedAt": "2026-11-05T13:37:37.797Z",
   "modelProvider": "local simulated Responses",
-  "embeddingProvider": "local deterministic 3D fixture",
+  "embeddingProvider": null,
   "semanticQualityVerified": false,
   "docs": [
     "README.md",
-    "demo1/README.md",
-    "demo2/README.md",
-    "demo3/README.md",
-    "demo4/README.md",
-    "demo5/README.md",
-    "demo4/docs/data-layer.md",
-    "demo3/docs/tools.md",
-    "demo5/docs/knowledge-implementation.md"
+    "introduction.md",
+    "s00-sdk-quickstart/README.md",
+    "s01-single-turn/README.md",
+    "s02-multi-turn/README.md",
+    "s03-agent-core/README.md",
+    "s04-data-layer/README.md",
+    "s05-knowledge-layer/README.md",
+    "s06-skill-workflow/README.md",
+    "s07-model-gateway/README.md",
+    "s01-single-turn/docs/design.md",
+    "s02-multi-turn/docs/design.md",
+    "s03-agent-core/docs/design.md",
+    "s04-data-layer/docs/design.md",
+    "s05-knowledge-layer/docs/design.md",
+    "s06-skill-workflow/docs/design.md",
+    "s07-model-gateway/docs/design.md",
+    "s00-sdk-quickstart/docs/guide.md",
+    "s03-agent-core/docs/tools.md",
+    "s04-data-layer/docs/data-layer.md",
+    "s05-knowledge-layer/docs/knowledge-implementation.md",
+    "s06-skill-workflow/docs/skill-workflow-design.md",
+    "s07-model-gateway/docs/model-gateway.md"
   ],
   "checks": [
     {
-      "directory": "demo1",
+      "directory": "s00-sdk-quickstart",
+      "command": "npm test",
+      "passed": true,
+      "tests": 20,
+      "skipped": 0
+    },
+    {
+      "directory": "s01-single-turn",
       "command": "npm test",
       "passed": true,
       "tests": 6,
       "skipped": 0
     },
     {
-      "directory": "demo2",
+      "directory": "s02-multi-turn",
       "command": "npm test",
       "passed": true,
       "tests": 45,
       "skipped": 0
     },
     {
-      "directory": "demo3",
+      "directory": "s03-agent-core",
       "command": "npm test",
       "passed": true,
-      "tests": 140,
+      "tests": 148,
       "skipped": 0
     },
     {
-      "directory": "demo4",
+      "directory": "s04-data-layer",
       "command": "npm test",
       "passed": true,
-      "tests": 139,
+      "tests": 151,
       "skipped": 0
     },
     {
-      "directory": "demo5",
+      "directory": "s05-knowledge-layer",
       "command": "npm test",
       "passed": true,
-      "tests": 141,
+      "tests": 155,
       "skipped": 0
     },
     {
-      "directory": ".",
-      "command": "/usr/local/bin/node --test tests/evolution.integration.mjs",
+      "directory": "s06-skill-workflow",
+      "command": "npm test",
       "passed": true,
-      "tests": 2,
+      "tests": 190,
       "skipped": 0
     },
     {
-      "directory": "demo3",
-      "command": "npm run test:codex-tools",
+      "directory": "s07-model-gateway",
+      "command": "npm test",
       "passed": true,
-      "tests": 2,
-      "skipped": 0
-    },
-    {
-      "directory": "demo3",
-      "command": "npm run test:codex-memory",
-      "passed": true,
-      "tests": 2,
-      "skipped": 0
-    },
-    {
-      "directory": "demo4",
-      "command": "npm run test:data",
-      "passed": true,
-      "tests": 9,
-      "skipped": 0
-    },
-    {
-      "directory": "demo5",
-      "command": "npm run test:rag",
-      "passed": true,
-      "tests": 13,
+      "tests": 257,
       "skipped": 0
     }
   ]

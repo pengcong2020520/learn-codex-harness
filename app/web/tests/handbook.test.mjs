@@ -79,7 +79,7 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
 
  const arch=await b.run(`${helpers}
   const diagrams=$$('.architecture-figure');
-  const loaded=await until(()=>diagrams.every(el=>{const img=$('img',el);return img.complete&&img.naturalWidth===1600&&img.naturalHeight===930;}));
+  const loaded=await until(()=>diagrams.every(el=>{const img=$('img',el);return img.complete&&img.naturalWidth===1600&&img.naturalHeight===Number(img.getAttribute("height"));}));
   return {count:diagrams.length,loaded,links:diagrams.every(el=>{const a=$('a',el),img=$('img',el);return a.href===img.src&&a.target==='_blank'&&a.rel.includes('noopener')&&img.alt.includes('总架构');})};`);
  assert.deepEqual(arch,{count:5,loaded:true,links:true});
 

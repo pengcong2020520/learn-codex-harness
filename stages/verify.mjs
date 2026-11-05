@@ -105,6 +105,9 @@ for (const stage of Object.keys(STAGES).map(Number)) {
 // 各阶段总架构图由同一份模块数据生成，必须与生成脚本一致。
 const diagrams = spawnSync(process.execPath, [path.join(root, "build-architecture.mjs"), "--check"], { encoding: "utf8" });
 assert.equal(diagrams.status, 0, diagrams.stderr);
+// 阶段增量（stages/changes.json、CHANGES.md）也由快照生成，必须是最新的。
+const changes = spawnSync(process.execPath, [path.join(root, "build-changes.mjs"), "--check"], { encoding: "utf8" });
+assert.equal(changes.status, 0, changes.stderr);
 assert.equal(fs.existsSync(path.join(root, 's03-agent-core/server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's04-data-layer/server/modules/knowledge/index.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's05-knowledge-layer/server/modules/permissions/index.mjs')), true);
