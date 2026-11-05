@@ -1,0 +1,295 @@
+[
+  {
+    "id": "s01-accepted",
+    "title": "收到了，不等于答完了",
+    "question": "turn/start 已经返回了 turn id，为什么还不能把答案交给用户？",
+    "file": "stages/s01-single-turn/05-app-server.mjs",
+    "start": 154,
+    "end": 176,
+    "expect": "async function runTurn(prompt)",
+    "notes": {
+      "155": "还没有对话就先 thread/start 建一个",
+      "156": "为这一轮准备：答案、暂存区、一个“完成”信号；turn id 先空着",
+      "157": "先挂一个空处理，避免信号失败时报未处理异常",
+      "158": "标记“当前正在进行的是这一轮”，事件按它来匹配",
+      "159": "超时就断开，不自动重发（重发可能让模型做两遍）",
+      "162": "发起这一轮，只带这一句输入",
+      "165": "RPC 响应里拿到 turn id——这只表示“受理了”",
+      "167": "把 turn id 到手之前就到达的事件补处理掉",
+      "170": "真正的等待在这里：等本轮自己的 turn/completed",
+      "171": "完成之后才拼出完整答案",
+      "174": "无论成败都清掉计时器和当前轮"
+    },
+    "actors": [
+      [
+        "client",
+        "我们的客户端"
+      ],
+      [
+        "server",
+        "Codex App Server"
+      ],
+      [
+        "model",
+        "模型"
+      ]
+    ],
+    "state0": {
+      "threadId": "—",
+      "turn id": "—",
+      "本轮状态": "未开始",
+      "已收到的答案": ""
+    },
+    "steps": [
+      {
+        "lines": [
+          155,
+          155
+        ],
+        "flow": [
+          "client",
+          "server",
+          "thread/start：新建 Thread"
+        ],
+        "say": "第一次提问，先建一个对话（Thread）。",
+        "state": {
+          "threadId": "thr_01"
+        }
+      },
+      {
+        "lines": [
+          156,
+          159
+        ],
+        "say": "为这一轮建一份记录，并启动超时计时器。turn id 这时还不知道。",
+        "state": {
+          "本轮状态": "等待受理"
+        }
+      },
+      {
+        "lines": [
+          162,
+          164
+        ],
+        "flow": [
+          "client",
+          "server",
+          "turn/start：发送 prompt"
+        ],
+        "say": "发起这一轮。"
+      },
+      {
+        "lines": [
+          165,
+          166
+        ],
+        "flow": [
+          "server",
+          "client",
+          "返回 turn id（inProgress）"
+        ],
+        "say": "App Server 立刻回了 turn id，状态是 inProgress。这只说明“收到了”，模型可能一个字还没写——很多人在这里就当成功了。",
+        "state": {
+          "turn id": "turn_01",
+          "本轮状态": "进行中"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "model",
+          "生成回答"
+        ],
+        "say": "App Server 驱动模型生成回答。",
+        "actors": {
+          "model": "生成中"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "client",
+          "delta：第一段文本"
+        ],
+        "say": "回答一段段推回来（item/agentMessage/delta），客户端按条目拼接。",
+        "state": {
+          "已收到的答案": "Codex harness"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "client",
+          "delta：后续文本"
+        ],
+        "say": "继续推送，答案在变长，但还不能确定写完了。",
+        "actors": {
+          "model": "空闲"
+        },
+        "state": {
+          "已收到的答案": "Codex harness 已连接。"
+        }
+      },
+      {
+        "lines": [
+          170,
+          172
+        ],
+        "flow": [
+          "server",
+          "client",
+          "turn/completed（completed）"
+        ],
+        "say": "收到本轮自己的 turn/completed，状态为 completed，才把答案交给用户。",
+        "state": {
+          "本轮状态": "completed ✓"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "server",
+          "client",
+          "turn/completed（failed）"
+        ],
+        "say": "换一种结局：如果状态是 failed 或 interrupted，“完成”信号被拒绝，客户端报错，半截答案不会当成结果。",
+        "state": {
+          "本轮状态": "failed → 报错"
+        }
+      },
+      {
+        "lines": [
+          173,
+          175
+        ],
+        "say": "无论成败，都清掉计时器和当前轮，下一轮从干净的状态开始。",
+        "state": {
+          "turn id": "—"
+        }
+      }
+    ],
+    "takeaway": "RPC 响应只代表受理，答案以事件形式陆续到达；只有本轮的 turn/completed 且状态为 completed，才算真正答完。"
+  },
+  {
+    "id": "s01-early-events",
+    "title": "事件比响应先到",
+    "question": "如果模型的第一段回答，比 turn/start 的响应还早到，客户端怎么知道它属于哪一轮？",
+    "file": "stages/s01-single-turn/05-app-server.mjs",
+    "start": 84,
+    "end": 102,
+    "expect": "function handleTurnEvent(message)",
+    "notes": {
+      "85": "取出当前正在进行的那一轮",
+      "86": "没有进行中的轮次，或者不是这个对话的事件：忽略",
+      "88": "还不知道 turn id：先放进暂存区，不急着判断",
+      "89": "事件里带的 turn id",
+      "90": "不是本轮的事件一律丢掉，防止串轮",
+      "91": "一段增量文字：拼到对应条目后面",
+      "95": "条目完成时给出完整文本，以它为准覆盖拼接结果",
+      "98": "本轮结束事件",
+      "99": "completed 才算成功",
+      "100": "其余状态（failed / interrupted）都按失败处理"
+    },
+    "actors": [
+      [
+        "server",
+        "Codex App Server"
+      ],
+      [
+        "client",
+        "我们的客户端"
+      ],
+      [
+        "buffer",
+        "暂存区"
+      ]
+    ],
+    "state0": {
+      "turn id": "未知",
+      "暂存区": "0 条",
+      "答案": ""
+    },
+    "steps": [
+      {
+        "lines": [
+          85,
+          86
+        ],
+        "say": "每条事件进来，先看是不是当前对话的；别的对话的事件直接忽略。"
+      },
+      {
+        "lines": [
+          88,
+          88
+        ],
+        "flow": [
+          "server",
+          "buffer",
+          "delta 先于响应到达"
+        ],
+        "say": "turn/start 的响应还在路上，第一段回答已经到了。此时不知道 turn id，没法判断它属于哪一轮，于是先暂存。",
+        "state": {
+          "暂存区": "1 条"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "client",
+          "turn/start 响应：turn id"
+        ],
+        "say": "响应到了，现在知道本轮是 turn_01。",
+        "state": {
+          "turn id": "turn_01"
+        }
+      },
+      {
+        "lines": [
+          89,
+          90
+        ],
+        "flow": [
+          "buffer",
+          "client",
+          "按 turn id 回放暂存事件"
+        ],
+        "say": "把暂存区的事件按到达顺序回放，每条都核对 turn id。",
+        "state": {
+          "暂存区": "0 条"
+        }
+      },
+      {
+        "lines": [
+          91,
+          94
+        ],
+        "say": "核对通过，这段文字拼进答案。",
+        "state": {
+          "答案": "你好"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "server",
+          "client",
+          "旧 Turn 的迟到 delta"
+        ],
+        "say": "一条上一轮遗留的迟到事件也进来了，turn id 对不上，直接丢掉，不会串进这一轮的答案。"
+      },
+      {
+        "lines": [
+          98,
+          101
+        ],
+        "flow": [
+          "server",
+          "client",
+          "turn/completed"
+        ],
+        "say": "本轮结束事件到达，按状态决定成功还是失败。"
+      }
+    ],
+    "takeaway": "网络上的消息不保证先后。先暂存、拿到 ID 后再严格匹配，才能保证每段回答都归到正确的那一轮。"
+  }
+]

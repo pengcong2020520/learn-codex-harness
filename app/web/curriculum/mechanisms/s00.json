@@ -1,0 +1,295 @@
+[
+  {
+    "id": "s00-run",
+    "title": "一次 run 背后发生了什么",
+    "question": "调用 thread.run() 之后，是谁在读文件、跑命令？跑完之后还剩下什么？",
+    "file": "stages/s00-sdk-quickstart/examples/01-hello.mjs",
+    "start": 4,
+    "end": 25,
+    "expect": "const codex = new Codex(",
+    "notes": {
+      "4": "只准备配置（密钥、路径），此时还没有启动任何进程",
+      "7": "记下这段对话的选项，同样不启动进程",
+      "8": "Codex 在哪个目录里干活",
+      "10": "只读沙箱：能读文件、不能改",
+      "11": "从不停下来问人，遇到需要批准的操作直接拒绝",
+      "12": "不联网搜索",
+      "21": "这一句才真正启动 codex exec 子进程，并等它跑完整个循环",
+      "22": "没有最终回答就算失败，不把中间输出当结果",
+      "24": "对话 ID 由 Codex 生成，下次靠它接着聊",
+      "25": "这一轮用了多少 token"
+    },
+    "actors": [
+      [
+        "script",
+        "你的脚本"
+      ],
+      [
+        "sdk",
+        "Codex SDK"
+      ],
+      [
+        "codex",
+        "codex exec 进程",
+        "proc"
+      ],
+      [
+        "model",
+        "模型"
+      ]
+    ],
+    "state0": {
+      "Codex 进程": "0 个",
+      "对话 ID": "还没有",
+      "工具调用": "0 次"
+    },
+    "steps": [
+      {
+        "lines": [
+          4,
+          4
+        ],
+        "say": "new Codex() 只是把配置放进内存。这时电脑上还没有任何 Codex 进程。",
+        "actors": {
+          "codex": "未启动",
+          "model": "空闲"
+        }
+      },
+      {
+        "lines": [
+          7,
+          14
+        ],
+        "say": "startThread() 也只记下选项：在当前目录、只读沙箱、不审批。仍然没有进程，也还没有对话 ID。"
+      },
+      {
+        "lines": [
+          21,
+          21
+        ],
+        "flow": [
+          "script",
+          "sdk",
+          "发送 prompt"
+        ],
+        "say": "run() 被调用，脚本在这里等待（await）。"
+      },
+      {
+        "flow": [
+          "sdk",
+          "codex",
+          "启动 codex exec 子进程"
+        ],
+        "say": "SDK 启动一个 codex exec 子进程，把任务交给它。",
+        "actors": {
+          "codex": "运行中"
+        },
+        "state": {
+          "Codex 进程": "1 个"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "model",
+          "prompt + 可用工具"
+        ],
+        "say": "Codex 把任务和它能用的工具（读文件、跑命令……）一起发给模型。",
+        "actors": {
+          "model": "思考中"
+        }
+      },
+      {
+        "flow": [
+          "model",
+          "codex",
+          "请求调用工具：读 package.json"
+        ],
+        "say": "模型决定先看一下文件。注意：模型自己不能读文件，它只能“提出”要调用工具。",
+        "actors": {
+          "model": "等工具结果"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "codex",
+          "在只读沙箱中执行"
+        ],
+        "say": "Codex 在只读沙箱里执行这次读取。这就是执行循环：模型提出，Codex 执行。",
+        "state": {
+          "工具调用": "1 次"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "model",
+          "返回工具结果"
+        ],
+        "say": "把执行结果交回模型。需要的话会再来几次，直到模型认为可以回答了。",
+        "actors": {
+          "model": "思考中"
+        }
+      },
+      {
+        "flow": [
+          "model",
+          "codex",
+          "给出最终回答"
+        ],
+        "say": "模型给出最终回答，本轮循环结束。",
+        "actors": {
+          "model": "空闲"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "sdk",
+          "推送事件流（含 thread id）"
+        ],
+        "say": "进程把整个过程以事件形式交给 SDK；第一条事件里带着新生成的对话 ID。",
+        "state": {
+          "对话 ID": "thread_7f3c…"
+        }
+      },
+      {
+        "lines": [
+          22,
+          25
+        ],
+        "flow": [
+          "sdk",
+          "script",
+          "返回最终回答与 token 用量"
+        ],
+        "say": "run() 返回结果，codex exec 进程随即退出。对话记录留在本机 ~/.codex/sessions 里。",
+        "actors": {
+          "codex": "已退出"
+        },
+        "state": {
+          "Codex 进程": "0 个"
+        }
+      }
+    ],
+    "takeaway": "读文件、跑命令的循环由 Codex 转，模型只负责提出要做什么；你的脚本只发起和验收。每一次 run 都是一个新进程，跑完就退出。"
+  },
+  {
+    "id": "s00-resume",
+    "title": "进程退出了，对话怎么接上",
+    "question": "脚本和 Codex 进程都退出了，第二次运行为什么还记得上一轮说过的话？",
+    "file": "stages/s00-sdk-quickstart/examples/03-resume.mjs",
+    "start": 4,
+    "end": 13,
+    "expect": "try {",
+    "notes": {
+      "5": "读出上一次 npm run fix 留下的对话 ID 和工作目录",
+      "7": "按 ID 接回已有对话；和 startThread 一样，这里还不启动进程",
+      "8": "这次只说新的一句话，不重发上一轮的内容",
+      "10": "启动新的 codex 进程跑这一轮，过程写到 jsonl 文件里便于查看",
+      "12": "统一的出错提示"
+    },
+    "actors": [
+      [
+        "run1",
+        "第一次运行",
+        "proc"
+      ],
+      [
+        "disk",
+        "本机会话记录"
+      ],
+      [
+        "run2",
+        "第二次运行",
+        "proc"
+      ],
+      [
+        "codex",
+        "新的 codex exec 进程",
+        "proc"
+      ]
+    ],
+    "state0": {
+      "内存里的对话": "无",
+      "磁盘上的对话": "第 1 轮：修复了 add.mjs",
+      "发给模型的上下文": "—"
+    },
+    "steps": [
+      {
+        "say": "第一次运行（npm run fix）结束：脚本退出，codex 进程也退出了，内存里什么都没剩。",
+        "actors": {
+          "run1": "已退出",
+          "disk": "有 1 轮记录",
+          "run2": "未启动",
+          "codex": "未启动"
+        }
+      },
+      {
+        "lines": [
+          5,
+          5
+        ],
+        "flow": [
+          "disk",
+          "run2",
+          "读出 thread id"
+        ],
+        "say": "第二次运行先读出上次记下的对话 ID。程序自己只保存了这个 ID，没有保存聊天内容。",
+        "actors": {
+          "run2": "运行中"
+        }
+      },
+      {
+        "lines": [
+          7,
+          7
+        ],
+        "say": "resumeThread(ID) 只是记下“要接这段对话”，仍然没有进程。"
+      },
+      {
+        "lines": [
+          8,
+          10
+        ],
+        "flow": [
+          "run2",
+          "codex",
+          "按 thread id 恢复，发送新 prompt"
+        ],
+        "say": "发送时才启动新的 codex 进程，只带上这一句新问题。",
+        "actors": {
+          "codex": "运行中"
+        }
+      },
+      {
+        "flow": [
+          "disk",
+          "codex",
+          "加载第 1 轮历史"
+        ],
+        "say": "Codex 按 ID 从本机会话记录里把历史读回来，和新问题一起交给模型。",
+        "state": {
+          "发给模型的上下文": "第 1 轮历史 + 新问题"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "run2",
+          "回答：修改了 add.mjs"
+        ],
+        "say": "模型因此能回答上一轮的事。回答完，这一轮也写进会话记录。",
+        "actors": {
+          "codex": "已退出",
+          "disk": "有 2 轮记录"
+        },
+        "state": {
+          "磁盘上的对话": "第 1、2 轮"
+        }
+      }
+    ],
+    "takeaway": "能接着聊，靠的是 Codex 存在本机的会话记录，而不是你的程序记住了什么。换一台机器、或者删掉 ~/.codex/sessions，就接不上了——这也是后面要把服务放到云端的原因之一。"
+  }
+]
