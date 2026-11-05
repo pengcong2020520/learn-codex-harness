@@ -1,5 +1,5 @@
 // 课程里的"阶段演示"页：每个阶段先看总图上新增了哪些模块，再逐步演示这一阶段的核心机制。
-// 数据：stages/changes.json（模块与新增能力）+ curriculum/mechanisms.json（机制演示，代码按行号从真实源码截取）。
+// 数据：stages/changes.json（模块与新增能力）+ curriculum/mechanisms/sNN.json（机制演示，代码按行号从真实源码截取）。
 // 页面本身不含脚本，动画由 /course/demos.js 驱动。
 const esc = s => String(s).replace(/[&<>"']/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[v]));
 const repo = "https://github.com/pengcong2020520/learn-codex-harness/blob/main";
@@ -8,7 +8,7 @@ const surfaceName = { tools: "新增工具", routes: "新增接口", env: "新�
 // 截取源码并核对：起始行必须包含 expect，源码改动后行号对不上就构建失败。
 export function excerpt(m, read) {
   const lines = read(m.file).split("\n");
-  if (!lines[m.start - 1]?.includes(m.expect)) throw new Error(`机制 ${m.id}：${m.file} 第 ${m.start} 行不再是「${m.expect}」，请更新 mechanisms.json 的行号`);
+  if (!lines[m.start - 1]?.includes(m.expect)) throw new Error(`机制 ${m.id}：${m.file} 第 ${m.start} 行不再是「${m.expect}」，请更新 mechanisms/ 里的行号`);
   if (m.end > lines.length || m.end < m.start) throw new Error(`机制 ${m.id}：行号范围无效`);
   for (const s of m.steps) if (s.lines && (s.lines[0] < m.start || s.lines[1] > m.end)) throw new Error(`机制 ${m.id}：步骤高亮超出截取范围`);
   for (const k of Object.keys(m.notes)) if (k < m.start || k > m.end) throw new Error(`机制 ${m.id}：第 ${k} 行注释超出截取范围`);
@@ -75,7 +75,7 @@ function stage(s, mechs, read) {
 
 export function renderChanges({ stages }, mechanisms, read) {
   const known = new Set(stages.map(s => s.id));
-  for (const id of Object.keys(mechanisms)) if (!known.has(id)) throw new Error(`mechanisms.json 里的 ${id} 不是已有阶段`);
+  for (const id of Object.keys(mechanisms)) if (!known.has(id)) throw new Error(`mechanisms/ 里的 ${id} 不是已有阶段`);
   const nav = stages.map(s => `<a href="#${s.id}"><b>${s.id}</b><span>${esc(s.title)}</span><small>${(mechanisms[s.id] || []).length ? `${mechanisms[s.id].length} 个机制演示` : "演示制作中"}</small></a>`).join("");
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>阶段演示 · Codex Harness</title><link rel="stylesheet" href="/course/changes.css"><script src="/course/demos.js" defer></script></head><body>
