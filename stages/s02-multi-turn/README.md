@@ -54,7 +54,7 @@
 
 用户的输入先进一个先进先出（FIFO）的队列，上一轮结束后才取下一条。这只是一个交互缓冲，不是在我们的程序里重写一个 agent loop。
 
-![多轮会话](images/multi-turn.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 ---
 

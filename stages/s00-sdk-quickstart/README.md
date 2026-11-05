@@ -27,7 +27,7 @@
 
 ### 循环由 harness 来转
 
-![SDK 调用链](images/sdk-flow.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 官方 TypeScript SDK 会在本机启动一个 Codex 子进程（`codex exec`），通过 stdio 和它通信。推理 → 调工具 → 看结果 → 继续，这整个循环都在 Codex 内部完成。你的程序只是说一句"去做这件事"，然后等结果，或者一路看着它做。
 

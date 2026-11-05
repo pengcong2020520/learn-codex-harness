@@ -97,11 +97,14 @@ for (const stage of Object.keys(STAGES).map(Number)) {
     assert.equal(fs.existsSync(path.join(cwd, file)), stage >= 7, `${STAGES[stage]}: ${file}`);
   }
   if (stage >= 7) {
-    for (const file of ["snapshot.json", "lessons/catalog.json", "lessons/run.mjs", "lessons/README.md", "images/model-gateway.svg"]) {
+    for (const file of ["snapshot.json", "lessons/catalog.json", "lessons/run.mjs", "lessons/README.md", "images/model-gateway.svg", "images/architecture.svg"]) {
       assert.ok(fs.existsSync(path.join(cwd, file)), `${STAGES[stage]}: ${file}`);
     }
   }
 }
+// 各阶段总架构图由同一份模块数据生成，必须与生成脚本一致。
+const diagrams = spawnSync(process.execPath, [path.join(root, "build-architecture.mjs"), "--check"], { encoding: "utf8" });
+assert.equal(diagrams.status, 0, diagrams.stderr);
 assert.equal(fs.existsSync(path.join(root, 's03-agent-core/server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's04-data-layer/server/modules/knowledge/index.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's05-knowledge-layer/server/modules/permissions/index.mjs')), true);

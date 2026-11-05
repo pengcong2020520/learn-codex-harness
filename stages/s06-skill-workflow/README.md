@@ -43,7 +43,7 @@ Workflow 定义"一类任务"：本任务额外给什么授权、注入哪个 Sk
 
 ### 三件事分开放
 
-![Skill 与 Workflow](images/skill-workflow.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 | 层 | 回答什么 | 谁定义 | 能否授权 | 放在哪里 |
 |----|---------|-------|---------|---------|

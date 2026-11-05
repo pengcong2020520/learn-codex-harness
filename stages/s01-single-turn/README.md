@@ -64,7 +64,7 @@ App Server 的连接是**双向**的。stdout 上的每一行都是一条 JSON-R
 
 ### 第五步：一轮的完整流程
 
-![单轮协议闭环](images/protocol.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 ```text
 启动 App Server → initialize 请求 + initialized 通知（握手）→ thread/start（开对话）

@@ -101,7 +101,7 @@ Codex 原生就有长期记忆。三方分工如下：
 
 ### 一份配置，装配一个 Agent
 
-![配置驱动 Agent](images/agent-assembly.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 角色、工具、记忆，再加上资料边界，都写进一份 [`agents/writing-agent.json`](agents/writing-agent.json)。它是唯一的装配入口：
 

@@ -34,7 +34,7 @@
 
 本项目用开源网关 [Bifrost](https://github.com/maximhq/bifrost)，作为一个容器运行。协议转换、备用切换、限流计数这些是通用的基础设施，交给成熟的开源项目；**"这一步该用哪个模型""这个 Agent 花了多少"这类和业务有关的判断，由我们自己写**，因为网关看不到任务的含义。
 
-![模型网关](images/model-gateway.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 模型网关有三层作用，下面逐层讲。
 

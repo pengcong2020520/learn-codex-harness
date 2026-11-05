@@ -34,7 +34,7 @@
 
 ### 一道门禁，五项检查
 
-![知识层与通用门禁](images/knowledge-gate.svg)
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 所有对外部世界的访问（文件、知识、索引）都经过同一个 `PermissionGate`：
 
