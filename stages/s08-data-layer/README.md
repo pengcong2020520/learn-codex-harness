@@ -1,6 +1,6 @@
 # s08: 数据层 — 对话历史归 Codex，业务事实归我们
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-agent-core/) → `s08` → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s07](../s07-memory/) → `s08` → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"PostgreSQL 记事实，Redis 只负责叫醒"* — 任务和"该叫醒谁"写在同一个事务里，唤醒信号丢了也能补上；不确定的事不猜，交给人决定。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？ ④ 依据什么资料？
@@ -68,7 +68,7 @@ Codex 已经替我们保存了很多东西，s02 恢复会话靠的就是它。�
 | 事情 | Codex | 我们的程序 |
 |------|-------|----------|
 | 对话历史、上下文、原生记忆 | 持久保存，恢复时自己读 | 不重复保存 |
-| 执行循环 | 和 s03 完全一样 | — |
+| 执行循环 | 和前面各章一样 | — |
 | 任务排队与调度 | — | PostgreSQL 任务表 + outbox，Redis 只负责叫醒 |
 | 中断后的恢复 | 线程历史还在 | 执行中的任务标为 `unconfirmed`，暂停会话，等人决定 |
 | 资料与产物版本 | — | 不可变正文、版本记录、依赖与失效 |

@@ -7,8 +7,8 @@ import { createRequire } from "node:module";
 import { Readable, PassThrough } from "node:stream";
 import { runAppServer as runSingle, buildAppServerLaunch as singleLaunch } from "../s01-single-turn/05-app-server.mjs";
 import { runAppServer as runChat, buildAppServerLaunch as chatLaunch } from "../s02-multi-turn/05-app-server.mjs";
-import { tempRoot } from "../s03-agent-core/tests/helpers.mjs";
-import { responsesFixture, answer, toolSpecs } from "../s03-agent-core/tests/responses-fixture.mjs";
+import { tempRoot } from "../s07-memory/tests/helpers.mjs";
+import { responsesFixture, answer, toolSpecs } from "../s07-memory/tests/responses-fixture.mjs";
 
 const STAGE_DIRS = { 1: "s01-single-turn", 2: "s02-multi-turn" };
 

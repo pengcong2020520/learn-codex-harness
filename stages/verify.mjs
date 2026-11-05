@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
-// s01–s09 即课程里的 Demo 1–5；s10 起只有章节，暂未接入课程。s00 是 SDK 入门，只有章节文档，没有设计说明。
-const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-agent-core", 4: "s08-data-layer", 5: "s09-knowledge-layer", 6: "s10-skill-workflow", 7: "s11-model-gateway" };
+// 键是阶段编号（取自目录名，可以不连续）。s00 是 SDK 入门，只有章节文档，没有设计说明。
+const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-service", 7: "s07-memory", 8: "s08-data-layer", 9: "s09-knowledge-layer", 10: "s10-skill-workflow", 11: "s11-model-gateway" };
 const CHAPTERS = ["s00-sdk-quickstart", ...Object.values(STAGES)];
 const options = new Set(process.argv.slice(2));
 if ([...options].some(option => !["--integration", "--docs-only", "--rag"].includes(option))) {
@@ -23,7 +23,7 @@ const docs = [
   ...CHAPTERS.map(dir => [`${dir}/README.md`, "chapter"]),
   ...Object.values(STAGES).map(dir => [`${dir}/docs/design.md`, "design"]),
   ["s00-sdk-quickstart/docs/guide.md", "reference"],
-  ["s03-agent-core/docs/tools.md", "reference"],
+  ["s07-memory/docs/tools.md", "reference"],
   ["s08-data-layer/docs/data-layer.md", "reference"],
   ["s09-knowledge-layer/docs/knowledge-implementation.md", "reference"],
   ["s10-skill-workflow/docs/skill-workflow-design.md", "reference"],
@@ -81,6 +81,7 @@ for (const [name, kind] of docs) {
   }
   report.docs.push(name);
 }
+const ports = {};
 for (const stage of Object.keys(STAGES).map(Number)) {
   const cwd = path.join(root, STAGES[stage]);
   const pkg = JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8"));
@@ -88,15 +89,30 @@ for (const stage of Object.keys(STAGES).map(Number)) {
   const template = fs.readFileSync(path.join(cwd, ".env.example"), "utf8");
   assert.match(template, /^CODEX_API_KEY=$/m, "模板不能包含真实密钥");
   assert.ok(!/^AGENT_INSTRUCTIONS=/m.test(template), "角色不能回到环境变量中");
-  assert.equal(fs.existsSync(path.join(cwd, "server/modules/memory/index.mjs")), stage >= 3);
+  // 每个阶段只多一个单元：s03 服务化、s04 事件与消息、s05 Agent 装配、s06 工具、s07 记忆。
+  const has = file => fs.existsSync(path.join(cwd, file));
+  assert.equal(has("server/main.mjs") && has("client/main.mjs") && has("server/modules/http/index.mjs"), stage >= 3, `${STAGES[stage]}: 服务端 + 客户端`);
+  assert.equal(has("server/modules/lifecycle/index.mjs") && has("server/modules/maintenance/index.mjs"), stage >= 3, `${STAGES[stage]}: 生命周期与清理`);
+  assert.equal(has("server/modules/messages/index.mjs") && has("server/modules/events/index.mjs"), stage >= 4, `${STAGES[stage]}: 事件与消息`);
+  assert.equal(has("server/modules/agents/index.mjs"), stage >= 5, `${STAGES[stage]}: Agent 装配`);
+  assert.equal(has("server/modules/tools/index.mjs") && has("server/modules/tools/mcp-server.mjs"), stage >= 6, `${STAGES[stage]}: 工具`);
+  assert.equal(has("server/modules/memory/index.mjs"), stage >= 7, `${STAGES[stage]}: 记忆`);
   // s10 起 Agent 定义改为 Agent 包：agents/<id>/agent.json。
-  assert.equal(fs.existsSync(path.join(cwd, "agents/writing-agent.json")), stage >= 3 && stage < 6);
-  assert.equal(fs.existsSync(path.join(cwd, "agents/writing/agent.json")), stage >= 6);
-  assert.equal(fs.existsSync(path.join(cwd, "server/modules/workflows/index.mjs")), stage >= 6);
+  assert.equal(has("agents/writing-agent.json"), stage >= 5 && stage < 10);
+  assert.equal(has("agents/writing/agent.json"), stage >= 10);
+  assert.equal(has("server/modules/workflows/index.mjs"), stage >= 10);
   for (const file of ["config/models.json", "server/modules/gateway/index.mjs", "server/modules/gateway/router.mjs", "server/modules/usage/index.mjs"]) {
-    assert.equal(fs.existsSync(path.join(cwd, file)), stage >= 7, `${STAGES[stage]}: ${file}`);
+    assert.equal(has(file), stage >= 11, `${STAGES[stage]}: ${file}`);
   }
-  if (stage >= 7) {
+  // 服务端口按阶段区分，不能和别的阶段、app（4317）或工作台（4320）撞上。
+  if (stage >= 3) {
+    const port = template.match(/^AGENT_PORT=(\d+)$/m)?.[1];
+    assert.ok(port, `${STAGES[stage]}: .env.example 缺少 AGENT_PORT`);
+    assert.ok(!["4317", "4320", "4321", "4322", "4330"].includes(port), `${STAGES[stage]}: 端口 ${port} 与 app、工作台或网关冲突`);
+    assert.ok(!Object.values(ports).includes(port), `${STAGES[stage]}: 端口 ${port} 与其他阶段重复`);
+    ports[STAGES[stage]] = port;
+  }
+  if (stage >= 11) {
     for (const file of ["snapshot.json", "lessons/catalog.json", "lessons/run.mjs", "lessons/README.md", "images/model-gateway.svg", "images/architecture.svg"]) {
       assert.ok(fs.existsSync(path.join(cwd, file)), `${STAGES[stage]}: ${file}`);
     }
@@ -108,10 +124,10 @@ assert.equal(diagrams.status, 0, diagrams.stderr);
 // 阶段增量（stages/changes.json、CHANGES.md）也由快照生成，必须是最新的。
 const changes = spawnSync(process.execPath, [path.join(root, "build-changes.mjs"), "--check"], { encoding: "utf8" });
 assert.equal(changes.status, 0, changes.stderr);
-assert.equal(fs.existsSync(path.join(root, 's03-agent-core/server/modules/data/database.mjs')), false);
+for (const dir of ["s03-service", "s07-memory"]) assert.equal(fs.existsSync(path.join(root, dir, 'server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's08-data-layer/server/modules/knowledge/index.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's09-knowledge-layer/server/modules/permissions/index.mjs')), true);
-assert.equal(JSON.parse(fs.readFileSync(path.join(root, 's03-agent-core/package.json'))).dependencies.pg, undefined);
+for (const dir of ["s03-service", "s07-memory"]) assert.equal(JSON.parse(fs.readFileSync(path.join(root, dir, 'package.json'))).dependencies.pg, undefined);
 function run(directory, command, args) {
   const result = spawnSync(command, args, { cwd: path.join(root, directory), encoding: "utf8", timeout: 180000 });
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
@@ -127,8 +143,8 @@ if (!options.has("--docs-only")) {
   for (const stage of Object.keys(STAGES).map(Number)) run(STAGES[stage], "npm", ["test"]);
   if (options.has("--integration") || options.has("--rag")) {
     run("", process.execPath, ["--test", "tests/evolution.integration.mjs"]);
-    run("s03-agent-core", "npm", ["run", "test:codex-tools"]);
-    run("s03-agent-core", "npm", ["run", "test:codex-memory"]);
+    run("s07-memory", "npm", ["run", "test:codex-tools"]);
+    run("s07-memory", "npm", ["run", "test:codex-memory"]);
     run("s08-data-layer", "npm", ["run", "test:data"]);
     run("s09-knowledge-layer", "npm", ["run", options.has('--rag') ? "test:rag" : "test:data"]);
     run("s10-skill-workflow", "npm", ["run", "test:codex-tools"]);

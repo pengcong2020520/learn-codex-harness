@@ -1,0 +1,73 @@
+[
+  {
+    "id": "s03-resident",
+    "demo": 3,
+    "title": "客户端断开，这一轮还在跑",
+    "question": "终端客户端在回复途中被关掉，服务端那一轮会被取消吗？",
+    "command": "npm run lesson -- s03-resident",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "POST /turns 立即返回 202 和 turn id，不等模型答完",
+      "客户端进程被杀掉后，服务端这一轮照常完成",
+      "重新连接后用 /sessions/resume 能看到完整回复"
+    ],
+    "why": "一轮由服务端发起并持有；客户端只是查看者，断开不影响执行。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(真实本机 HTTP|客户端在回复途中被关掉)",
+      "tests/http-cli.test.mjs"
+    ]
+  },
+  {
+    "id": "s03-one-turn",
+    "demo": 3,
+    "title": "一次只跑一轮，服务端还不排队",
+    "question": "上一轮还没答完就再发一条，服务端会怎么处理？",
+    "command": "npm run lesson -- s03-one-turn",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "同一会话上一轮未结束时，再提交返回 409",
+      "并发提交只有一个真正发出 turn/start",
+      "客户端自己等上一轮结束，再发下一条"
+    ],
+    "why": "本阶段服务端只负责发起与查看；排队调度要等下一章的任务队列。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(同一会话一次只跑一轮|上一轮没结束时再提交|上一轮结束前不发送下一条)",
+      "tests/sessions.test.mjs",
+      "tests/http-cli.test.mjs",
+      "tests/client-rendering.test.mjs"
+    ]
+  },
+  {
+    "id": "s03-cleanup",
+    "demo": 3,
+    "title": "运行目录怎么清理才不误删",
+    "question": "服务常驻后每次启动都留下 .runs/app-server-*，能直接按时间全删吗？",
+    "command": "npm run lesson -- s03-cleanup",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "只清理超过 7 天且不在最近 5 次之内的运行目录",
+      "当前运行、已加载会话、活进程和正在打开的文件都受保护",
+      "删除前先把会话索引落盘，删掉日志后历史会话仍能检索"
+    ],
+    "why": "运行目录是缓存，但会话检索和正在运行的进程依赖它；先保住索引、再确认无人使用才删除。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(默认只清理|删除日志后|当前运行、已加载会话)",
+      "tests/maintenance.test.mjs"
+    ]
+  }
+]

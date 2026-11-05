@@ -1,6 +1,6 @@
 # 导论：Codex harness 是什么，为什么用它来做 Agent
 
-`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-agent-core/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [app](../app/)
+`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [app](../app/)
 > *"Agent = 模型 + Harness"* — 模型负责想，harness 负责做。这套教程带你亲手做一个云端 Agent：不自己造 harness，而是把 OpenAI Codex 的 harness 接进来，把精力留给业务。
 
 ---
@@ -31,7 +31,9 @@
 | [s00](s00-sdk-quickstart/) | 动手之前，先摸一摸引擎：用 SDK 把一个真实任务交给 Codex |
 | [s01](s01-single-turn/) | 心脏：打通"我们的程序 → App Server → 模型"这条链路 |
 | [s02](s02-multi-turn/) | 连续对话，断开以后还能接着聊 |
-| [s03](s03-agent-core/) | 角色、工具、记忆；拆成服务端和客户端，Agent 成为一个常驻服务 |
+| [s03](s03-service/) | 常驻：拆成服务端和客户端，客户端关掉，服务和正在执行的一轮还在 |
+| s04–s06（编写中） | 任务排队与事件推送；用一份 JSON 装配角色与 Skills；工具白名单与资料边界 |
+| [s07](s07-memory/) | 记忆：Codex 提炼，开不开、谁能参与由服务端说了算 |
 | [s08](s08-data-layer/) | 靠得住：任务排队，重启不丢不重，资料和产物有版本 |
 | [s09](s09-knowledge-layer/) | 守得住：身份由服务端认定，所有访问过一道门禁；资料整理成知识库 |
 | [s10](s10-skill-workflow/) | 会干活：Skill 教方法，Workflow 管边界、验收和确认 |

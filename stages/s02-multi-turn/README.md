@@ -1,6 +1,6 @@
 # s02: 多轮会话 — 一个聊天窗口，多轮对话
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → `s02` → [s03](../s03-agent-core/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → `s02` → [s03](../s03-service/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"顺序交给队列，历史留给 Codex"* — 我们的程序只管按顺序发出每一轮，不保存、不拼接、不重发历史。
 >
 > **对应六个问题**：③ 之前聊过什么？
@@ -161,6 +161,6 @@ selectThread(result);
 
 ## 下一章
 
-能连续聊了，但它还只是一个会聊天的模型：角色是代码里的一段固定文字，不能读写任何资料，也没有工具。而且它还是一个在你本机运行的程序，关掉终端就没了。
+能连续聊了，但它还是一个在你本机终端里运行的程序：程序一退出，Codex 子进程跟着退出，正在回答的那一轮也就没了。
 
-[s03 可配置 Agent](../s03-agent-core/) → 给 Agent 装上角色、工具和记忆，用一份配置文件来装配，并把它拆成常驻的服务端和连上去的客户端。模型能不能绕过配置，自己给自己加权限？
+[s03 服务化](../s03-service/) → 把程序拆成常驻的服务端和随时连上来的客户端。客户端关掉了，交给服务端的那一轮还会继续吗？

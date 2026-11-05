@@ -181,7 +181,7 @@ onIdleWindowOpen():
 
 ### 工作区目录结构
 
-配置中的 `bindings.workspaceDir` 是 `"../workspace"`，相对 `agents/writing-agent.json` 所在的 `agents/` 目录解析，因此默认实际位置是 `s03-agent-core/workspace/`，不是 `agents/workspace/`，也不是 `.runs/`。操作发生在连接到的服务端工作区；客户端从哪个目录启动不决定落盘位置。默认权限如下：
+配置中的 `bindings.workspaceDir` 是 `"../workspace"`，相对 `agents/writing-agent.json` 所在的 `agents/` 目录解析，因此默认实际位置是 `s08-data-layer/workspace/`，不是 `agents/workspace/`，也不是 `.runs/`。操作发生在连接到的服务端工作区；客户端从哪个目录启动不决定落盘位置。默认权限如下：
 
 同一服务的多个 Thread 共用这个工作区，并非每个 Thread 独立一份文件目录。
 
@@ -316,8 +316,8 @@ execFile(process.execPath, [固定 web-cli 路径, action, ...参数], {
 ### 启动验证
 
 ```bash
-# 从 repo 根目录进入 s03
-cd stages/s03-agent-core
+# 从 repo 根目录进入本阶段
+cd stages/s08-data-layer
 
 # 首次安装依赖
 npm ci

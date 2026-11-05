@@ -1,0 +1,420 @@
+[
+  {
+    "id": "s03-resident",
+    "title": "客户端走了，这一轮还在跑",
+    "question": "回答写到一半时关掉终端客户端，服务端那一轮会被取消吗？",
+    "file": "stages/s03-service/server/modules/sessions/index.mjs",
+    "start": 30,
+    "end": 43,
+    "expect": "// 服务端替客户端发起一轮",
+    "notes": {
+      "32": "POST /turns 进来后调用这里",
+      "33": "空消息直接拒绝",
+      "34": "会话没载入就先恢复（thread/resume）",
+      "36": "上一轮还在跑：409，服务端这一章不排队",
+      "37": "标记“正在发起”，挡住并发的第二次提交",
+      "39": "服务端自己发 turn/start，Codex 从这里开始干活",
+      "40": "记下这一轮；之后的通知都由服务端接收",
+      "41": "把 turn id 交回客户端，HTTP 返回 202",
+      "42": "无论成败，清掉“正在发起”标记"
+    },
+    "actors": [
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ],
+      [
+        "http",
+        "HTTP 接口"
+      ],
+      [
+        "sessions",
+        "会话模块"
+      ],
+      [
+        "codex",
+        "Codex"
+      ]
+    ],
+    "state0": {
+      "客户端": "未启动",
+      "这一轮": "—",
+      "会话快照里的回复": "空"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "http",
+          "POST /turns"
+        ],
+        "say": "用户在终端里输入一句话，客户端把它交给服务端。",
+        "actors": {
+          "client": "运行中"
+        },
+        "state": {
+          "客户端": "运行中"
+        }
+      },
+      {
+        "lines": [
+          32,
+          37
+        ],
+        "flow": [
+          "http",
+          "sessions",
+          "startTurn"
+        ],
+        "say": "HTTP 入口核对过令牌，把请求交给会话模块。上一轮没结束的话，这里就会拒绝。"
+      },
+      {
+        "lines": [
+          39,
+          39
+        ],
+        "flow": [
+          "sessions",
+          "codex",
+          "turn/start"
+        ],
+        "say": "由服务端向 Codex 发起这一轮，Codex 开始执行。",
+        "actors": {
+          "codex": "执行中"
+        },
+        "state": {
+          "这一轮": "执行中"
+        }
+      },
+      {
+        "lines": [
+          40,
+          41
+        ],
+        "flow": [
+          "http",
+          "client",
+          "202 + turn id"
+        ],
+        "say": "turn/start 一返回，HTTP 就回 202。客户端拿到 turn id，不用等模型写完。"
+      },
+      {
+        "flow": [
+          "client",
+          "http",
+          "GET /state"
+        ],
+        "say": "客户端每隔一小段时间查一次会话快照，把新写出来的文字显示出来。",
+        "state": {
+          "会话快照里的回复": "写了一半"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "client",
+          "client",
+          "Ctrl+C 退出"
+        ],
+        "say": "用户关掉了客户端。它只是停止查看，没有发出任何“取消”请求。",
+        "actors": {
+          "client": "已退出"
+        },
+        "state": {
+          "客户端": "已退出"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "sessions",
+          "turn/completed"
+        ],
+        "say": "Codex 照常把这一轮做完，通知由服务端接收，写进会话快照。",
+        "actors": {
+          "codex": "空闲"
+        },
+        "state": {
+          "这一轮": "completed",
+          "会话快照里的回复": "完整"
+        }
+      },
+      {
+        "flow": [
+          "client",
+          "http",
+          "POST /sessions/resume"
+        ],
+        "say": "重新打开客户端，/resume 选中这个会话，完整的回复就在快照里。",
+        "actors": {
+          "client": "运行中"
+        },
+        "state": {
+          "客户端": "运行中"
+        }
+      }
+    ],
+    "takeaway": "一轮由服务端发起、由服务端接收结果；客户端只是查看者，来去都不影响执行。不过服务端这一章还不排队：上一轮没结束就只能等。"
+  },
+  {
+    "id": "s03-auth",
+    "title": "谁能连上这个服务",
+    "question": "服务监听在本机端口上，本机任何一个网页、任何一个程序都能让它干活吗？",
+    "file": "stages/s03-service/server/modules/http/index.mjs",
+    "start": 23,
+    "end": 41,
+    "expect": "function authenticated(request, token)",
+    "notes": {
+      "24": "请求里带来的 Authorization 头",
+      "25": "服务启动时随机生成的连接令牌",
+      "26": "长度相同才比较，并用定时安全比较，不泄露比对进度",
+      "38": "带 Origin 头说明来自网页：一律拒绝",
+      "39": "令牌不对：401，请求到不了会话模块",
+      "41": "认过人之后，才按“方法 + 路径”分派"
+    },
+    "actors": [
+      [
+        "server",
+        "服务端"
+      ],
+      [
+        "file",
+        "connection.json"
+      ],
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ],
+      [
+        "page",
+        "某个网页",
+        "proc"
+      ],
+      [
+        "other",
+        "其他程序",
+        "proc"
+      ]
+    ],
+    "state0": {
+      "连接令牌": "—",
+      "connection.json": "不存在",
+      "最近一次请求": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "server",
+          "file",
+          "写入地址 + 令牌"
+        ],
+        "say": "服务就绪后，把地址和随机令牌写进 .data/connection.json，权限 0600，只有本机这个用户能读。",
+        "state": {
+          "连接令牌": "随机 64 个十六进制字符",
+          "connection.json": "0600"
+        }
+      },
+      {
+        "flow": [
+          "file",
+          "client",
+          "读取连接信息"
+        ],
+        "say": "客户端从这个文件拿到地址和令牌。它不读 .env，拿不到模型密钥。",
+        "actors": {
+          "client": "运行中"
+        }
+      },
+      {
+        "lines": [
+          24,
+          26
+        ],
+        "flow": [
+          "client",
+          "server",
+          "请求 + Bearer 令牌"
+        ],
+        "say": "每个请求都带上令牌，服务端逐字节比对。",
+        "state": {
+          "最近一次请求": "200 通过"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          38,
+          38
+        ],
+        "flow": [
+          "page",
+          "server",
+          "带 Origin 的请求"
+        ],
+        "say": "浏览器里的网页想偷偷调用本机服务：请求带着 Origin 头，直接 403。",
+        "actors": {
+          "page": "运行中"
+        },
+        "state": {
+          "最近一次请求": "403 拒绝"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          39,
+          39
+        ],
+        "flow": [
+          "other",
+          "server",
+          "没有令牌的请求"
+        ],
+        "say": "本机另一个程序不知道令牌，也不带 Origin：401。请求根本到不了会话模块。",
+        "actors": {
+          "page": "已退出",
+          "other": "运行中"
+        },
+        "state": {
+          "最近一次请求": "401 拒绝"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "file",
+          "关闭时删除"
+        ],
+        "say": "服务停止时删掉 connection.json；下次启动换一个新令牌。",
+        "actors": {
+          "client": "已退出",
+          "other": "已退出"
+        },
+        "state": {
+          "connection.json": "已删除",
+          "连接令牌": "作废"
+        }
+      }
+    ],
+    "takeaway": "服务只监听本机，凭连接令牌认人，拒绝网页跨源请求。连接令牌只决定能不能连上服务，和模型 API Key 是两回事。"
+  },
+  {
+    "id": "s03-cleanup",
+    "title": "运行目录怎么清理才不误删",
+    "question": "服务常驻后，每次启动都会留下一个 .runs/app-server-*，能按时间直接全删吗？",
+    "file": "stages/s03-service/server/modules/maintenance/index.mjs",
+    "start": 100,
+    "end": 113,
+    "expect": "candidates.sort(",
+    "notes": {
+      "100": "按最近修改时间从新到旧排",
+      "101": "留下最近 5 个；其余里只挑超过 7 天、且没被保护的",
+      "103": "用 lsof 查哪些文件正被进程打开",
+      "107": "当前运行、已加载的会话、活着的进程、打开的文件：跳过",
+      "109": "删之前先把日志里的会话位置写进会话索引",
+      "111": "等待期间可能有变化：删除前再核对一次",
+      "112": "确认无人使用，才真正删除"
+    },
+    "actors": [
+      [
+        "maint",
+        "维护模块"
+      ],
+      [
+        "runs",
+        ".runs/ 运行目录"
+      ],
+      [
+        "index",
+        "会话索引"
+      ],
+      [
+        "sessions",
+        "会话模块"
+      ]
+    ],
+    "state0": {
+      "运行目录": "8 个",
+      "候选": "—",
+      "会话索引": "无"
+    },
+    "steps": [
+      {
+        "flow": [
+          "maint",
+          "runs",
+          "列出并检查"
+        ],
+        "say": "启动时和之后每小时检查一次。目录里只能有 models.json、protocol.jsonl、run.json，多出别的东西就不当缓存。"
+      },
+      {
+        "lines": [
+          100,
+          101
+        ],
+        "say": "按修改时间排序，留下最近 5 个；剩下的只挑超过 7 天的。",
+        "state": {
+          "候选": "3 个（超过 7 天）"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          107,
+          107
+        ],
+        "flow": [
+          "maint",
+          "runs",
+          "检查 run.json"
+        ],
+        "say": "一个候选目录的 run.json 记录的进程还在运行，跳过；会话正在载入、文件正被打开时同样跳过。",
+        "state": {
+          "候选": "2 个"
+        }
+      },
+      {
+        "lines": [
+          109,
+          109
+        ],
+        "flow": [
+          "maint",
+          "index",
+          "保存会话位置"
+        ],
+        "say": "删日志之前，先把其中的会话位置写进 .data/session-index.json。",
+        "state": {
+          "会话索引": "已保存 2 个目录的会话"
+        }
+      },
+      {
+        "lines": [
+          111,
+          112
+        ],
+        "flow": [
+          "maint",
+          "runs",
+          "核对后删除"
+        ],
+        "say": "删除前一刻再核对一次没人在用、内容没变，才真正删除。",
+        "state": {
+          "运行目录": "6 个",
+          "候选": "—"
+        }
+      },
+      {
+        "flow": [
+          "sessions",
+          "index",
+          "/resume 查找旧会话"
+        ],
+        "say": "日志删了，用户 /resume 时仍能从会话索引找到旧会话。"
+      }
+    ],
+    "takeaway": "运行目录是缓存，但会话检索和正在运行的进程依赖它。先保住索引、再确认没人在用，才删除；任何一步拿不准就保留。"
+  }
+]
