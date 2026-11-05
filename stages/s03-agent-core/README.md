@@ -7,6 +7,8 @@
 
 ---
 
+![本阶段在整体架构中的位置](images/architecture.svg)
+
 ## 要回答的问题
 
 能连续对话以后，Agent 还只是一个"会聊天的模型"，而且关掉终端就没了。要让它变成一个能干活、能常驻的写作助手，还差几样东西：
@@ -100,8 +102,6 @@ Codex 原生就有长期记忆。三方分工如下：
 记忆默认关闭（`AGENT_MEMORY_ENABLED=false`），开启后才会在会话空闲一段时间后提炼。
 
 ### 一份配置，装配一个 Agent
-
-![本阶段在整体架构中的位置](images/architecture.svg)
 
 角色、工具、记忆，再加上资料边界，都写进一份 [`agents/writing-agent.json`](agents/writing-agent.json)。它是唯一的装配入口：
 
