@@ -27,11 +27,11 @@
         ],
         [
           "sdk",
-          "SDK"
+          "Codex SDK"
         ],
         [
           "codex",
-          "Codex 进程",
+          "codex exec 进程",
           "proc"
         ],
         [
@@ -71,7 +71,7 @@
           "flow": [
             "script",
             "sdk",
-            "交给它一个任务"
+            "发送 prompt"
           ],
           "say": "run() 被调用，脚本在这里等待（await）。"
         },
@@ -79,7 +79,7 @@
           "flow": [
             "sdk",
             "codex",
-            "启动一个 Codex 进程"
+            "启动 codex exec 子进程"
           ],
           "say": "SDK 启动一个 codex exec 子进程，把任务交给它。",
           "actors": {
@@ -93,7 +93,7 @@
           "flow": [
             "codex",
             "model",
-            "任务和能用的工具"
+            "prompt + 可用工具"
           ],
           "say": "Codex 把任务和它能用的工具（读文件、跑命令……）一起发给模型。",
           "actors": {
@@ -104,7 +104,7 @@
           "flow": [
             "model",
             "codex",
-            "我想先看看项目文件"
+            "请求调用工具：读 package.json"
           ],
           "say": "模型决定先看一下文件。注意：模型自己不能读文件，它只能“提出”要调用工具。",
           "actors": {
@@ -115,7 +115,7 @@
           "flow": [
             "codex",
             "codex",
-            "在只读沙箱里读文件"
+            "在只读沙箱中执行"
           ],
           "say": "Codex 在只读沙箱里执行这次读取。这就是执行循环：模型提出，Codex 执行。",
           "state": {
@@ -126,7 +126,7 @@
           "flow": [
             "codex",
             "model",
-            "文件里写了什么"
+            "返回工具结果"
           ],
           "say": "把执行结果交回模型。需要的话会再来几次，直到模型认为可以回答了。",
           "actors": {
@@ -137,7 +137,7 @@
           "flow": [
             "model",
             "codex",
-            "这是最终回答"
+            "给出最终回答"
           ],
           "say": "模型给出最终回答，本轮循环结束。",
           "actors": {
@@ -148,7 +148,7 @@
           "flow": [
             "codex",
             "sdk",
-            "整个过程的记录"
+            "推送事件流（含 thread id）"
           ],
           "say": "进程把整个过程以事件形式交给 SDK；第一条事件里带着新生成的对话 ID。",
           "state": {
@@ -163,7 +163,7 @@
           "flow": [
             "sdk",
             "script",
-            "回答和用量"
+            "返回最终回答与 token 用量"
           ],
           "say": "run() 返回结果，codex exec 进程随即退出。对话记录留在本机 ~/.codex/sessions 里。",
           "actors": {
@@ -208,7 +208,7 @@
         ],
         [
           "codex",
-          "新的 Codex 进程",
+          "新的 codex exec 进程",
           "proc"
         ]
       ],
@@ -235,7 +235,7 @@
           "flow": [
             "disk",
             "run2",
-            "上次的对话编号"
+            "读出 thread id"
           ],
           "say": "第二次运行先读出上次记下的对话 ID。程序自己只保存了这个 ID，没有保存聊天内容。",
           "actors": {
@@ -257,7 +257,7 @@
           "flow": [
             "run2",
             "codex",
-            "接着那段对话，问一句新的"
+            "按 thread id 恢复，发送新 prompt"
           ],
           "say": "发送时才启动新的 codex 进程，只带上这一句新问题。",
           "actors": {
@@ -268,7 +268,7 @@
           "flow": [
             "disk",
             "codex",
-            "上一轮聊过什么"
+            "加载第 1 轮历史"
           ],
           "say": "Codex 按 ID 从本机会话记录里把历史读回来，和新问题一起交给模型。",
           "state": {
@@ -279,7 +279,7 @@
           "flow": [
             "codex",
             "run2",
-            "刚才改了哪个文件"
+            "回答：修改了 add.mjs"
           ],
           "say": "模型因此能回答上一轮的事。回答完，这一轮也写进会话记录。",
           "actors": {
@@ -323,7 +323,7 @@
         ],
         [
           "server",
-          "Codex 服务"
+          "Codex App Server"
         ],
         [
           "model",
@@ -345,7 +345,7 @@
           "flow": [
             "client",
             "server",
-            "新建一段对话"
+            "thread/start：新建 Thread"
           ],
           "say": "第一次提问，先建一个对话（Thread）。",
           "state": {
@@ -370,7 +370,7 @@
           "flow": [
             "client",
             "server",
-            "开始这一轮，带上问题"
+            "turn/start：发送 prompt"
           ],
           "say": "发起这一轮。"
         },
@@ -382,7 +382,7 @@
           "flow": [
             "server",
             "client",
-            "收到了，正在处理"
+            "返回 turn id（inProgress）"
           ],
           "say": "App Server 立刻回了 turn id，状态是 inProgress。这只说明“收到了”，模型可能一个字还没写——很多人在这里就当成功了。",
           "state": {
@@ -394,7 +394,7 @@
           "flow": [
             "server",
             "model",
-            "请生成回答"
+            "生成回答"
           ],
           "say": "App Server 驱动模型生成回答。",
           "actors": {
@@ -405,7 +405,7 @@
           "flow": [
             "server",
             "client",
-            "回答的第一段"
+            "delta：第一段文本"
           ],
           "say": "回答一段段推回来（item/agentMessage/delta），客户端按条目拼接。",
           "state": {
@@ -416,7 +416,7 @@
           "flow": [
             "server",
             "client",
-            "回答的下一段"
+            "delta：后续文本"
           ],
           "say": "继续推送，答案在变长，但还不能确定写完了。",
           "actors": {
@@ -434,7 +434,7 @@
           "flow": [
             "server",
             "client",
-            "这一轮顺利结束"
+            "turn/completed（completed）"
           ],
           "say": "收到本轮自己的 turn/completed，状态为 completed，才把答案交给用户。",
           "state": {
@@ -446,7 +446,7 @@
           "flow": [
             "server",
             "client",
-            "这一轮失败了"
+            "turn/completed（failed）"
           ],
           "say": "换一种结局：如果状态是 failed 或 interrupted，“完成”信号被拒绝，客户端报错，半截答案不会当成结果。",
           "state": {
@@ -489,7 +489,7 @@
       "actors": [
         [
           "server",
-          "Codex 服务"
+          "Codex App Server"
         ],
         [
           "client",
@@ -521,7 +521,7 @@
           "flow": [
             "server",
             "buffer",
-            "回答的第一段（抢先到了）"
+            "delta 先于响应到达"
           ],
           "say": "turn/start 的响应还在路上，第一段回答已经到了。此时不知道 turn id，没法判断它属于哪一轮，于是先暂存。",
           "state": {
@@ -532,7 +532,7 @@
           "flow": [
             "server",
             "client",
-            "收到了，这是第 1 轮"
+            "turn/start 响应：turn id"
           ],
           "say": "响应到了，现在知道本轮是 turn_01。",
           "state": {
@@ -547,7 +547,7 @@
           "flow": [
             "buffer",
             "client",
-            "把先到的内容补上"
+            "按 turn id 回放暂存事件"
           ],
           "say": "把暂存区的事件按到达顺序回放，每条都核对 turn id。",
           "state": {
@@ -569,7 +569,7 @@
           "flow": [
             "server",
             "client",
-            "上一轮迟到的内容"
+            "旧 Turn 的迟到 delta"
           ],
           "say": "一条上一轮遗留的迟到事件也进来了，turn id 对不上，直接丢掉，不会串进这一轮的答案。"
         },
@@ -581,7 +581,7 @@
           "flow": [
             "server",
             "client",
-            "这一轮结束"
+            "turn/completed"
           ],
           "say": "本轮结束事件到达，按状态决定成功还是失败。"
         }
@@ -645,7 +645,7 @@
           "flow": [
             "user",
             "loop",
-            "第 1 句"
+            "输入第 1 句"
           ],
           "say": "聊天循环正在等输入，第 1 句直接交给它。"
         },
@@ -653,7 +653,7 @@
           "flow": [
             "loop",
             "codex",
-            "回答第 1 句"
+            "turn/start：第 1 句"
           ],
           "say": "开始第 1 轮。聊天循环要等这一轮完成，才会去问下一句。",
           "actors": {
@@ -672,7 +672,7 @@
           "flow": [
             "user",
             "queue",
-            "第 2 句"
+            "输入第 2 句（入队）"
           ],
           "say": "用户等不及又输入了一句。没人在等输入，这句先进队列，不会丢。",
           "state": {
@@ -683,7 +683,7 @@
           "flow": [
             "user",
             "queue",
-            "第 3 句"
+            "输入第 3 句（入队）"
           ],
           "say": "再来一句，排在后面。",
           "state": {
@@ -694,7 +694,7 @@
           "flow": [
             "codex",
             "loop",
-            "第 1 句答完了"
+            "turn/completed"
           ],
           "say": "第 1 轮完成，聊天循环回来问下一句。",
           "actors": {
@@ -712,7 +712,7 @@
           "flow": [
             "queue",
             "loop",
-            "轮到第 2 句"
+            "出队：第 2 句"
           ],
           "say": "队列里有，按先进先出先取第 2 句。",
           "state": {
@@ -723,7 +723,7 @@
           "flow": [
             "loop",
             "codex",
-            "回答第 2 句"
+            "turn/start：第 2 句"
           ],
           "say": "第 2 轮开始。第 3 句继续排着，等这一轮完成再发。",
           "actors": {
@@ -760,11 +760,11 @@
         ],
         [
           "server",
-          "Codex 服务"
+          "Codex App Server"
         ],
         [
           "history",
-          "Codex 对话记录"
+          "Codex 原生历史"
         ]
       ],
       "state0": {
@@ -782,7 +782,7 @@
           "flow": [
             "client",
             "server",
-            "新建一段对话"
+            "thread/start"
           ],
           "say": "第一句话之前建一个对话，记下 threadId。",
           "state": {
@@ -797,7 +797,7 @@
           "flow": [
             "client",
             "server",
-            "只发新的一句：我叫小周"
+            "turn/start：只发新输入"
           ],
           "say": "第 1 轮：只发这一句。",
           "state": {
@@ -808,7 +808,7 @@
           "flow": [
             "server",
             "history",
-            "记下第 1 轮"
+            "写入第 1 轮"
           ],
           "say": "问答由 Codex 记进这个对话的历史。",
           "state": {
@@ -819,7 +819,7 @@
           "flow": [
             "client",
             "server",
-            "只发新的一句：我叫什么？"
+            "turn/start：只发新输入"
           ],
           "say": "第 2 轮：仍然只发新的一句，用的还是同一个 threadId。",
           "state": {
@@ -830,7 +830,7 @@
           "flow": [
             "history",
             "server",
-            "取出之前聊过的"
+            "按 threadId 读取历史"
           ],
           "say": "App Server 按 threadId 取出历史，和新的一句一起交给模型，所以模型能答出“小周”。"
         },
@@ -842,7 +842,7 @@
           "flow": [
             "server",
             "history",
-            "记下第 2 轮"
+            "写入第 2 轮"
           ],
           "say": "这一轮也记进历史。客户端始终没有保存过聊天内容。",
           "state": {
@@ -882,11 +882,11 @@
         ],
         [
           "server",
-          "Codex 服务"
+          "Codex App Server"
         ],
         [
           "history",
-          "Codex 对话记录"
+          "Codex 原生历史"
         ]
       ],
       "state0": {
@@ -905,7 +905,7 @@
           "flow": [
             "user",
             "client",
-            "找一下“小周”那段对话"
+            "/resume 小周"
           ],
           "say": "用 /resume 加关键词搜索本项目的历史会话。"
         },
@@ -913,7 +913,7 @@
           "flow": [
             "client",
             "server",
-            "有哪些历史对话？"
+            "thread/list：搜索会话"
           ],
           "say": "客户端向 App Server 查询会话列表，按名称、开场问题、ID 过滤。"
         },
@@ -921,7 +921,7 @@
           "flow": [
             "server",
             "client",
-            "找到 1 段"
+            "返回匹配的 Thread"
           ],
           "say": "列出匹配的会话。"
         },
@@ -933,7 +933,7 @@
           "flow": [
             "user",
             "client",
-            "就要这一段"
+            "选择第 1 个"
           ],
           "say": "选中第 1 个，先检查它的工作目录还在。"
         },
@@ -945,7 +945,7 @@
           "flow": [
             "client",
             "server",
-            "接回这段对话"
+            "thread/resume：恢复 Thread"
           ],
           "say": "请求接回这个会话，但不把历史内容拉回来（excludeTurns）。",
           "state": {
@@ -966,7 +966,7 @@
           "flow": [
             "client",
             "server",
-            "继续聊"
+            "turn/start：继续对话"
           ],
           "say": "模型照样能看到前两轮，因为历史一直在 Codex 那边。",
           "actors": {
