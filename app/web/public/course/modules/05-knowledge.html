@@ -14,7 +14,7 @@
 
       <p>s04 已经能可靠存储业务数据并调度任务。s05 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="930" alt="S05 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="968" alt="S05 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout" id="m5-callout-arch">
         <div class="callout-text">图为逻辑职责划分。蓝色是我们的程序，绿色是 Codex 原生能力，橙色突出本阶段新增。门禁位于同一服务进程中，不是另起一个网络服务。</div>
