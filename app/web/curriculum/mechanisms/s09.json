@@ -1,0 +1,492 @@
+[
+  {
+    "id": "s09-trusted-context",
+    "title": "身份来自服务端签发，不来自工具参数",
+    "question": "模型在工具参数里写上 \"userId\": \"admin\"，或者伪造一个长得一样的上下文对象，能拿到更多权限吗？",
+    "file": "stages/s09-knowledge-layer/server/modules/permissions/index.mjs",
+    "start": 13,
+    "end": 47,
+    "expect": "const context = Object.freeze({ ...fields",
+    "notes": {
+      "13": "签发上下文：owner 和 agent 来自服务端配置，不来自调用方",
+      "14": "登记进私有的 WeakSet，只有这里签发的对象才算数",
+      "17": "工具在某个上下文里执行",
+      "18": "不是门禁签发的对象，直接拒绝",
+      "19": "用 AsyncLocalStorage 把上下文绑定到这次调用链上",
+      "21": "工具实现取上下文的唯一入口",
+      "25": "没有上下文、或上下文不是签发的：FORBIDDEN",
+      "27": "任务已结束（signal 已中止）也拒绝",
+      "28": "任务上下文必须仍是该会话当前那一次运行的",
+      "31": "派发任务时：每个会话同一时刻只有一个运行",
+      "34": "签发任务上下文，带上 taskId、threadId 和维护范围",
+      "38": "收到 turn/started 后，把 turn id 绑定到这次运行",
+      "39": "工具回调按 Thread + Turn 找上下文",
+      "41": "turn id 对不上或已结束：拒绝",
+      "44": "收到 turn/completed：结束运行",
+      "47": "中止信号并删除，旧上下文从此失效"
+    },
+    "actors": [
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "gate",
+        "PermissionGate"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ],
+      [
+        "tool",
+        "工具实现"
+      ]
+    ],
+    "state0": {
+      "上下文": "—",
+      "绑定 turn": "—",
+      "工具结果": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          31,
+          37
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "签发任务上下文"
+        ],
+        "say": "派发任务前，门禁签发一份上下文：属于哪个 owner、哪个 Agent、哪个任务。它由服务端生成，模型碰不到。",
+        "state": {
+          "上下文": "ctx1（有效）"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：发送 prompt"
+        ],
+        "say": "这一轮发给 Codex。"
+      },
+      {
+        "lines": [
+          38,
+          38
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/started：turn id"
+        ],
+        "say": "收到 turn/started，把 turn id 绑定到 ctx1。",
+        "state": {
+          "绑定 turn": "turn_1"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "server",
+          "kb_read：参数自称 admin"
+        ],
+        "say": "模型调用工具，参数里写了 userId: admin。参数只是一段 JSON，门禁根本不读它；调用会带着 threadId 和 turnId 回到我们的进程。"
+      },
+      {
+        "lines": [
+          39,
+          43
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "按 Thread + Turn 取上下文"
+        ],
+        "say": "服务端按 threadId + turnId 找到 ctx1。“我是谁”由这里决定，而不是参数。"
+      },
+      {
+        "lines": [
+          17,
+          30
+        ],
+        "flow": [
+          "gate",
+          "tool",
+          "在 ctx1 内执行"
+        ],
+        "say": "工具在 ctx1 里执行。读知识库时，门禁用服务端签发的 owner（来自服务端 scope）对比数据库里的资源归属，再看 Agent 的挂载配置，参数里的 admin 不起任何作用。",
+        "state": {
+          "工具结果": "按 ctx1 权限返回"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          17,
+          18
+        ],
+        "flow": [
+          "tool",
+          "gate",
+          "伪造上下文：FORBIDDEN"
+        ],
+        "say": "如果有人造一个字段完全相同的对象 { ownerId: ... } 传进来：它不在 WeakSet 里，直接 FORBIDDEN。"
+      },
+      {
+        "lines": [
+          44,
+          47
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/completed"
+        ],
+        "say": "本轮结束，中止信号、删除运行记录，ctx1 失效。",
+        "state": {
+          "上下文": "ctx1（已撤销）"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          39,
+          42
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "旧 turn 的工具调用"
+        ],
+        "say": "一条迟到的工具调用还带着旧的 turn id：找不到对应的运行，FORBIDDEN。上下文只在本轮有效。",
+        "state": {
+          "工具结果": "FORBIDDEN"
+        }
+      }
+    ],
+    "takeaway": "模型能决定调用哪个工具、传什么参数，但“我是谁、能碰什么”只来自服务端签发、按 Thread/Turn 绑定、轮次结束即撤销的上下文。"
+  },
+  {
+    "id": "s09-wiki-version",
+    "title": "Wiki 并发提交：expectedVersion 对不上就拒绝",
+    "question": "两个维护任务同时改同一页 Wiki，后提交的会不会悄悄覆盖前一个？",
+    "file": "stages/s09-knowledge-layer/server/modules/knowledge/index.mjs",
+    "start": 142,
+    "end": 162,
+    "expect": "async submit({ kbId, slug",
+    "notes": {
+      "142": "提交 Wiki：必须带上自己读到的 expectedVersion",
+      "143": "先过门禁：本任务必须有这个知识库的 update 权限",
+      "145": "新建页面写 null，修改页面写读到的版本 ID",
+      "148": "引用的原始资料必须是本知识库的、而且是当前版本",
+      "149": "再按 ID 重读一遍来源，确认没被改过",
+      "150": "正文先存成内容寻址的 blob",
+      "151": "进入锁，下面的检查和写入是原子的",
+      "152": "锁内再查一次权限和来源，防止锁外检查之后状态变化",
+      "154": "页面不存在就先建一个空壳",
+      "155": "锁住页面行（FOR UPDATE）",
+      "156": "当前版本不是 expectedVersion：VERSION_CONFLICT",
+      "157": "写一条新版本记录，旧版本保留",
+      "160": "把页面指针切到新版本",
+      "161": "返回新版本 ID，立即生效"
+    },
+    "actors": [
+      [
+        "taskA",
+        "维护任务 A"
+      ],
+      [
+        "taskB",
+        "维护任务 B"
+      ],
+      [
+        "kb",
+        "KnowledgeService"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "current_version": "v1",
+      "A 的 expectedVersion": "—",
+      "B 的 expectedVersion": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "taskA",
+          "kb",
+          "kb_read：读 topic"
+        ],
+        "say": "两个维护任务先后读同一页 topic，都读到 v1。",
+        "state": {
+          "A 的 expectedVersion": "v1",
+          "B 的 expectedVersion": "v1"
+        }
+      },
+      {
+        "lines": [
+          142,
+          149
+        ],
+        "flow": [
+          "taskA",
+          "kb",
+          "提交（expectedVersion v1）"
+        ],
+        "say": "A 改完后提交，带上自己读到的版本 v1。先在锁外检查权限和来源版本。"
+      },
+      {
+        "flow": [
+          "taskB",
+          "kb",
+          "提交（expectedVersion v1）"
+        ],
+        "say": "几乎同时，B 也提交了，也带着 v1。"
+      },
+      {
+        "lines": [
+          151,
+          155
+        ],
+        "flow": [
+          "kb",
+          "pg",
+          "锁页面行（FOR UPDATE）"
+        ],
+        "say": "A 先拿到锁。B 只能等 A 的事务结束。锁内会把权限和来源再查一遍。"
+      },
+      {
+        "lines": [
+          156,
+          160
+        ],
+        "flow": [
+          "kb",
+          "pg",
+          "写 wiki_versions + 切 current_version"
+        ],
+        "say": "当前版本正好是 v1，A 写入新版本 v2 并切换指针。v1 仍保留在 wiki_versions 里。",
+        "state": {
+          "current_version": "v2（A）"
+        }
+      },
+      {
+        "lines": [
+          161,
+          161
+        ],
+        "flow": [
+          "kb",
+          "taskA",
+          "返回 versionId v2"
+        ],
+        "say": "A 的修改立即生效。"
+      },
+      {
+        "warn": true,
+        "lines": [
+          155,
+          156
+        ],
+        "flow": [
+          "kb",
+          "taskB",
+          "VERSION_CONFLICT"
+        ],
+        "say": "轮到 B：锁住页面后发现当前版本已是 v2，和它的 v1 对不上，整体拒绝。B 的内容不会覆盖 A。"
+      },
+      {
+        "flow": [
+          "taskB",
+          "kb",
+          "重读最新版本"
+        ],
+        "say": "B 必须重新读 v2，在最新内容上修改，再用 expectedVersion v2 提交。",
+        "state": {
+          "B 的 expectedVersion": "v2"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          148,
+          149
+        ],
+        "flow": [
+          "kb",
+          "taskB",
+          "SOURCE_STALE"
+        ],
+        "say": "另一种拒绝：如果引用的原始资料在此期间被改过，来源版本对不上，同样拒绝，要求重新读取原文。"
+      }
+    ],
+    "takeaway": "乐观锁：每次提交都声明“我是在哪个版本上改的”，在锁内核对，对不上就 VERSION_CONFLICT。并发写入不会静默覆盖，历史版本也都留着。"
+  },
+  {
+    "id": "s09-rag-switch",
+    "title": "RAG 新索引完整就绪才切指针",
+    "question": "重建 RAG 索引到一半，向量服务挂了，正在进行的检索会落到半成品索引上吗？",
+    "file": "stages/s09-knowledge-layer/server/modules/knowledge/rag.mjs",
+    "start": 115,
+    "end": 146,
+    "expect": "INSERT INTO agent_data.knowledge_indexes",
+    "notes": {
+      "115": "先登记一个新修订，状态 building",
+      "118": "按门禁读出知识库的全部原始资料并分块",
+      "120": "manifest 记下每个来源的版本",
+      "121": "新建一个独立的 Chroma collection，名字里带修订号",
+      "122": "每 32 块一批",
+      "123": "每批前后都重查权限：任务结束或权限撤销就停",
+      "125": "调用 Embedding 服务生成向量",
+      "127": "写入新 collection，元数据带 owner 和修订号",
+      "130": "BM25 关键词索引写成文件，并记下哈希",
+      "133": "校验 Chroma 里的分块数量完整",
+      "134": "来源在构建期间被改过就不切换",
+      "135": "进入锁：标 ready 和切指针是一步",
+      "138": "新修订标为 ready",
+      "139": "知识库的 index_revision 指向新修订",
+      "142": "任何一步失败",
+      "143": "丢弃新 collection 和 BM25 文件",
+      "144": "新修订标为 failed，记下原因；旧指针不动"
+    },
+    "actors": [
+      [
+        "worker",
+        "索引任务"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "embed",
+        "Embedding 服务"
+      ],
+      [
+        "chroma",
+        "Chroma"
+      ],
+      [
+        "search",
+        "kb_search 检索"
+      ]
+    ],
+    "state0": {
+      "index_revision": "r1",
+      "r2 状态": "—",
+      "检索使用": "r1"
+    },
+    "steps": [
+      {
+        "lines": [
+          115,
+          116
+        ],
+        "flow": [
+          "worker",
+          "pg",
+          "登记 r2（building）"
+        ],
+        "say": "开始重建，登记新修订 r2。知识库的指针仍然是 r1。",
+        "state": {
+          "r2 状态": "building"
+        }
+      },
+      {
+        "lines": [
+          118,
+          121
+        ],
+        "flow": [
+          "worker",
+          "chroma",
+          "新建 collection（r2）"
+        ],
+        "say": "读出全部原始资料、分块，建一个只属于 r2 的新 collection。旧索引一个字节都不动。"
+      },
+      {
+        "lines": [
+          122,
+          129
+        ],
+        "flow": [
+          "worker",
+          "embed",
+          "生成向量（每批 32）"
+        ],
+        "say": "逐批生成向量写进 r2，每批前后都重新过一次门禁。"
+      },
+      {
+        "flow": [
+          "search",
+          "chroma",
+          "按 r1 检索"
+        ],
+        "say": "构建期间有人检索：检索按 index_revision 找已 ready 的修订，用的还是 r1，看不到半成品 r2。"
+      },
+      {
+        "lines": [
+          130,
+          133
+        ],
+        "flow": [
+          "worker",
+          "chroma",
+          "校验分块数量"
+        ],
+        "say": "BM25 文件落盘并记下哈希，再核对 Chroma 里的分块数是否完整。"
+      },
+      {
+        "lines": [
+          134,
+          140
+        ],
+        "flow": [
+          "worker",
+          "pg",
+          "标 ready + 切 index_revision"
+        ],
+        "say": "确认来源没变后，在同一把锁里把 r2 标为 ready、把指针切到 r2。切换是一步完成的。",
+        "state": {
+          "r2 状态": "ready",
+          "index_revision": "r2"
+        }
+      },
+      {
+        "say": "已是 RAG 模式时，每次检索都重新读取知识库的 index_revision，所以切完指针，下一次检索立即用 r2。只有 Wiki 和 RAG 之间切换模式，才要等服务重启（open）时决定。",
+        "state": {
+          "检索使用": "r2（立即）"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          142,
+          145
+        ],
+        "flow": [
+          "embed",
+          "worker",
+          "向量服务失败"
+        ],
+        "say": "换一种结局：构建到一半 Embedding 服务不可用。新 collection 和 BM25 文件被丢弃，r2 标为 failed，指针仍是 r1。",
+        "state": {
+          "r2 状态": "failed",
+          "index_revision": "r1",
+          "检索使用": "r1"
+        }
+      },
+      {
+        "warn": true,
+        "say": "已经生效的 RAG 不可用时，检索直接报错，不会悄悄回退到 Wiki——回答依据变了，用户必须知道。"
+      }
+    ],
+    "takeaway": "新索引在独立的修订里完整构建、校验，最后在锁内一次切换指针；失败就丢弃新修订，旧索引原封不动。检索永远落在一个完整的索引上。"
+  }
+]

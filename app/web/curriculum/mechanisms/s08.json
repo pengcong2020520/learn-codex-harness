@@ -1,0 +1,484 @@
+[
+  {
+    "id": "s08-outbox-tx",
+    "title": "任务和唤醒记录同一事务提交",
+    "question": "任务写进了数据库，却在通知执行器之前服务崩了——这条任务会不会丢？反过来会不会多出一条不存在的任务？",
+    "file": "stages/s08-data-layer/server/modules/data/jobs.mjs",
+    "start": 45,
+    "end": 79,
+    "expect": "async create(job)",
+    "notes": {
+      "45": "提交一条任务：所有写入都在下面这一个事务里",
+      "46": "transaction：中途任何一步失败都整体回滚",
+      "48": "先锁住会话这一行（FOR UPDATE），同一会话的并发提交排队进行",
+      "53": "会话不存在（或不属于当前 owner）直接 404",
+      "54": "在同一事务里数本会话还有多少条 queued",
+      "59": "超过 100 条待执行就 429，队列不会无限增长",
+      "61": "写入任务表 agent_data.tasks，状态为 queued",
+      "63": "WHERE $2 IS NOT NULL：owner 参数必须存在，否则什么都不写",
+      "75": "同一事务里写 outbox：没有就插入，有就 generation+1 并立即到期",
+      "76": "顺手更新会话名称和更新时间"
+    },
+    "actors": [
+      [
+        "client",
+        "客户端"
+      ],
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "redis",
+        "Redis"
+      ]
+    ],
+    "state0": {
+      "事务": "—",
+      "tasks 表": "—",
+      "outbox": "—",
+      "Redis 集合": "空"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "server",
+          "POST /messages：提交任务"
+        ],
+        "say": "用户发来一条消息，客户端带着自己生成的 clientMessageId 提交。"
+      },
+      {
+        "lines": [
+          46,
+          53
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "BEGIN + 锁会话（FOR UPDATE）"
+        ],
+        "say": "开启事务并锁住会话行。同一会话同时来两条提交，也只能一条一条进。",
+        "state": {
+          "事务": "进行中"
+        }
+      },
+      {
+        "lines": [
+          54,
+          60
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "统计 queued 条数"
+        ],
+        "say": "在同一事务里检查队列长度，超过 100 条直接拒绝。检查和写入在同一把锁下，不会被并发绕过。"
+      },
+      {
+        "lines": [
+          61,
+          74
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "写 tasks 表（queued）"
+        ],
+        "say": "任务本身写进 tasks 表。此时还没提交，别的连接看不到它。",
+        "state": {
+          "tasks 表": "a：queued（未提交）"
+        }
+      },
+      {
+        "lines": [
+          75,
+          75
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "写 outbox（同一事务）"
+        ],
+        "say": "唤醒记录写进 outbox，和任务在同一事务里。“有任务”和“该去叫醒执行器”要么一起成立，要么一起不存在。",
+        "state": {
+          "outbox": "thread-1（未提交）"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "server",
+          "client",
+          "崩溃：未返回成功"
+        ],
+        "say": "假如服务在 COMMIT 之前崩溃：事务回滚，tasks 表和 outbox 里都没有这条记录。客户端没收到成功，用同一个 clientMessageId 重发即可，服务端按消息 ID 幂等去重。",
+        "state": {
+          "事务": "已回滚",
+          "tasks 表": "—",
+          "outbox": "—"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "pg",
+          "COMMIT"
+        ],
+        "say": "正常的结局：事务提交，任务和唤醒记录同时生效。",
+        "state": {
+          "事务": "已提交",
+          "tasks 表": "a：queued",
+          "outbox": "thread-1：待投递"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "client",
+          "返回任务（queued）"
+        ],
+        "say": "提交成功才回复客户端。回复里的 queued 是数据库里已经存在的事实。"
+      },
+      {
+        "flow": [
+          "server",
+          "redis",
+          "SADD：唤醒 thread id"
+        ],
+        "say": "提交之后，后台轮询才把 outbox 里到期的记录投到 Redis。Redis 里只有一个会话 ID，没有任务内容。",
+        "state": {
+          "Redis 集合": "{thread-1}"
+        }
+      },
+      {
+        "warn": true,
+        "say": "假如崩溃发生在 COMMIT 之后、写 Redis 之前：任务和 outbox 都已落库，重启后 outbox 依然到期，照样投递，任务不会丢。",
+        "state": {
+          "Redis 集合": "空（待重新投递）"
+        }
+      }
+    ],
+    "takeaway": "任务和唤醒记录在同一个 PostgreSQL 事务里提交：提交前崩溃什么都不留下，可以安全重发；提交后崩溃靠 outbox 补投。Redis 只负责“叫醒”，不负责“记住”。"
+  },
+  {
+    "id": "s08-redis-wake",
+    "title": "Redis 只是叫醒，丢了也能补投",
+    "question": "Redis 断线、数据被清空，或者同一个会话被叫醒了两次，任务会丢或者被执行两遍吗？",
+    "file": "stages/s08-data-layer/server/modules/data/queue.mjs",
+    "start": 57,
+    "end": 78,
+    "expect": "async poll()",
+    "notes": {
+      "57": "每 200 毫秒轮询一次",
+      "58": "从 PostgreSQL 取到期的 outbox：只挑还有 queued 任务、且会话没暂停的",
+      "59": "逐个会话投递",
+      "61": "把会话 ID 放进 Redis 集合（SADD），重复放入只算一个",
+      "62": "Redis 写失败：标记不健康，本轮直接返回",
+      "63": "outbox 没动，下一轮还会再投",
+      "66": "投递成功：这条 outbox 推迟 5 秒再到期（按 generation 匹配）",
+      "70": "从 Redis 一次最多取 50 个会话 ID（SPOP）",
+      "71": "取到了说明 Redis 正常",
+      "73": "取失败同样只是延迟，不会丢任务",
+      "76": "每个会话 ID 交给调度器去认领任务",
+      "77": "deliver 只是“叫醒”，真正领取在数据库里做"
+    },
+    "actors": [
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "poll",
+        "outbox 轮询"
+      ],
+      [
+        "redis",
+        "Redis"
+      ],
+      [
+        "sched",
+        "任务调度"
+      ]
+    ],
+    "state0": {
+      "tasks 表": "a：queued",
+      "outbox": "thread-1：到期",
+      "Redis 集合": "空",
+      "Redis 状态": "正常"
+    },
+    "steps": [
+      {
+        "lines": [
+          57,
+          58
+        ],
+        "flow": [
+          "poll",
+          "pg",
+          "查到期 outbox"
+        ],
+        "say": "轮询先问数据库：哪些会话有 queued 任务、而且该投递了。数据库是唯一的事实来源。"
+      },
+      {
+        "lines": [
+          59,
+          61
+        ],
+        "flow": [
+          "poll",
+          "redis",
+          "SADD：唤醒 thread id"
+        ],
+        "say": "把会话 ID 放进 Redis 集合。",
+        "state": {
+          "Redis 集合": "{thread-1}"
+        }
+      },
+      {
+        "lines": [
+          66,
+          66
+        ],
+        "flow": [
+          "poll",
+          "pg",
+          "outbox 推迟 5 秒"
+        ],
+        "say": "投递成功后不删 outbox，只把到期时间推后 5 秒：只要任务还在 queued，过一会儿就再投一次。",
+        "state": {
+          "outbox": "thread-1：5 秒后再到期"
+        }
+      },
+      {
+        "lines": [
+          68,
+          71
+        ],
+        "flow": [
+          "poll",
+          "redis",
+          "SPOP：取出 thread id"
+        ],
+        "say": "从 Redis 取出要叫醒的会话。",
+        "state": {
+          "Redis 集合": "空"
+        }
+      },
+      {
+        "lines": [
+          76,
+          77
+        ],
+        "flow": [
+          "poll",
+          "sched",
+          "deliver：叫醒会话"
+        ],
+        "say": "调度器被叫醒，去数据库里找这个会话的下一条任务。"
+      },
+      {
+        "flow": [
+          "sched",
+          "pg",
+          "认领：queued → starting"
+        ],
+        "say": "认领是一条带条件的 UPDATE：只有状态还是 queued 才改成 starting。会话里没有 queued 任务之后，这条 outbox 就不会再被投递。",
+        "state": {
+          "tasks 表": "a：starting"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "sched",
+          "pg",
+          "重复认领被拒"
+        ],
+        "say": "同一会话被重复叫醒（Redis 里放了两次、或 outbox 补投）：调度器先看到这个会话已有执行中的任务，直接返回；即使并发漏过这一关，认领也是只认 queued 的条件 UPDATE，影响 0 行，任务不会执行两遍。"
+      },
+      {
+        "warn": true,
+        "lines": [
+          62,
+          64
+        ],
+        "flow": [
+          "poll",
+          "redis",
+          "SADD 失败（断线）"
+        ],
+        "say": "换一种情况：Redis 断线，写入失败。轮询标记不健康后直接返回，outbox 原样留在数据库里。",
+        "state": {
+          "tasks 表": "b：queued",
+          "outbox": "thread-1：到期",
+          "Redis 状态": "不健康"
+        }
+      },
+      {
+        "lines": [
+          57,
+          61
+        ],
+        "flow": [
+          "poll",
+          "redis",
+          "恢复后重新 SADD"
+        ],
+        "say": "Redis 恢复（甚至数据被清空）后，下一轮轮询照样从 outbox 查到这条任务并重新投递。Redis 故障只会让派发变慢，不会丢任务。",
+        "state": {
+          "Redis 集合": "{thread-1}",
+          "Redis 状态": "正常"
+        }
+      }
+    ],
+    "takeaway": "顺序、内容和认领都在 PostgreSQL；Redis 里只有可以丢、可以重复的会话 ID。丢了由 outbox 补投，重复了由“只认 queued”的条件更新挡住。"
+  },
+  {
+    "id": "s08-recover",
+    "title": "重启后不盲目重发",
+    "question": "服务在任务执行到一半时崩了，重启之后应该把它重新跑一遍吗？",
+    "file": "stages/s08-data-layer/server/modules/data/jobs.mjs",
+    "start": 123,
+    "end": 146,
+    "expect": "async recover(reason)",
+    "notes": {
+      "123": "服务启动时调用：处理上次没收尾的任务",
+      "124": "三步放在同一个事务里",
+      "126": "所有执行中的任务（starting / running / steering）改成 unconfirmed",
+      "127": "reason 记下原因：“服务曾重启，执行结果待核对，不会自动重发”",
+      "131": "有 unconfirmed 任务的会话一律暂停",
+      "136": "只有 queued 的任务确定没发出去，可以放心重新投递",
+      "139": "找出还有 queued 任务的会话",
+      "144": "通过 outbox 重新唤醒；暂停的会话不会被投递"
+    },
+    "actors": [
+      [
+        "user",
+        "用户"
+      ],
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ]
+    ],
+    "state0": {
+      "任务 a": "queued",
+      "任务 b": "queued",
+      "会话": "正常",
+      "outbox": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：任务 a"
+        ],
+        "say": "任务 a 已经发给 Codex，正在执行；任务 b 在后面排队。",
+        "state": {
+          "任务 a": "running"
+        }
+      },
+      {
+        "warn": true,
+        "say": "服务进程崩溃。a 那一轮到底做完没有、文件有没有改，服务这边已经不知道了。",
+        "actors": {
+          "server": "已崩溃"
+        }
+      },
+      {
+        "lines": [
+          123,
+          129
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "执行中 → unconfirmed"
+        ],
+        "say": "重启后先收尾：执行中的任务不能当失败，也不能当没发生，只能标为 unconfirmed（结果待核对）。",
+        "actors": {
+          "server": "重启中"
+        },
+        "state": {
+          "任务 a": "unconfirmed"
+        }
+      },
+      {
+        "lines": [
+          130,
+          135
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "暂停会话（paused）"
+        ],
+        "say": "有待核对任务的会话整体暂停，后面的任务先不跑，免得在不确定的状态上继续叠加。",
+        "state": {
+          "会话": "paused"
+        }
+      },
+      {
+        "lines": [
+          136,
+          144
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "queued 会话重写 outbox"
+        ],
+        "say": "queued 的任务确定没发出去，重新写 outbox，等会话恢复后再投递。",
+        "actors": {
+          "server": "运行中"
+        },
+        "state": {
+          "outbox": "thread-1"
+        }
+      },
+      {
+        "say": "投递只挑没暂停的会话，所以 b 继续等着；a 不会被自动重发——重发可能让模型把同一件事做两遍。",
+        "state": {
+          "任务 b": "queued（会话暂停）"
+        }
+      },
+      {
+        "flow": [
+          "user",
+          "server",
+          "POST /queue/continue"
+        ],
+        "say": "用户核对过 a 的结果后，手动恢复会话。恢复时同一事务里重新唤醒 outbox。",
+        "state": {
+          "会话": "正常"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：任务 b"
+        ],
+        "say": "b 被正常派发。a 仍保持 unconfirmed，留给人判断。",
+        "state": {
+          "任务 b": "running"
+        }
+      }
+    ],
+    "takeaway": "崩溃后只有“确定没发出”的 queued 任务会自动继续；发出去但结果未知的任务标为 unconfirmed 并暂停会话，由人决定，宁可停下也不重复执行。"
+  }
+]

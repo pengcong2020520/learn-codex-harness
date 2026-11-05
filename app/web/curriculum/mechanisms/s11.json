@@ -1,0 +1,502 @@
+[
+  {
+    "id": "s11-budget",
+    "title": "派发前查预算：超限保持排队，在途不打断",
+    "question": "今天的 token 用完了，正在跑的任务要不要掐断？新来的任务怎么办？",
+    "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+    "start": 236,
+    "end": 258,
+    "expect": "pending = all.filter",
+    "notes": {
+      "236": "本会话还在排队的任务",
+      "237": "当前正在进行的轮次",
+      "238": "追加到正在进行那一轮的消息",
+      "241": "追加走 turn/steer，在预算检查之前：在途任务不被打断",
+      "245": "已经有轮次在跑就不派新的",
+      "246": "挑出下一条要派发的任务",
+      "248": "派发新一轮之前查预算（今日 / 本月的 token 与金额）",
+      "249": "超限：不派发",
+      "250": "设定时器：最多 3 分钟后重查（不超过到 resetsAt 的时间）",
+      "251": "推送队列状态，客户端看到预算已满",
+      "252": "任务保持 queued，不标失败",
+      "254": "预算正常：清掉等待定时器",
+      "256": "认领任务：queued → starting"
+    },
+    "actors": [
+      [
+        "user",
+        "用户"
+      ],
+      [
+        "server",
+        "任务调度"
+      ],
+      [
+        "usage",
+        "UsageService"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ]
+    ],
+    "state0": {
+      "今日 token": "0 / 100",
+      "任务 a": "queued",
+      "任务 b": "—",
+      "重试定时器": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          246,
+          248
+        ],
+        "flow": [
+          "server",
+          "usage",
+          "budgetStatus：未超限"
+        ],
+        "say": "派发 a 之前先查预算，还有余量。"
+      },
+      {
+        "lines": [
+          254,
+          257
+        ],
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：任务 a"
+        ],
+        "say": "认领并发出任务 a。",
+        "state": {
+          "任务 a": "running"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "usage",
+          "对话用量入账"
+        ],
+        "say": "对话用量从 Codex 的通知入账；向量、生图、生视频由工具层各自上报，同样计入这本账。今日用量达到上限 100。",
+        "state": {
+          "今日 token": "100 / 100"
+        }
+      },
+      {
+        "flow": [
+          "user",
+          "server",
+          "POST /messages：任务 b"
+        ],
+        "say": "用户又提交了任务 b，先进队列。",
+        "state": {
+          "任务 b": "queued"
+        }
+      },
+      {
+        "lines": [
+          238,
+          243
+        ],
+        "flow": [
+          "server",
+          "codex",
+          "turn/steer：追加到 a"
+        ],
+        "say": "用户给正在跑的 a 追加一句话。追加走 turn/steer，在预算检查之前处理，不受预算拦截。"
+      },
+      {
+        "flow": [
+          "codex",
+          "server",
+          "turn/completed（任务 a）"
+        ],
+        "say": "a 正常跑完。预算超了也不会掐断在途的轮次——半途中断留下的状态更难收拾。",
+        "state": {
+          "任务 a": "completed"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          248,
+          252
+        ],
+        "flow": [
+          "server",
+          "usage",
+          "budgetStatus：exceeded"
+        ],
+        "say": "轮到 b：预算已满，不派发。b 保持 queued，调度设一个定时器，最多每 3 分钟重查一次。",
+        "state": {
+          "任务 b": "queued（预算已满）",
+          "重试定时器": "≤3 分钟后重查"
+        }
+      },
+      {
+        "lines": [
+          251,
+          251
+        ],
+        "flow": [
+          "server",
+          "user",
+          "推送 queue（budget.exceeded）"
+        ],
+        "say": "客户端收到队列状态，看到预算已满和恢复时间，而不是一条失败。"
+      },
+      {
+        "lines": [
+          254,
+          257
+        ],
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：任务 b"
+        ],
+        "say": "定时器每次触发都重新调度、重查预算；到了 resetsAt（次日 0 点）预算恢复，清掉定时器，b 立即派发。",
+        "state": {
+          "今日 token": "0 / 100",
+          "任务 b": "running",
+          "重试定时器": "—"
+        }
+      }
+    ],
+    "takeaway": "预算只在“派发新一轮”这一个点上把关：超限时新任务保持排队、到周期自动恢复；在途的轮次和追加不打断。"
+  },
+  {
+    "id": "s11-route",
+    "title": "Codex 只连网关：路由挑模型，网关管备用",
+    "question": "这一步该用哪个模型？选中的模型限流了又由谁来换？",
+    "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+    "start": 284,
+    "end": 306,
+    "expect": "// 优先级：步骤 > 任务 > 默认",
+    "notes": {
+      "284": "选模型的优先级：步骤指定 > 任务指定 > 默认路由",
+      "286": "步骤写的 model 优先，其次是用户给这个任务选的",
+      "287": "记下来源，之后显示给用户",
+      "288": "快超预算时：没写死具体模型的，改用降级场景",
+      "289": "默认降级到 fast 场景",
+      "290": "来源记为“预算降级”",
+      "293": "路由按用途、场景和能力要求（needs）挑一个已启用的模型",
+      "294": "推理档位必须是选中模型声明支持的",
+      "296": "实际用的模型和原因记在任务上",
+      "300": "这一轮的用量按这个模型和任务入账",
+      "301": "按轮指定模型发起 turn/start",
+      "305": "model 和 effort 随本轮一起发给 Codex"
+    },
+    "actors": [
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "router",
+        "路由"
+      ],
+      [
+        "codex",
+        "Codex"
+      ],
+      [
+        "gw",
+        "网关"
+      ],
+      [
+        "kimi",
+        "Kimi"
+      ],
+      [
+        "ds",
+        "DeepSeek"
+      ]
+    ],
+    "state0": {
+      "选择": "—",
+      "来源": "—",
+      "实际服务模型": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          284,
+          287
+        ],
+        "say": "写文章的成稿步骤声明了 model: strong，优先级最高。",
+        "state": {
+          "选择": "场景 strong",
+          "来源": "步骤指定"
+        }
+      },
+      {
+        "lines": [
+          288,
+          291
+        ],
+        "say": "如果设置了 AGENT_BUDGET_DOWNGRADE_AT（如 0.8，没有默认值，不设就不降级），今日或本月的 token 或金额任一项到了该比例，没写死具体模型的选择会被换成 fast 场景，来源记为“预算降级”。这次没触发，保持 strong。"
+      },
+      {
+        "lines": [
+          293,
+          294
+        ],
+        "flow": [
+          "server",
+          "router",
+          "按 needs 选"
+        ],
+        "say": "strong 场景的第一个候选是 deepseek-v4-pro。但联网搜索开着，每一轮都要求 web_search，它不支持被跳过。"
+      },
+      {
+        "lines": [
+          293,
+          293
+        ],
+        "flow": [
+          "router",
+          "server",
+          "选中 Kimi"
+        ],
+        "say": "下一个候选 Kimi 支持搜索，选中。全部候选都不满足时会报 MODEL_UNAVAILABLE，并列出每个候选不行的原因：任务记为 failed、会话也被暂停，不发 turn/start。",
+        "state": {
+          "选择": "kimi/kimi-k2.7-code"
+        }
+      },
+      {
+        "lines": [
+          296,
+          297
+        ],
+        "say": "选中的模型和来源（步骤指定：场景 strong）写到任务上，终端在这一轮开始时就能看到。"
+      },
+      {
+        "lines": [
+          300,
+          306
+        ],
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：model + effort"
+        ],
+        "say": "按轮指定模型发起这一轮。"
+      },
+      {
+        "flow": [
+          "codex",
+          "gw",
+          "Responses 请求（网关密钥）"
+        ],
+        "say": "Codex 只知道本机网关的地址和 AGENT_GATEWAY_KEY，各家的 API Key 根本不在 Codex 的环境里。"
+      },
+      {
+        "flow": [
+          "gw",
+          "kimi",
+          "转发（Kimi 密钥）"
+        ],
+        "say": "网关按清单把请求转给 Kimi，密钥由网关自己注入。",
+        "state": {
+          "实际服务模型": "Kimi"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "kimi",
+          "gw",
+          "429 限流"
+        ],
+        "say": "Kimi 限流（也可能是余额不足、超时）。"
+      },
+      {
+        "warn": true,
+        "flow": [
+          "gw",
+          "ds",
+          "备用链：改用 deepseek-flash"
+        ],
+        "say": "网关按 fallbacks 自动改用 deepseek-flash。代价是这一轮没有联网搜索——启动时已经逐条提醒过这类能力损失。",
+        "state": {
+          "实际服务模型": "DeepSeek（备用）"
+        }
+      },
+      {
+        "flow": [
+          "ds",
+          "gw",
+          "返回结果"
+        ],
+        "say": "DeepSeek 生成回答，交回网关。"
+      },
+      {
+        "flow": [
+          "gw",
+          "codex",
+          "流式返回（DeepSeek）"
+        ],
+        "say": "对 Codex 来说，这一轮照常完成。“这一步用谁”由我们的路由定，“出错改用谁”由网关定。"
+      }
+    ],
+    "takeaway": "Codex 只连网关一个地址：选哪个模型由我们按步骤、任务、预算和能力决定并记录来源；选中的模型出错时，由网关在请求层面切到备用链。"
+  },
+  {
+    "id": "s11-usage",
+    "title": "用量按轮入账，记不上就停止派发",
+    "question": "每一轮用了多少 token、花了多少钱？账本写失败了，还能继续派任务吗？",
+    "file": "stages/s11-model-gateway/server/modules/usage/index.mjs",
+    "start": 48,
+    "end": 81,
+    "expect": "record({ source, model",
+    "notes": {
+      "48": "记一笔用量：来源、模型、所属会话 / 轮次 / 任务",
+      "50": "来源只能是对话、向量、生图、生视频；模型必须是“服务商/模型名”",
+      "51": "token 必须是非负安全整数",
+      "54": "按清单里的价格估算花费",
+      "57": "没有价格的模型不瞎估",
+      "58": "缓存命中的输入按缓存价，输出按输出价，每百万 token 计",
+      "61": "未计价的请求单独计数，金额记为空",
+      "62": "写入排成一条链：失败会一直留在链上",
+      "68": "写入 usage 表",
+      "70": "带 event_key 的记录冲突就跳过（工具层用）；对话用量不带 event_key",
+      "76": "对话用量来自 thread/tokenUsage/updated 通知",
+      "78": "累计值没有增长：重复通知，跳过",
+      "80": "每次只记这一轮新增的 last 部分"
+    },
+    "actors": [
+      [
+        "codex",
+        "Codex App Server"
+      ],
+      [
+        "sessions",
+        "会话层"
+      ],
+      [
+        "usage",
+        "UsageService"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "sched",
+        "任务调度"
+      ]
+    ],
+    "state0": {
+      "本轮绑定": "—",
+      "累计 total": "0",
+      "usage 记录": "0",
+      "账本": "正常"
+    },
+    "steps": [
+      {
+        "flow": [
+          "sched",
+          "sessions",
+          "绑定本轮的模型和任务"
+        ],
+        "say": "发 turn/start 之前，先把这一轮的模型和 taskId 登记好。用量通知可能比 RPC 响应先到，也能记到正确的任务上。",
+        "state": {
+          "本轮绑定": "kimi / task-1"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "sessions",
+          "thread/tokenUsage/updated"
+        ],
+        "say": "Codex 推来用量通知：累计 total 1000，本次 last 1000。"
+      },
+      {
+        "lines": [
+          76,
+          80
+        ],
+        "flow": [
+          "sessions",
+          "usage",
+          "recordChat：记 last"
+        ],
+        "say": "累计值增长了，说明是新用量，只记本次的 last，不记累计。",
+        "state": {
+          "累计 total": "1000"
+        }
+      },
+      {
+        "lines": [
+          48,
+          61
+        ],
+        "say": "校验来源和数值，按清单价格估算花费；没有定价的模型只记 token，金额为空并计入“未计价”。"
+      },
+      {
+        "lines": [
+          62,
+          73
+        ],
+        "flow": [
+          "usage",
+          "pg",
+          "INSERT usage 表"
+        ],
+        "say": "写入排进一条串行链。对话用量不带 event_key，去重靠上面的累计值比较。",
+        "state": {
+          "usage 记录": "1"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "sessions",
+          "tokenUsage（1120）× 2"
+        ],
+        "say": "又来两条通知，累计都是 1120。"
+      },
+      {
+        "lines": [
+          78,
+          80
+        ],
+        "say": "第一条累计增长了 120，入账；第二条没增长，跳过。重复通知不会重复记账。",
+        "state": {
+          "累计 total": "1120",
+          "usage 记录": "2"
+        }
+      },
+      {
+        "flow": [
+          "sched",
+          "usage",
+          "budgetStatus"
+        ],
+        "say": "派发下一轮前查预算：会先等写入链完成，用的是已经落库的数据。"
+      },
+      {
+        "warn": true,
+        "lines": [
+          62,
+          63
+        ],
+        "flow": [
+          "usage",
+          "pg",
+          "INSERT 失败"
+        ],
+        "say": "如果写入失败：触发 usageError，调度服务立即进入故障状态——停止一切调度、撤销权限上下文、执行中的任务标为 unconfirmed，等人核对。错误也留在链上，之后查预算同样失败。不能拿一本不完整的账继续花钱。",
+        "state": {
+          "账本": "写入失败 → 服务停止调度"
+        }
+      }
+    ],
+    "takeaway": "用量按轮从 Codex 的通知入账，按累计值去重、按清单估价；预算判断等账本落库，账本写不进去整个调度就停下，绝不按空账本继续花钱。"
+  }
+]

@@ -1,0 +1,478 @@
+[
+  {
+    "id": "s10-steps",
+    "title": "Workflow 确认点：waiting → /confirm → 下一步",
+    "question": "写文章要先定大纲、等人看过再成稿。Agent 怎么知道该停在哪里，又怎么判断做完了？",
+    "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+    "start": 136,
+    "end": 147,
+    "expect": "// 一步结束后的去向",
+    "notes": {
+      "136": "每一轮结束后，由服务端决定任务的去向",
+      "139": "轮次本身没完成（failed / interrupted），或者是追加消息：照轮次状态记",
+      "141": "按任务记下的 workflow 和参数重新解析",
+      "142": "当前是第几步",
+      "143": "本步声明了验收就检查结果（文件是否存在、格式等），只看产物不看过程",
+      "144": "验收不通过：needs-review，不暂停队列、不自动重试",
+      "145": "还有下一步：需要确认就停在 waiting，否则直接排队进入下一步",
+      "146": "最后一步且验收通过：completed"
+    },
+    "actors": [
+      [
+        "user",
+        "用户"
+      ],
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ]
+    ],
+    "state0": {
+      "任务 a1": "—",
+      "步骤": "—",
+      "写入范围": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "user",
+          "server",
+          "POST /messages（workflow: write-article）"
+        ],
+        "say": "用户发起“写文章”任务。Workflow 声明了两步：outline（完成后要确认）和 final。",
+        "state": {
+          "任务 a1": "queued",
+          "步骤": "1/2 outline"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：第 1/2 步 outline"
+        ],
+        "say": "第一步发给 Codex。本步只能在 drafts 下新建文件，怎么拆解、调哪些工具仍由 Codex 自己决定。",
+        "state": {
+          "任务 a1": "running",
+          "写入范围": "drafts"
+        }
+      },
+      {
+        "lines": [
+          139,
+          143
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/completed（completed）"
+        ],
+        "say": "大纲写完，轮次正常结束。服务端按本步声明决定下一步去哪。"
+      },
+      {
+        "lines": [
+          145,
+          145
+        ],
+        "say": "outline 不是最后一步，而且要求确认：任务停在 waiting，不会自动往下走。",
+        "state": {
+          "任务 a1": "waiting"
+        }
+      },
+      {
+        "flow": [
+          "user",
+          "server",
+          "普通对话"
+        ],
+        "say": "等待期间，用户照常聊天。普通对话正常执行，不会推进 a1。"
+      },
+      {
+        "flow": [
+          "user",
+          "server",
+          "/confirm：按第二版大纲写"
+        ],
+        "say": "用户看过大纲，确认并附上补充说明（POST /tasks/confirm）。只有 waiting 或 proposed 的任务能被确认。",
+        "state": {
+          "任务 a1": "queued",
+          "步骤": "2/2 final"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：用户已确认上一步"
+        ],
+        "say": "第二步不重发原文，只说明用户已确认，并带上补充说明。写入范围换成本步声明的 research、drafts、outputs。",
+        "state": {
+          "任务 a1": "running",
+          "写入范围": "research / drafts / outputs"
+        }
+      },
+      {
+        "lines": [
+          142,
+          143
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/completed（completed）"
+        ],
+        "say": "轮次结束，只运行最后一步自己的验收：产物文件是否存在、格式是否符合。"
+      },
+      {
+        "warn": true,
+        "lines": [
+          144,
+          144
+        ],
+        "say": "没有找到产物：记为 needs-review，附上每项验收结果。不暂停队列，也不自动重试——轮次完成不等于任务完成。",
+        "state": {
+          "任务 a1": "needs-review"
+        }
+      },
+      {
+        "lines": [
+          146,
+          146
+        ],
+        "say": "如果验收都通过，才记为 completed。",
+        "state": {
+          "任务 a1": "completed（验收通过时）"
+        }
+      }
+    ],
+    "takeaway": "Workflow 只在权限要变或必须由人拍板的地方切步骤：确认点停在 waiting，等 /confirm 才继续；“做完”由结果验收判定，不通过就是 needs-review。"
+  },
+  {
+    "id": "s10-propose",
+    "title": "可以提议，不能自批",
+    "question": "普通对话里模型发现需要维护知识库，但它没有改 Wiki 的权限。它能不能自己给自己开个任务？",
+    "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+    "start": 150,
+    "end": 183,
+    "expect": "if (Object.keys(rest).length) throw new AppError(\"提议只接受",
+    "notes": {
+      "150": "参数里多出任何字段（比如 status: queued）直接 400",
+      "152": "提议的 workflow 必须是当前 Agent 声明过的",
+      "153": "普通对话不需要提议",
+      "154": "任务原文和提议理由都必填",
+      "156": "同一会话最多 3 个待确认的提议",
+      "158": "身份（threadId、userId）来自权限门签发的上下文，不来自参数",
+      "159": "状态固定为 proposed，记下理由",
+      "161": "写入任务表；proposed 不写 outbox，不会被派发",
+      "163": "告诉模型：确认前不会执行，也不授予任何权限",
+      "167": "用户确认：只能由用户通过接口发起",
+      "174": "任务必须属于这个会话",
+      "175": "确认的是模型提议的任务时",
+      "177": "在用户这一次请求的身份下核对 workflow 申请的授权",
+      "179": "proposed 进入 queued；waiting 则进入下一步",
+      "180": "带条件更新：只有 waiting / proposed 才能确认",
+      "183": "唤醒队列，进入正常派发"
+    },
+    "actors": [
+      [
+        "user",
+        "用户"
+      ],
+      [
+        "model",
+        "模型"
+      ],
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "gate",
+        "PermissionGate"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "当前任务授权": "无（普通对话）",
+      "提议 p1": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "user",
+          "server",
+          "普通对话：更新知识库"
+        ],
+        "say": "用户在普通对话里说“把新资料整理进 Wiki”。这一轮没有任何额外授权。"
+      },
+      {
+        "warn": true,
+        "flow": [
+          "model",
+          "gate",
+          "kb_submit_revision：FORBIDDEN"
+        ],
+        "say": "如果模型直接提交 Wiki：本任务上下文里没有 knowledge.update 授权，门禁拒绝。"
+      },
+      {
+        "lines": [
+          150,
+          154
+        ],
+        "flow": [
+          "model",
+          "server",
+          "propose_task（knowledge-maintain）"
+        ],
+        "say": "模型改用 propose_task 提议一个知识库维护任务，说明理由。只接受 workflow、params、text、reason 四个字段，多带 status: queued 之类的字段直接 400；workflow 必须是 Agent 声明过的。"
+      },
+      {
+        "lines": [
+          155,
+          157
+        ],
+        "say": "检查本会话待确认的提议没超过 3 个，模型不能刷屏。"
+      },
+      {
+        "lines": [
+          158,
+          161
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "写 tasks 表（proposed）"
+        ],
+        "say": "提议记为 proposed。它不排队、不写 outbox、不授权。",
+        "state": {
+          "提议 p1": "proposed"
+        }
+      },
+      {
+        "lines": [
+          162,
+          163
+        ],
+        "flow": [
+          "server",
+          "model",
+          "已提议，等待用户确认"
+        ],
+        "say": "模型得知：确认前不会执行。它能做的到此为止。"
+      },
+      {
+        "lines": [
+          167,
+          174
+        ],
+        "flow": [
+          "user",
+          "server",
+          "/confirm：确认提议"
+        ],
+        "say": "用户看到提议，自己决定确认，还可以加一句补充说明。"
+      },
+      {
+        "lines": [
+          175,
+          178
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "以用户身份核对 grants"
+        ],
+        "say": "这时才核对授权：在用户这一次请求的身份下，检查 Agent 的配置确实允许更新这个知识库。",
+        "state": {
+          "当前任务授权": "knowledge.update：general"
+        }
+      },
+      {
+        "lines": [
+          179,
+          183
+        ],
+        "flow": [
+          "server",
+          "pg",
+          "proposed → queued + 唤醒"
+        ],
+        "say": "提议转为排队任务，经正常派发执行。授权只附在这个任务上。",
+        "state": {
+          "提议 p1": "queued"
+        }
+      },
+      {
+        "warn": true,
+        "say": "用户也可以不理它，或者结束它（cancelled）。没有用户的一次确认，提议永远不会执行。"
+      }
+    ],
+    "takeaway": "判断“要不要做”可以交给模型，给不给权限必须留在模型之外：模型只能留下 proposed 记录，只有用户的确认请求才会在用户身份下核对授权并让它进入队列。"
+  },
+  {
+    "id": "s10-grants",
+    "title": "grants 只在本任务有效，轮次结束即撤销",
+    "question": "知识库维护任务被授予了改 Wiki 的权限。任务结束后，下一条普通对话还能借这份权限改 Wiki 吗？",
+    "file": "stages/s10-skill-workflow/server/modules/permissions/index.mjs",
+    "start": 33,
+    "end": 65,
+    "expect": "// grants 与 writes",
+    "notes": {
+      "33": "授权来自 workflow 解析结果，只挂在本任务的上下文里",
+      "34": "派发一个任务时调用",
+      "35": "同一会话已有运行中的任务、或任务不属于当前 owner：拒绝",
+      "36": "每次运行一个中止信号，结束时用它让上下文失效",
+      "37": "签发上下文：grants 和 writes 都冻结，不能被改",
+      "39": "记为这个会话当前唯一的运行",
+      "41": "收到 turn/started",
+      "44": "绑定 turn id，重新签发一份带 turnId 的上下文",
+      "47": "工具回调按 Thread + Turn 找到本轮上下文",
+      "49": "turn 对不上或已中止：拒绝",
+      "52": "轮次结束",
+      "55": "中止并删除，这份授权随之失效",
+      "59": "检查知识库挂载",
+      "62": "Agent 配置里必须挂载了这个知识库、允许这个动作",
+      "63": "写操作还要求本任务的 grants 里有对应的 knowledge.update"
+    },
+    "actors": [
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "gate",
+        "PermissionGate"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ]
+    ],
+    "state0": {
+      "当前任务": "—",
+      "上下文 grants": "—",
+      "Wiki 提交": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          34,
+          39
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "签发上下文（grants）"
+        ],
+        "say": "派发 knowledge-maintain 任务 m1：上下文里冻结了 grants = knowledge.update（general）。",
+        "state": {
+          "当前任务": "m1（知识维护）",
+          "上下文 grants": "knowledge.update：general"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：知识库维护"
+        ],
+        "say": "这一轮发给 Codex。"
+      },
+      {
+        "lines": [
+          41,
+          46
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/started：turn id"
+        ],
+        "say": "绑定 turn id。授权从此和这一轮绑在一起。"
+      },
+      {
+        "lines": [
+          47,
+          51
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "dynamicTools：kb_submit_revision"
+        ],
+        "say": "模型提交 Wiki，回调按 Thread + Turn 拿到 m1 的上下文。"
+      },
+      {
+        "lines": [
+          59,
+          64
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "检查挂载 + grants"
+        ],
+        "say": "知识库已挂载、动作允许、本任务 grants 里有 knowledge.update：放行。",
+        "state": {
+          "Wiki 提交": "放行"
+        }
+      },
+      {
+        "lines": [
+          52,
+          57
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "turn/completed"
+        ],
+        "say": "轮次结束，中止信号、删除运行记录，带 grants 的上下文失效。",
+        "state": {
+          "当前任务": "—",
+          "上下文 grants": "已撤销"
+        }
+      },
+      {
+        "lines": [
+          34,
+          39
+        ],
+        "flow": [
+          "server",
+          "gate",
+          "签发上下文（无 grants）"
+        ],
+        "say": "下一条普通对话 c1 派发，签发一份新的上下文，grants 为空。",
+        "state": {
+          "当前任务": "c1（普通对话）",
+          "上下文 grants": "无"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          63,
+          63
+        ],
+        "flow": [
+          "codex",
+          "server",
+          "dynamicTools：kb_submit_revision"
+        ],
+        "say": "模型在普通对话里再提交 Wiki：本任务没有 knowledge.update，FORBIDDEN。上一个任务的授权不会遗留下来。",
+        "state": {
+          "Wiki 提交": "FORBIDDEN"
+        }
+      }
+    ],
+    "takeaway": "授权不挂在 Agent 或会话上，而是挂在“这个任务的这一轮”上：签发时冻结，轮次结束随中止信号一起撤销，下一个任务从零开始。"
+  }
+]
