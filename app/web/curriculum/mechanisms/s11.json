@@ -248,7 +248,7 @@
         "flow": [
           "server",
           "router",
-          "按 needs 挑模型"
+          "按 needs 选"
         ],
         "say": "strong 场景的第一个候选是 deepseek-v4-pro。但联网搜索开着，每一轮都要求 web_search，它不支持被跳过。"
       },
