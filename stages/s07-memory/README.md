@@ -115,7 +115,7 @@ npm run chat            # 终端 2：CLI 客户端
 npm run lesson -- s07-memory   # 默认关闭、配置核验、固定文件读取、会话参与设置
 ```
 
-本快照还带着前几个单元的实验（`s03-agent-config`、`s03-skills`、`s03-tool-registry`、`s03-mcp`、`s03-workspace`），用 `npm run lesson -- list` 查看。
+本快照还带着 Agent 装配与工具相关的实验，用 `npm run lesson -- list` 查看全部课时。
 
 ---
 

@@ -20,7 +20,9 @@ function entry(n) {
     : n === 2 ? M("client", "多轮客户端", "只发新输入", 1)
     : n === 3 ? M("api", "HTTP 接口", "常驻服务的入口", 3, ["http/"])
     : M("api", "HTTP / SSE 接口", "终端与浏览器接入", 3, ["http/"]);
-  return [first, M("sessions", "会话与排队", "先进先出，复用 Thread", 2, ["sessions/"]),
+  // s03 服务端还不排队（上一轮没结束返回 409），会话卡片按阶段写清楚。
+  const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"]) : M("sessions", "会话与排队", "先进先出，复用 Thread", 2, ["sessions/"]);
+  return [first, sessions,
     M("messages", "任务与消息", "任务排队与调度", 4, ["messages/"]), M("events", "事件推送", "状态变化推给客户端", 4, ["events/"])];
 }
 const layers = n => [
@@ -101,7 +103,7 @@ function render(n) {
   [[c.card, c.line, "", "前面阶段已有", c.muted], [c.accentBg, c.accent, "", "本阶段新增", c.accent], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]]
     .forEach(([f, s, d, l, col], i) => { const x = 48 + i * 170; box(x, 138, 22, 16, f, s, d, 4); t(l, x + 30, 152, 15, col); });
 
-  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t("终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
+  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n <= 3 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
   pos.user = { x: 48, y: 330, w: 120, h: 104 };
 
   // 我们的程序：每层一行，只画到本阶段为止；s03 起常驻为服务。

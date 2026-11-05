@@ -77,7 +77,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 |------|--------|
 | s01 单轮问答 | `s01-transport` 先建立通信，再派发任务 · `s01-lifecycle` 收到请求，不等于完成任务 |
 | s02 多轮会话 | `s02-fifo` 连续输入如何不丢、不抢跑 · `s02-resume` 恢复会话，为何不是重新拼历史 |
-| s03 可配置 Agent | `s03-agent-config` 配置是装配合同，不是临时提示词 · `s03-skills` Skill 给方法，权限仍要单独核验 · `s03-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s03-mcp` MCP 是调用边界，不是一工具一服务 · `s03-workspace` 在工作区里，也不等于有权读写 |
+| s03 可配置 Agent | `s05-agent-config` 配置是装配合同，不是临时提示词 · `s05-skills` Skill 给方法，权限仍要单独核验 · `s06-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s06-mcp` MCP 是调用边界，不是一工具一服务 · `s06-workspace` 在工作区里，也不等于有权读写 |
 | s08 数据层 | `s08-persistence` 消息收到了，为什么还需要一条 outbox？ · `s08-dispatch` Redis 丢了，哪条任务还能继续？ · `s08-versions` 原文改了一句，旧产物还能读吗？ |
 | s09 知识层 | `s09-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s09-mounts` 读得到 inputs，不等于读得到所有知识库 · `s09-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s09-rag` 新索引失败，为什么旧索引指针不能先切？ · `s09-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
 

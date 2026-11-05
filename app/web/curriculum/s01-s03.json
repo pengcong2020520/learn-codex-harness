@@ -724,7 +724,7 @@
     }
   },
   {
-    "id": "s03-agent-config",
+    "id": "s05-agent-config",
     "demo": 3,
     "title": "配置是装配合同，不是临时提示词",
     "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
@@ -880,7 +880,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='Agent schema|描述符不复制|工具双重' tests/agent-core.test.mjs",
-      "action": "在 s03 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+      "action": "在 s07-memory 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
       "observe": [
         "未知字段、缺失引用、nativeShell=true 等定义被拒绝。",
         "无版本绑定的旧 Thread、不同描述符或排队消息版本不匹配会报错。",
@@ -905,7 +905,7 @@
     }
   },
   {
-    "id": "s03-skills",
+    "id": "s05-skills",
     "demo": 3,
     "title": "Skill 给方法，权限仍要单独核验",
     "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
@@ -1061,7 +1061,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='原生 Skill|必需 Skill' tests/agent-core.test.mjs",
-      "action": "在 s03 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+      "action": "在 s07-memory 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
       "observe": [
         "接口夹具中的范围外 other 从 enabled=true 变成 false。",
         "$allowed 生成 type:skill；$other 被拒绝，而普通 $HOME 和前缀相近名称不误匹配。",
@@ -1086,7 +1086,7 @@
     }
   },
   {
-    "id": "s03-tool-registry",
+    "id": "s06-tool-registry",
     "demo": 3,
     "title": "工具名、参数合同和实现怎样接在一起",
     "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
@@ -1249,7 +1249,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='schema 与运行时' tests/tools.test.mjs",
-      "action": "在 s03 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+      "action": "在 s07-memory 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
       "observe": [
         "每项 specs 都使用 inputSchema，并禁止未声明的额外参数。",
         "read_file 缺 path、write_file 的 content=null、未知 bash 等输入被拒绝。",
@@ -1274,7 +1274,7 @@
     }
   },
   {
-    "id": "s03-mcp",
+    "id": "s06-mcp",
     "demo": 3,
     "title": "MCP 是调用边界，不是一工具一服务",
     "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
@@ -1437,7 +1437,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='MCP 入口' tests/tool-loading.test.mjs",
-      "action": "在 s03 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+      "action": "在 s07-memory 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
       "observe": [
         "连接 URL 使用 http://127.0.0.1: 加临时端口。",
         "没有令牌的 POST 返回 403；带正确令牌但有 Origin 的 POST 仍返回 403。",
@@ -1462,7 +1462,7 @@
     }
   },
   {
-    "id": "s03-workspace",
+    "id": "s06-workspace",
     "demo": 3,
     "title": "在工作区里，也不等于有权读写",
     "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
@@ -1610,7 +1610,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='来源范围|工作区内的窄来源' tests/agent-core.test.mjs",
-      "action": "在 s03 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+      "action": "在 s07-memory 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
       "observe": [
         "移除 articles 读绑定后，outputs/new.md 仍能创建，但不能通过 read_file 读回。",
         "同名产物再次创建失败，原文件内容保留。",

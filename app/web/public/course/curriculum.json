@@ -769,7 +769,7 @@
       }
     },
     {
-      "id": "s03-agent-config",
+      "id": "s05-agent-config",
       "demo": 3,
       "title": "配置是装配合同，不是临时提示词",
       "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
@@ -928,8 +928,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s03-agent-config",
-        "action": "在 s03 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+        "command": "npm run lesson -- s05-agent-config",
+        "action": "在 s07-memory 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
         "observe": [
           "未知字段、缺失引用、权限提升被 schema 拒绝",
           "Agent 改动立即撤销旧工具权限；恢复旧文件也不能免重启",
@@ -954,7 +954,7 @@
       }
     },
     {
-      "id": "s03-skills",
+      "id": "s05-skills",
       "demo": 3,
       "title": "Skill 给方法，权限仍要单独核验",
       "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
@@ -1113,8 +1113,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s03-skills",
-        "action": "在 s03 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+        "command": "npm run lesson -- s05-skills",
+        "action": "在 s07-memory 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
         "observe": [
           "范围外发现结果被禁用",
           "授权 Skill 生成显式 skill 输入；未授权名称被拒绝",
@@ -1139,7 +1139,7 @@
       }
     },
     {
-      "id": "s03-tool-registry",
+      "id": "s06-tool-registry",
       "demo": 3,
       "title": "工具名、参数合同和实现怎样接在一起",
       "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
@@ -1305,8 +1305,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s03-tool-registry",
-        "action": "在 s03 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+        "command": "npm run lesson -- s06-tool-registry",
+        "action": "在 s07-memory 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
         "observe": [
           "echo_note 真正经 registry.call 返回输入",
           "重复名、缺实现、坏 schema、越界模块被拒绝",
@@ -1331,7 +1331,7 @@
       }
     },
     {
-      "id": "s03-mcp",
+      "id": "s06-mcp",
       "demo": 3,
       "title": "MCP 是调用边界，不是一工具一服务",
       "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
@@ -1497,8 +1497,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s03-mcp",
-        "action": "在 s03 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+        "command": "npm run lesson -- s06-mcp",
+        "action": "在 s07-memory 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
         "observe": [
           "活动 Thread 存在时不发布新 registry",
           "刷新失败回滚旧配置",
@@ -1523,7 +1523,7 @@
       }
     },
     {
-      "id": "s03-workspace",
+      "id": "s06-workspace",
       "demo": 3,
       "title": "在工作区里，也不等于有权读写",
       "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
@@ -1674,8 +1674,8 @@
         }
       ],
       "experiment": {
-        "command": "npm run lesson -- s03-workspace",
-        "action": "在 s03 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+        "command": "npm run lesson -- s06-workspace",
+        "action": "在 s07-memory 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
         "observe": [
           "两次运行共用 workspaceDir，但 runDir 不同",
           "来源过滤同时约束 list/read；产物不能覆盖",

@@ -38,8 +38,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   const port = Number(environment.AGENT_PORT || 4313);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_PORT 必须是 1 到 65535 的整数。");
   const launch = buildRestrictedLaunch(environment);
-  const data = { databaseUrl: environment.DATABASE_URL, redisUrl: environment.REDIS_URL };
-  // Product credentials must not leak into Codex, model tool subprocesses or protocol logs.
-  for (const key of Object.keys(launch.env)) if (/^(DATABASE_URL|REDIS_URL|PG[A-Z_]+)$/.test(key)) delete launch.env[key];
-  return { root, port, host: "127.0.0.1", launch, data };
+  return { root, port, host: "127.0.0.1", launch };
 }

@@ -14,7 +14,7 @@ import { AGENT_INSTRUCTIONS } from "./modules/role/index.mjs";
 // 主流程只组装模块：配置 → 独占锁 → Codex → 会话 → 运行目录维护 → HTTP → 就绪。
 export async function startAgentServer({ config = loadServerConfig(), cli, log = console.log } = {}) {
   const lifecycle = createLifecycle();
-  const redact = createLogRedactor(config.launch.env.CODEX_API_KEY, [config.data?.databaseUrl, config.data?.redisUrl]);
+  const redact = createLogRedactor(config.launch.env.CODEX_API_KEY);
   const safeLog = value => log(redact(value));
   try {
     // 1. 确保同一个项目只有一个服务在运行。

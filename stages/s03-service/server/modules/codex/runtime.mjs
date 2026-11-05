@@ -19,7 +19,7 @@ export async function resolveWorkspace(root, requested = path.join(root, "worksp
   try { info = await lstat(target); } catch (error) { if (error.code === "ENOENT") throw new Error(`工作区不存在：${target}。请创建/恢复目录或修正 Agent 绑定。`); throw error; }
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("工作区必须是真实目录，不能是符号链接。");
   const physical = await realpath(target), serviceRoot = await realpath(root);
-  if (physical === serviceRoot || [".runs", ".data", "server", "client", "agents", "config"].some(name => physical === path.join(serviceRoot, name) || physical.startsWith(path.join(serviceRoot, name) + path.sep))) throw new Error("不能把服务代码、配置或运行状态目录作为工作区。");
+  if (physical === serviceRoot || [".runs", ".data", "server", "client"].some(name => physical === path.join(serviceRoot, name) || physical.startsWith(path.join(serviceRoot, name) + path.sep))) throw new Error("不能把服务代码、配置或运行状态目录作为工作区。");
   return physical;
 }
 
@@ -38,6 +38,5 @@ export async function prepareRun(launch, root = PROJECT_ROOT, { workspaceDir, in
     await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + "\n", { mode: 0o600, flag: "wx" });
     args.push("-c", `model_catalog_json=${JSON.stringify(catalogFile)}`);
   }
-  // workspace 只为旧 05 单文件示例保留别名；正式服务不再使用该含糊字段。
-  return { serviceRoot: path.resolve(root), workspaceDir: stableWorkspace, runDir: workspace, codexHome: path.join(root, ".data/codex"), workspace, args, catalogFile };
+  return { serviceRoot: path.resolve(root), workspaceDir: stableWorkspace, runDir: workspace, codexHome: path.join(root, ".data/codex"), args, catalogFile };
 }

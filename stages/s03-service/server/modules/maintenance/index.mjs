@@ -66,7 +66,7 @@ export class RunMaintenance {
     Object.assign(this, { root, runtime, sessions, log, policy, inspectOpenPaths });
   }
   protected(directory) {
-    return this.closed || directory === (this.runtime?.runDir || this.runtime?.workspace) || directory === this.runtime?.workspaceDir || this.sessions?.loading.size > 0 ||
+    return this.closed || directory === this.runtime?.runDir || directory === this.runtime?.workspaceDir || this.sessions?.loading.size > 0 ||
       [...(this.sessions?.sessions.values() || [])].some(session => path.resolve(session.cwd) === directory);
   }
   async start() {
