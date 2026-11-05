@@ -1,14 +1,11 @@
 // 章节长文（/course/handbook.html）：静态检查 + 无头 Chrome 实测交互。找不到 Chrome 时只跳过浏览器部分（CI 的 ubuntu 镜像自带 Chrome）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {createWorkbench} from '../server.mjs';
+import {browser,helpers,chrome} from './browser.mjs';
 
 const course=new URL('../public/course/',import.meta.url);
-const chrome=[process.env.CHROME_PATH,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'].find(file=>file&&fs.existsSync(file));
 
 async function workbench(t){const app=createWorkbench({port:0,targets:[]});const url=await app.listen();t.after(()=>app.close());return url;}
 
@@ -22,27 +19,6 @@ test('长文页面没有内联脚本和外部资源，CSP 只允许同源脚本'
  for(const removed of ['styles.css','main.js','_base.html','_footer.html','build.sh','course.css','course.js'])assert.ok(!fs.existsSync(new URL(removed,course)),`${removed} 应已移除`);
 });
 
-// 最小 CDP 客户端：一个浏览器连接，扁平会话。
-async function browser(t){
- const profile=fs.mkdtempSync(path.join(os.tmpdir(),'handbook-chrome-'));
- const proc=spawn(chrome,['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-gpu','--window-size=1280,900','about:blank'],{stdio:['ignore','ignore','pipe']});
- const exited=new Promise(r=>proc.once('exit',r));
- t.after(async()=>{proc.kill();await exited;fs.rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
- const endpoint=await new Promise((resolve,reject)=>{let text='';const timer=setTimeout(()=>reject(Error('Chrome 没有在 15 秒内启动')),15000);proc.stderr.on('data',d=>{text+=d;const m=text.match(/DevTools listening on (ws:\/\/\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});proc.on('exit',code=>reject(Error(`Chrome 退出：${code}`)));});
- const ws=new WebSocket(endpoint);await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no;});t.after(()=>ws.close());
- let id=0;const pending=new Map(),listeners=[];
- ws.onmessage=({data})=>{const msg=JSON.parse(data);if(msg.id&&pending.has(msg.id)){const {resolve,reject}=pending.get(msg.id);pending.delete(msg.id);msg.error?reject(Error(msg.error.message)):resolve(msg.result);}else for(const fn of listeners)fn(msg);};
- const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const n=++id;pending.set(n,{resolve,reject});ws.send(JSON.stringify({id:n,method,params,sessionId}));});
- const {targetId}=await send('Target.createTarget',{url:'about:blank'});const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true});
- const page=(method,params)=>send(method,params,sessionId);const errors=[];
- listeners.push(msg=>{if(msg.sessionId!==sessionId)return;if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.exception?.description||msg.params.exceptionDetails.text);if(msg.method==='Runtime.consoleAPICalled'&&['error','warning'].includes(msg.params.type))errors.push(msg.params.args.map(a=>a.value??a.description).join(' '));if(msg.method==='Log.entryAdded'&&['error','warning'].includes(msg.params.entry.level))errors.push(msg.params.entry.text+(msg.params.entry.url?` ${msg.params.entry.url}`:''));});
- await Promise.all([page('Runtime.enable'),page('Log.enable'),page('Page.enable')]);
- async function open(url,{reduceMotion=false}={}){await page('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduceMotion?'reduce':'no-preference'}]});const loaded=new Promise(r=>listeners.push(m=>{if(m.sessionId===sessionId&&m.method==='Page.loadEventFired')r();}));await page('Page.navigate',{url});await loaded;}
- async function run(source){const {result,exceptionDetails}=await page('Runtime.evaluate',{expression:`(async()=>{${source}})()`,awaitPromise:true,returnByValue:true});if(exceptionDetails)throw Error(exceptionDetails.exception?.description||exceptionDetails.text);return result.value;}
- return {open,run,errors};
-}
-const helpers=`const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],sleep=ms=>new Promise(r=>setTimeout(r,ms));
- const until=async(fn,ms=3000)=>{const end=Date.now()+ms;while(Date.now()<end){if(fn())return true;await sleep(30);}return false;};`;
 
 test('长文交互：测验、对话推演、流程推演、架构图、术语释义、章节导航与阅读进度',{skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'},async t=>{
  const url=await workbench(t),b=await browser(t);

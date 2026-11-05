@@ -1,4 +1,4 @@
-/* 阶段增量页：配色与各阶段总架构图一致（橙色为本阶段新增，绿色为 Codex 原生）。 */
+/* 阶段演示页：配色与各阶段总架构图一致（橙色为本阶段新增，绿色为 Codex 原生）。 */
 :root{--bg:#FBFBF9;--ink:#1F2933;--muted:#6B7780;--faint:#B8C0C6;--line:#E3E7EA;--card:#FFFFFF;--accent:#D9622B;--accent-bg:#FFF3EC;--plus:#2F7D62;--minus:#B34B38}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif}
@@ -17,9 +17,6 @@ code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
 .chg-tag{flex:none;padding:4px 10px;border-radius:8px;background:var(--ink);color:#fff;font-weight:700;font-size:14px}
 .chg-stage h2{margin:0;font-size:24px}.chg-stage header p{margin:6px 0 0;color:var(--muted)}
 .chg-stage h3{font-size:17px;margin:28px 0 12px}
-.chg-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:22px 0}
-.chg-stats div{padding:14px 16px;border:1px solid var(--line);border-radius:12px}
-.chg-stats b{display:block;font-size:24px}.chg-stats span{color:var(--muted);font-size:13px}
 em{font-style:normal}.plus{color:var(--plus)}.minus{color:var(--minus)}
 .chg-overview{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:24px;align-items:start}
 .chg-figure img{width:100%;height:auto;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
@@ -31,16 +28,48 @@ em{font-style:normal}.plus{color:var(--plus)}.minus{color:var(--minus)}
 .chg-surface{margin-top:14px}.chg-surface h4,.chg-surface summary{margin:0 0 6px;font-size:14px;cursor:default}.chg-surface summary{cursor:pointer}
 .chg-surface b{color:var(--accent);margin-left:4px}
 .chg-surface div{display:flex;flex-wrap:wrap;gap:6px}.chg-surface code{padding:2px 8px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
-.chg-group{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
-.chg-group summary{display:flex;justify-content:space-between;gap:12px;padding:10px 16px;cursor:pointer;background:var(--bg)}
-.chg-group summary span{color:var(--muted);font-size:13px}
-.chg-group ul{list-style:none;margin:0;padding:6px 0}
-.chg-group li{display:grid;grid-template-columns:52px minmax(0,1fr) 110px 128px;gap:12px;align-items:center;padding:6px 16px}
-.chg-group li a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none}.chg-group li a:hover code{text-decoration:underline}
-.chg-status{font-size:12px;text-align:center;border-radius:6px;padding:1px 0;border:1px solid var(--line);color:var(--muted)}
-li.added .chg-status{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-li.removed .chg-status{color:var(--minus)}li.removed code{text-decoration:line-through;color:var(--muted)}
-.chg-lines{text-align:right;font-size:13px}
-.chg-bar{display:flex;height:8px}.chg-bar i{display:block;height:8px}.chg-bar .plus{background:var(--plus)}.chg-bar .minus{background:var(--minus)}
 .muted{color:var(--muted)}
-@media (max-width:860px){.chg-overview{grid-template-columns:1fr}.chg-stats{grid-template-columns:repeat(2,1fr)}.chg-group li{grid-template-columns:44px minmax(0,1fr) 90px}.chg-bar{display:none}.chg-main{padding:20px}}
+/* 机制演示：左边是角色和状态，右边是逐行注释的源码。 */
+.mech{margin:16px 0 24px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.mech>header{padding:16px 20px;background:var(--bg);border-bottom:1px solid var(--line)}
+.mech h4{margin:0;font-size:18px}.mech>header p{margin:4px 0 0;color:var(--muted)}
+.mech-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}
+.mech-play{padding:20px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.mech-stage{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:12px;padding:56px 0 8px}
+.mech-actor{min-height:76px;padding:10px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);text-align:center;transition:border-color .3s,background .3s,box-shadow .3s}
+.mech-actor b{display:block;font-size:14px}.mech-actor small{display:block;min-height:20px;margin-top:6px;color:var(--muted);font-size:13px}
+.mech-actor.from{border-color:var(--ink)}.mech-actor.to{border-color:var(--accent);background:var(--accent-bg)}
+.mech-actor.self{border-color:#2F7D62;background:#EEF7F2;animation:mech-pulse .9s ease-in-out 2}
+.mech-actor.changed small{color:var(--accent);font-weight:600}
+@keyframes mech-pulse{50%{box-shadow:0 0 0 6px rgba(47,125,98,.18)}}
+.mech-packet{position:absolute;z-index:1;transform:translate(-50%,-50%);max-width:220px;padding:5px 10px;border-radius:999px;background:var(--ink);color:#fff;font-size:12.5px;line-height:1.35;text-align:center;white-space:normal;transition:left .9s cubic-bezier(.4,.1,.2,1),top .9s cubic-bezier(.4,.1,.2,1);pointer-events:none}
+.mech-packet.warn{background:#B34B38}.mech-packet.pop{animation:mech-pop .5s ease-out}
+@keyframes mech-pop{from{opacity:0;transform:translate(-50%,0)}}
+.mech-track{position:absolute;height:0;border-top:2px dashed var(--faint)}
+.mech-track::after{content:"";position:absolute;top:-7px;border:6px solid transparent}
+.mech-track.right::after{right:-2px;border-left:9px solid var(--faint);border-right:0}
+.mech-track.left::after{left:-2px;border-right:9px solid var(--faint);border-left:0}
+.mech-track.warn{border-top-color:#B34B38}.mech-track.warn.right::after{border-left-color:#B34B38}.mech-track.warn.left::after{border-right-color:#B34B38}
+.mech-actor{position:relative}.mech-actor.from::before,.mech-actor.to::before{content:"";position:absolute;left:50%;top:-30px;height:28px;border-left:2px dashed var(--faint)}
+.mech-say{margin:0;min-height:72px;padding:12px 14px;border-left:4px solid var(--accent);background:var(--accent-bg);border-radius:8px}
+.mech-say.warn{border-color:#B34B38;background:#FBEDEA}
+.mech-state{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.mech-state div{padding:8px 10px;border:1px solid var(--line);border-radius:8px;transition:background .4s,border-color .4s}
+.mech-state dt{color:var(--muted);font-size:12px}.mech-state dd{margin:2px 0 0;font:13px/1.4 ui-monospace,Menlo,monospace;word-break:break-all}
+.mech-state div.changed{border-color:var(--accent);background:var(--accent-bg)}
+.mech-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mech-controls button{padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:inherit;font-size:14px;cursor:pointer}
+.mech-controls button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.mech-controls button:disabled{opacity:.4;cursor:default}
+.mech-count{margin-left:auto;color:var(--muted);font-size:13px}
+.mech-takeaway{margin:0;padding:12px 14px;border:1px solid #B5DCCB;background:#EEF7F2;border-radius:8px}.mech-takeaway b{color:#2F7D62;margin-right:8px}
+.mech-code{margin:0;background:#1F2933;color:#E3E7EA;display:flex;flex-direction:column;min-width:0}
+.mech-code figcaption{padding:8px 14px;border-bottom:1px solid #33414D;font-size:12px}.mech-code figcaption a{color:#B8C0C6}
+.mech-code ol{list-style:none;margin:0;padding:8px 0;overflow:auto;max-height:560px}
+.mech-code li{display:grid;grid-template-columns:40px minmax(0,1fr);padding:1px 12px 1px 0;border-left:3px solid transparent;transition:background .3s}
+.mech-code .no{color:#6B7780;text-align:right;padding-right:10px;font:12px/1.6 ui-monospace,Menlo,monospace}
+.mech-code code{white-space:pre;overflow:hidden;text-overflow:ellipsis;font-size:12.5px;line-height:1.6}
+.mech-code .note{grid-column:2;color:#8FD1B5;font-size:12.5px;line-height:1.5;padding-bottom:3px}.mech-code .note::before{content:"// "}
+.mech-code li.on{background:rgba(217,98,43,.22);border-left-color:#D9622B}
+.mech-todo{padding:16px;border:1px dashed var(--line);border-radius:12px}
+@media (max-width:960px){.chg-overview,.mech-body{grid-template-columns:1fr}.mech-play{border-right:0;border-bottom:1px solid var(--line)}.chg-main{padding:20px}}
