@@ -1,5 +1,5 @@
 // 各阶段总架构图：所有阶段共用一张总图，模块位置固定，只按阶段切换状态（前面已有 / 本阶段新增 / 后面才有）。
-// 运行：node stages/build-architecture.mjs 生成 stages/*/images/architecture.svg；加 --check 只检查是否最新。
+// 运行：node stages/build-architecture.mjs 生成 stages/*/images/architecture.svg 和 design.md 用的细节图；加 --check 只检查是否最新。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,10 +119,77 @@ function render(n) {
   return a.join("");
 }
 
+// 细节图：供 docs/design.md 深入阅读，按"分区 → 一行节点"排布，配色与总图一致。
+// 节点类型：new 本阶段新增，old 沿用，codex Codex 原生，warn 需要注意的分支。
+const details = {
+  "s06-skill-workflow/images/skill-workflow.svg": {
+    title: "S06 细节：一个任务怎么走完 Workflow", sub: "Skill 教方法，Workflow 管边界和终点；模型决定怎么做，权限和验收留在模型之外。",
+    sections: [
+      { title: "配置：由部署者定义，跟着 Agent 包走", links: ["同步", null], nodes: [
+        ["new", "Agent 包", "agent.json · role.md", "skills/ · workflows/"], ["new", "CODEX_HOME/skills", "启动时同步", "只启用声明的 Skill"], ["old", "Workspace", "用户资料与产物", "不放角色与 Skill"]] },
+      { title: "执行：一步一步走，权限只在本任务有效", nodes: [
+        ["old", "提交任务", "/messages + workflow", "或用户确认过的提议"], ["new", "Workflow 解析", "校验参数与授权", "定本步目标和写入范围"],
+        ["new", "权限门", "grants 只在本任务有效", "轮次结束即撤销"], ["codex", "Codex 执行", "怎么做由模型决定", "skill_read 读取方法"], ["new", "验收", "只看结果", "不看调了哪些工具"]] },
+      { title: "一步结束后的去向", links: [null, null, null], nodes: [
+        ["warn", "验收不通过", "needs-review", "不暂停队列、不重试"], ["new", "需要确认", "waiting", "/confirm 后继续"], ["old", "无需确认", "直接排队下一步", ""], ["old", "最后一步", "completed", ""]],
+        note: "propose_task：需要别的 Workflow 时，模型只能提议；用户确认前不执行、不授权。" },
+    ] },
+  "s07-model-gateway/images/model-gateway.svg": {
+    title: "S07 细节：模型网关的三层作用", sub: "各家服务商的密钥只交给网关；Codex 只拿网关访问密钥。",
+    sections: [
+      { title: "① 统一协议", nodes: [
+        ["codex", "Codex", "只说 Responses", "用网关访问密钥"], ["new", "模型网关 · Bifrost", "Responses 原样转发", "其余转 Chat / Messages"], ["old", "各家模型", "Kimi / DeepSeek / 智谱…", "密钥只在网关"]],
+        note: "模型自带联网搜索：清单写 nativeTools，AGENT_WEB_SEARCH=auto / off；开搜索时只路由到有 web_search 能力的模型。" },
+      { title: "② 多模型协调", nodes: [
+        ["new", "模型清单", "config/models.json", "用途 · 候选 · 场景 · 能力"], ["new", "本次选谁", "步骤 > 任务 > 默认", "能力不符就换候选"], ["old", "四种用途", "对话 · 向量", "生图 · 生视频"]],
+        note: "每轮记下选中的模型和来源；主模型失败时，网关自动尝试已启用的备用模型。" },
+      { title: "③ 用量与预算", nodes: [
+        ["warn", "派发前查预算", "超限：新任务保持排队", "在途轮次不打断"], ["old", "发起请求", "经网关到上游", ""], ["new", "用量入账", "按轮去重", "价格表估算金额"], ["new", "网关 token 限流", "日上限兜底", "超限直接拒绝"]],
+        note: "运行中的请求仍会产生用量；预算和限流不保证费用精确封顶。" },
+    ] },
+};
+const kinds = { new: [c.accentBg, c.accent], old: [c.card, c.line], codex: [c.greenBg, c.greenLine], warn: ["#FFF8E6", "#E3B341"] };
+
+function renderDetail(d) {
+  const a = [], W = 1600, X = 48, IW = W - 96, NH = 96, AG = 44;
+  const box = (x, y, w, h, fill, stroke, r = 12) => a.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`);
+  const t = (s, x, y, size, color, weight = 400, anchor = "start") => a.push(`<text x="${x}" y="${y}" font-size="${size}" fill="${color}" font-weight="${weight}" text-anchor="${anchor}">${esc(s)}</text>`);
+  let y = 150;
+  for (const sec of d.sections) {
+    const top = y, n = sec.nodes.length, nw = (IW - 48 - AG * (n - 1)) / n;
+    const h = 56 + NH + (sec.note ? 52 : 24);
+    box(X, top, IW, h, c.card, c.line, 16); t(sec.title, X + 24, top + 36, 18, c.ink, 700);
+    sec.nodes.forEach(([kind, name, l1, l2], i) => {
+      const x = X + 24 + i * (nw + AG), ny = top + 56, [fill, stroke] = kinds[kind];
+      box(x, ny, nw, NH, fill, stroke);
+      if (kind === "new") a.push(`<rect x="${x + 1}" y="${ny + 16}" width="4" height="${NH - 32}" rx="2" fill="${c.accent}"/>`);
+      t(name, x + 18, ny + 34, 17, kind === "codex" ? c.green : c.ink, 650); t(l1, x + 18, ny + 60, 14, c.muted); if (l2) t(l2, x + 18, ny + 82, 14, c.muted);
+      const link = sec.links ? sec.links[i] : "";
+      if (i < n - 1 && link !== null) {
+        const ax = x + nw + 6, ay = ny + NH / 2;
+        a.push(`<path d="M${ax},${ay} L${ax + AG - 14},${ay}" fill="none" stroke="${c.ink}" stroke-width="2" marker-end="url(#m${c.ink.slice(1)})"/>`);
+        if (link) t(link, ax + (AG - 8) / 2, ay - 10, 13, c.muted, 500, "middle");
+      }
+    });
+    if (sec.note) t(sec.note, X + 24, top + 56 + NH + 34, 15, c.muted);
+    y += h + 24;
+  }
+  const H = y + 52;
+  const legend = [["new", "本阶段新增"], ["old", "沿用"], ["codex", "Codex 原生"], ["warn", "需要注意的分支"]];
+  legend.forEach(([k, l], i) => { const [f, s] = kinds[k], lx = X + i * 170; box(lx, H - 44, 22, 16, f, s, 4); t(l, lx + 30, H - 30, 15, c.muted); });
+  const head = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">${esc(d.title)}</title><desc id="desc">${esc(d.sub)}</desc><defs><marker id="m${c.ink.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${c.ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect x="0" y="0" width="${W}" height="${H}" fill="${c.bg}"/><text x="${X}" y="72" font-size="30" fill="${c.ink}" font-weight="700">${esc(d.title)}</text><text x="${X}" y="112" font-size="19" fill="${c.muted}">${esc(d.sub)}</text>`;
+  return head + a.join("") + "</g></svg>\n";
+}
+
 const check = process.argv.includes("--check");
 dirs.forEach((dir, n) => {
   const file = path.join(root, dir, "images/architecture.svg"), body = render(n);
   if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
   else fs.writeFileSync(file, body);
 });
-console.log(check ? `${dirs.length} 张架构图是最新的。` : `已生成 ${dirs.length} 张架构图。`);
+for (const [rel, d] of Object.entries(details)) {
+  const file = path.join(root, rel), body = renderDetail(d);
+  if (check) { if (fs.readFileSync(file, "utf8") !== body) throw new Error(`${rel} 不是最新；请运行 node stages/build-architecture.mjs`); }
+  else fs.writeFileSync(file, body);
+}
+console.log(check ? `${dirs.length} 张架构图和 ${Object.keys(details).length} 张细节图是最新的。` : `已生成 ${dirs.length} 张架构图和 ${Object.keys(details).length} 张细节图。`);
