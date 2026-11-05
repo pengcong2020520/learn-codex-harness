@@ -1,56 +1,75 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1220" viewBox="0 0 1280 1220" role="img" aria-labelledby="title desc"><title id="title">s04 总体架构</title><desc id="desc">按职责分层；右侧为独立 Codex 原生进程；红色表示相较上一 Demo 的新增或变化。</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8" fill="#305780"/></marker></defs><rect width="1280" height="1220" fill="#f7f9fc"/>
-<text x="40" y="55" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="32" font-weight="650" fill="#192d44">S04  /  数据层升级</text>
-<text x="40" y="91" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">纵向箭头表示能力依赖；右侧箭头表示与 Codex 的实际通信</text>
-<text x="40" y="122" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#b63743">红色：本阶段新增或变化    ·    蓝色：复用能力    ·    分层表示职责，不代表独立服务</text>
-<rect x="40" y="150" width="820" height="100" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="60" y="186" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">01  交互入口</text>
-<text x="60" y="221" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#586d81">本地 CLI  →  HTTP / SSE  ·  本地 Bearer 凭据</text>
-<path d="M450,250 L450,279" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
-<rect x="40" y="280" width="820" height="170" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="60" y="316" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">02  Agent 装配与任务调度</text>
-<text x="60" y="352" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">Agent 配置 → 角色、原生 Skills、工具白名单</text>
-<text x="60" y="382" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">会话绑定 · FIFO / steer · 原生 Thread / Turn 控制（stdio）</text>
-<text x="60" y="419" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#b63743">任务 + outbox 同事务落 PG，再交接调度唤醒</text>
-<path d="M860,355 L920,355" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-<rect x="920" y="150" width="320" height="100" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="944" y="190" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">模型 API</text>
-<text x="944" y="224" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">推理请求与响应</text>
-<rect x="920" y="280" width="320" height="355" rx="14" fill="#edf4fa" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="944" y="320" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">Codex app-server</text>
-<text x="944" y="394" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">本机独立子进程</text>
-<text x="944" y="424" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生模型 / 工具循环</text>
-<text x="944" y="454" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生 Skills</text>
-<text x="944" y="484" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">Thread / Turn / 上下文</text>
-<text x="944" y="550" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="600" fill="#305780">工具调用返回产品侧</text>
-<text x="944" y="585" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="400" fill="#305780">MCP bridge</text>
-<path d="M1080,280 L1080,250" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-<path d="M450,450 L450,504" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
-<rect x="40" y="505" width="820" height="180" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="60" y="541" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">03  工具与资源服务</text>
-<text x="60" y="577" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">MCP → Registry：工具定义、Schema 校验、执行函数</text>
-<text x="60" y="607" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">文件 / Web 工具 → 路径边界校验 → 资源服务</text>
-<text x="60" y="648" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#b63743">资源永久 ID · 不可变版本 · 来源关系与失效传播</text>
-<path d="M920,580 L860,580" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
-<path d="M450,685 L450,749" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)"/>
-<rect x="40" y="750" width="820" height="300" rx="14" fill="#fff9f9" stroke="#d9a0a6" stroke-width="1.5"/>
-<text x="60" y="786" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#b63743">04  数据与文件</text>
-<rect x="60" y="811" width="370" height="108" rx="14" fill="#fff" stroke="#d9a0a6" stroke-width="1.5"/>
-<text x="77" y="843" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">PostgreSQL  ·  持久业务状态</text>
-<text x="77" y="876" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">会话 / 任务 / outbox / 资源版本</text>
-<text x="77" y="906" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">v1 元数据</text>
-<rect x="450" y="811" width="390" height="108" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="467" y="843" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">Redis  ·  调度唤醒</text>
-<text x="467" y="876" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">Set 保存 Thread ID，状态以 PG 为准</text>
-<text x="467" y="906" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">非完整聊天历史 / 非持久任务库</text>
-<rect x="60" y="935" width="780" height="94" rx="14" fill="#fff" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="77" y="965" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#b63743">文件系统</text>
-<text x="77" y="996" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">workspace/ 原文与产物 · .data/files/objects/ 不可变正文</text>
-<rect x="920" y="750" width="320" height="205" rx="14" fill="#edf4fa" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="944" y="790" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="600" fill="#192d44">Codex 原生存储</text>
-<text x="944" y="827" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">.data/codex/</text>
-<text x="944" y="857" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">SQLite / JSONL</text>
-<text x="944" y="887" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="400" fill="#586d81">原生上下文与会话历史</text>
-<path d="M1080,635 L1080,750" fill="none" stroke="#305780" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-<rect x="40" y="1100" width="1200" height="85" rx="14" fill="#eaf0f6" stroke="#d5e0e9" stroke-width="1.5"/>
-<text x="60" y="1133" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="600" fill="#192d44">存储边界：PG 管业务事实，Redis 管唤醒，文件管正文，Codex 管原生会话。</text>
-<text x="60" y="1163" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="400" fill="#586d81">单机 · 单 owner · 多 Thread  |  .runs/app-server-* 为临时协议日志；PG / Redis / 文件不构成跨系统事务</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" role="img" aria-labelledby="title desc"><title id="title">S04 总架构：让任务与产物有据可查</title><desc id="desc">把业务记录迁入 PostgreSQL，增加 Redis 唤醒和资源版本；原生历史仍归 Codex。 蓝色为我们的程序，绿色为 Codex 原生能力，橙色突出本阶段新增机制。上方展示请求与返回方向，下方展开职责和数据归属。</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#33658A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#B34B38" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#296E62" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+<rect x="0" y="0" width="1600" height="1040" rx="0" fill="#FAFAF7" stroke="#FAFAF7" stroke-width="1.5"/>
+<rect x="48" y="40" width="80" height="32" rx="8" fill="#B34B38" stroke="#B34B38" stroke-width="1.5"/>
+<text x="88" y="62" font-size="18" fill="#FFFFFF" font-weight="650" text-anchor="middle">S04</text>
+<text x="148" y="63" font-size="21" fill="#617079" font-weight="400" text-anchor="start">冲量 AI  /  云端 Agent 脚手架</text>
+<text x="48" y="128" font-size="46" fill="#202C35" font-weight="700" text-anchor="start">让任务与产物有据可查</text>
+<text x="48" y="174" font-size="26" fill="#617079" font-weight="400" text-anchor="start">把业务记录迁入 PostgreSQL，增加 Redis 唤醒和资源版本；原生历史仍归 Codex。</text>
+<rect x="48" y="204" width="134" height="32" rx="8" fill="#EEF5FA" stroke="#EEF5FA" stroke-width="1.5"/>
+<text x="115" y="226" font-size="18" fill="#33658A" font-weight="650" text-anchor="middle">我们的程序</text>
+<rect x="198" y="204" width="172" height="32" rx="8" fill="#EDF6F1" stroke="#EDF6F1" stroke-width="1.5"/>
+<text x="284" y="226" font-size="18" fill="#296E62" font-weight="650" text-anchor="middle">Codex 原生能力</text>
+<rect x="386" y="204" width="142" height="32" rx="8" fill="#FFF0E9" stroke="#FFF0E9" stroke-width="1.5"/>
+<text x="457" y="226" font-size="18" fill="#B34B38" font-weight="650" text-anchor="middle">本阶段新增</text>
+<text x="1552" y="226" font-size="20" fill="#617079" font-weight="400" text-anchor="end">实线：请求 / 调用     虚线：事件 / 结果</text>
+<rect x="48" y="280" width="180" height="184" rx="16" fill="#FFFFFF" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="138" y="324" font-size="30" fill="#202C35" font-weight="500" text-anchor="middle">用户</text>
+<text x="138" y="370" font-size="23" fill="#617079" font-weight="500" text-anchor="middle">终端客户端</text>
+<text x="138" y="408" font-size="21" fill="#617079" font-weight="500" text-anchor="middle">HTTP / SSE</text>
+<rect x="308" y="280" width="500" height="184" rx="16" fill="#EEF5FA" stroke="#ADC6D8" stroke-width="1.5"/>
+<text x="336" y="324" font-size="30" fill="#33658A" font-weight="650" text-anchor="start">Agent 服务 + 数据层</text>
+<text x="336" y="372" font-size="25" fill="#202C35" font-weight="400" text-anchor="start">任务与 outbox 在同一事务中提交</text>
+<text x="336" y="410" font-size="25" fill="#202C35" font-weight="400" text-anchor="start">调度执行，登记产物版本及来源</text>
+<rect x="920" y="280" width="350" height="184" rx="16" fill="#EDF6F1" stroke="#ADCFC4" stroke-width="1.5"/>
+<text x="948" y="324" font-size="29" fill="#296E62" font-weight="650" text-anchor="start">Codex App Server</text>
+<text x="948" y="372" font-size="24" fill="#202C35" font-weight="400" text-anchor="start">继续复用执行循环</text>
+<text x="948" y="410" font-size="24" fill="#202C35" font-weight="400" text-anchor="start">经 MCP 调用资源工具</text>
+<rect x="1380" y="280" width="172" height="184" rx="16" fill="#FFFFFF" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="1466" y="324" font-size="27" fill="#202C35" font-weight="500" text-anchor="middle">模型服务</text>
+<text x="1466" y="372" font-size="22" fill="#617079" font-weight="500" text-anchor="middle">理解上下文</text>
+<text x="1466" y="410" font-size="22" fill="#617079" font-weight="500" text-anchor="middle">判断下一步</text>
+<path d="M228,350 L306,350" fill="none" stroke="#33658A" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M308,396 L230,396" fill="none" stroke="#33658A" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<text x="268" y="337" font-size="18" fill="#33658A" font-weight="500" text-anchor="middle">输入</text>
+<text x="268" y="426" font-size="18" fill="#617079" font-weight="500" text-anchor="middle">结果</text>
+<path d="M808,350 L918,350" fill="none" stroke="#33658A" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M920,396 L810,396" fill="none" stroke="#296E62" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#green)"/>
+<text x="864" y="331" font-size="18" fill="#33658A" font-weight="500" text-anchor="middle">JSON-RPC</text>
+<text x="864" y="426" font-size="18" fill="#296E62" font-weight="500" text-anchor="middle">事件 / 回包</text>
+<path d="M1270,350 L1378,350" fill="none" stroke="#296E62" stroke-width="2.5"  marker-end="url(#green)"/>
+<path d="M1380,396 L1272,396" fill="none" stroke="#296E62" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#green)"/>
+<text x="1324" y="331" font-size="18" fill="#296E62" font-weight="500" text-anchor="middle">模型请求</text>
+<text x="1324" y="426" font-size="18" fill="#617079" font-weight="500" text-anchor="middle">模型响应</text>
+<text x="948" y="490" font-size="19" fill="#617079" font-weight="400" text-anchor="start">本机独立进程 · stdio 通信</text>
+<text x="48" y="543" font-size="29" fill="#202C35" font-weight="650" text-anchor="start">四类数据，各自只承担一份明确的职责</text>
+<rect x="48" y="577" width="364" height="266" rx="16" fill="#FFF0E9" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="76" y="623" font-size="29" fill="#B34B38" font-weight="650" text-anchor="start">PostgreSQL</text>
+<text x="76" y="659" font-size="21" fill="#617079" font-weight="400" text-anchor="start">业务事实的依据</text>
+<text x="76" y="714" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">会话 / 任务 / outbox</text>
+<text x="76" y="757" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">资源 ID / 版本 / 来源</text>
+<text x="76" y="800" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">任务和 outbox 同事务落库</text>
+<rect x="428" y="577" width="364" height="266" rx="16" fill="#FFF0E9" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="456" y="623" font-size="29" fill="#B34B38" font-weight="650" text-anchor="start">Redis</text>
+<text x="456" y="659" font-size="21" fill="#617079" font-weight="400" text-anchor="start">调度唤醒</text>
+<text x="456" y="714" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">提醒服务有任务待执行</text>
+<text x="456" y="757" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">唤醒后从 PG 读取任务</text>
+<text x="456" y="800" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">不承担完整历史或任务真相</text>
+<rect x="808" y="577" width="364" height="266" rx="16" fill="#EEF5FA" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="836" y="623" font-size="29" fill="#33658A" font-weight="650" text-anchor="start">文件系统</text>
+<text x="836" y="659" font-size="21" fill="#617079" font-weight="400" text-anchor="start">保存正文</text>
+<text x="836" y="714" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">workspace：原文与产物</text>
+<text x="836" y="757" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">.data/files：不可变正文</text>
+<text x="836" y="800" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">元数据与来源关系登记到 PG</text>
+<rect x="1188" y="577" width="364" height="266" rx="16" fill="#EDF6F1" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="1216" y="623" font-size="29" fill="#296E62" font-weight="650" text-anchor="start">Codex 原生存储</text>
+<text x="1216" y="659" font-size="21" fill="#617079" font-weight="400" text-anchor="start">保存会话上下文</text>
+<text x="1216" y="714" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">.data/codex</text>
+<text x="1216" y="757" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">SQLite / JSONL</text>
+<text x="1216" y="800" font-size="21" fill="#202C35" font-weight="400" text-anchor="start">历史不搬入业务任务库</text>
+<rect x="48" y="863" width="1504" height="42" rx="9" fill="#FFFFFF" stroke="#D9E1E3" stroke-width="1.5"/>
+<text x="70" y="891" font-size="23" fill="#617079" font-weight="400" text-anchor="start">任务提交：写入 PG → Redis 唤醒 → 读取任务执行 → 回写状态；跨 PG、Redis、文件的操作不构成一个事务。</text>
+<rect x="48" y="934" width="1504" height="67" rx="13" fill="#24333C" stroke="#24333C" stroke-width="1.5"/>
+<text x="76" y="977" font-size="27" fill="#FFFFFF" font-weight="550" text-anchor="start">PostgreSQL 是业务状态的依据；Redis 负责唤醒，不能代替任务数据库。</text>
+<text x="48" y="1025" font-size="15" fill="#617079" font-weight="650" text-anchor="start">CHONGLIANG AI</text>
+<text x="1552" y="1025" font-size="17" fill="#617079" font-weight="400" text-anchor="end">逻辑职责图 · S04 当前阶段实现 · 非云端部署拓扑</text>
+</g></svg>

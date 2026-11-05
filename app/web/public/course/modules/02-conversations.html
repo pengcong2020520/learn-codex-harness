@@ -12,20 +12,7 @@
   <h2 class="screen-heading">全景：从单轮到多轮的三个关键变化</h2>
   <p>s02 在 s01 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
 
-  <div class="pattern-cards">
-    <div class="pattern-card">
-      <div class="pattern-title">变化 1：<span class="term" data-definition="持续保存一段对话上下文的会话容器，如一本笔记本。">Thread</span> 跨 <span class="term" data-definition="同一会话里的一次用户任务，如笔记本的一页；有独立的唯一标识。">Turn</span> 复用</div>
-      <div class="pattern-desc">s01：一次执行一个 Thread，结束即关闭。s02：同一 Thread 可以持续接收新 Turn，直到用户退出或执行 /resume 切换。</div>
-    </div>
-    <div class="pattern-card">
-      <div class="pattern-title">变化 2：<span class="term" data-definition="先进先出：早输入的消息先执行，上一轮结束后再处理下一条。">FIFO 输入缓冲</span></div>
-      <div class="pattern-desc">用户可以快速连续输入多条消息，但系统只在上一 Turn 执行完毕后才取下一条。这是输入节奏控制，不是重写模型的推理循环。</div>
-    </div>
-    <div class="pattern-card">
-      <div class="pattern-title">变化 3：<span class="term" data-definition="选择并重新打开以前的会话，后续消息继续使用该会话的历史上下文。">/resume</span> 会话恢复</div>
-      <div class="pattern-desc">通过关键词检索历史 Thread 元数据（名称、开场预览），选定后调用 thread/resume 恢复上下文。恢复的是会话状态，不是"长期记忆注入"。</div>
-    </div>
-  </div>
+<figure class="architecture-figure"><a href="/course/assets/s02-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S02 总架构 SVG 大图"><img src="/course/assets/s02-architecture.svg" width="1600" height="1040" alt="S02 总架构：多轮对话怎样延续。蓝色为我们的程序，绿色为 Codex，橙色为阶段新增。" /></a><figcaption>从左到右看任务链路，再看下方的阶段增量。点击图片可放大查看 SVG。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
