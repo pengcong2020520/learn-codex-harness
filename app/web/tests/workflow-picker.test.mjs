@@ -29,13 +29,18 @@ test('Workflow 选择器：列出目录、按 schema 渲染参数、提交请求
   out.steps=$$('.wf-steps .tag').length;
   const pick=id=>{$('#workflow-id').value=id;$('#workflow-id').dispatchEvent(new Event('change',{bubbles:true}));};
   const type=(el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));};
-  // 必填参数为空时浏览器表单校验拦下，不发请求。
+  // kbId：能拿到知识库列表就是下拉。
   pick('knowledge-maintain');await until(()=>$('[data-param="kbId"]'));
-  type($('#message'),'整理新资料');$('#composer').requestSubmit();await sleep(200);out.blocked=bodies.length;
+  out.kbSelect=$('[data-param="kbId"]').tagName+':'+$$('[data-param="kbId"] option').map(o=>o.value).join(',');
+  out.noPatternAttr=!$('#composer [pattern]');
   // 枚举 + 文本参数。
   pick('brief');await until(()=>$('select[data-param="tone"]'));
   out.toneOptions=$$('select[data-param="tone"] option').map(o=>o.value);out.topicMax=$('input[data-param="topic"]').maxLength;
   $('select[data-param="tone"]').value='轻松';type($('input[data-param="topic"]'),'季度复盘');type($('#message'),'写一份简报');
+  // 不合规的编号：JS 按 u 标志校验，拦下并给提示。
+  type($('input[data-param="topic"]'),'季度复盘');type($('#message'),'写一份简报');type($('input[data-param="code"]'),'9bad_ID');document.querySelector('#composer button[type=submit]').click();await sleep(200);
+  out.patternBlocked=bodies.length;out.patternMessage=$('input[data-param="code"]').validationMessage;
+  type($('input[data-param="code"]'),'');
   $('#composer').requestSubmit();await until(()=>bodies.length===1&&$$('.task-row').length===1,4000);
   // 多步 workflow：第 1 步后停在 waiting，确认后完成。
   await until(()=>!$('#message').disabled);
@@ -48,7 +53,8 @@ test('Workflow 选择器：列出目录、按 schema 渲染参数、提交请求
  assert.ok(r.modes&&r.defaultChat,'默认是普通对话');
  assert.deepEqual(r.options,['write-article','knowledge-maintain','brief']);
  assert.ok(r.noParamsHint);assert.equal(r.steps,2);
- assert.equal(r.blocked,0,'必填参数为空时不提交');
+ assert.equal(r.kbSelect,'SELECT:general','能拿到知识库列表时 kbId 渲染成下拉');assert.ok(r.noPatternAttr,'不输出会被 v 标志忽略的 pattern 属性');
+ assert.equal(r.patternBlocked,0,'编号不合规时不提交');assert.match(r.patternMessage,/格式不符合要求/);
  assert.deepEqual(r.toneOptions,['正式','轻松']);assert.equal(r.topicMax,40);
  assert.ok(r.modeKept,'提交后仍停在 Workflow 模式');
  assert.deepEqual(r.bodies,[{workflow:'brief',params:{tone:'轻松',topic:'季度复盘'},text:'写一份简报'},{workflow:'write-article',params:null,text:'写一篇关于本地优先的文章'}]);
