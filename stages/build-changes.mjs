@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirs, stages, stageModules, moduleOf } from "./build-architecture.mjs";
+import { dirs, stageNo, stages, stageModules, moduleOf } from "./build-architecture.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url)), repo = path.dirname(root);
 // 只比较"这一阶段的实现"：测试、文档、课程材料、示例、锁文件和快照说明不算增量。
@@ -44,8 +44,9 @@ const extract = {
 };
 const added = (before, after) => [...new Set(after)].filter(x => !new Set(before).has(x));
 
-function diff(n) {
-  const prev = dirs[n - 1], dir = dirs[n], before = new Set(tracked(prev)), after = tracked(dir);
+function diff(i) {
+  // 和上一个已有的阶段比；编号可以不连续。
+  const n = stageNo[i], prevNo = stageNo[i - 1], prev = dirs[i - 1], dir = dirs[i], before = new Set(tracked(prev)), after = tracked(dir);
   const files = [];
   for (const f of after) {
     if (!before.has(f)) { files.push({ path: f, status: "added", plus: lines(read(dir, f)), minus: 0, module: owner(n, f) }); continue; }
@@ -53,7 +54,7 @@ function diff(n) {
     const [plus, minus] = numstat(path.join(root, prev, f), path.join(root, dir, f));
     files.push({ path: f, status: "changed", plus, minus, module: owner(n, f) });
   }
-  for (const f of before) if (!after.includes(f)) files.push({ path: f, status: "removed", plus: 0, minus: lines(read(prev, f)), module: owner(n - 1, f) });
+  for (const f of before) if (!after.includes(f)) files.push({ path: f, status: "removed", plus: 0, minus: lines(read(prev, f)), module: owner(prevNo, f) });
   files.sort((a, b) => a.module.localeCompare(b.module, "zh") || a.path.localeCompare(b.path));
   const sum = key => files.reduce((total, f) => total + f[key], 0);
   return {

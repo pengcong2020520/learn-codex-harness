@@ -645,8 +645,8 @@
       ]
     },
     {
-      "id": "s04",
-      "dir": "s04-data-layer",
+      "id": "s08",
+      "dir": "s08-data-layer",
       "title": "让任务与产物有据可查",
       "summary": "业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。",
       "previous": "s03-agent-core",
@@ -827,11 +827,11 @@
       ]
     },
     {
-      "id": "s05",
-      "dir": "s05-knowledge-layer",
+      "id": "s09",
+      "dir": "s09-knowledge-layer",
       "title": "知识层与门禁：依据什么，能碰什么",
       "summary": "身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。",
-      "previous": "s04-data-layer",
+      "previous": "s08-data-layer",
       "modules": [
         {
           "layer": "知识与工作流",
@@ -1057,11 +1057,11 @@
       ]
     },
     {
-      "id": "s06",
-      "dir": "s06-skill-workflow",
+      "id": "s10",
+      "dir": "s10-skill-workflow",
       "title": "Skill 教方法，Workflow 管边界和终点",
       "summary": "一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。",
-      "previous": "s05-knowledge-layer",
+      "previous": "s09-knowledge-layer",
       "modules": [
         {
           "layer": "知识与工作流",
@@ -1458,11 +1458,11 @@
       ]
     },
     {
-      "id": "s07",
-      "dir": "s07-model-gateway",
+      "id": "s11",
+      "dir": "s11-model-gateway",
       "title": "模型网关：Codex 只连网关",
       "summary": "网关统一协议、按任务把请求路由到各家模型；每轮记录 token 用量，超出预算就停止派发。",
-      "previous": "s06-skill-workflow",
+      "previous": "s10-skill-workflow",
       "modules": [
         {
           "layer": "模型网关",

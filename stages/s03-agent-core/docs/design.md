@@ -6,7 +6,7 @@
 
 工具机制详见 [工具机制详解](tools.md)。
 
-> **与旧版本的区别**：s03 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 s04，见 [数据层升级说明](../../s04-data-layer/docs/data-layer.md)。
+> **与旧版本的区别**：s03 已移除 PostgreSQL / Redis 依赖、compose 文件和数据库迁移脚本。业务状态以本地 JSON 文件保存（见"技术实现流程"）。数据层升级内容已独立移入 s08，见 [数据层升级说明](../../s08-data-layer/docs/data-layer.md)。
 
 ## 设计原理
 
@@ -243,7 +243,7 @@ node verify.mjs --docs-only
 | 限制项 | 说明 |
 |--------|------|
 | 单机单用户 | 每实例一个 Agent 多 Thread，不支持多账户或多 Agent 编排 |
-| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s04 |
+| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s08 |
 | 工具热增 | 新增工具需同时配置 allow 并受控重启 |
 | Skill 支持范围 | 仅验证原生文本指令型 Skill；带脚本/附件的工作流不保证运行 |
 | 记忆链路 | 读开关与提炼限制路径已测；合并摘要当前 blocked，完整链路未最终验收 |

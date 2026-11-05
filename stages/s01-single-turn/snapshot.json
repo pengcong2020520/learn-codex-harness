@@ -40,7 +40,7 @@
       "memoryManagement": false
     },
     {
-      "directory": "s04-data-layer",
+      "directory": "s08-data-layer",
       "capabilities": [
         "client-server",
         "fixed-role",

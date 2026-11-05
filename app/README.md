@@ -6,7 +6,7 @@
 
 本期数据层已接入 PostgreSQL + Redis + 文件存储，并保留 Codex 原生存储。审查结论、迁移步骤和验收边界见 [数据层升级说明](docs/data-layer.md)。当前仍是本机单用户入口，未实现账号登录或多用户运行环境隔离。
 
-知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s05 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
+知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s09 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
 
 运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。Codex 只认 Responses API；默认经本机**模型网关**（Bifrost）接模型，Kimi、DeepSeek、智谱 GLM、OpenAI、Claude、Gemini、Grok，以及 Hugging Face 推理服务上的开源模型，填了密钥就能用，网关负责协议转换和失败时改用备用模型，见 [模型网关](docs/model-gateway.md)。
 
@@ -281,7 +281,7 @@ npm run check:server
 
 当前实现包含配置装配、结构化来源、Wiki、可选 RAG 和可信工具上下文；真实模型完整记忆生成及多用户认证/运行隔离仍后置。
 
-工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；Skill 与 Workflow 的设计和实施计划见 [skill-workflow-design.md](docs/skill-workflow-design.md)；独立教学版本见 [s03–s05 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
+工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；Skill 与 Workflow 的设计和实施计划见 [skill-workflow-design.md](docs/skill-workflow-design.md)；独立教学版本见 [s03–s09 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
 
 
 媒体生成：写作 Agent 提供 `generate_image`、`generate_video`、`media_status`，只在用户明确要求生成时使用，会产生费用。配置 `ARK_API_KEY` 前，先在火山方舟控制台开通清单中的模型，再重建网关；没有可用模型时隐藏相应工具。图片、视频以不可变版本保存到 `outputs/media/`；视频任务由数据库持久化，重启继续跟进，见 [生图与生视频](docs/model-gateway.md#生图与生视频)。

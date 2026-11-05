@@ -5,7 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-agent-core", "s04-data-layer", "s05-knowledge-layer", "s06-skill-workflow", "s07-model-gateway"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-agent-core", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway"];
+// 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
+export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
   accent: "#D9622B", accentBg: "#FFF3EC", green: "#2F7D62", greenBg: "#EEF7F2", greenLine: "#B5DCCB" };
 
@@ -25,13 +27,13 @@ const layers = n => [
   { name: "Agent 装配", mods: [M("def", "Agent 定义", "JSON 校验 + 版本哈希", 3, ["agents/"]), M("roles", "角色与 Skills", "做什么、怎么做", 3, ["role/", "codex/skills.mjs"]),
     M("tools", "工具与资料边界", "白名单 + 参数校验", 3, ["tools/", "data/files.mjs"]), M("mcp", "MCP 工具入口", "Codex 回调本地工具", 3, ["tools/mcp-server.mjs"])] },
   { name: "运行支撑", mods: [M("lifecycle", "生命周期与清理", "启停、运行目录回收", 3, ["lifecycle/", "maintenance/"]), M("memory", "记忆", "Codex 提炼，服务端管控", 3, ["memory/"])] },
-  { name: "数据", mods: [M("jobs", "任务记录", "任务状态与产物登记", 3, ["data/index.mjs", "data/jobs.mjs"]), M("pg", "PostgreSQL", "业务状态的依据", 4, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/"]),
-    M("outbox", "Outbox + Redis", "提交后再唤醒", 4, ["data/queue.mjs"]), M("versions", "资源版本", "产物可追溯来源", 4, ["data/resources.mjs"])] },
-  { name: "知识与工作流", mods: [M("gate", "可信门禁", "服务端签发身份", 5, ["permissions/"]), M("wiki", "Wiki / RAG", "带原文依据的知识", 5, ["knowledge/", "tools/knowledge.mjs"]),
-    M("flow", "Workflow", "步骤、确认与验收", 6, ["workflows/"]), M("approve", "审批与提权", "可以提议，不能自批", 6, ["tools/tasks.mjs"])] },
+  { name: "数据", mods: [M("jobs", "任务记录", "任务状态与产物登记", 3, ["data/index.mjs", "data/jobs.mjs"]), M("pg", "PostgreSQL", "业务状态的依据", 8, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/"]),
+    M("outbox", "Outbox + Redis", "提交后再唤醒", 8, ["data/queue.mjs"]), M("versions", "资源版本", "产物可追溯来源", 8, ["data/resources.mjs"])] },
+  { name: "知识与工作流", mods: [M("gate", "可信门禁", "服务端签发身份", 9, ["permissions/"]), M("wiki", "Wiki / RAG", "带原文依据的知识", 9, ["knowledge/", "tools/knowledge.mjs"]),
+    M("flow", "Workflow", "步骤、确认与验收", 10, ["workflows/"]), M("approve", "审批与提权", "可以提议，不能自批", 10, ["tools/tasks.mjs"])] },
   // 网关放在靠近 Codex 的几列：Codex 的模型请求先到网关，再由网关转给各家模型。
-  { name: "模型网关", mods: [M("media", "生图与生视频", "异步任务，结果存为产物", 7, ["media/", "tools/media.mjs"], 1), M("usage", "用量与预算", "超额停止派发", 7, ["usage/"], 2),
-    M("router", "模型路由", "统一协议，转给上游", 7, ["gateway/"], 3)] },
+  { name: "模型网关", mods: [M("media", "生图与生视频", "异步任务，结果存为产物", 11, ["media/", "tools/media.mjs"], 1), M("usage", "用量与预算", "超额停止派发", 11, ["usage/"], 2),
+    M("router", "模型路由", "统一协议，转给上游", 11, ["gateway/"], 3)] },
 ];
 // 基础设施：每个阶段都需要、但不单独成章的代码，画在服务框底部的一条带里。until 表示只到哪个阶段为止算基础设施。
 const infra = [{ files: "config/", name: "配置" }, { files: "storage/", name: "存储" }, { files: "codex/", name: "Codex 连接" }, { files: "role/", name: "角色文件", until: 2 }, { files: "data/paths.mjs", name: "路径" }];
@@ -49,15 +51,15 @@ export function moduleOf(n, rel) {
 // 检查总图和代码是否对得上：每个模块文件都要有归属，画出来的模块都要有代码。
 export function checkBindings() {
   const problems = [];
-  dirs.forEach((dir, n) => {
-    const base = path.join(root, dir, "server/modules");
+  dirs.forEach((dir, i) => {
+    const n = stageNo[i], base = path.join(root, dir, "server/modules");
     const files = fs.existsSync(base) ? fs.readdirSync(base, { recursive: true }).filter(f => /\.(mjs|sql)$/.test(f)).map(f => f.split(path.sep).join("/")) : [];
     for (const f of files) if (!moduleOf(n, f)) problems.push(`${dir}: server/modules/${f} 没有对应的模块框，也不在基础设施里`);
     for (const m of visible(n).flatMap(layer => layer.mods)) if (m.files.length && !files.some(f => m.files.some(b => matches(f, b)))) problems.push(`${dir}: 模块「${m.name}」在图上，但代码里找不到 ${m.files.join("、")}`);
   });
   return problems;
 }
-export const stages = [
+const stageList = [
   { title: "先体验：把一件事交给 Codex", sub: "用官方 SDK 发起一轮任务；读文件、跑命令、改代码这个循环由 Codex 来转。",
     path: [["user", "写一句任务"], ["sdk", "SDK 发起"], ["codex", "codex exec 执行"], ["codex", "读文件、跑命令"], ["sdk", "拿到结果"], ["user", "自己验收"]] },
   { title: "先打通一次问答", sub: "自己写客户端，经 JSON-RPC 驱动 App Server；只有本轮成功结束，才算答完。",
@@ -75,6 +77,8 @@ export const stages = [
   { title: "模型网关：Codex 只连网关", sub: "网关统一协议、按任务把请求路由到各家模型；每轮记录 token 用量，超出预算就停止派发。",
     path: [["api", "发起任务"], ["usage", "检查预算"], ["def", "选定模型"], ["codex", "Codex 执行"], ["router", "转发到上游"], ["usage", "记录用量"]] },
 ];
+// 按阶段编号取：stages[11] 是 s11。
+export const stages = Object.fromEntries(stageList.map((st, i) => [stageNo[i], st]));
 
 const esc = s => String(s).replace(/[&<>"]/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[v]));
 
@@ -131,13 +135,13 @@ function render(n) {
   (n ? ["执行循环", "原生 Skills", "原生历史"] : ["执行循环", "工具与沙箱", "本地会话"])
     .forEach((s, i) => { box(CX + 20, CY + 90 + i * 58, CW - 40, 44, c.card, c.greenLine, "", 8); t(s, CX + CW / 2, CY + 118 + i * 58, 15, c.ink, 500, "middle"); });
 
-  const MY = n >= 7 ? pos.router.y - 8 : 380;
-  box(1460, MY, 92, 120, c.card, c.line); t("模型", 1506, MY + 52, 19, c.ink, 600, "middle"); t(n >= 7 ? "各家模型" : "理解与决策", 1506, MY + 80, 13, c.muted, 400, "middle");
+  const MY = n >= 11 ? pos.router.y - 8 : 380;
+  box(1460, MY, 92, 120, c.card, c.line); t("模型", 1506, MY + 52, 19, c.ink, 600, "middle"); t(n >= 11 ? "各家模型" : "理解与决策", 1506, MY + 80, 13, c.muted, 400, "middle");
 
   arrow(`M168,382 L${SX - 4},382`, c.ink);
   arrow(`M${SX + SW},${CY + 40} L${CX - 4},${CY + 40}`, c.ink); t(n ? "JSON-RPC" : "子进程", (SX + SW + CX) / 2, CY + 28, 13, c.muted, 500, "middle");
   if (n >= 3) { arrow(`M${CX - 2},${CY + CH - 40} L${SX + SW + 4},${CY + CH - 40}`, c.green, "6 5"); t("工具回调", (SX + SW + CX) / 2, CY + CH - 52, 13, c.green, 500, "middle"); }
-  if (n >= 7) {
+  if (n >= 11) {
     // 模型请求不再直连：Codex → 网关 → 各家模型。
     const gy = pos.router.y, gx = pos.router.x + pos.router.w;
     arrow(`M${CX + 60},${CY + CH} L${CX + 60},${gy + 26} L${gx + 4},${gy + 26}`, c.green); t("模型请求", CX + 70, CY + CH + 40, 13, c.green, 500);
@@ -146,7 +150,7 @@ function render(n) {
 
   for (const [id, ks] of num) { const p = pos[id]; ks.forEach((k, i) => badge(String(k), p.x + p.w - 6 - (ks.length - 1 - i) * 30, p.y - 2)); }
 
-  const BY = Math.max(SY + SH, 600, n >= 7 ? pos.router.y + 140 : 0) + 44, sw = (W - 96 - 5 * 20) / 6;
+  const BY = Math.max(SY + SH, 600, n >= 11 ? pos.router.y + 140 : 0) + 44, sw = (W - 96 - 5 * 20) / 6;
   t("一次请求怎么走", 48, BY, 17, c.ink, 700);
   st.path.forEach(([id, text], i) => {
     const x = 48 + i * (sw + 20), y = BY + 16, codex = id === "codex";
@@ -163,8 +167,8 @@ function render(n) {
 // 细节图：供 docs/design.md 深入阅读，按"分区 → 一行节点"排布，配色与总图一致。
 // 节点类型：new 本阶段新增，old 沿用，codex Codex 原生，warn 需要注意的分支。
 const details = {
-  "s06-skill-workflow/images/skill-workflow.svg": {
-    title: "S06 细节：一个任务怎么走完 Workflow", sub: "Skill 教方法，Workflow 管边界和终点；模型决定怎么做，权限和验收留在模型之外。",
+  "s10-skill-workflow/images/skill-workflow.svg": {
+    title: "S10 细节：一个任务怎么走完 Workflow", sub: "Skill 教方法，Workflow 管边界和终点；模型决定怎么做，权限和验收留在模型之外。",
     sections: [
       { title: "配置：由部署者定义，跟着 Agent 包走", links: ["同步", null], nodes: [
         ["new", "Agent 包", "agent.json · role.md", "skills/ · workflows/"], ["new", "CODEX_HOME/skills", "启动时同步", "只启用声明的 Skill"], ["old", "Workspace", "用户资料与产物", "不放角色与 Skill"]] },
@@ -175,8 +179,8 @@ const details = {
         ["warn", "验收不通过", "needs-review", "不暂停队列、不重试"], ["new", "需要确认", "waiting", "/confirm 后继续"], ["old", "无需确认", "直接排队下一步", ""], ["old", "最后一步", "completed", ""]],
         note: "propose_task：需要别的 Workflow 时，模型只能提议；用户确认前不执行、不授权。" },
     ] },
-  "s07-model-gateway/images/model-gateway.svg": {
-    title: "S07 细节：模型网关的三层作用", sub: "各家服务商的密钥只交给网关；Codex 只拿网关访问密钥。",
+  "s11-model-gateway/images/model-gateway.svg": {
+    title: "S11 细节：模型网关的三层作用", sub: "各家服务商的密钥只交给网关；Codex 只拿网关访问密钥。",
     sections: [
       { title: "① 统一协议", nodes: [
         ["codex", "Codex", "只说 Responses", "用网关访问密钥"], ["new", "模型网关 · Bifrost", "Responses 原样转发", "其余转 Chat / Messages"], ["old", "各家模型", "Kimi / DeepSeek / 智谱…", "密钥只在网关"]],
@@ -229,8 +233,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 const check = process.argv.includes("--check");
 const problems = checkBindings();
 if (problems.length) throw new Error(`总图和代码对不上，请更新 stages/build-architecture.mjs 里的模块绑定：\n${problems.join("\n")}`);
-dirs.forEach((dir, n) => {
-  const file = path.join(root, dir, "images/architecture.svg"), body = render(n);
+dirs.forEach((dir, i) => {
+  const file = path.join(root, dir, "images/architecture.svg"), body = render(stageNo[i]);
   if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
   else fs.writeFileSync(file, body);
 });
