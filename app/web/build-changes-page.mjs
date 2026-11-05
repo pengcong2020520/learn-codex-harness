@@ -22,12 +22,12 @@ export function excerpt(m, read) {
 function lanes(m) {
   const n = m.actors.length, x = i => ((i + 0.5) / n) * 100, at = new Map(m.actors.map(([id], i) => [id, i]));
   const heads = m.actors.map(([id, name, kind]) => `<div class="lane-head" data-actor="${id}"${kind === "proc" ? " data-proc" : ""}><b>${esc(name)}</b><small></small></div>`).join("");
-  const lines = m.actors.map(([id], i) => `<i class="lifeline" data-actor="${id}" style="left:${x(i)}%"></i>`).join("");
+  const lines = m.actors.map(([id], i) => `<i class="lifeline" data-actor="${id}"${m.actors[i][2] === "proc" ? " data-proc" : ""} style="left:${x(i)}%"></i>`).join("");
   const rows = m.steps.map((s, i) => {
     if (!s.flow) return "";
     const [from, to, label] = s.flow, a = x(at.get(from)), b = x(at.get(to)), warn = s.warn ? " warn" : "";
-    if (from === to) return `<div class="msg self${warn}" data-step="${i + 1}"><span class="arrow" style="left:${a}%"></span><span class="label" style="left:${a}%">${esc(label)}</span></div>`;
-    return `<div class="msg ${b > a ? "right" : "left"}${warn}" data-step="${i + 1}"><span class="arrow" style="left:${Math.min(a, b)}%;width:${Math.abs(b - a)}%"></span><span class="label" style="left:${(a + b) / 2}%">${esc(label)}</span></div>`;
+    if (from === to) return `<div class="msg self${warn}" data-step="${i + 1}"><b class="no">${i + 1}</b><span class="arrow" style="left:${a}%"></span><span class="label" style="left:${a}%">${esc(label)}</span></div>`;
+    return `<div class="msg ${b > a ? "right" : "left"}${warn}" data-step="${i + 1}"><b class="no">${i + 1}</b><span class="arrow" style="left:${Math.min(a, b)}%;width:${Math.abs(b - a)}%"></span><span class="label" style="left:${(a + b) / 2}%">${esc(label)}</span></div>`;
   }).join("");
   return `<div class="lanes"><div class="lane-heads" style="grid-template-columns:repeat(${n},1fr)">${heads}</div><div class="lane-body">${lines}${rows}</div></div>`;
 }
