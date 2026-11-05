@@ -78,9 +78,10 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
  assert.deepEqual(flow.active,['flow-m2-user']);assert.ok(flow.label);assert.equal(flow.progress,`1 / ${flow.steps}`);assert.ok(flow.packetVisible&&flow.packetOnTarget,'数据包停在目标参与方中心');assert.ok(flow.done);assert.ok(flow.reset);
 
  const arch=await b.run(`${helpers}
-  const diagram=$('.arch-diagram'),[,second]=$$('.arch-component',diagram);second.click();
-  return {text:$('.arch-description',diagram).textContent===second.dataset.desc,pressed:second.getAttribute('aria-pressed'),active:$$('.arch-component.is-active',diagram).length};`);
- assert.deepEqual(arch,{text:true,pressed:'true',active:1});
+  const diagrams=$$('.architecture-figure');
+  const loaded=await until(()=>diagrams.every(el=>{const img=$('img',el);return img.complete&&img.naturalWidth===1600&&img.naturalHeight===1040;}));
+  return {count:diagrams.length,loaded,links:diagrams.every(el=>{const a=$('a',el),img=$('img',el);return a.href===img.src&&a.target==='_blank'&&a.rel.includes('noopener')&&img.alt.includes('总架构');})};`);
+ assert.deepEqual(arch,{count:5,loaded:true,links:true});
 
  const term=await b.run(`${helpers}
   const term=$('.term');term.focus();const tip=$('#term-tip');

@@ -20,11 +20,11 @@
         s04 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <img src="assets/s04-architecture.svg" width="100%" alt="s04 系统架构总图：四层存储职责划分" />
+      <figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="1040" alt="S04 总架构：任务与数据分别存在哪里。蓝色为我们的程序，绿色为 Codex，橙色为阶段新增。" /></a><figcaption>从左到右看任务链路，再看下方的阶段增量。点击图片可放大查看 SVG。</figcaption></figure>
 
       <div class="callout">
         <div class="callout-text">
-          图示说明：四层是逻辑职责，PG、Redis 为独立服务；右侧 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；红色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
         </div>
       </div>
 

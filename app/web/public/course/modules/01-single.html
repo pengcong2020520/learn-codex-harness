@@ -10,19 +10,10 @@
 
 <!-- Screen 1: 总架构图 -->
 <section class="screen animate-in" id="m1-screen-1">
-  <h2 class="screen-heading">全景：一次问答背后的五层结构</h2>
-  <p>打出命令到模型返回结果，中间经过五个清晰可辨的层次。先看整体，再逐层钻入。</p>
+  <h2 class="screen-heading">全景：一次请求怎样走完</h2>
+  <p>先分清用户、我们的程序、Codex 和模型四个角色，再沿五步流程检查一轮问答。</p>
 
-  <div class="arch-diagram">
-    <div class="arch-zone">
-      <button class="arch-component" data-desc="你在终端执行 npm start，这里是唯一的调用入口。main.mjs 只解析参数，把控制权交给下一层，不直接触碰模型。">① 用户终端 / main.mjs</button>
-      <button class="arch-component" data-desc="05-app-server.mjs 是编排核心：读取配置、准备目录，通过 child_process.spawn 拉起本机 Codex 子进程，并全程维护 JSON-RPC 通信状态。">② Node 主进程（编排层）</button>
-      <button class="arch-component" data-desc="标准输入输出管道。Node 把请求序列化为 JSON-RPC 消息写入 stdin；Codex 把事件通知和响应写回 stdout。两端完全解耦，无需 HTTP 端口。">③ stdio 通道（JSON-RPC 2.0）</button>
-      <button class="arch-component" data-desc="本机 Codex App Server 子进程。它负责：维护 Thread/Turn 状态、调用 Responses API、向上游推送 turn/completed 通知。本阶段由它负责调用模型，Node 负责调度。">④ 本机 Codex 子进程</button>
-      <button class="arch-component" data-desc="远端大语言模型服务，通过 Responses API 接口访问。Codex 内部封装了这层调用，Node 主进程感知不到具体的 HTTP 细节。">⑤ 远端模型服务（Responses API）</button>
-    </div>
-    <div class="arch-description">点击上方组件查看职责说明</div>
-  </div>
+<figure class="architecture-figure"><a href="/course/assets/s01-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S01 总架构 SVG 大图"><img src="/course/assets/s01-architecture.svg" width="1600" height="1040" alt="S01 总架构：一次请求怎样走完。蓝色为我们的程序，绿色为 Codex，橙色为阶段新增。" /></a><figcaption>从左到右看任务链路，再看下方的阶段增量。点击图片可放大查看 SVG。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>

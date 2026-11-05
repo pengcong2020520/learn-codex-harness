@@ -9,20 +9,10 @@
 
 <!-- Screen 1: 总架构 -->
 <section class="screen animate-in" id="m3-screen-1">
-  <h2 class="screen-heading">全景：装配工作台的六个插槽</h2>
-  <p>想象一张装配工作台：服务代码是台架，配置文件是装配清单，六个插槽决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
+  <h2 class="screen-heading">全景：配置怎样变成可执行的能力</h2>
+  <p>先看配置、执行和结果的分工：同一套服务读取角色、方法、工具与资料边界，共同决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
 
-  <div class="arch-diagram">
-    <div class="arch-zone">
-      <button class="arch-component" data-desc="agent.instructions：指向角色正文文件路径（如 roles/writing-assistant.md）。角色内容与服务代码解耦，换角色只改路径，不改代码。">① 角色指令（instructions）</button>
-      <button class="arch-component" data-desc="agent.skills：声明原生 Skill 列表。Skill 提供方法指导，但不授予工具权限——工具权限必须通过 tools.allow 单独授权。">② 原生 Skills</button>
-      <button class="arch-component" data-desc="agent.tools.allow：工具白名单数组，如 ['list_files','read_file','write_file']。list 与 call 均执行此白名单，模型无法调用未列出的工具。">③ 工具白名单（tools.allow）</button>
-      <button class="arch-component" data-desc="agent.dataBindings：资料源与目录映射。每条绑定声明 sourceRef、actions（read/create）和 methods。inputs 只读，research/drafts 可读可创建，outputs 按产物规则写入。">④ 资料绑定（dataBindings）</button>
-      <button class="arch-component" data-desc="agent.outputs：产物规则，声明允许的输出目录、格式（md/txt）和写入模式（create-only，不覆盖）。文件落盘后检查存在性与扩展名。">⑤ 产物规则（outputs）</button>
-      <button class="arch-component" data-desc="agent.memory：记忆开关。use 控制是否召回原生记忆，contribute 控制是否向记忆库贡献。s03 两者均为 false。Skill 不等于记忆权限。">⑥ 记忆开关（memory）</button>
-    </div>
-    <div class="arch-description">点击插槽查看各字段职责</div>
-  </div>
+<figure class="architecture-figure"><a href="/course/assets/s03-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S03 总架构 SVG 大图"><img src="/course/assets/s03-architecture.svg" width="1600" height="1040" alt="S03 总架构：角色与工具怎样装配。蓝色为我们的程序，绿色为 Codex，橙色为阶段新增。" /></a><figcaption>从左到右看任务链路，再看下方的阶段增量。点击图片可放大查看 SVG。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
