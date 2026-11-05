@@ -1,0 +1,980 @@
+{
+  "s00": [
+    {
+      "id": "s00-run",
+      "title": "一次 run 背后发生了什么",
+      "question": "调用 thread.run() 之后，是谁在读文件、跑命令？跑完之后还剩下什么？",
+      "file": "stages/s00-sdk-quickstart/examples/01-hello.mjs",
+      "start": 4,
+      "end": 25,
+      "expect": "const codex = new Codex(",
+      "notes": {
+        "4": "只准备配置（密钥、路径），此时还没有启动任何进程",
+        "7": "记下这段对话的选项，同样不启动进程",
+        "8": "Codex 在哪个目录里干活",
+        "10": "只读沙箱：能读文件、不能改",
+        "11": "从不停下来问人，遇到需要批准的操作直接拒绝",
+        "12": "不联网搜索",
+        "21": "这一句才真正启动 codex exec 子进程，并等它跑完整个循环",
+        "22": "没有最终回答就算失败，不把中间输出当结果",
+        "24": "对话 ID 由 Codex 生成，下次靠它接着聊",
+        "25": "这一轮用了多少 token"
+      },
+      "actors": [
+        [
+          "script",
+          "你的脚本"
+        ],
+        [
+          "sdk",
+          "Codex SDK"
+        ],
+        [
+          "codex",
+          "codex exec 进程",
+          "proc"
+        ],
+        [
+          "model",
+          "模型"
+        ]
+      ],
+      "state0": {
+        "Codex 进程": "0 个",
+        "对话 ID": "还没有",
+        "工具调用": "0 次"
+      },
+      "steps": [
+        {
+          "lines": [
+            4,
+            4
+          ],
+          "say": "new Codex() 只是把配置放进内存。这时电脑上还没有任何 Codex 进程。",
+          "actors": {
+            "codex": "未启动",
+            "model": "空闲"
+          }
+        },
+        {
+          "lines": [
+            7,
+            14
+          ],
+          "say": "startThread() 也只记下选项：在当前目录、只读沙箱、不审批。仍然没有进程，也还没有对话 ID。"
+        },
+        {
+          "lines": [
+            21,
+            21
+          ],
+          "flow": [
+            "script",
+            "sdk",
+            "发送 prompt"
+          ],
+          "say": "run() 被调用，脚本在这里等待（await）。"
+        },
+        {
+          "flow": [
+            "sdk",
+            "codex",
+            "启动 codex exec 子进程"
+          ],
+          "say": "SDK 启动一个 codex exec 子进程，把任务交给它。",
+          "actors": {
+            "codex": "运行中"
+          },
+          "state": {
+            "Codex 进程": "1 个"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "model",
+            "prompt + 可用工具"
+          ],
+          "say": "Codex 把任务和它能用的工具（读文件、跑命令……）一起发给模型。",
+          "actors": {
+            "model": "思考中"
+          }
+        },
+        {
+          "flow": [
+            "model",
+            "codex",
+            "请求调用工具：读 package.json"
+          ],
+          "say": "模型决定先看一下文件。注意：模型自己不能读文件，它只能“提出”要调用工具。",
+          "actors": {
+            "model": "等工具结果"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "codex",
+            "在只读沙箱中执行"
+          ],
+          "say": "Codex 在只读沙箱里执行这次读取。这就是执行循环：模型提出，Codex 执行。",
+          "state": {
+            "工具调用": "1 次"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "model",
+            "返回工具结果"
+          ],
+          "say": "把执行结果交回模型。需要的话会再来几次，直到模型认为可以回答了。",
+          "actors": {
+            "model": "思考中"
+          }
+        },
+        {
+          "flow": [
+            "model",
+            "codex",
+            "给出最终回答"
+          ],
+          "say": "模型给出最终回答，本轮循环结束。",
+          "actors": {
+            "model": "空闲"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "sdk",
+            "推送事件流（含 thread id）"
+          ],
+          "say": "进程把整个过程以事件形式交给 SDK；第一条事件里带着新生成的对话 ID。",
+          "state": {
+            "对话 ID": "thread_7f3c…"
+          }
+        },
+        {
+          "lines": [
+            22,
+            25
+          ],
+          "flow": [
+            "sdk",
+            "script",
+            "返回最终回答与 token 用量"
+          ],
+          "say": "run() 返回结果，codex exec 进程随即退出。对话记录留在本机 ~/.codex/sessions 里。",
+          "actors": {
+            "codex": "已退出"
+          },
+          "state": {
+            "Codex 进程": "0 个"
+          }
+        }
+      ],
+      "takeaway": "读文件、跑命令的循环由 Codex 转，模型只负责提出要做什么；你的脚本只发起和验收。每一次 run 都是一个新进程，跑完就退出。"
+    },
+    {
+      "id": "s00-resume",
+      "title": "进程退出了，对话怎么接上",
+      "question": "脚本和 Codex 进程都退出了，第二次运行为什么还记得上一轮说过的话？",
+      "file": "stages/s00-sdk-quickstart/examples/03-resume.mjs",
+      "start": 4,
+      "end": 13,
+      "expect": "try {",
+      "notes": {
+        "5": "读出上一次 npm run fix 留下的对话 ID 和工作目录",
+        "7": "按 ID 接回已有对话；和 startThread 一样，这里还不启动进程",
+        "8": "这次只说新的一句话，不重发上一轮的内容",
+        "10": "启动新的 codex 进程跑这一轮，过程写到 jsonl 文件里便于查看",
+        "12": "统一的出错提示"
+      },
+      "actors": [
+        [
+          "run1",
+          "第一次运行",
+          "proc"
+        ],
+        [
+          "disk",
+          "本机会话记录"
+        ],
+        [
+          "run2",
+          "第二次运行",
+          "proc"
+        ],
+        [
+          "codex",
+          "新的 codex exec 进程",
+          "proc"
+        ]
+      ],
+      "state0": {
+        "内存里的对话": "无",
+        "磁盘上的对话": "第 1 轮：修复了 add.mjs",
+        "发给模型的上下文": "—"
+      },
+      "steps": [
+        {
+          "say": "第一次运行（npm run fix）结束：脚本退出，codex 进程也退出了，内存里什么都没剩。",
+          "actors": {
+            "run1": "已退出",
+            "disk": "有 1 轮记录",
+            "run2": "未启动",
+            "codex": "未启动"
+          }
+        },
+        {
+          "lines": [
+            5,
+            5
+          ],
+          "flow": [
+            "disk",
+            "run2",
+            "读出 thread id"
+          ],
+          "say": "第二次运行先读出上次记下的对话 ID。程序自己只保存了这个 ID，没有保存聊天内容。",
+          "actors": {
+            "run2": "运行中"
+          }
+        },
+        {
+          "lines": [
+            7,
+            7
+          ],
+          "say": "resumeThread(ID) 只是记下“要接这段对话”，仍然没有进程。"
+        },
+        {
+          "lines": [
+            8,
+            10
+          ],
+          "flow": [
+            "run2",
+            "codex",
+            "按 thread id 恢复，发送新 prompt"
+          ],
+          "say": "发送时才启动新的 codex 进程，只带上这一句新问题。",
+          "actors": {
+            "codex": "运行中"
+          }
+        },
+        {
+          "flow": [
+            "disk",
+            "codex",
+            "加载第 1 轮历史"
+          ],
+          "say": "Codex 按 ID 从本机会话记录里把历史读回来，和新问题一起交给模型。",
+          "state": {
+            "发给模型的上下文": "第 1 轮历史 + 新问题"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "run2",
+            "回答：修改了 add.mjs"
+          ],
+          "say": "模型因此能回答上一轮的事。回答完，这一轮也写进会话记录。",
+          "actors": {
+            "codex": "已退出",
+            "disk": "有 2 轮记录"
+          },
+          "state": {
+            "磁盘上的对话": "第 1、2 轮"
+          }
+        }
+      ],
+      "takeaway": "能接着聊，靠的是 Codex 存在本机的会话记录，而不是你的程序记住了什么。换一台机器、或者删掉 ~/.codex/sessions，就接不上了——这也是后面要把服务放到云端的原因之一。"
+    }
+  ],
+  "s01": [
+    {
+      "id": "s01-accepted",
+      "title": "收到了，不等于答完了",
+      "question": "turn/start 已经返回了 turn id，为什么还不能把答案交给用户？",
+      "file": "stages/s01-single-turn/05-app-server.mjs",
+      "start": 154,
+      "end": 176,
+      "expect": "async function runTurn(prompt)",
+      "notes": {
+        "155": "还没有对话就先 thread/start 建一个",
+        "156": "为这一轮准备：答案、暂存区、一个“完成”信号；turn id 先空着",
+        "157": "先挂一个空处理，避免信号失败时报未处理异常",
+        "158": "标记“当前正在进行的是这一轮”，事件按它来匹配",
+        "159": "超时就断开，不自动重发（重发可能让模型做两遍）",
+        "162": "发起这一轮，只带这一句输入",
+        "165": "RPC 响应里拿到 turn id——这只表示“受理了”",
+        "167": "把 turn id 到手之前就到达的事件补处理掉",
+        "170": "真正的等待在这里：等本轮自己的 turn/completed",
+        "171": "完成之后才拼出完整答案",
+        "174": "无论成败都清掉计时器和当前轮"
+      },
+      "actors": [
+        [
+          "client",
+          "我们的客户端"
+        ],
+        [
+          "server",
+          "Codex App Server"
+        ],
+        [
+          "model",
+          "模型"
+        ]
+      ],
+      "state0": {
+        "threadId": "—",
+        "turn id": "—",
+        "本轮状态": "未开始",
+        "已收到的答案": ""
+      },
+      "steps": [
+        {
+          "lines": [
+            155,
+            155
+          ],
+          "flow": [
+            "client",
+            "server",
+            "thread/start：新建 Thread"
+          ],
+          "say": "第一次提问，先建一个对话（Thread）。",
+          "state": {
+            "threadId": "thr_01"
+          }
+        },
+        {
+          "lines": [
+            156,
+            159
+          ],
+          "say": "为这一轮建一份记录，并启动超时计时器。turn id 这时还不知道。",
+          "state": {
+            "本轮状态": "等待受理"
+          }
+        },
+        {
+          "lines": [
+            162,
+            164
+          ],
+          "flow": [
+            "client",
+            "server",
+            "turn/start：发送 prompt"
+          ],
+          "say": "发起这一轮。"
+        },
+        {
+          "lines": [
+            165,
+            166
+          ],
+          "flow": [
+            "server",
+            "client",
+            "返回 turn id（inProgress）"
+          ],
+          "say": "App Server 立刻回了 turn id，状态是 inProgress。这只说明“收到了”，模型可能一个字还没写——很多人在这里就当成功了。",
+          "state": {
+            "turn id": "turn_01",
+            "本轮状态": "进行中"
+          }
+        },
+        {
+          "flow": [
+            "server",
+            "model",
+            "生成回答"
+          ],
+          "say": "App Server 驱动模型生成回答。",
+          "actors": {
+            "model": "生成中"
+          }
+        },
+        {
+          "flow": [
+            "server",
+            "client",
+            "delta：第一段文本"
+          ],
+          "say": "回答一段段推回来（item/agentMessage/delta），客户端按条目拼接。",
+          "state": {
+            "已收到的答案": "Codex harness"
+          }
+        },
+        {
+          "flow": [
+            "server",
+            "client",
+            "delta：后续文本"
+          ],
+          "say": "继续推送，答案在变长，但还不能确定写完了。",
+          "actors": {
+            "model": "空闲"
+          },
+          "state": {
+            "已收到的答案": "Codex harness 已连接。"
+          }
+        },
+        {
+          "lines": [
+            170,
+            172
+          ],
+          "flow": [
+            "server",
+            "client",
+            "turn/completed（completed）"
+          ],
+          "say": "收到本轮自己的 turn/completed，状态为 completed，才把答案交给用户。",
+          "state": {
+            "本轮状态": "completed ✓"
+          }
+        },
+        {
+          "warn": true,
+          "flow": [
+            "server",
+            "client",
+            "turn/completed（failed）"
+          ],
+          "say": "换一种结局：如果状态是 failed 或 interrupted，“完成”信号被拒绝，客户端报错，半截答案不会当成结果。",
+          "state": {
+            "本轮状态": "failed → 报错"
+          }
+        },
+        {
+          "lines": [
+            173,
+            175
+          ],
+          "say": "无论成败，都清掉计时器和当前轮，下一轮从干净的状态开始。",
+          "state": {
+            "turn id": "—"
+          }
+        }
+      ],
+      "takeaway": "RPC 响应只代表受理，答案以事件形式陆续到达；只有本轮的 turn/completed 且状态为 completed，才算真正答完。"
+    },
+    {
+      "id": "s01-early-events",
+      "title": "事件比响应先到",
+      "question": "如果模型的第一段回答，比 turn/start 的响应还早到，客户端怎么知道它属于哪一轮？",
+      "file": "stages/s01-single-turn/05-app-server.mjs",
+      "start": 84,
+      "end": 102,
+      "expect": "function handleTurnEvent(message)",
+      "notes": {
+        "85": "取出当前正在进行的那一轮",
+        "86": "没有进行中的轮次，或者不是这个对话的事件：忽略",
+        "88": "还不知道 turn id：先放进暂存区，不急着判断",
+        "89": "事件里带的 turn id",
+        "90": "不是本轮的事件一律丢掉，防止串轮",
+        "91": "一段增量文字：拼到对应条目后面",
+        "95": "条目完成时给出完整文本，以它为准覆盖拼接结果",
+        "98": "本轮结束事件",
+        "99": "completed 才算成功",
+        "100": "其余状态（failed / interrupted）都按失败处理"
+      },
+      "actors": [
+        [
+          "server",
+          "Codex App Server"
+        ],
+        [
+          "client",
+          "我们的客户端"
+        ],
+        [
+          "buffer",
+          "暂存区"
+        ]
+      ],
+      "state0": {
+        "turn id": "未知",
+        "暂存区": "0 条",
+        "答案": ""
+      },
+      "steps": [
+        {
+          "lines": [
+            85,
+            86
+          ],
+          "say": "每条事件进来，先看是不是当前对话的；别的对话的事件直接忽略。"
+        },
+        {
+          "lines": [
+            88,
+            88
+          ],
+          "flow": [
+            "server",
+            "buffer",
+            "delta 先于响应到达"
+          ],
+          "say": "turn/start 的响应还在路上，第一段回答已经到了。此时不知道 turn id，没法判断它属于哪一轮，于是先暂存。",
+          "state": {
+            "暂存区": "1 条"
+          }
+        },
+        {
+          "flow": [
+            "server",
+            "client",
+            "turn/start 响应：turn id"
+          ],
+          "say": "响应到了，现在知道本轮是 turn_01。",
+          "state": {
+            "turn id": "turn_01"
+          }
+        },
+        {
+          "lines": [
+            89,
+            90
+          ],
+          "flow": [
+            "buffer",
+            "client",
+            "按 turn id 回放暂存事件"
+          ],
+          "say": "把暂存区的事件按到达顺序回放，每条都核对 turn id。",
+          "state": {
+            "暂存区": "0 条"
+          }
+        },
+        {
+          "lines": [
+            91,
+            94
+          ],
+          "say": "核对通过，这段文字拼进答案。",
+          "state": {
+            "答案": "你好"
+          }
+        },
+        {
+          "warn": true,
+          "flow": [
+            "server",
+            "client",
+            "旧 Turn 的迟到 delta"
+          ],
+          "say": "一条上一轮遗留的迟到事件也进来了，turn id 对不上，直接丢掉，不会串进这一轮的答案。"
+        },
+        {
+          "lines": [
+            98,
+            101
+          ],
+          "flow": [
+            "server",
+            "client",
+            "turn/completed"
+          ],
+          "say": "本轮结束事件到达，按状态决定成功还是失败。"
+        }
+      ],
+      "takeaway": "网络上的消息不保证先后。先暂存、拿到 ID 后再严格匹配，才能保证每段回答都归到正确的那一轮。"
+    }
+  ],
+  "s02": [
+    {
+      "id": "s02-queue",
+      "title": "模型还在回答，又输入了两句",
+      "question": "上一轮还没答完，用户连着又输入了两句，这两句会丢吗？会乱序吗？",
+      "file": "stages/s02-multi-turn/05-app-server.mjs",
+      "start": 33,
+      "end": 51,
+      "expect": "const queue = [];",
+      "notes": {
+        "33": "排队的输入",
+        "34": "聊天循环正在等输入时，这里放着“交给它”的回调",
+        "35": "终端是否已关闭",
+        "36": "每输入一行",
+        "37": "有人在等：直接交给它",
+        "38": "没人在等（模型还在回答）：放进队列",
+        "40": "终端关了：告诉正在等的一方“没有输入了”",
+        "44": "Ctrl+C 交给外面处理",
+        "46": "聊天循环问“下一句是什么”",
+        "47": "显示提示符",
+        "49": "队列里有就先取最早的那一句（先进先出）",
+        "50": "没有了而且终端已关：结束",
+        "51": "否则挂起，等下一行输入"
+      },
+      "actors": [
+        [
+          "user",
+          "你"
+        ],
+        [
+          "queue",
+          "输入队列"
+        ],
+        [
+          "loop",
+          "聊天循环"
+        ],
+        [
+          "codex",
+          "Codex"
+        ]
+      ],
+      "state0": {
+        "队列": "[ ]",
+        "正在等输入": "是",
+        "Codex": "空闲"
+      },
+      "steps": [
+        {
+          "lines": [
+            36,
+            37
+          ],
+          "flow": [
+            "user",
+            "loop",
+            "输入第 1 句"
+          ],
+          "say": "聊天循环正在等输入，第 1 句直接交给它。"
+        },
+        {
+          "flow": [
+            "loop",
+            "codex",
+            "turn/start：第 1 句"
+          ],
+          "say": "开始第 1 轮。聊天循环要等这一轮完成，才会去问下一句。",
+          "actors": {
+            "codex": "回答中"
+          },
+          "state": {
+            "正在等输入": "否（等本轮完成）",
+            "Codex": "回答第 1 句"
+          }
+        },
+        {
+          "lines": [
+            38,
+            38
+          ],
+          "flow": [
+            "user",
+            "queue",
+            "输入第 2 句（入队）"
+          ],
+          "say": "用户等不及又输入了一句。没人在等输入，这句先进队列，不会丢。",
+          "state": {
+            "队列": "[ 第 2 句 ]"
+          }
+        },
+        {
+          "flow": [
+            "user",
+            "queue",
+            "输入第 3 句（入队）"
+          ],
+          "say": "再来一句，排在后面。",
+          "state": {
+            "队列": "[ 第 2 句, 第 3 句 ]"
+          }
+        },
+        {
+          "flow": [
+            "codex",
+            "loop",
+            "turn/completed"
+          ],
+          "say": "第 1 轮完成，聊天循环回来问下一句。",
+          "actors": {
+            "codex": "空闲"
+          },
+          "state": {
+            "Codex": "空闲"
+          }
+        },
+        {
+          "lines": [
+            46,
+            49
+          ],
+          "flow": [
+            "queue",
+            "loop",
+            "出队：第 2 句"
+          ],
+          "say": "队列里有，按先进先出先取第 2 句。",
+          "state": {
+            "队列": "[ 第 3 句 ]"
+          }
+        },
+        {
+          "flow": [
+            "loop",
+            "codex",
+            "turn/start：第 2 句"
+          ],
+          "say": "第 2 轮开始。第 3 句继续排着，等这一轮完成再发。",
+          "actors": {
+            "codex": "回答中"
+          },
+          "state": {
+            "Codex": "回答第 2 句"
+          }
+        }
+      ],
+      "takeaway": "同一个对话同时只跑一轮。输入先排队，所以连续输入、粘贴多行、管道输入都不会丢，也不会乱序。到 s03 变成服务后，这个队列会搬到服务端。"
+    },
+    {
+      "id": "s02-only-new",
+      "title": "每轮只发新的一句",
+      "question": "第 10 轮的时候，客户端要把前 9 轮的聊天记录都发过去吗？",
+      "file": "stages/s02-multi-turn/05-app-server.mjs",
+      "start": 192,
+      "end": 208,
+      "expect": "async function runTurn(prompt)",
+      "notes": {
+        "193": "只有第一次才建对话；之后一直复用同一个 threadId",
+        "194": "这一轮的记录（答案、暂存区、完成信号）",
+        "197": "超时提示里告诉用户：可以重启后 /resume 接着聊",
+        "200": "发起新一轮",
+        "201": "input 里只有这一句新输入，没有历史",
+        "203": "拿到本轮 turn id",
+        "208": "等本轮完成，再回去问下一句"
+      },
+      "actors": [
+        [
+          "client",
+          "客户端"
+        ],
+        [
+          "server",
+          "Codex App Server"
+        ],
+        [
+          "history",
+          "Codex 原生历史"
+        ]
+      ],
+      "state0": {
+        "threadId": "—",
+        "客户端保存的聊天记录": "无",
+        "本次发送的内容": "—",
+        "Codex 里的历史": "0 轮"
+      },
+      "steps": [
+        {
+          "lines": [
+            193,
+            193
+          ],
+          "flow": [
+            "client",
+            "server",
+            "thread/start"
+          ],
+          "say": "第一句话之前建一个对话，记下 threadId。",
+          "state": {
+            "threadId": "thr_01"
+          }
+        },
+        {
+          "lines": [
+            200,
+            202
+          ],
+          "flow": [
+            "client",
+            "server",
+            "turn/start：只发新输入"
+          ],
+          "say": "第 1 轮：只发这一句。",
+          "state": {
+            "本次发送的内容": "“我叫小周”"
+          }
+        },
+        {
+          "flow": [
+            "server",
+            "history",
+            "写入第 1 轮"
+          ],
+          "say": "问答由 Codex 记进这个对话的历史。",
+          "state": {
+            "Codex 里的历史": "1 轮"
+          }
+        },
+        {
+          "flow": [
+            "client",
+            "server",
+            "turn/start：只发新输入"
+          ],
+          "say": "第 2 轮：仍然只发新的一句，用的还是同一个 threadId。",
+          "state": {
+            "本次发送的内容": "“我叫什么？”"
+          }
+        },
+        {
+          "flow": [
+            "history",
+            "server",
+            "按 threadId 读取历史"
+          ],
+          "say": "App Server 按 threadId 取出历史，和新的一句一起交给模型，所以模型能答出“小周”。"
+        },
+        {
+          "lines": [
+            208,
+            208
+          ],
+          "flow": [
+            "server",
+            "history",
+            "写入第 2 轮"
+          ],
+          "say": "这一轮也记进历史。客户端始终没有保存过聊天内容。",
+          "state": {
+            "Codex 里的历史": "2 轮"
+          }
+        }
+      ],
+      "takeaway": "历史由 Codex 原生保存，客户端只负责记住 threadId、每轮发新输入。这样不会重复发送越来越长的记录，上下文压缩也由 Codex 负责。"
+    },
+    {
+      "id": "s02-resume",
+      "title": "退出后 /resume 接着聊",
+      "question": "关掉终端再打开，怎么回到昨天那段对话？",
+      "file": "stages/s02-multi-turn/05-app-server.mjs",
+      "start": 239,
+      "end": 248,
+      "expect": "const selected =",
+      "notes": {
+        "239": "按用户输入的编号找到会话",
+        "240": "编号不对：重新输入",
+        "241": "选的就是当前会话：不用恢复",
+        "242": "确认这个会话的工作目录还在",
+        "243": "让 App Server 接回这个会话",
+        "244": "excludeTurns：不把历史内容拉回客户端，历史留在 Codex 里",
+        "246": "之后的每一轮都用这个 threadId",
+        "248": "继续用当前配置的模型"
+      },
+      "actors": [
+        [
+          "user",
+          "你"
+        ],
+        [
+          "client",
+          "新启动的客户端",
+          "proc"
+        ],
+        [
+          "server",
+          "Codex App Server"
+        ],
+        [
+          "history",
+          "Codex 原生历史"
+        ]
+      ],
+      "state0": {
+        "当前 threadId": "—",
+        "客户端里的历史": "无",
+        "Codex 里的历史": "thr_01：2 轮"
+      },
+      "steps": [
+        {
+          "say": "昨天聊完后退出了。今天重新 npm start，客户端是全新的，什么都不记得。",
+          "actors": {
+            "client": "刚启动"
+          }
+        },
+        {
+          "flow": [
+            "user",
+            "client",
+            "/resume 小周"
+          ],
+          "say": "用 /resume 加关键词搜索本项目的历史会话。"
+        },
+        {
+          "flow": [
+            "client",
+            "server",
+            "thread/list：搜索会话"
+          ],
+          "say": "客户端向 App Server 查询会话列表，按名称、开场问题、ID 过滤。"
+        },
+        {
+          "flow": [
+            "server",
+            "client",
+            "返回匹配的 Thread"
+          ],
+          "say": "列出匹配的会话。"
+        },
+        {
+          "lines": [
+            239,
+            242
+          ],
+          "flow": [
+            "user",
+            "client",
+            "选择第 1 个"
+          ],
+          "say": "选中第 1 个，先检查它的工作目录还在。"
+        },
+        {
+          "lines": [
+            243,
+            245
+          ],
+          "flow": [
+            "client",
+            "server",
+            "thread/resume：恢复 Thread"
+          ],
+          "say": "请求接回这个会话，但不把历史内容拉回来（excludeTurns）。",
+          "state": {
+            "客户端里的历史": "仍然无"
+          }
+        },
+        {
+          "lines": [
+            246,
+            248
+          ],
+          "say": "记下 threadId，之后照常每轮只发新输入。",
+          "state": {
+            "当前 threadId": "thr_01"
+          }
+        },
+        {
+          "flow": [
+            "client",
+            "server",
+            "turn/start：继续对话"
+          ],
+          "say": "模型照样能看到前两轮，因为历史一直在 Codex 那边。",
+          "actors": {
+            "history": "被读取"
+          }
+        }
+      ],
+      "takeaway": "恢复会话只需要一个 threadId：客户端随时可以退出重来，对话不丢。不过历史存在这台电脑上，换台机器就接不上——s03 会把它变成一个常驻的服务。"
+    }
+  ]
+}
