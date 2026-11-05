@@ -14,8 +14,8 @@
       "53": "会话不存在（或不属于当前 owner）直接 404",
       "54": "在同一事务里数本会话还有多少条 queued",
       "59": "超过 100 条待执行就 429，队列不会无限增长",
-      "61": "写入 jobs 表（agent_data.tasks），状态为 queued",
-      "63": "WHERE $2 IS NOT NULL：每条 SQL 都带 owner 作用域",
+      "61": "写入任务表 agent_data.tasks，状态为 queued",
+      "63": "WHERE $2 IS NOT NULL：owner 参数必须存在，否则什么都不写",
       "75": "同一事务里写 outbox：没有就插入，有就 generation+1 并立即到期",
       "76": "顺手更新会话名称和更新时间"
     },
@@ -39,7 +39,7 @@
     ],
     "state0": {
       "事务": "—",
-      "jobs 表": "—",
+      "tasks 表": "—",
       "outbox": "—",
       "Redis 集合": "空"
     },
@@ -87,11 +87,11 @@
         "flow": [
           "server",
           "pg",
-          "写 jobs 表（queued）"
+          "写 tasks 表（queued）"
         ],
-        "say": "任务本身写进 jobs 表。此时还没提交，别的连接看不到它。",
+        "say": "任务本身写进 tasks 表。此时还没提交，别的连接看不到它。",
         "state": {
-          "jobs 表": "a：queued（未提交）"
+          "tasks 表": "a：queued（未提交）"
         }
       },
       {
@@ -116,10 +116,10 @@
           "client",
           "崩溃：未返回成功"
         ],
-        "say": "假如服务在 COMMIT 之前崩溃：事务回滚，jobs 和 outbox 里都没有这条记录。客户端没收到成功，用同一个 clientMessageId 重发即可，服务端按消息 ID 幂等去重。",
+        "say": "假如服务在 COMMIT 之前崩溃：事务回滚，tasks 表和 outbox 里都没有这条记录。客户端没收到成功，用同一个 clientMessageId 重发即可，服务端按消息 ID 幂等去重。",
         "state": {
           "事务": "已回滚",
-          "jobs 表": "—",
+          "tasks 表": "—",
           "outbox": "—"
         }
       },
@@ -132,7 +132,7 @@
         "say": "正常的结局：事务提交，任务和唤醒记录同时生效。",
         "state": {
           "事务": "已提交",
-          "jobs 表": "a：queued",
+          "tasks 表": "a：queued",
           "outbox": "thread-1：待投递"
         }
       },
@@ -206,7 +206,7 @@
       ]
     ],
     "state0": {
-      "jobs 表": "a：queued",
+      "tasks 表": "a：queued",
       "outbox": "thread-1：到期",
       "Redis 集合": "空",
       "Redis 状态": "正常"
@@ -287,9 +287,9 @@
           "pg",
           "认领：queued → starting"
         ],
-        "say": "认领是一条带条件的 UPDATE：只有状态还是 queued 才改成 starting。任务一旦被认领，outbox 就不会再被投递。",
+        "say": "认领是一条带条件的 UPDATE：只有状态还是 queued 才改成 starting。会话里没有 queued 任务之后，这条 outbox 就不会再被投递。",
         "state": {
-          "jobs 表": "a：starting"
+          "tasks 表": "a：starting"
         }
       },
       {
@@ -299,7 +299,7 @@
           "pg",
           "重复认领被拒"
         ],
-        "say": "同一会话被重复叫醒（Redis 里放了两次、或 outbox 补投）：第二次认领时状态已不是 queued，UPDATE 影响 0 行，任务不会执行两遍。"
+        "say": "同一会话被重复叫醒（Redis 里放了两次、或 outbox 补投）：调度器先看到这个会话已有执行中的任务，直接返回；即使并发漏过这一关，认领也是只认 queued 的条件 UPDATE，影响 0 行，任务不会执行两遍。"
       },
       {
         "warn": true,
@@ -314,7 +314,7 @@
         ],
         "say": "换一种情况：Redis 断线，写入失败。轮询标记不健康后直接返回，outbox 原样留在数据库里。",
         "state": {
-          "jobs 表": "b：queued",
+          "tasks 表": "b：queued",
           "outbox": "thread-1：到期",
           "Redis 状态": "不健康"
         }

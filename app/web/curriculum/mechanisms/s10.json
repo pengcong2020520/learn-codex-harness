@@ -9,7 +9,7 @@
     "expect": "// 一步结束后的去向",
     "notes": {
       "136": "每一轮结束后，由服务端决定任务的去向",
-      "138": "轮次本身没完成（failed / interrupted），或者是追加消息：照轮次状态记",
+      "139": "轮次本身没完成（failed / interrupted），或者是追加消息：照轮次状态记",
       "141": "按任务记下的 workflow 和参数重新解析",
       "142": "当前是第几步",
       "143": "本步声明了验收就检查结果（文件是否存在、格式等），只看产物不看过程",
@@ -41,7 +41,7 @@
         "flow": [
           "user",
           "server",
-          "POST /messages（workflow: article）"
+          "POST /messages（workflow: write-article）"
         ],
         "say": "用户发起“写文章”任务。Workflow 声明了两步：outline（完成后要确认）和 final。",
         "state": {
@@ -63,7 +63,7 @@
       },
       {
         "lines": [
-          138,
+          139,
           143
         ],
         "flow": [
@@ -156,10 +156,11 @@
     "title": "可以提议，不能自批",
     "question": "普通对话里模型发现需要维护知识库，但它没有改 Wiki 的权限。它能不能自己给自己开个任务？",
     "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
-    "start": 152,
-    "end": 185,
-    "expect": "const workflow = this.resolve({ id, params });",
+    "start": 150,
+    "end": 183,
+    "expect": "if (Object.keys(rest).length) throw new AppError(\"提议只接受",
     "notes": {
+      "150": "参数里多出任何字段（比如 status: queued）直接 400",
       "152": "提议的 workflow 必须是当前 Agent 声明过的",
       "153": "普通对话不需要提议",
       "154": "任务原文和提议理由都必填",
@@ -222,7 +223,7 @@
       },
       {
         "lines": [
-          152,
+          150,
           154
         ],
         "flow": [
@@ -230,7 +231,7 @@
           "server",
           "propose_task（knowledge-maintain）"
         ],
-        "say": "模型改用 propose_task 提议一个知识库维护任务，说明理由。workflow 必须是 Agent 声明过的。"
+        "say": "模型改用 propose_task 提议一个知识库维护任务，说明理由。只接受 workflow、params、text、reason 四个字段，多带 status: queued 之类的字段直接 400；workflow 必须是 Agent 声明过的。"
       },
       {
         "lines": [
@@ -247,9 +248,9 @@
         "flow": [
           "server",
           "pg",
-          "写 jobs（proposed）"
+          "写 tasks 表（proposed）"
         ],
-        "say": "提议记为 proposed。它不排队、不写 outbox、不授权；参数里带 status: queued 之类的多余字段会直接 400。",
+        "say": "提议记为 proposed。它不排队、不写 outbox、不授权。",
         "state": {
           "提议 p1": "proposed"
         }
