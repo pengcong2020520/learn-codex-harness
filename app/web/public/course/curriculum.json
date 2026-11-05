@@ -18,7 +18,7 @@
     {
       "name": "可配置 Agent",
       "focus": "装配、Skills、工具与工作区",
-      "dir": "stages/s03-agent-core"
+      "dir": "stages/s07-memory"
     },
     {
       "name": "数据层",
@@ -805,7 +805,7 @@
         "cost": "修改配置、角色或 Skill 后需要重启，并可能新建 Thread；不会自动迁移或覆盖旧历史。工具实现刷新另有边界锁，不能与任意 Agent 配置热更混为一谈。"
       },
       "source": {
-        "file": "stages/s03-agent-core/server/modules/agents/index.mjs",
+        "file": "stages/s07-memory/server/modules/agents/index.mjs",
         "needle": "  assertCurrent() {",
         "before": 4,
         "after": 10,
@@ -990,7 +990,7 @@
         "cost": "只支持已验证的文本指令路径；必需项不可用会阻止启动，可选项缺失可降级。文件变更需受控重启与会话版本检查。"
       },
       "source": {
-        "file": "stages/s03-agent-core/server/modules/codex/skills.mjs",
+        "file": "stages/s07-memory/server/modules/codex/skills.mjs",
         "needle": "  const requested = new Map(agent.skills.map(skill => [skill.path, skill]));",
         "before": 1,
         "after": 13,
@@ -1175,7 +1175,7 @@
         "cost": "新增能力需要实现、规格、授权都齐全，只改配置不会产生新能力。工具版本与撤销还需边界协调，不能在任务中途任意替换。"
       },
       "source": {
-        "file": "stages/s03-agent-core/server/modules/tools/loader.mjs",
+        "file": "stages/s07-memory/server/modules/tools/loader.mjs",
         "needle": "    validate(name, args) {",
         "before": 0,
         "after": 18,
@@ -1367,7 +1367,7 @@
         "cost": "多了一层本地协议、版本与连接生命周期。它用于本机单 owner 开发，没有实现公网多用户授权，也不是浏览器业务 API。"
       },
       "source": {
-        "file": "stages/s03-agent-core/server/modules/tools/mcp-server.mjs",
+        "file": "stages/s07-memory/server/modules/tools/mcp-server.mjs",
         "needle": "    const registry = registries.get(request.url?.slice(1));",
         "before": 2,
         "after": 15,
@@ -1559,7 +1559,7 @@
         "cost": "默认格式、大小和新建限制牺牲部分通用编辑能力；这是受限文件服务，不是隔离同机恶意进程的操作系统沙箱。"
       },
       "source": {
-        "file": "stages/s03-agent-core/server/modules/data/files.mjs",
+        "file": "stages/s07-memory/server/modules/data/files.mjs",
         "needle": "  const readable = (relative) =>",
         "before": 2,
         "after": 23,

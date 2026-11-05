@@ -5,7 +5,7 @@ const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=
 const stages={
  s01:{n:1,dir:'stages/s01-single-turn',name:'单轮问答',title:'从一个问题开始',desc:'建立 Node 与 Codex 的连接，完成一次有起点、有终点的模型执行。',gain:'打通原生执行链路',storage:'Codex 原生历史',tools:'关闭通用工具',before:'尚无执行入口',after:'一次命令，完成一轮问答'},
  s02:{n:2,dir:'stages/s02-multi-turn',name:'多轮会话',title:'让上下文延续下来',desc:'复用同一个 Thread，逐轮推进任务；退出后仍能恢复原生会话。',gain:'多轮与历史恢复',storage:'原生历史 + 本地索引',tools:'FIFO 输入缓冲',before:'每次问答独立结束',after:'同一 Thread，多次 Turn'},
- s03:{n:3,dir:'stages/s03-agent-core',name:'可配置 Agent',title:'装配你的 Agent',desc:'把角色、Skills、工具和工作区写成配置，让能力与边界一起生效。',gain:'角色与能力可配置',storage:'JSON 业务状态',tools:'MCP 工具注册表',before:'写死的基础问答',after:'配置决定可用工具与资料范围'},
+ s03:{n:3,dir:'stages/s07-memory',name:'可配置 Agent',title:'装配你的 Agent',desc:'把角色、Skills、工具和工作区写成配置，让能力与边界一起生效。',gain:'角色与能力可配置',storage:'JSON 业务状态',tools:'MCP 工具注册表',before:'写死的基础问答',after:'配置决定可用工具与资料范围'},
  s08:{n:4,dir:'stages/s08-data-layer',name:'数据层',title:'让每次执行有据可查',desc:'用持久任务、资源版本和来源关系，把一次对话变成可追踪的业务执行。',gain:'事务与资源版本',storage:'PostgreSQL + Redis',tools:'MCP + 资源服务',before:'单文件业务状态',after:'持久任务、事务 outbox、版本追踪'},
  s09:{n:5,dir:'stages/s09-knowledge-layer',name:'知识层',title:'让知识进入工作流',desc:'从原始资料到有来源的 Wiki，再到可选的混合检索。每次访问都经过统一门禁。',gain:'知识组织与通用门禁',storage:'PG + Redis + 可选 Chroma',tools:'原生动态工具 + 门禁',before:'Agent 直接读取散落资料',after:'Wiki / RAG 按挂载范围提供知识'}
 };

@@ -79,60 +79,49 @@
     },
     {
       "id": "s03",
-      "dir": "s03-agent-core",
-      "title": "用配置装配一个能做事的 Agent",
-      "summary": "服务常驻，通过 HTTP / SSE 接入；一份 JSON 决定角色、Skills、可用工具和资料边界，记忆由服务端管控。",
+      "dir": "s03-service",
+      "title": "变成常驻服务：客户端走了，服务还在",
+      "summary": "服务端常驻运行、持有 Codex；终端客户端经 HTTP 提交和查看，关掉客户端不影响正在执行的一轮。",
       "previous": "s02-multi-turn",
       "modules": [
         {
           "layer": "接入与会话",
-          "name": "HTTP / SSE 接口",
-          "desc": "终端与浏览器接入"
-        },
-        {
-          "layer": "接入与会话",
-          "name": "任务与消息",
-          "desc": "任务排队与调度"
-        },
-        {
-          "layer": "接入与会话",
-          "name": "事件推送",
-          "desc": "状态变化推给客户端"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "Agent 定义",
-          "desc": "JSON 校验 + 版本哈希"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "角色与 Skills",
-          "desc": "做什么、怎么做"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "工具与资料边界",
-          "desc": "白名单 + 参数校验"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "MCP 工具入口",
-          "desc": "Codex 回调本地工具"
+          "name": "HTTP 接口",
+          "desc": "常驻服务的入口"
         },
         {
           "layer": "运行支撑",
           "name": "生命周期与清理",
           "desc": "启停、运行目录回收"
-        },
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /health",
+          "GET /sessions",
+          "POST /sessions",
+          "POST /sessions/resume",
+          "GET /state",
+          "POST /turns"
+        ],
+        "env": [
+          "AGENT_PORT"
+        ],
+        "migrations": []
+      }
+    },
+    {
+      "id": "s07",
+      "dir": "s07-memory",
+      "title": "记忆：Codex 提炼，服务端管控",
+      "summary": "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
+      "previous": "s03-service",
+      "modules": [
         {
           "layer": "运行支撑",
           "name": "记忆",
           "desc": "Codex 提炼，服务端管控"
-        },
-        {
-          "layer": "数据",
-          "name": "任务记录",
-          "desc": "任务状态与产物登记"
         }
       ],
       "surface": {
@@ -153,17 +142,11 @@
           "GET /memory/summary",
           "POST /memory/contribution",
           "GET /tools",
-          "GET /health",
-          "GET /sessions",
-          "POST /sessions",
-          "POST /sessions/resume",
-          "GET /state",
           "POST /messages",
           "POST /queue/continue",
           "GET /events"
         ],
         "env": [
-          "AGENT_PORT",
           "AGENT_DEFINITION",
           "AGENT_MEMORY_ENABLED",
           "AGENT_MEMORY_USE",
@@ -180,7 +163,7 @@
       "dir": "s08-data-layer",
       "title": "让任务与产物有据可查",
       "summary": "业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。",
-      "previous": "s03-agent-core",
+      "previous": "s07-memory",
       "modules": [
         {
           "layer": "数据",

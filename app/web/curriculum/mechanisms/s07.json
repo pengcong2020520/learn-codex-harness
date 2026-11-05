@@ -1,0 +1,247 @@
+[
+  {
+    "id": "s07-verify",
+    "title": "开了记忆，就真的开了吗",
+    "question": "在 .env 里打开 AGENT_MEMORY_ENABLED，服务端怎么确认 Codex 真的按这个配置在运行？",
+    "file": "stages/s07-memory/server/modules/memory/index.mjs",
+    "start": 38,
+    "end": 50,
+    "expect": "async verify() {",
+    "notes": {
+      "39": "向 Codex 读回实际生效的配置",
+      "41": "服务端自己写进 config.toml 的那一份",
+      "42": "总开关、是否使用、是否生成……",
+      "43": "提炼模型、合并模型",
+      "44": "空闲多久才提炼，逐项比对",
+      "45": "有一项对不上就拒绝启动",
+      "47": "核验通过后，才把这份配置当作“实际生效”",
+      "49": "关闭了原生 Shell 和写文件：后台合并写不出最终摘要，如实记下"
+    },
+    "actors": [
+      [
+        "server",
+        "服务端"
+      ],
+      [
+        "toml",
+        "config.toml"
+      ],
+      [
+        "codex",
+        "Codex"
+      ],
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ]
+    ],
+    "state0": {
+      "服务端写入": "—",
+      "Codex 实际生效": "—",
+      "启动": "进行中",
+      "摘要能否生成": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "server",
+          "toml",
+          "写入记忆配置"
+        ],
+        "say": "启动时，服务端按 .env 生成 .data/codex/config.toml：[features] memories 与 [memories] 两段。",
+        "state": {
+          "服务端写入": "memories = true"
+        }
+      },
+      {
+        "flow": [
+          "toml",
+          "codex",
+          "启动时读取"
+        ],
+        "say": "Codex 的 CODEX_HOME 固定为本项目 .data/codex，读的就是这一份。",
+        "actors": {
+          "codex": "已启动"
+        }
+      },
+      {
+        "lines": [
+          39,
+          41
+        ],
+        "flow": [
+          "server",
+          "codex",
+          "config/read"
+        ],
+        "say": "服务端不假设写进去就生效，而是向 Codex 读回实际配置。",
+        "state": {
+          "Codex 实际生效": "memories = true"
+        }
+      },
+      {
+        "lines": [
+          42,
+          44
+        ],
+        "say": "逐项比对：总开关、是否使用、是否生成、两个模型、空闲时间。"
+      },
+      {
+        "warn": true,
+        "lines": [
+          45,
+          45
+        ],
+        "say": "换一种情况：有别的配置覆盖了其中一项，两边对不上，服务拒绝启动，不会“假报开启成功”。",
+        "state": {
+          "启动": "失败（不一致时）"
+        }
+      },
+      {
+        "lines": [
+          47,
+          49
+        ],
+        "say": "一致时才记为实际生效。本阶段关闭了原生写工具，后台合并写不出最终摘要，这一点也记下来。",
+        "state": {
+          "启动": "通过",
+          "摘要能否生成": "blocked（如实报告）"
+        }
+      },
+      {
+        "flow": [
+          "client",
+          "server",
+          "GET /memory"
+        ],
+        "say": "客户端 /memory 看到的，是核验过的实际状态，以及“已开启不等于已生成”的说明。",
+        "actors": {
+          "client": "运行中"
+        }
+      }
+    ],
+    "takeaway": "开关由服务端写定，还要读回核对；对不上就拒绝启动。开了也只代表允许提炼，摘要什么时候生成、能不能生成，服务端如实报告。"
+  },
+  {
+    "id": "s07-contribute",
+    "title": "不想让这个会话进记忆",
+    "question": "某个会话聊了隐私内容，能不能让它不参与提炼？客户端能不能顺手把记忆清空？",
+    "file": "stages/s07-memory/server/modules/memory/index.mjs",
+    "start": 71,
+    "end": 83,
+    "expect": "async contribute(threadId, enabled) {",
+    "notes": {
+      "72": "Thread id 格式不对直接拒绝",
+      "73": "只接受 true / false",
+      "74": "想打开参与：总开关必须已开",
+      "75": "Agent 策略禁止贡献时，也不能打开",
+      "76": "只能操作本项目的会话",
+      "78": "这个会话正在执行一轮：等它结束再改",
+      "80": "只调用 Codex 原生接口，服务端不另存一份记忆",
+      "81": "只影响以后的提炼，不删除过去的记忆"
+    },
+    "actors": [
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ],
+      [
+        "http",
+        "HTTP 接口"
+      ],
+      [
+        "memory",
+        "记忆模块"
+      ],
+      [
+        "codex",
+        "Codex"
+      ]
+    ],
+    "state0": {
+      "总开关": "关闭",
+      "这个会话参与提炼": "否",
+      "已有记忆": "保留"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "http",
+          "POST /memory/contribution"
+        ],
+        "say": "用户输入 /memory contribute on，想让当前会话参与提炼。",
+        "actors": {
+          "client": "运行中"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          74,
+          74
+        ],
+        "flow": [
+          "http",
+          "memory",
+          "contribute(true)"
+        ],
+        "say": "总开关还关着：409，提示先改 .env 并重启服务。客户端打不开总开关。"
+      },
+      {
+        "lines": [
+          76,
+          78
+        ],
+        "flow": [
+          "client",
+          "http",
+          "POST /memory/contribution"
+        ],
+        "say": "改成 /memory contribute off。服务端先确认这是本项目的会话、当前没有执行中的一轮。"
+      },
+      {
+        "lines": [
+          79,
+          80
+        ],
+        "flow": [
+          "memory",
+          "codex",
+          "thread/memoryMode/set"
+        ],
+        "say": "通过 Codex 原生接口把这个 Thread 设为不参与。",
+        "state": {
+          "这个会话参与提炼": "否（已提交）"
+        }
+      },
+      {
+        "lines": [
+          81,
+          81
+        ],
+        "flow": [
+          "memory",
+          "client",
+          "只影响以后"
+        ],
+        "say": "只控制之后的提炼资格：不停止已经在跑的后台任务，不删除过去已经提炼的内容。",
+        "state": {
+          "已有记忆": "保留"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "client",
+          "http",
+          "POST /memory/reset"
+        ],
+        "say": "想直接清空记忆？没有这个接口，返回“接口不存在”。读取也只认三个固定文件名，不接受路径。"
+      }
+    ],
+    "takeaway": "会话能不能参与由服务端把关，只走原生接口；客户端只能查看和提出设置，没有清空或任意读取的能力。"
+  }
+]

@@ -729,7 +729,7 @@
   <h2 class="screen-heading">全景：配置怎样变成可执行的能力</h2>
   <p>先看配置、执行和结果的分工：同一套服务读取角色、方法、工具与资料边界，共同决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
 
-<figure class="architecture-figure"><a href="/course/assets/s03-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S03 总架构 SVG 大图"><img src="/course/assets/s03-architecture.svg" width="1600" height="856" alt="S03 总架构：角色与工具怎样装配。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构（本章源码取自 s07-memory 快照）：角色与工具怎样装配。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
@@ -788,7 +788,7 @@
 
   <div class="translation-block">
     <div class="translation-code">
-      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 1–18 行</span>
+      <span class="translation-label">源码 · stages/s07-memory/agents/writing-agent.json · 第 1–18 行</span>
       <pre><code>{
   <span class="code-string">"schemaVersion"</span>: <span class="code-string">"1.0"</span>,
   <span class="code-string">"agent"</span>: {
@@ -828,7 +828,7 @@
 
   <div class="translation-block">
     <div class="translation-code">
-      <span class="translation-label">源码 · stages/s03-agent-core/server/modules/tools/index.mjs · 第 15–31 行</span>
+      <span class="translation-label">源码 · stages/s07-memory/server/modules/tools/index.mjs · 第 15–31 行</span>
       <pre><code>export class ToolManager {
   constructor({ config, runtime, log, redact, files, agent, boundary = <span class="code-keyword">new</span> ExecutionBoundary() }) {
     Object.assign(this, { config, runtime, log, redact, files, agent, boundary });
@@ -915,7 +915,7 @@
 
   <div class="translation-block">
     <div class="translation-code">
-      <span class="translation-label">源码 · stages/s03-agent-core/agents/writing-agent.json · 第 19–29 行</span>
+      <span class="translation-label">源码 · stages/s07-memory/agents/writing-agent.json · 第 19–29 行</span>
       <pre><code>  <span class="code-string">"bindings"</span>: {
     <span class="code-string">"workspaceDir"</span>: <span class="code-string">"../workspace"</span>,
     <span class="code-string">"skills"</span>: {},
@@ -948,14 +948,14 @@
       <div class="pattern-desc">
         <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s08。<br>
         <strong>s03 → s08</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
-        s03 是独立源码快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4313</code>，本机开发，无多用户公网授权。
+        本章源码取自 s07-memory 快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4325</code>，本机开发，无多用户公网授权。
       </div>
     </div>
     <div class="pattern-card">
       <div class="pattern-title">⌨️ 实践命令（s03 HTTP 服务）</div>
       <div class="pattern-desc">
-        <code>cd stages/s03-agent-core &amp;&amp; npm ci</code><br>
-        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4313）<br>
+        <code>cd stages/s07-memory &amp;&amp; npm ci</code><br>
+        <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4325）<br>
         <code>npm run check</code>（本地配置校验）<br>
         <code>npm run server</code>（启动服务，s03 无需数据库迁移）<br>
         另开终端：<code>npm run chat</code><br>

@@ -9,7 +9,7 @@ const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
 // CLI 与工作台共用的浏览器可用模块，从 shared/ 直接提供，不复制一份。
 const sharedModules = { '/app/session-events.js': fileURLToPath(new URL('../shared/session-events.mjs', import.meta.url)) };
 // Demo N 的源码快照位于仓库 stages/ 下；课程构建也从这里取目录，避免两处各写一份。
-export const stageDirs = ['s01-single-turn','s02-multi-turn','s03-agent-core','s08-data-layer','s09-knowledge-layer'].map(name => `stages/${name}`);
+export const stageDirs = ['s01-single-turn','s02-multi-turn','s07-memory','s08-data-layer','s09-knowledge-layer'].map(name => `stages/${name}`);
 export const defaultTargets = [
   ...[1,2,3,4,5].map(n => ({ id:`s0${n}`,name:`s0${n}`,root:path.resolve(root,'..',stageDirs[n-1]),live:n>=3,port:4310+n })),
   {id:'project',name:'当前项目',root,live:true,port:4317}

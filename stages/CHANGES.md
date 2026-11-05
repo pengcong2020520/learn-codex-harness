@@ -30,23 +30,35 @@
 
 <a id="s03"></a>
 
-## s03：用配置装配一个能做事的 Agent
+## s03：变成常驻服务：客户端走了，服务还在
 
-相比 [s02-multi-turn](s02-multi-turn/)：服务常驻，通过 HTTP / SSE 接入；一份 JSON 决定角色、Skills、可用工具和资料边界，记忆由服务端管控。
+相比 [s02-multi-turn](s02-multi-turn/)：服务端常驻运行、持有 Codex；终端客户端经 HTTP 提交和查看，关掉客户端不影响正在执行的一轮。
 
-**新增模块**：HTTP / SSE 接口（接入与会话，终端与浏览器接入）；任务与消息（接入与会话，任务排队与调度）；事件推送（接入与会话，状态变化推给客户端）；Agent 定义（Agent 装配，JSON 校验 + 版本哈希）；角色与 Skills（Agent 装配，做什么、怎么做）；工具与资料边界（Agent 装配，白名单 + 参数校验）；MCP 工具入口（Agent 装配，Codex 回调本地工具）；生命周期与清理（运行支撑，启停、运行目录回收）；记忆（运行支撑，Codex 提炼，服务端管控）；任务记录（数据，任务状态与产物登记）
+**新增模块**：HTTP 接口（接入与会话，常驻服务的入口）；生命周期与清理（运行支撑，启停、运行目录回收）
+
+**新增接口**：`GET /health`、`GET /sessions`、`POST /sessions`、`POST /sessions/resume`、`GET /state`、`POST /turns`
+
+**新增环境变量**：`AGENT_PORT`
+
+<a id="s07"></a>
+
+## s07：记忆：Codex 提炼，服务端管控
+
+相比 [s03-service](s03-service/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
+
+**新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
 
 **新增工具**：`list_files`、`read_file`、`write_file`、`read_webpage`
 
-**新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`、`GET /health`、`GET /sessions`、`POST /sessions`、`POST /sessions/resume`、`GET /state`、`POST /messages`、`POST /queue/continue`、`GET /events`
+**新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`、`POST /messages`、`POST /queue/continue`、`GET /events`
 
-**新增环境变量**：`AGENT_PORT`、`AGENT_DEFINITION`、`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
+**新增环境变量**：`AGENT_DEFINITION`、`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
 
 <a id="s08"></a>
 
 ## s08：让任务与产物有据可查
 
-相比 [s03-agent-core](s03-agent-core/)：业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。
+相比 [s07-memory](s07-memory/)：业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。
 
 **新增模块**：PostgreSQL（数据，业务状态的依据）；Outbox + Redis（数据，提交后再唤醒）；资源版本（数据，产物可追溯来源）
 
