@@ -31,7 +31,7 @@ s08 的代码常量为：上下文估算阈值 50,000 字符，单批工具结�
 
 ## 交付与验证
 
-`s01-s03.json` 提供九节原创课：s01-transport、s01-lifecycle、s02-fifo、s02-resume、s05-agent-config、s05-skills、s06-tool-registry、s06-mcp、s06-workspace。每节两种场景、每场景 3–5 步、一道带原因的测验，并包含实际源码定位和实验边界。没有新增后端能力，UI 与演示驱动由主任务统一实现。
+`lessons/s01.json`、`lessons/s02.json`、`lessons/s05.json` 与 `lessons/s06.json` 提供九节原创课：s01-transport、s01-lifecycle、s02-fifo、s02-resume、s05-agent-config、s05-skills、s06-tool-registry、s06-mcp、s06-workspace。每节两种场景、每场景 3–5 步、一道带原因的测验，并包含实际源码定位和实验边界。没有新增后端能力，UI 与演示驱动由主任务统一实现。
 
 已运行现有本地测试 17 项并全部通过：本项目 s01 的 success/early/failed/hang 四项，本项目 s02 的输入、双轮聊天、恢复成功与取消/失败四项，本项目 s03 的 Agent Schema、版本描述符、工具撤销、Skill 核验、来源边界、参数合同与 MCP 入口九项。它们使用假 App Server、临时文件或本机 HTTP；未发送真实模型请求，也没有据此声称回答质量、原生 Skill 遵循效果或完整线上链路已经验收。s01-transport 的手动握手命令只是明确的实验入口，本轮没有用用户真实配置执行；页面采用 early/success 夹具时，应说明其验证真实入口的握手与请求/事件分流。
 
