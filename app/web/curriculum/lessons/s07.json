@@ -1,0 +1,225 @@
+[
+  {
+    "id": "s07-memory",
+    "stage": "s07-memory",
+    "title": "记忆开关由服务端掌握",
+    "principle": "读取、会话贡献与后台生成各有条件；允许参与提炼，不等于已经生成摘要。",
+    "problem": "用户关掉一个会话的贡献后，以为旧记忆也已删除；另一个会话打开参与设置后，又期待立刻看到摘要。若把读取、贡献与生成合成一个“记住了”状态，界面就会承诺源码没有保证的结果。",
+    "change": {
+      "before": "若界面只展示会话历史和一个开关标签，用户就无法区分提炼资格、读取权限与摘要是否存在。",
+      "added": "服务端分别计算读取与贡献策略，启动时读回核验原生配置，在会话边界修改参与模式，并只读固定产物报告状态。",
+      "kept": "Thread 历史、记忆提炼、合并与后续注入仍由 Codex 管理；Node 不自行拼历史或实现摘要器。"
+    },
+    "ownership": {
+      "codex": "读取原生配置，保存 Thread 的 memory mode，按原生条件后台提炼、合并并在允许时使用记忆。",
+      "product": "默认关闭记忆，约束 Agent 与会话参与，固定状态目录，核验实际配置，只读查看产物并如实报告合并限制。"
+    },
+    "concepts": [
+      {
+        "term": "三道开关",
+        "meaning": "总开关是 AGENT_MEMORY_ENABLED；Agent 策略是 agent.memory.use / contribute；会话参与是单个 Thread 的 memory mode。默认总开关为 false，Agent 的 use、contribute 也都为 false。会话开关不能扩大服务端允许范围。"
+      },
+      {
+        "term": "读取 / 贡献 / 后台生成",
+        "meaning": "原生读取需要总开关、AGENT_MEMORY_USE、agent.memory.use 同时开启。新会话默认贡献需要总开关与 agent.memory.contribute 同时开启，之后还可关闭单个 Thread 的参与。后台生成需要总开关与 AGENT_MEMORY_GENERATE 开启；它不与 Agent 的 contribute 字段相交，候选会话仍受参与模式和原生筛选条件约束。"
+      },
+      {
+        "term": "config/read / dedicated_tools",
+        "meaning": "config/read 读回实际配置，不能用本地写文件成功代替核验。dedicated_tools=true 配置受限原生记忆工具，用于通用 shell 关闭时召回细节；它不保证后台合并具备写出最终摘要的能力。"
+      },
+      {
+        "term": "原始记忆 / 最终摘要",
+        "meaning": "raw_memories.md 是提炼的原始产物，MEMORY.md 是合并后的详细记忆，memory_summary.md 是供后续会话使用的摘要。出现原始产物不能证明最终摘要已经生成，摘要也不是完整聊天历史。"
+      }
+    ],
+    "mechanism": "loadServerConfig 严格解析配置，非法布尔值、空闲小时数或模型名称会拒绝启动。AgentDefinition.configure 将 use 与 agent.memory.use 取交集，将 contribute 设为 enabled && agent.memory.contribute；generate 保留环境配置值。因此总开关关闭不意味着 use、generate 字段必然都为 false，原生能力另受 features.memories 约束。prepareCodexConfig 把状态固定在本服务的 .data/codex，写入 features.memories 与 [memories]。启动时 MemoryService.verify 通过 config/read 逐项比较 features.memories、use_memories、generate_memories、extract_model、consolidation_model、min_rollout_idle_hours 和 dedicated_tools=true，任何不一致都拒绝启动。新建 Thread 先设置参与模式，成功后才绑定 Agent 版本并发布；恢复不会覆盖已有模式。修改参与时，HTTP 先拒绝 threadId、enabled 之外的字段，服务再校验 ID 与布尔类型，非法为 400；只有请求开启时才依次检查总开关与 Agent 贡献策略，不允许则 409；随后 sessions.ensure 检查项目归属与 Agent 兼容性，最后在 atBoundary 内检查目标 Thread 的 activeTurnId，存在则 409，关闭参与也不能跳过这一项。通过后才调用 thread/memoryMode/set；ensure 必要时还会查询、恢复会话，不能说整条调用链只有一个 RPC。关闭参与只改变后续提炼资格，不停止已运行的后台任务、不删除旧贡献，也不控制读取。GET /memory 返回配置、生成限制和三个固定文件的元数据，不返回文件正文；GET /memory/summary 只读取 memory_summary.md 正文，最多读取 64 KiB + 1 byte 以判断截断，取前 64 KiB 解码后脱敏。读取拒绝目录或文件符号链接及文件硬链接，不接受任意路径，也不提供清空接口。配置修改需重启，已有 Thread 可能保留先前注入的内容。",
+    "design": {
+      "decision": "复用原生记忆，把权限、配置核验和产物查看放在服务端，并分开报告配置状态与生成结果。",
+      "reason": "客户端无法靠一个参与请求绕过总开关或 Agent 策略；实际配置与预期不符时停止启动，避免界面假报开启。固定文件名使查看范围可解释，也避免另建一份与原生记忆不同步的副本。",
+      "alternative": "客户端直接传文件路径或清空目录会越过固定查看范围；Node 自己提炼并注入摘要则需另管历史、合并与召回规则。两者都超出本课实现。",
+      "cost": "原生后台按空闲等条件运行，开启不代表即时保存。源码与既有 Codex 0.154.0 隔离测试表明：原生 shell 和写文件工具关闭时，后台合并写不出最终摘要。verify 读到 shell_tool=false 且 apply_patch_freeform=false 就标记 generationCapability=blocked；其他情况也只标为 unverified。generationProgress 保持 unknown，模型兼容性仍未验证，不能从配置通过推断生成质量。"
+    },
+    "source": {
+      "file": "stages/s07-memory/server/modules/memory/index.mjs",
+      "needle": "  async contribute(threadId, enabled) {",
+      "before": 0,
+      "after": 12,
+      "explanation": "窗口依次展示参数、开启权限、sessions.ensure、目标活动 Turn 检查与原生模式设置。前两个 409 只针对 enabled=true，活动 Turn 的 409 对开和关都生效；allowBusy:true 没有跳过目标检查。HTTP 的字段白名单在 http/index.mjs；项目归属与 Agent 版本检查在 sessions/index.mjs，版本不兼容也可能返回 409。启动配置比对与固定文件查看在本文件 verify、snapshot、summary，不能从这个片段推断摘要已经生成。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "允许读取的会话关闭贡献，摘要状态另查",
+        "steps": [
+          {
+            "title": "先核验已配置的开启状态",
+            "actor": "Node ↔ Codex",
+            "event": "教学模拟 · memory.verify() → config/read(includeLayers=false)",
+            "explain": "此场景假设总开关、读取、生成与 Agent 的 use/contribute 已显式开启，读回各项一致，且目录中尚无摘要。这不是默认配置；核验通过只确认配置，没有触发模型生成。",
+            "state": {
+              "enabled": "true（显式配置）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "尚未创建",
+              "activeTurn": "无",
+              "result": "配置核验通过"
+            },
+            "lines": []
+          },
+          {
+            "title": "新会话按策略设置参与模式",
+            "actor": "SessionService → Codex",
+            "event": "教学模拟 · thread/start → thread/memoryMode/set(mode=enabled) → bind → register",
+            "explain": "T-A 是示意 ID。参与设置成功后才绑定 Agent 版本并发布会话；若设置失败，不会发布一个已经可用的快照。",
+            "state": {
+              "enabled": "true（显式配置）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: enabled",
+              "activeTurn": "无",
+              "result": "会话可用，尚无摘要"
+            },
+            "lines": []
+          },
+          {
+            "title": "关闭请求先经过字段与归属检查",
+            "actor": "HTTP → MemoryService → SessionService",
+            "event": "教学模拟 · POST /memory/contribution { threadId: T-A, enabled: false } → sessions.ensure(T-A)",
+            "explain": "字段、ID、布尔类型合法；关闭请求不要求总开关或 Agent 策略允许开启，但仍需确认目标会话属于本项目、Agent 版本兼容。此时还没有修改模式。",
+            "state": {
+              "enabled": "true（显式配置）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: enabled",
+              "activeTurn": "无",
+              "result": "校验通过，等待边界检查"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认目标空闲后提交关闭",
+            "actor": "MemoryService → Codex",
+            "event": "教学模拟 · atBoundary → activeTurnId 为空 → thread/memoryMode/set(mode=disabled)",
+            "explain": "thread/memoryMode/set 调用成功后，MemoryService 返回 mode=disabled，表示设置已提交。变化仅是 T-A 后续参与提炼的资格；读取与后台生成配置没有改变，过去贡献的内容也没有被删除。",
+            "state": {
+              "enabled": "true（显式配置）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "无",
+              "result": "参与设置已提交"
+            },
+            "lines": []
+          },
+          {
+            "title": "查看实际产物与合并限制",
+            "actor": "客户端 → MemoryService",
+            "event": "教学模拟 · GET /memory → snapshot()",
+            "explain": "本场景没有摘要文件，所以 hasSummary=false。原生 shell 与写文件均关闭，generationCapability=blocked，进度仍是 unknown。查看只读固定文件元数据，不会触发生成，也不能把 generate=true 显示成“已记住”。",
+            "state": {
+              "enabled": "true（显式配置）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "无",
+              "result": "无摘要；后台合并受限"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "总开关和策略都允许，目标 Turn 忙时仍拒绝",
+        "steps": [
+          {
+            "title": "请求开启一个已有会话",
+            "actor": "客户端 → HTTP",
+            "event": "教学模拟 · POST /memory/contribution { threadId: T-A, enabled: true }",
+            "explain": "假设 T-A 原来已关闭参与，但仍可执行普通 Turn；目前 U-A 正在运行。请求只带允许字段，ID 合法且 enabled 是布尔值，因此参数校验通过。",
+            "state": {
+              "enabled": "true（已核验）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "U-A（示意）",
+              "result": "参数通过，模式未改"
+            },
+            "lines": []
+          },
+          {
+            "title": "依次检查开启权限",
+            "actor": "MemoryService",
+            "event": "教学模拟 · effective.enabled=true → config.memory.contribute=true",
+            "explain": "本场景总开关与 Agent 贡献策略都允许，所以继续。若总开关关闭，会先返回 409；总开关开启但 Agent 禁止贡献，则在下一项返回 409，均不会进入模式设置。",
+            "state": {
+              "enabled": "true（已核验）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "U-A（示意）",
+              "result": "开启权限通过，模式未改"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认归属与版本仍不足以提交",
+            "actor": "SessionService",
+            "event": "教学模拟 · await sessions.ensure(T-A)",
+            "explain": "目标已在本项目会话集合中且 Agent 版本兼容，ensure 成功。它没有取消 U-A；下一步还必须在边界内检查目标是否忙碌。",
+            "state": {
+              "enabled": "true（已核验）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "U-A（示意）",
+              "result": "会话检查通过，模式未改"
+            },
+            "lines": []
+          },
+          {
+            "title": "活动 Turn 使设置返回 409",
+            "actor": "MemoryService → HTTP",
+            "event": "教学模拟 · atBoundary({ allowBusy: true }) → activeTurnId 存在 → AppError(409)",
+            "explain": "allowBusy:true 允许进入检查，不允许跳过目标 Thread 的活动 Turn。没有调用 thread/memoryMode/set，参与模式保持 disabled，当前 Turn 继续；需等它结束后重新提出设置。",
+            "state": {
+              "enabled": "true（已核验）",
+              "use": "true",
+              "generate": "true",
+              "threadMode": "T-A: disabled",
+              "activeTurn": "U-A（示意）",
+              "result": "409；未提交模式设置"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s07-memory",
+      "action": "在 stages/s07-memory 目录运行既有离线实验。入口筛选 memory.test.mjs 的四项测试，使用临时目录与 RPC fixture 检查默认配置、读回核验、链接拒绝和参与设置；不启动真实 Codex 或外部模型。",
+      "observe": [
+        "记忆默认关闭，配置非法时拒绝启动",
+        "启动时读回 Codex 实际配置，不一致就报错，不假报开启",
+        "只读三个固定文件，拒绝符号链接和硬链接",
+        "开启请求检查总开关；开关请求均检查项目归属和活动 Turn。本实验使用会话 fixture，模式修改通过 thread/memoryMode/set 提交；真实链路还可能查询、恢复会话。"
+      ],
+      "boundary": "离线临时目录与真实记忆模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。"
+    },
+    "quiz": {
+      "question": "config/read 逐项一致，参与设置也成功，但只出现 raw_memories.md，且原生 shell 与写文件工具关闭。界面应如何解释？",
+      "options": [
+        "参与设置已成功，所以可以把原始记忆当作最终摘要并显示“已记住”。",
+        "配置与参与资格已确认；原始产物不等于最终摘要，本阶段后台合并受限，应分别显示产物状态和限制。",
+        "先清空记忆目录再重试；关闭贡献会同时关闭读取并删除旧记忆。"
+      ],
+      "answer": 1,
+      "explanation": "B 区分权限、原始产物与最终结果，符合 snapshot 的状态边界。A 从设置成功推导出未发生的摘要生成；C 假设了不存在的清空接口，也把关闭贡献误当成关闭读取和删除记忆。"
+    },
+    "reference": {
+      "session": "s09",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s09_memory",
+      "adaptation": "借用“选择性保留，以及候选、保存、召回是不同状态”的教学方式。参考自行选择、提取和合并 Markdown 记忆；本课复用 Codex 原生提炼与注入，只讲服务端开关、实际配置核验、固定文件查看和会话参与边界，不移植其抽取、召回或回滚算法。"
+    }
+  }
+]

@@ -1,0 +1,150 @@
+<section class="module" id="module-s07">
+<div class="module-content">
+<header class="module-header animate-in">
+<span class="module-number">s07</span>
+<h2 class="module-title">记忆：Codex 提炼，服务端管控</h2>
+<p class="module-subtitle">把跨会话记忆接到服务中：默认关闭，逐项核验配置，限制查看范围，并让会话参与设置服从策略。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s07-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么：跨会话使用经验</h2>
+<p>上一章，Agent 可以读取资料、查看网页并保存结果。这个云端 Agent 还缺什么？同一 Thread 可以延续历史，但新开的 Thread 不会仅凭另一段会话记录就自动继承其中的偏好。本章接入 Codex 原生记忆，同时明确谁能使用、谁能贡献、什么结果已经生成。</p>
+<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<p><span class="term" data-definition="Codex 从会话历史中按条件提炼、合并，并供后续会话使用的记忆；不同于恢复同一 Thread 的完整历史。">原生记忆</span> 的提炼与使用由 Codex 负责。服务端不自行拼接历史摘要、不把摘要塞进用户消息，而是管理配置、存储位置、核验与会话参与资格。CLI 只展示服务端结果并提出设置请求。</p>
+<table><thead><tr><th>固定产物</th><th>含义</th></tr></thead><tbody>
+<tr><td>raw_memories.md</td><td>提炼得到的原始记忆。</td></tr>
+<tr><td>MEMORY.md</td><td>合并后的详细记忆。</td></tr>
+<tr><td>memory_summary.md</td><td>供后续会话使用的摘要。</td></tr>
+</tbody></table>
+<p>这些文件位于本服务的 <code>.data/codex/memories/</code>。启动配置固定 <code>CODEX_HOME</code> 与 <code>CODEX_SQLITE_HOME</code> 到本项目的状态目录。查看接口只认这三个固定文件名，拒绝符号链接和硬链接，不接受客户端指定任意路径；摘要最多读取 64 KiB，脱敏后返回。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">本阶段不能清空记忆</p><p>服务不提供清空接口。关闭开关或会话贡献设置不会删除已经提炼的内容；现有 Thread 也可能保留之前注入的内容。本阶段是单机单用户的状态目录，不提供多用户记忆隔离。</p></div></div>
+</section>
+
+<section class="screen animate-in" id="s07-screen-2">
+<h2 class="screen-heading">三道开关：总开关、Agent 策略、会话参与</h2>
+<p>默认不启用记忆。即使客户端提出“让这个会话贡献记忆”，也必须满足服务端的前提。<span class="term" data-definition="允许一个 Thread 的内容参与后续记忆提炼；它不控制已有记忆的读取，也不代表即时生成摘要。">contribute</span> 与 <code>use</code> 分别表达贡献和使用，不能用一个开关概括。</p>
+<table><thead><tr><th>控制层</th><th>设置</th><th>默认与作用</th></tr></thead><tbody>
+<tr><td>服务总开关</td><td>AGENT_MEMORY_ENABLED</td><td>默认 false；总开关关闭时，读取与后台生成即使已配置也不生效。修改需重启。</td></tr>
+<tr><td>Agent 策略</td><td>agent.memory.use / contribute</td><td>默认都为 false；决定 Agent 能否使用记忆，以及新会话的贡献默认值。contribute 为 false 时也禁止客户端开启贡献。</td></tr>
+<tr><td>会话参与</td><td>/memory contribute on|off</td><td>控制当前 Thread 的后续参与资格；不能绕过总开关与 Agent 策略。</td></tr>
+</tbody></table>
+<p>还有两个独立的服务配置：<code>AGENT_MEMORY_USE</code> 与 <code>AGENT_MEMORY_GENERATE</code> 默认 true，分别配置读取和后台生成，但都以总开关为生效前提。使用记忆还要求 <code>agent.memory.use</code> 为 true。生成配置允许处理，不等于每个 Thread 都有资格贡献，更不等于已经产生摘要。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s07-memory/server/modules/agents/index.mjs · 第 101–107 行</span>
+<pre><code data-source="stages/s07-memory/server/modules/agents/index.mjs" data-start="101" data-end="107">  configure(config, runtime) {
+    this.runtime = runtime;
+    config.agent = this;
+    config.memory = { ...config.memory, use: config.memory.use &amp;&amp; this.definition.agent.memory.use,
+      contribute: config.memory.enabled &amp;&amp; this.definition.agent.memory.contribute };
+    this.memory = { ...config.memory };
+    if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>101–103 行</strong>：进入 configure，保存运行环境，并把装配后的 Agent 交给服务配置。</p>
+<p class="tl"><strong>104 行</strong>：保留服务记忆设置，同时把 use 收紧为服务 use 与 Agent memory.use 同时为真。</p>
+<p class="tl"><strong>105 行</strong>：contribute 必须同时满足总开关与 Agent memory.contribute；客户端不能越过这项策略。</p>
+<p class="tl"><strong>106 行</strong>：保存这份有效策略，供描述符等后续处理使用。</p>
+<p class="tl"><strong>107 行</strong>：启用模型目录时继续写入角色指令；这行不负责生成记忆。</p>
+</div></div></div>
+<p>配置中的 <code>enabled</code>、<code>use</code>、<code>generate</code> 会分别写入并被读回核对；总开关关闭，不意味着程序把另外两个字段一律改写为 false。CLI 会把这种情况显示为“已配置，总开关关闭时不生效”。新建 Thread 时，服务通过 <code>thread/memoryMode/set</code> 设置默认参与模式。</p>
+</section>
+
+<section class="screen animate-in" id="s07-screen-3">
+<h2 class="screen-heading">config/read：核验实际配置，不把开启当成生成</h2>
+<p>服务启动时先写入 <code>.data/codex/config.toml</code> 中的 <code>[features]</code> 与 <code>[memories]</code>，再向 Codex 调用 <code>config/read</code>。<span class="term" data-definition="把 Codex 实际返回的配置与服务端要求逐项比较；不一致就拒绝启动，避免仅凭写入成功宣称生效。">有效配置核验</span> 要检查的不只是总开关，还包括读取、生成、模型、空闲时长和专用记忆工具。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s07-memory/server/modules/memory/index.mjs · 第 38–50 行</span>
+<pre><code data-source="stages/s07-memory/server/modules/memory/index.mjs" data-start="38" data-end="50">  async verify() {
+    const { config: actual } = await this.rpc.request("config/read", { includeLayers: false });
+    const memory = actual?.memories;
+    const requested = this.config.memory;
+    if (actual?.features?.memories !== requested.enabled || memory?.use_memories !== requested.use ||
+        memory?.generate_memories !== requested.generate || memory?.extract_model !== (requested.extractModel ?? null) ||
+        memory?.consolidation_model !== (requested.consolidationModel ?? null) || memory?.min_rollout_idle_hours !== requested.minIdleHours || memory?.dedicated_tools !== true) {
+      throw new Error("Codex 记忆配置与服务端配置不一致，请检查配置覆盖；不会假报开启成功。");
+    }
+    this.effective = { ...requested };
+    // 0.154.0 隔离测试确认：当前禁用原生写工具时，后台合并不能写出最终摘要。
+    this.generationBlocked = actual.features.shell_tool === false &amp;&amp; actual.features.apply_patch_freeform === false;
+  }</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>38–39 行</strong>：启动 verify，通过 config/read 读取实际配置，不需要返回各覆盖层。</p>
+<p class="tl"><strong>40–41 行</strong>：分别取得 Codex 的 memories 与服务端期望的 memory 配置。</p>
+<p class="tl"><strong>42 行</strong>：先比较 features.memories 总开关和 use_memories 读取设置。</p>
+<p class="tl"><strong>43 行</strong>：继续比较 generate_memories 和 extract_model；没有指定模型时按 null 核对。</p>
+<p class="tl"><strong>44 行</strong>：比较 consolidation_model、min_rollout_idle_hours，并要求 dedicated_tools 为 true。</p>
+<p class="tl"><strong>45–46 行</strong>：任一项不一致就抛错，拒绝假报生效；随后结束这一条件分支。</p>
+<p class="tl"><strong>47 行</strong>：只有全部一致才保存 effective 配置。</p>
+<p class="tl"><strong>48–49 行</strong>：记录版本验证得到的限制：shell_tool 与 apply_patch_freeform 都关闭时，标记后台合并写入受阻。</p>
+<p class="tl"><strong>50 行</strong>：结束配置核验方法；这里只证明配置一致，没有等待或保证摘要生成。</p>
+</div></div></div>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">当前配置下，后台合并写不出最终摘要</p><p>本阶段使用的 Codex 0.154.0 在原生 shell 与写文件工具关闭时，后台合并不能写出最终记忆摘要。/memory 会报告这一限制，generationCapability 为 blocked。即使三道开关都允许参与、出现中间产物，也不能把它说成最终摘要已经生成。</p></div></div>
+<p>原生后台按空闲时间等条件运行，不是每轮结束就保存记忆。默认 <code>AGENT_MEMORY_MIN_IDLE_HOURS</code> 为 6，可配置范围为 1–48；等待达到这个值也不能解除上面的写入限制。</p>
+<p>查看状态时把三件事分开：<code>effective</code> 表示核验后的配置，<code>hasSummary</code> 表示摘要文件非空，<code>generationCapability</code> 表示当前写入能力判断。<code>generationProgress</code> 为 unknown、<code>modelCompatibility</code> 为 unverified，不能拿配置通过替代真实模型验证；已有摘要也不证明本次运行刚刚生成了它。</p>
+</section>
+
+<section class="screen animate-in" id="s07-screen-4">
+<h2 class="screen-heading">会话参与设置：先核对归属，再等当前轮次结束</h2>
+<p>某一段对话不适合参与后续提炼时，在聊天客户端使用 <code>/memory contribute off</code>。请求送到服务端后，先确认 Thread 属于本项目、Agent 版本兼容，再在 <span class="term" data-definition="把会话操作与工具更新等协调起来的服务端边界；记忆参与设置还会检查目标 Thread 没有活动 Turn。">执行边界</span> 内提交原生协议方法。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s07-memory/server/modules/memory/index.mjs · 第 71–84 行</span>
+<pre><code data-source="stages/s07-memory/server/modules/memory/index.mjs" data-start="71" data-end="84">  async contribute(threadId, enabled) {
+    requireId(threadId, "Thread id");
+    if (typeof enabled !== "boolean") throw new AppError("enabled 必须为布尔值。");
+    if (enabled &amp;&amp; !this.effective?.enabled) throw new AppError("记忆总开关尚未开启，请配置 AGENT_MEMORY_ENABLED 并重启服务。", 409);
+    if (enabled &amp;&amp; this.config.agent &amp;&amp; !this.config.memory.contribute) throw new AppError("当前 Agent 策略禁止会话贡献记忆。", 409);
+    await this.sessions.ensure(threadId); // 复用项目会话校验，不能操作其他项目的 Thread。
+    return this.sessions.atBoundary(async () =&gt; {
+      if (this.sessions.sessions.get(threadId)?.activeTurnId) throw new AppError("请在当前 turn 结束后修改记忆参与设置。", 409);
+      const mode = enabled ? "enabled" : "disabled";
+      await this.rpc.request("thread/memoryMode/set", { threadId, mode });
+      return { threadId, mode, note: "设置已提交：只控制此 Thread 后续参与提炼的资格；不停止已运行的后台任务，不立即删除过去贡献的记忆，也不控制读取。" };
+    }, { allowBusy: true });
+  }
+}</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>71–73 行</strong>：contribute 接收 Thread id 与 enabled，先校验标识格式，再要求 enabled 是布尔值。</p>
+<p class="tl"><strong>74 行</strong>：开启贡献时要求有效的记忆总开关已打开，否则返回 409。</p>
+<p class="tl"><strong>75 行</strong>：还要求 Agent 策略允许贡献；客户端命令不能自行放宽策略。</p>
+<p class="tl"><strong>76 行</strong>：ensure 核对项目会话归属及版本，不能用另一项目的 Thread id 操作它。</p>
+<p class="tl"><strong>77–78 行</strong>：进入执行边界，若目标 Thread 仍有 activeTurnId，就返回 409，要求等本轮结束。</p>
+<p class="tl"><strong>79–80 行</strong>：把布尔值转为 enabled 或 disabled 模式，调用 thread/memoryMode/set。</p>
+<p class="tl"><strong>81 行</strong>：返回提交结果，并明确仅控制后续参与资格，不停止已运行后台任务、不删除已有记忆、不控制读取。</p>
+<p class="tl"><strong>82 行</strong>：allowBusy 允许在全局忙碌时进入这项操作；第 78 行对目标 Thread 的活动检查仍然保留。</p>
+<p class="tl"><strong>83–84 行</strong>：结束方法与 MemoryService 类。</p>
+</div></div></div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">关闭贡献之后</div><div class="pattern-desc">这个 Thread 后续不再具有参与提炼的资格。已经运行的后台任务不会因这一命令被停止，过去贡献的记忆不会被删除；如果读取策略仍允许，它仍可使用已有记忆。</div></div>
+<div class="pattern-card"><div class="pattern-title">开启贡献之前</div><div class="pattern-desc">总开关和 Agent contribute 都必须允许；目标 Thread 还必须没有活动 Turn。想体验设置变化，应先准备服务策略、受控重启并新建会话，再操作 CLI。</div></div>
+</div>
+<p>查看用 <code>/memory</code> 和 <code>/memory show</code>，设置用 <code>/memory contribute on</code> 或 <code>/memory contribute off</code>。它们都经服务端处理；查看摘要不会触发模型提炼，也没有“清空”或“读取任意文件”的命令。</p>
+</section>
+
+<section class="screen animate-in" id="s07-screen-5">
+<h2 class="screen-heading" id="m3-screen-6">亲手验证：观察策略、拒绝原因与产物状态</h2>
+<p>使用 Node.js 24 或更高版本。从仓库根目录进入本阶段，在 <code>.env</code> 中填好可用的模型配置，再执行检查和启动。</p>
+<pre><code>cd stages/s07-memory
+npm ci
+test -f .env || cp .env.example .env
+npm run check
+npm run server</code></pre>
+<p>终端 1 保持服务运行；终端 2 进入同一个阶段目录，执行 <code>npm run chat</code>。以下以 <code>/</code> 开头的命令都输入在这个聊天客户端中。</p>
+<ol>
+<li><strong>先看默认关闭：</strong>输入 /memory，查看总开关、使用设置、新 Thread 默认参与和摘要状态。/memory show 查看已有摘要；没有摘要时会提示，不应据此断言服务损坏。</li>
+<li><strong>尝试被拒绝的设置：</strong>执行 <code>/new</code>，发送一条普通消息以实际创建会话，等待该 Turn 结束后输入 <code>/memory contribute on</code>。总开关默认关闭时应拒绝；只开总开关而 Agent contribute 仍为 false 时也应拒绝。<code>/new</code> 只清除当前选择，不会立即创建 Thread。</li>
+<li><strong>准备参与策略：</strong>停止服务，在 .env 设置 AGENT_MEMORY_ENABLED=true，并在 agents/writing-agent.json 将 agent.memory.use 与 contribute 设为 true，确认 AGENT_MEMORY_USE / GENERATE 未被关闭。重启服务和客户端，执行 <code>/new</code>，发送一条普通消息以创建匹配当前策略的会话，等待该 Turn 结束；在空闲时依次执行 <code>/memory contribute off</code> 与 <code>/memory contribute on</code>。再发送一条普通消息，在该 Turn 仍执行时尝试 <code>/memory contribute off</code>，观察活动轮次检查；若它已结束，则需在后续活动 Turn 中重试。</li>
+<li><strong>核对能力限制：</strong>再次 /memory，应看到后台合并写不出最终摘要的说明。不要把开启状态、设置提交成功或中间文件出现当成最终摘要生成成功；本阶段不能通过 CLI 清空记忆。</li>
+</ol>
+<pre><code>npm run lesson -- list
+npm run lesson -- s07-memory
+npm test
+npm run test:codex-memory</code></pre>
+<p>记忆课时用临时目录与模拟 RPC 检查默认值、config/read、固定文件读取和参与设置，不调用模型。完整测试可能需要本机监听权限；<code>test:codex-memory</code> 则使用真实 Codex 与本地模拟模型验证原生机制，不代表当前执行策略下最终摘要可写，也不证明真实模型兼容。<code>npm run smoke</code> 需服务运行且调用实际模型；<code>npm run check:server</code> 核验启动，需先停止服务。</p>
+<div class="quiz-container" id="s07-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="服务端先检查总开关，再检查 Agent 贡献策略，两项都通过才能继续。" data-explanation-wrong="A 把客户端请求当成更高权限。C 混淆读取和贡献，use 不授予参与提炼的资格。"><h3 class="quiz-question">总开关已打开，但 Agent memory.contribute=false，CLI 能开启当前 Thread 的贡献吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>可以，客户端设置优先</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>不能，Agent 策略仍禁止贡献</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>只要 use=true 就可以</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="参与资格、读取权限、已有产物和后台任务是不同状态。" data-explanation-wrong="A 把关闭参与当成清空，本阶段没有清空接口。B 把 contribute 当成 use，读取仍由读取策略决定。"><h3 class="quiz-question">对空闲 Thread 执行 /memory contribute off 成功后，哪些事情发生了？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>所有既有记忆立即删除</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>既有记忆不再允许读取</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>只控制此 Thread 后续参与资格，不停止已运行后台任务或删除既有记忆</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="Codex 0.154.0 在当前原生写工具关闭的策略下不能完成最终摘要写入，状态会如实报告。" data-explanation-wrong="B 混淆配置与产物。C 忽略后台按条件处理以及当前写入限制，不存在每轮即时生成的保证。"><h3 class="quiz-question">config/read 核验通过，并显示记忆开启，能否承诺本阶段已经生成最终摘要？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>不能；配置一致不代表生成，原生写工具关闭还会阻塞后台合并</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>可以，核验通过说明文件已写好</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>等一轮回答结束，就一定有最终摘要</span></button></div><div class="quiz-feedback"></div></div>
+</div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s07-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s07-quiz">重新作答</button></div><p><a href="/course/changes.html#s07">→ 打开 s07 阶段演示与实践命令</a></p><p>现在可以核对记忆配置、控制会话参与，并如实查看产物与限制。下一步处理业务任务与资料版本的持久记录：<a href="#module-s08">进入 s08 数据层</a>。</p>
+</section>
+</div>
+</div>
+</section>
