@@ -772,16 +772,16 @@
       "id": "s05-agent-config",
       "demo": 3,
       "title": "配置是装配合同，不是临时提示词",
-      "principle": "让角色、工具和资料规则在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
-      "problem": "运营修改了角色文件，旧会话仍按旧工具和资料边界执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
+      "principle": "让角色、Skill 和执行策略在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
+      "problem": "运营修改了角色文件，旧会话仍按旧角色执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
       "change": {
-        "before": "s02 主要是通用对话入口，没有把一个业务 Agent 的角色、资源和权限集中为可校验定义。",
+        "before": "s02 主要是通用对话入口，没有把一个业务 Agent 的角色、Skill 和执行策略集中为可校验定义。",
         "added": "AgentDefinition 校验装配配置，记录文件指纹，生成描述符并让 Thread 绑定版本。",
         "kept": "仍是一实例一套 Agent 配置、多个 Thread；Codex 执行任务，产品层不改写模型循环。"
       },
       "ownership": {
         "codex": "接收装配后的角色和原生执行参数，管理原生 Thread/Turn。",
-        "product": "校验定义、解析资源引用、限定有效权限、检查变更，并决定旧 Thread 是否兼容。"
+        "product": "校验定义、装配角色与执行策略、检查变更，并决定旧 Thread 是否兼容。"
       },
       "concepts": [
         {
@@ -790,30 +790,30 @@
         },
         {
           "term": "描述符",
-          "meaning": "启动核验后的能力快照，记录角色指纹、工具版本、有效资源与执行策略等，而非复制角色正文或完整聊天。"
+          "meaning": "启动核验后的能力快照，记录定义与角色指纹、实际启用的 Skill、工作区与执行策略，而非复制角色正文或完整聊天。"
         },
         {
           "term": "Hash / 指纹",
           "meaning": "由内容计算的标识，用来判断规则是否变化；修改角色正文但不改显示版本号也会被发现。"
         }
       ],
-      "mechanism": "配置被读取后先经过 validateDefinition，再解析角色、资料、Skill 与 executionRef。sourceHash 将定义、角色、所选 Skill 内容纳入指纹；assertCurrent 每次受控入口核对它，一旦发现变化就把 revoked 置为真并撤销后续调用。启动核验生成的描述符另含工具与资源版本，Thread 绑定其 hash。重启只能建立新运行版本，不能让旧 Thread 自动获得新规则：恢复时仍要比对绑定，失配就要求新会话。",
+      "mechanism": "配置被读取后先经过 validateDefinition，再解析角色、Skill 与 executionRef。sourceHash 将定义、角色、所选 Skill 内容纳入指纹；assertCurrent 每次受控入口核对它，一旦发现变化就把 revoked 置为真并撤销后续调用。启动核验 Skill 后生成描述符，Thread 绑定其 hash。重启只能建立新运行版本，不能让旧 Thread 自动获得新规则：恢复时仍要比对绑定，失配就要求新会话。",
       "design": {
         "decision": "配置只在受控装配时生效；变更检测后停止调用，而不是无声热替换角色。",
         "reason": "同一个 Thread 与排队任务需要可解释的权限版本，避免一次工作前半段、后半段使用不同规则。",
         "alternative": "每次临时读取最新角色看似方便，但旧上下文与新权限可能不一致，也难追踪某次结果依据哪套配置。",
-        "cost": "修改配置、角色或 Skill 后需要重启，并可能新建 Thread；不会自动迁移或覆盖旧历史。工具实现刷新另有边界锁，不能与任意 Agent 配置热更混为一谈。"
+        "cost": "修改配置、角色或 Skill 后需要重启，并可能新建 Thread；不会自动迁移或覆盖旧历史。"
       },
       "source": {
-        "file": "stages/s07-memory/server/modules/agents/index.mjs",
+        "file": "stages/s05-agent-assembly/server/modules/agents/index.mjs",
         "needle": "  assertCurrent() {",
         "before": 4,
         "after": 10,
-        "explanation": "sourceHash 同时读取定义、角色和已配置 Skill；assertCurrent 把变化转成持续 revoked 状态，并 abort。allowsTool 也先调用此检查，所以把文件改回去不能让已经撤销的实例自行恢复。描述符与 Thread 兼容检查位于同文件 activate / checkBinding。",
-        "start": 89,
-        "anchor": 93,
-        "code": "  sourceHash() {\n    return digest([fs.readFileSync(this.file, \"utf8\"), fs.readFileSync(this.roleFile, \"utf8\"),\n      ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);\n  }\n  assertCurrent() {\n    try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }\n    if (this.revoked) {\n      const error = new AppError(\"Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。\", 409, \"AGENT_CHANGED\");\n      this.revocation.abort(error); throw error;\n    }\n  }\n  allowsTool(name) { this.assertCurrent(); return this.definition.agent.tools.allow.includes(name); }\n  configure(config, runtime) {\n    this.runtime = runtime;\n    config.agent = this;",
-        "hash": "122dc0eb3212ee33ca4356853ab85b84498119765b4f8626757b09d6fdb70723"
+        "explanation": "sourceHash 同时读取定义、角色和已配置 Skill；assertCurrent 把变化转成持续 revoked 状态。新建会话、恢复会话和每一轮发出前都先调用此检查，所以把文件改回去不能让已经撤销的实例自行恢复。描述符与 Thread 兼容检查位于同文件 activate / checkBinding。",
+        "start": 64,
+        "anchor": 68,
+        "code": "  sourceHash() {\n    return digest([fs.readFileSync(this.file, \"utf8\"), fs.readFileSync(this.roleFile, \"utf8\"),\n      ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);\n  }\n  assertCurrent() {\n    try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }\n    if (this.revoked) {\n      throw new AppError(\"Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。\", 409, \"AGENT_CHANGED\");\n    }\n  }\n  configure(config, runtime) {\n    this.runtime = runtime;\n    config.agent = this;\n    if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };\n  }",
+        "hash": "300e51aee93f2316cee5a9e02c3b3d477192dd8469da961f2a5c575bea5483b1"
       },
       "scenarios": [
         {
@@ -824,7 +824,7 @@
               "title": "校验定义并解析引用",
               "actor": "AgentDefinition",
               "event": "教学模拟 · validateDefinition(JSON.parse(this.raw))",
-              "explain": "未知字段或不支持的执行策略在运行前被拒绝；通过后才形成有效角色与资源集合。",
+              "explain": "未知字段或不支持的执行策略在运行前被拒绝；通过后才形成有效角色与执行策略。",
               "state": {
                 "definition": "A（示意指纹）",
                 "descriptor": "未激活",
@@ -837,8 +837,8 @@
             {
               "title": "核验能力后生成描述符",
               "actor": "Node",
-              "event": "教学模拟 · agent.activate(toolVersion, skills)",
-              "explain": "描述符把实际核验后的能力与资源规则固定下来，不只相信显示的版本名称。",
+              "event": "教学模拟 · agent.activate(skills)",
+              "explain": "描述符把实际核验后的角色、Skill 与执行策略固定下来，不只相信显示的版本名称。",
               "state": {
                 "definition": "A（示意指纹）",
                 "descriptor": "D-A（示意）",
@@ -950,14 +950,15 @@
       "reference": {
         "session": "s03",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
-        "adaptation": "借用“在执行之前用代码形成边界”的推理方式。参考用 deny/rule/ask 三道门展示位置；本项目采用受限配置、版本检查和资源服务，不移植字符串黑名单或交互审批流程。"
-      }
+        "adaptation": "借用“在执行之前用代码形成边界”的推理方式。参考用 deny/rule/ask 三道门展示位置；本项目采用受限配置和版本检查，不移植字符串黑名单或交互审批流程。"
+      },
+      "stage": "s05-agent-assembly"
     },
     {
       "id": "s05-skills",
       "demo": 3,
       "title": "Skill 给方法，权限仍要单独核验",
-      "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 本文不会扩大工具权限。",
+      "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 正文不会改变执行策略。",
       "problem": "把一个 SKILL.md 放进工作区后，用户以为其中提到的命令就自动可执行；另一个意外被原生引擎发现的 Skill 也可能超出这个 Agent 的装配范围。",
       "change": {
         "before": "通用角色难以携带按任务选择的方法说明，而任意发现目录又可能引入未声明的能力描述。",
@@ -982,7 +983,7 @@
           "meaning": "用户提及已核验的 $名称时，输入除原始 text 外增加 {type:\"skill\",name,path}，由引擎读取正文。"
         }
       ],
-      "mechanism": "默认 writing-agent.json 的 skills 是空数组，因此默认并没有启用一套额外 Skill。配置测试夹具声明 Skill 后，verifySkills 先读取原生清单，按规范化路径启用声明项、禁用范围外项，再读一次确认生效；必需项缺失或额外工具依赖会失败。AgentDefinition.input 只为有效集合中的精确名称添加原生 Skill 项，已知未授权名称报错；普通 $HOME 文字不会一概被当成非法 Skill。工具能否执行仍由 tools.allow 和资源边界决定。",
+      "mechanism": "默认 writing-agent.json 的 skills 是空数组，因此默认并没有启用一套额外 Skill。配置测试夹具声明 Skill 后，verifySkills 先读取原生清单，按规范化路径启用声明项、禁用范围外项，再读一次确认生效；必需项缺失会失败；声明额外工具依赖的 Skill 不论必需可选都会被拒绝。AgentDefinition.input 只为有效集合中的精确名称添加原生 Skill 项，已知未授权名称报错；普通 $HOME 文字不会一概被当成非法 Skill。沙箱与审批仍由 Agent 定义的执行策略决定。",
       "design": {
         "decision": "复用原生发现与注入，在产品层收紧集合并验证依赖。",
         "reason": "避免写两套 SKILL.md 解析器，也防止“碰巧在磁盘上”演变成该 Agent 的授权。",
@@ -990,7 +991,7 @@
         "cost": "只支持已验证的文本指令路径；必需项不可用会阻止启动，可选项缺失可降级。文件变更需受控重启与会话版本检查。"
       },
       "source": {
-        "file": "stages/s07-memory/server/modules/codex/skills.mjs",
+        "file": "stages/s05-agent-assembly/server/modules/codex/skills.mjs",
         "needle": "  const requested = new Map(agent.skills.map(skill => [skill.path, skill]));",
         "before": 1,
         "after": 13,
@@ -1051,7 +1052,7 @@
               "title": "显式提及后交给原生引擎",
               "actor": "Node",
               "event": "教学模拟 · agent.input(\"$allowed 提炼观点\")",
-              "explain": "返回原始 text 与一个 type:skill 项。此步只交付方法，不增加 tools.allow。",
+              "explain": "返回原始 text 与一个 type:skill 项。此步只交付方法，不改变只读沙箱等执行策略。",
               "state": {
                 "declared": "allowed 路径（测试夹具）",
                 "discovered": "allowed、other",
@@ -1123,20 +1124,21 @@
         "boundary": "离线临时目录与真实 Agent 装配模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。"
       },
       "quiz": {
-        "question": "Skill 正文写着“使用 write_file”，但 tools.allow 中没有 write_file。应怎样解决？",
+        "question": "Skill 正文写着“直接用 shell 改文件”，但执行策略是只读沙箱、不开原生 shell。应怎样解决？",
         "options": [
-          "只把正文重复三遍，模型就会得到工具权限。",
-          "把 Skill 标为 required=true，它就能自动扩权。",
-          "先确认业务确需写入，再按装配规则实现和授权工具及资源；Skill 本身只提供方法。"
+          "只把正文重复三遍，模型就会得到 shell 权限。",
+          "把 Skill 标为 required=true，它就能自动放宽沙箱。",
+          "先确认业务确需写入，再由服务端提供受控的写入能力（下一章的工具）；Skill 本身只提供方法。"
         ],
         "answer": 2,
-        "explanation": "C 区分方法说明、工具登记和资源授权。A 不会改变执行层校验；B 的 required 只决定缺失时是否阻止装配，不授予工具权限。"
+        "explanation": "C 区分方法说明与执行能力。A 不会改变执行策略；B 的 required 只决定缺失时是否阻止装配，不授予任何权限。"
       },
       "reference": {
         "session": "s11",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
         "adaptation": "借用“目录与正文分开、需要时加载”的认知顺序。参考自己解析 YAML 并用 load_skill 返回 tool_result；这里原生 Codex 负责解析与注入，我们教的是发现核验、显式输入与权限边界。"
-      }
+      },
+      "stage": "s05-agent-assembly"
     },
     {
       "id": "s06-tool-registry",

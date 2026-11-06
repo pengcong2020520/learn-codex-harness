@@ -24,7 +24,6 @@ function trustedFile(file, root) {
 export class AgentDefinition {
   constructor(root, file = path.join(root, "agents/writing-agent.json")) {
     this.root = root; this.file = path.resolve(file);
-    this.revocation = new AbortController();
     const directory = path.dirname(this.file);
     if (fs.lstatSync(this.file).size > 1024 * 1024) throw new Error("Agent 定义超过 1 MiB。");
     this.raw = fs.readFileSync(trustedFile(this.file, directory), "utf8");
@@ -69,8 +68,7 @@ export class AgentDefinition {
   assertCurrent() {
     try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }
     if (this.revoked) {
-      const error = new AppError("Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。", 409, "AGENT_CHANGED");
-      this.revocation.abort(error); throw error;
+      throw new AppError("Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。", 409, "AGENT_CHANGED");
     }
   }
   configure(config, runtime) {
@@ -100,7 +98,7 @@ export class AgentDefinition {
     this.checkBinding(previous, jobHash);
   }
   checkBinding(previous, jobHash) {
-    if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不自动迁移权限，请新建会话。", 409, "LEGACY_THREAD");
+    if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不会把旧会话自动迁到新版本，请新建会话。", 409, "LEGACY_THREAD");
     if (previous !== this.descriptor?.hash || (jobHash && jobHash !== previous)) throw new AppError("会话/排队消息的 Agent 版本与当前不兼容，请新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
   input(text) {
