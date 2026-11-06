@@ -1,0 +1,75 @@
+[
+  {
+    "id": "s04-queue",
+    "demo": 4,
+    "title": "排队搬到服务端",
+    "question": "模型还在回答，又连着提交了两条，服务端怎么保证不丢、不乱序、不并发？",
+    "command": "npm run lesson -- s04-queue",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "提交立即返回 queued，不等模型回复",
+      "同一会话先进先出，每条是一个新的 turn，同时只跑一轮",
+      "客户端退出后，已提交的消息由服务端继续执行"
+    ],
+    "why": "输入先写进任务记录，再由调度器按会话逐条发出；执行顺序不再依赖客户端在线。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(普通消息由服务端 FIFO|CLI 管道连续输入|同消息 ID 重复提交)",
+      "tests/scheduling.test.mjs",
+      "tests/http-cli.test.mjs"
+    ]
+  },
+  {
+    "id": "s04-reconnect",
+    "demo": 4,
+    "title": "断线重连，不漏状态、不重发消息",
+    "question": "SSE 连接断了又连上，客户端会漏掉中间的状态，或者把旧消息再发一遍吗？",
+    "command": "npm run lesson -- s04-reconnect",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "每次连接先收到一份完整快照，之后才是增量事件",
+      "重连只是重新订阅，不会产生新的消息",
+      "事件只推给对应 Thread 的订阅者"
+    ],
+    "why": "快照兜住断线期间的变化；提交和订阅是两件事，重连永远不会重发。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(重连先同步快照|会话快照变化都经事件中心发布|不同 thread 的事件)",
+      "tests/http-cli.test.mjs",
+      "tests/sessions.test.mjs",
+      "tests/scheduling.test.mjs"
+    ]
+  },
+  {
+    "id": "s04-restart",
+    "demo": 4,
+    "title": "重启以后，哪些任务还能继续",
+    "question": "服务重启时有一条在执行、一条在排队，重启后会怎样？",
+    "command": "npm run lesson -- s04-restart",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "排队中的消息保留下来",
+      "执行中的消息标为 unconfirmed，队列暂停，不自动重发",
+      "/continue 明确继续后才处理下一条，不重跑失败项"
+    ],
+    "why": "结果不确定的执行宁可停下来等人核对，也不重复执行。",
+    "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(任务记录 JSON|服务重启保留排队项|失败后暂停队列|迟到的响应)",
+      "tests/json-storage.test.mjs",
+      "tests/scheduling.test.mjs"
+    ]
+  }
+]

@@ -1,0 +1,396 @@
+[
+  {
+    "id": "s04-queue",
+    "title": "连着提交三条，服务端怎么排",
+    "question": "模型还在回答第一条，用户又连着提交了两条，服务端会不会把它们同时发出去？",
+    "file": "stages/s04-events-messages/server/modules/messages/index.mjs",
+    "start": 97,
+    "end": 124,
+    "expect": "async dispatch(threadId) {",
+    "notes": {
+      "98": "队列被暂停（上一条失败或结果未确认）：什么都不发",
+      "100": "会话还没载入就先恢复；恢复失败就暂停，不硬发",
+      "109": "从任务记录里取出这个会话的全部任务",
+      "111": "Codex 上正在执行的那一轮",
+      "115": "有指向正在执行那一轮的追加：用 turn/steer 补进去",
+      "119": "已经有一轮在执行：其余的继续排着",
+      "120": "追加优先，否则取最早的一条（先进先出）",
+      "122": "先把状态改成 starting 并写盘，再发给 Codex",
+      "124": "每次状态变化都发布一次队列快照"
+    },
+    "actors": [
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ],
+      [
+        "messages",
+        "任务与消息"
+      ],
+      [
+        "jobs",
+        "任务记录"
+      ],
+      [
+        "codex",
+        "Codex"
+      ]
+    ],
+    "state0": {
+      "任务记录": "[ ]",
+      "Codex": "空闲"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "messages",
+          "POST /messages：A"
+        ],
+        "say": "客户端提交第一条，带上自己生成的消息 ID。",
+        "actors": {
+          "client": "运行中"
+        }
+      },
+      {
+        "flow": [
+          "messages",
+          "jobs",
+          "写入 A（queued）"
+        ],
+        "say": "先写进任务记录，立刻回 202 queued，不等模型。",
+        "state": {
+          "任务记录": "[ A 排队 ]"
+        }
+      },
+      {
+        "lines": [
+          120,
+          124
+        ],
+        "flow": [
+          "messages",
+          "codex",
+          "turn/start：A"
+        ],
+        "say": "调度器取出 A，状态改成 starting 写盘后再发出。",
+        "actors": {
+          "codex": "执行 A"
+        },
+        "state": {
+          "任务记录": "[ A 执行中 ]",
+          "Codex": "执行 A"
+        }
+      },
+      {
+        "flow": [
+          "client",
+          "messages",
+          "POST /messages：B、C"
+        ],
+        "say": "又来两条，同样先写进任务记录。",
+        "state": {
+          "任务记录": "[ A 执行中, B 排队, C 排队 ]"
+        }
+      },
+      {
+        "lines": [
+          119,
+          119
+        ],
+        "say": "已经有一轮在执行，B、C 继续排着，不会并发发出。"
+      },
+      {
+        "warn": true,
+        "flow": [
+          "client",
+          "client",
+          "Ctrl+C 退出"
+        ],
+        "say": "用户关掉了客户端。B、C 已经在服务端的任务记录里，不会丢。",
+        "actors": {
+          "client": "已退出"
+        }
+      },
+      {
+        "flow": [
+          "codex",
+          "messages",
+          "turn/completed：A"
+        ],
+        "say": "A 完成，调度器被唤醒。",
+        "state": {
+          "任务记录": "[ A 完成, B 排队, C 排队 ]"
+        }
+      },
+      {
+        "lines": [
+          120,
+          122
+        ],
+        "flow": [
+          "messages",
+          "codex",
+          "turn/start：B"
+        ],
+        "say": "按先进先出取 B 发出；C 等 B 完成。",
+        "actors": {
+          "codex": "执行 B"
+        },
+        "state": {
+          "任务记录": "[ A 完成, B 执行中, C 排队 ]",
+          "Codex": "执行 B"
+        }
+      }
+    ],
+    "takeaway": "排队从客户端搬进了服务端：输入先写进任务记录，再按会话一条条发给 Codex。客户端在不在线，都不影响顺序和执行。"
+  },
+  {
+    "id": "s04-reconnect",
+    "title": "断线重连，先补快照",
+    "question": "SSE 连接断了又连上，客户端怎么知道断开期间发生了什么？会不会收到重复或乱序的事件？",
+    "file": "stages/s04-events-messages/server/modules/http/index.mjs",
+    "start": 61,
+    "end": 90,
+    "expect": "if (route === \"GET /events\") {",
+    "notes": {
+      "63": "只订阅本项目的会话",
+      "67": "text/event-stream：一条长连接，服务端随时往里写",
+      "73": "写一条事件；客户端读得太慢积压过多就断开，让它重连",
+      "78": "只转发这个 Thread 的事件",
+      "79": "快照发出之后，事件直接写出去",
+      "80": "快照还没发出：先存起来，不能抢在快照前面",
+      "83": "先订阅，再取快照：两者之间的变化都不会漏",
+      "86": "连接上来的第一条永远是完整快照：会话 + 队列",
+      "88": "再把等待期间存下的事件补上",
+      "89": "每 15 秒一次心跳，防止中间网络把空闲连接掐掉"
+    },
+    "actors": [
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ],
+      [
+        "http",
+        "HTTP / SSE 接口"
+      ],
+      [
+        "hub",
+        "事件中心"
+      ],
+      [
+        "messages",
+        "任务与消息"
+      ]
+    ],
+    "state0": {
+      "连接": "未连接",
+      "客户端看到的进度": "—",
+      "已提交的消息": "1 条"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "http",
+          "GET /events"
+        ],
+        "say": "客户端选中会话后订阅事件流。",
+        "actors": {
+          "client": "运行中"
+        },
+        "state": {
+          "连接": "已连接"
+        }
+      },
+      {
+        "lines": [
+          83,
+          86
+        ],
+        "flow": [
+          "http",
+          "client",
+          "snapshot：会话 + 队列"
+        ],
+        "say": "先在事件中心登记，再取一份完整快照发出去。",
+        "state": {
+          "客户端看到的进度": "回复写到第 1 段"
+        }
+      },
+      {
+        "flow": [
+          "hub",
+          "http",
+          "session：增量"
+        ],
+        "say": "之后每次会话或队列变化，事件中心都推一条带序号的事件。",
+        "state": {
+          "客户端看到的进度": "回复写到第 2 段"
+        }
+      },
+      {
+        "warn": true,
+        "flow": [
+          "client",
+          "client",
+          "网络断开"
+        ],
+        "say": "连接断了。客户端提示“正在重连；不会自动重发消息”。",
+        "state": {
+          "连接": "断开"
+        }
+      },
+      {
+        "flow": [
+          "messages",
+          "hub",
+          "发布事件"
+        ],
+        "say": "服务端照常执行，任务与消息继续向事件中心发布状态；回复又写了两段，客户端暂时收不到。"
+      },
+      {
+        "lines": [
+          83,
+          88
+        ],
+        "flow": [
+          "client",
+          "http",
+          "GET /events（重连）"
+        ],
+        "say": "一秒后重连：第一条仍是完整快照，断开期间的变化都在里面。",
+        "state": {
+          "连接": "已连接",
+          "客户端看到的进度": "回复写到第 4 段"
+        }
+      },
+      {
+        "flow": [
+          "http",
+          "client",
+          "不会重发消息"
+        ],
+        "say": "重连只是重新订阅，不会产生新的提交；已提交的消息还是 1 条。",
+        "state": {
+          "已提交的消息": "1 条"
+        }
+      }
+    ],
+    "takeaway": "每次连接先给完整快照，再给增量；订阅和提交是两件事，所以断线重连既不会漏掉状态，也不会把消息再发一遍。"
+  },
+  {
+    "id": "s04-restart",
+    "title": "重启时有一条在执行",
+    "question": "服务重启的那一刻，一条消息在执行、一条在排队，重启以后会自动重发吗？",
+    "file": "stages/s04-events-messages/server/modules/data/index.mjs",
+    "start": 33,
+    "end": 44,
+    "expect": "recover(reason) {",
+    "notes": {
+      "34": "改动先在副本上做，整个写回 JSON 文件",
+      "36": "执行到一半（starting / running / steering）的任务标成 unconfirmed：不知道 Codex 有没有做完",
+      "37": "这个会话的队列暂停，等人核对",
+      "43": "任务记录就是本地的 .data/messages.json"
+    },
+    "actors": [
+      [
+        "server",
+        "服务端"
+      ],
+      [
+        "jobs",
+        "任务记录"
+      ],
+      [
+        "codex",
+        "Codex"
+      ],
+      [
+        "client",
+        "终端客户端",
+        "proc"
+      ]
+    ],
+    "state0": {
+      "A": "执行中",
+      "B": "排队",
+      "队列": "运行"
+    },
+    "steps": [
+      {
+        "warn": true,
+        "flow": [
+          "server",
+          "server",
+          "服务重启"
+        ],
+        "say": "A 正在执行时服务被重启，Codex 子进程跟着结束，A 的结果不确定。",
+        "actors": {
+          "codex": "已重启"
+        }
+      },
+      {
+        "lines": [
+          34,
+          36
+        ],
+        "flow": [
+          "server",
+          "jobs",
+          "recover()"
+        ],
+        "say": "启动时先恢复任务记录：执行到一半的 A 标成 unconfirmed。",
+        "state": {
+          "A": "unconfirmed"
+        }
+      },
+      {
+        "lines": [
+          37,
+          37
+        ],
+        "say": "A 所在会话的队列暂停，B 保留在队列里，不会被自动发出。",
+        "state": {
+          "队列": "暂停"
+        }
+      },
+      {
+        "flow": [
+          "client",
+          "server",
+          "/queue 查看"
+        ],
+        "say": "用户连上来，看到 A 待核对、B 还在排队。",
+        "actors": {
+          "client": "运行中"
+        }
+      },
+      {
+        "flow": [
+          "client",
+          "server",
+          "POST /queue/continue"
+        ],
+        "say": "用户核对过 A 的结果后，明确输入 /continue。",
+        "state": {
+          "队列": "运行"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "turn/start：B"
+        ],
+        "say": "继续处理下一条 B；A 不会被重发。",
+        "state": {
+          "B": "执行中"
+        }
+      }
+    ],
+    "takeaway": "结果不确定的执行宁可停下来等人核对，也不自动重发；排队中的消息原样保留，继续要由人明确决定。"
+  }
+]

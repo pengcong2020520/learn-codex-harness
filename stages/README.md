@@ -13,7 +13,8 @@
 | [s01-single-turn](s01-single-turn/README.md) | 单轮对话 | 直连 App Server JSON-RPC，按终态判定成败 | — |
 | [s02-multi-turn](s02-multi-turn/README.md) | 单进程多轮对话 | FIFO 输入、同一 Thread 多 Turn、原生历史恢复 | — |
 | [s03-service](s03-service/README.md) | 服务化 | 常驻服务端 + 终端客户端、连接令牌、生命周期、运行目录清理 | 4313 |
-| [s07-memory](s07-memory/README.md) | 记忆 | Codex 原生记忆、服务端开关与会话参与；快照同时包含任务与事件、Agent 装配、工具（各自的章节 s04–s06 编写中） | 4325 |
+| [s04-events-messages](s04-events-messages/README.md) | 事件与消息 | 服务端任务队列（先进先出、追加、暂停与继续）、JSON 任务记录、SSE 事件推送与快照重连 | 4319 |
+| [s07-memory](s07-memory/README.md) | 记忆 | Codex 原生记忆、服务端开关与会话参与；快照同时包含任务与事件、Agent 装配、工具（Agent 装配与工具的章节 s05–s06 编写中） | 4325 |
 | [s08-data-layer](s08-data-layer/README.md) | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
 | [s09-knowledge-layer](s09-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
 | [s10-skill-workflow](s10-skill-workflow/README.md) | Skill 与 Workflow | Agent 包、Skill 同步与隐式读取、Workflow（授权 / 步骤 / 验收）、任务提议 | 4316 |

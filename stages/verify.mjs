@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
 // 键是阶段编号（取自目录名，可以不连续）。s00 是 SDK 入门，只有章节文档，没有设计说明。
-const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-service", 7: "s07-memory", 8: "s08-data-layer", 9: "s09-knowledge-layer", 10: "s10-skill-workflow", 11: "s11-model-gateway" };
+const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-service", 4: "s04-events-messages", 7: "s07-memory", 8: "s08-data-layer", 9: "s09-knowledge-layer", 10: "s10-skill-workflow", 11: "s11-model-gateway" };
 const CHAPTERS = ["s00-sdk-quickstart", ...Object.values(STAGES)];
 const options = new Set(process.argv.slice(2));
 if ([...options].some(option => !["--integration", "--docs-only", "--rag"].includes(option))) {

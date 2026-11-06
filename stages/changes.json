@@ -112,11 +112,47 @@
       }
     },
     {
+      "id": "s04",
+      "dir": "s04-events-messages",
+      "title": "排队搬进服务端，状态推给客户端",
+      "summary": "输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。",
+      "previous": "s03-service",
+      "modules": [
+        {
+          "layer": "接入与会话",
+          "name": "任务与消息",
+          "desc": "任务排队与调度"
+        },
+        {
+          "layer": "接入与会话",
+          "name": "事件推送",
+          "desc": "状态变化推给客户端"
+        },
+        {
+          "layer": "数据",
+          "name": "任务记录",
+          "desc": "任务状态，重启后可核对"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "POST /messages",
+          "POST /queue/continue",
+          "GET /events"
+        ],
+        "env": [
+          "AGENT_TURN_TIMEOUT_MS"
+        ],
+        "migrations": []
+      }
+    },
+    {
       "id": "s07",
       "dir": "s07-memory",
       "title": "记忆：Codex 提炼，服务端管控",
       "summary": "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
-      "previous": "s03-service",
+      "previous": "s04-events-messages",
       "modules": [
         {
           "layer": "运行支撑",
@@ -141,10 +177,7 @@
           "GET /memory",
           "GET /memory/summary",
           "POST /memory/contribution",
-          "GET /tools",
-          "POST /messages",
-          "POST /queue/continue",
-          "GET /events"
+          "GET /tools"
         ],
         "env": [
           "AGENT_DEFINITION",

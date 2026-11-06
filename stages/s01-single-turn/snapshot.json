@@ -37,6 +37,18 @@
       "memoryManagement": false
     },
     {
+      "directory": "s04-events-messages",
+      "capabilities": [
+        "client-server",
+        "server-queue",
+        "sse-events"
+      ],
+      "serverEntry": "server/main.mjs",
+      "clientEntry": "client/main.mjs",
+      "examplePort": 4319,
+      "memoryManagement": false
+    },
+    {
       "directory": "s07-memory",
       "capabilities": [
         "client-server",

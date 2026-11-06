@@ -1,0 +1,154 @@
+import { randomUUID } from "node:crypto";
+
+const HELP = `普通文字：提交普通队列；可连续输入，不必等待模型回复。
+/append 内容        显式追加当前或刚结束的任务（等价于追加按钮）
+/append-to ID 内容  指定目标 turn，避免多窗口时目标含糊
+/queue              查看队列
+/continue           明确继续暂停的待执行队列，不重发未确认消息
+/resume [关键词]    搜索历史会话，再输入完整 Thread id 恢复
+/new                切换到新会话；不会取消旧会话任务
+/help               查看帮助
+/exit               仅退出客户端，服务端任务继续运行`;
+
+export async function runChat(api, terminal) {
+  let current = null;
+  let subscription = null;
+  let choices = null;
+  let chain = Promise.resolve();
+  let exiting = false;
+  let eof = false;
+  let displayed = new Map();
+  let queuePaused = false;
+  let renderingTurnId = null;
+  const finished = Promise.withResolvers();
+
+  function renderSession(session) {
+    if (current?.id !== session.id) return;
+    current = session;
+    for (const turn of session.turns) {
+      const answer = Object.values(turn.answers).join("\n");
+      const before = displayed.get(turn.id);
+      if (!before || (answer !== before.answer && renderingTurnId !== turn.id)) {
+        terminal.endStream();
+        terminal.write(`turn id: ${turn.id}`);
+        renderingTurnId = turn.id;
+      }
+      if (answer && before?.answer !== answer) {
+        if (before?.answer && !answer.startsWith(before.answer)) {
+          // 最终快照偶尔会修订文本，不能把修订后的全文当作新 token 追加。
+          terminal.endStream();
+          terminal.write("回复已更新：");
+          terminal.stream(`Agent：${answer}`);
+        } else {
+          const addition = answer.slice(before?.answer.length || 0);
+          terminal.stream(`${before?.answer ? "" : "Agent："}${addition}`);
+        }
+      }
+      if (turn.status !== "inProgress") {
+        if (renderingTurnId === turn.id) terminal.endStream();
+        if (before?.status !== turn.status && turn.status !== "completed") {
+          terminal.write(`状态：${turn.status}${turn.error ? `；${turn.error}` : ""}`);
+        }
+      }
+      displayed.set(turn.id, { answer, status: turn.status });
+    }
+  }
+
+  async function select(session) {
+    subscription?.close();
+    terminal.endStream();
+    current = session;
+    displayed = new Map();
+    queuePaused = false;
+    renderingTurnId = null;
+    terminal.write(`Thread id: ${session.id}\n模型：${session.model || "服务端配置"}`);
+    renderSession(session);
+    subscription = api.subscribe(session.id, event => {
+      if (event.threadId && event.threadId !== current?.id) return;
+      if (event.type === "snapshot") {
+        renderSession(event.data.session);
+      }
+      if (event.type === "session") renderSession(event.data);
+      const queue = event.type === "snapshot" ? event.data.queue : event.type === "queue" ? event.data : null;
+      if (queue) {
+        if (queue.paused && !queuePaused) terminal.write("队列已暂停，查看 /queue 后可用 /continue 明确继续。");
+        queuePaused = queue.paused;
+      }
+      if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
+      if (event.type === "shutdown") terminal.write(event.data.message);
+    }, (status, message) => { if (status === "reconnecting") terminal.write(`${message} 正在重连；不会自动重发消息。`); });
+  }
+
+  async function handle(line) {
+    const text = line.trim();
+    if (!text || exiting) return;
+    if (text === "/exit") { exiting = true; terminal.close(); return; }
+    if (text === "/help") return terminal.write(HELP);
+    if (choices) {
+      if (text === "/cancel") { choices = null; return terminal.write("已取消选择，当前会话不变。"); }
+      const selected = choices.find(session => session.id === text);
+      if (!selected) return terminal.write("请输入列表中的完整 Thread id，或 /cancel 返回。");
+      const session = await api.request("/sessions/resume", { threadId: selected.id });
+      choices = null;
+      return select(session);
+    }
+    if (/^\/resume(?:\s|$)/.test(text)) {
+      const result = await api.request(`/sessions?q=${encodeURIComponent(text.slice(7).trim())}`);
+      if (!result.sessions.length) return terminal.write("未找到匹配会话，当前会话不变。");
+      choices = result.sessions;
+      choices.forEach(session => terminal.write(`${session.name || session.preview || "未命名"}\nThread id: ${session.id}`));
+      return terminal.write("输入完整 Thread id 恢复；/cancel 返回；/exit 退出。");
+    }
+    if (text === "/new") { subscription?.close(); terminal.endStream(); current = null; displayed.clear(); renderingTurnId = null; return terminal.write("下一条普通消息将创建新会话。旧任务不会取消。"); }
+    if (text === "/queue") {
+      if (!current) return terminal.write("尚未选择会话。");
+      const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
+      renderSession(state.session);
+      terminal.write(`队列${state.queue.paused ? "（暂停）" : ""}：`);
+      for (const job of state.queue.jobs) terminal.write(`${job.status}  ${job.text.slice(0,100)}${job.targetTurnId ? ` [追加目标 turn id: ${job.targetTurnId}]` : ""}${job.error ? `；${job.error}` : ""}`);
+      if (!state.queue.jobs.length) terminal.write("暂无消息。");
+      return;
+    }
+    if (text === "/continue") {
+      if (!current) return terminal.write("请先选择会话。");
+      await api.request("/queue/continue", { threadId: current.id });
+      return terminal.write("已请求继续待执行队列；未确认的旧消息不会重发。");
+    }
+    let mode = "enqueue", content = text, targetTurnId;
+    if (/^\/append-to(?:\s|$)/.test(text)) {
+      const match = text.match(/^\/append-to\s+(\S+)\s+([\s\S]+)$/);
+      if (!match) return terminal.write("用法：/append-to 目标turnID 补充内容");
+      [, targetTurnId, content] = match;
+      mode = "append";
+    } else if (/^\/append(?:\s|$)/.test(text)) {
+      mode = "append"; content = text.slice(7).trim();
+      // 捕获用户操作所指向的目标，不在服务端悄悄换成另一轮。
+      targetTurnId = current?.activeTurnId || current?.lastTurnId;
+    } else if (text.startsWith("/")) return terminal.write("未知命令，请使用 /help。");
+    if (!content) return terminal.write("请输入消息内容。");
+    if (mode === "append" && !targetTurnId) return terminal.write("当前没有可追加的目标轮次；先发送普通消息。");
+    if (!current) await select(await api.request("/sessions", {}));
+    const clientMessageId = randomUUID();
+    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId });
+    // UUID 仅用于服务端幂等处理，不作为聊天界面的编号展示。
+    if (["failed", "unconfirmed"].includes(result.status)) terminal.write(`消息状态：${result.status}${result.error ? `；${result.error}` : ""}`);
+  }
+
+  terminal.write("已连接你的 Agent 服务。输入 /help 查看操作；/exit 仅关闭当前客户端。");
+  terminal.rl.on("line", line => {
+    chain = chain.then(() => handle(line)).catch(error => terminal.write(`操作失败：${error.message}`));
+    terminal.prompt();
+  });
+  terminal.rl.on("SIGINT", () => { exiting = true; terminal.close(); });
+  terminal.rl.on("close", () => {
+    eof = true;
+    // 只等已经输入的 HTTP 提交完成，不等待模型回答。不会因管道 EOF 丢掉最后一条提交。
+    chain.finally(() => finished.resolve());
+  });
+  await finished.promise;
+  exiting = true;
+  subscription?.close();
+  await subscription?.done;
+  terminal.endStream();
+  if (eof) terminal.write("已退出客户端。已提交任务由服务端继续执行。");
+}
