@@ -124,6 +124,9 @@ assert.equal(diagrams.status, 0, diagrams.stderr);
 // 阶段增量（stages/changes.json、CHANGES.md）也由快照生成，必须是最新的。
 const changes = spawnSync(process.execPath, [path.join(root, "build-changes.mjs"), "--check"], { encoding: "utf8" });
 assert.equal(changes.status, 0, changes.stderr);
+// 根 README 的学习路线图也由脚本生成。
+const roadmap = spawnSync(process.execPath, [path.join(root, "build-roadmap.mjs"), "--check"], { encoding: "utf8" });
+assert.equal(roadmap.status, 0, roadmap.stderr);
 for (const dir of ["s03-service", "s07-memory"]) assert.equal(fs.existsSync(path.join(root, dir, 'server/modules/data/database.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's08-data-layer/server/modules/knowledge/index.mjs')), false);
 assert.equal(fs.existsSync(path.join(root, 's09-knowledge-layer/server/modules/permissions/index.mjs')), true);
