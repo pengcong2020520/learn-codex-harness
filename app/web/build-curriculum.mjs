@@ -12,6 +12,7 @@ const chapterMetadata={
  s04:{name:'事件与消息',focus:'服务端排队、SSE 推送与重启核对'},
  s05:{name:'Agent 装配',focus:'定义、角色与 Skills'},
  s06:{name:'工具',focus:'工具白名单、资料边界与 MCP'},
+ s07:{name:'记忆',focus:'原生记忆与服务端开关'},
  s08:{name:'数据层',focus:'持久任务与资源版本'},
  s09:{name:'知识层',focus:'可信门禁与 Wiki / RAG'}
 };

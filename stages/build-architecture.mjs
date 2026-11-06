@@ -22,8 +22,7 @@ function entry(n) {
     : M("api", "HTTP / SSE 接口", n < 7 ? "终端客户端接入" : "终端与浏览器接入", 3, ["http/"]);
   // s03 服务端还不排队（上一轮没结束返回 409）；s04 起排队归「任务与消息」，会话只复用 Thread、整理快照。
   const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"])
-    : n >= 4 && n < 7 ? M("sessions", "会话", "复用 Thread，整理快照", 2, ["sessions/"])
-    : M("sessions", "会话与排队", "先进先出，复用 Thread", 2, ["sessions/"]);
+    : M("sessions", "会话", "复用 Thread，整理快照", 2, ["sessions/"]);
   return [first, sessions,
     M("messages", "任务与消息", "任务排队与调度", 4, ["messages/"]), M("events", "事件推送", "状态变化推给客户端", 4, ["events/"])];
 }

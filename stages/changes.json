@@ -66,8 +66,8 @@
       "modules": [
         {
           "layer": "接入与会话",
-          "name": "会话与排队",
-          "desc": "先进先出，复用 Thread"
+          "name": "会话",
+          "desc": "复用 Thread，整理快照"
         }
       ],
       "surface": {

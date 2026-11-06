@@ -7,7 +7,18 @@ import {browser,helpers,chrome} from './browser.mjs';
 
 const course=new URL('../public/course/',import.meta.url);
 const repository=new URL('../../../',import.meta.url);
-const stages=['s01','s02','s03','s04','s05','s08','s09'];
+const stages=['s01','s02','s03','s04','s05','s06','s07','s08','s09'];
+const chapterSources=[
+ ['s03','s03-service.html','s03-service'],
+ ['s04','s04-events.html','s04-events-messages'],
+ ['s05','s05-agent.html','s05-agent-assembly'],
+ ['s06','s06-tools.html','s06-tools'],
+ ['s07','s07-memory.html','s07-memory']
+];
+const retainedAnchors={
+ 'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',
+ 'm3-screen-4':'s06','m3-screen-5':'s05','m3-screen-6':'s07','m3-quiz':'s06'
+};
 const decodeHtml=text=>text.replace(/&(?:amp|lt|gt|quot|#x27|#39);/g,entity=>({'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&#x27;':"'",'&#39;':"'"})[entity]);
 
 test('长文静态：阶段目录、锚点、资源与新增章节的逐行源码一致',()=>{
@@ -39,7 +50,7 @@ test('长文静态：阶段目录、锚点、资源与新增章节的逐行源�
    assert.ok(fs.existsSync(resource),`资源存在：${url}`);
   }
  }
- for(const [stage,file] of [['s03','s03-service.html'],['s04','s04-events.html']]){
+ for(const [stage,file,sourceDirectory] of chapterSources){
   const chapter=fs.readFileSync(new URL(`modules/${file}`,course),'utf8');
   const screens=[...chapter.matchAll(/<section class="screen /g)];
   assert.ok(screens.length>=3&&screens.length<=6);
@@ -51,8 +62,9 @@ test('长文静态：阶段目录、锚点、资源与新增章节的逐行源�
   const snippets=[...chapter.matchAll(/<code data-source="([^"]+)" data-start="(\d+)" data-end="(\d+)">([\s\S]*?)<\/code>/g)];
   assert.ok(snippets.length>=2,'有可核对的真实源码');
   for(const [,file,start,end,code] of snippets){
-   assert.ok(file.startsWith(`stages/${stage}-`));
+   assert.ok(file.startsWith(`stages/${sourceDirectory}/`),'源码必须出自本章对应的阶段目录');
    const lines=fs.readFileSync(new URL(file,repository),'utf8').split('\n');
+   assert.ok(Number(start)>=1&&Number(end)>=Number(start)&&Number(end)<=lines.length,'源码行号有效');
    assert.equal(decodeHtml(code),lines.slice(Number(start)-1,Number(end)).join('\n'),`${file}:${start}–${end} 逐行一致`);
   }
   for(const [,encoded] of chapter.matchAll(/data-steps='([^']+)'/g)){
@@ -64,6 +76,12 @@ test('长文静态：阶段目录、锚点、资源与新增章节的逐行源�
    }
   }
  }
+ for(const [id,stage] of Object.entries(retainedAnchors)){
+  const file=chapterSources.find(([s])=>s===stage)[1];
+  assert.ok(fs.readFileSync(new URL(`modules/${file}`,course),'utf8').includes(`id="${id}"`),`${id} 保留在 ${stage}`);
+ }
+ const script=fs.readFileSync(new URL('handbook.js',course),'utf8');
+ assert.match(script,/'#module-3': 'module-s05'/,'旧章链接继续指向 Agent 装配');
 });
 
 async function workbench(t){const app=createWorkbench({port:0,targets:[]});const url=await app.listen();t.after(()=>app.close());return url;}
@@ -74,7 +92,7 @@ test('长文页面没有内联脚本和外部资源，CSP 只允许同源脚本'
  assert.equal(scripts.trim(),"'self'");assert.doesNotMatch(csp,/googleapis|gstatic|https:/);
  const html=await res.text();
  assert.doesNotMatch(html,/\son[a-z]+=/i,'不能有内联事件');assert.doesNotMatch(html,/<script(?![^>]*\ssrc=)/,'不能有内联 <script>');assert.doesNotMatch(html,/https?:\/\/(?!127\.0\.0\.1)[^"'\s]*\.(css|js|woff2?)/,'不能加载外部样式、脚本或字体');
- assert.equal((html.match(/<section class="module" id="module-s\d{2}"/g)||[]).length,7);
+ assert.equal((html.match(/<section class="module" id="module-s\d{2}"/g)||[]).length,9);
  for(const removed of ['styles.css','main.js','_base.html','_footer.html','build.sh','course.css','course.js'])assert.ok(!fs.existsSync(new URL(removed,course)),`${removed} 应已移除`);
 });
 
@@ -116,7 +134,7 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
   const diagrams=$$('.architecture-figure');
   const loaded=await until(()=>diagrams.every(el=>{const img=$('img',el);return img.complete&&img.naturalWidth===1600&&img.naturalHeight===Number(img.getAttribute("height"));}));
   return {count:diagrams.length,loaded,links:diagrams.every(el=>{const a=$('a',el),img=$('img',el);return a.href===img.src&&a.target==='_blank'&&a.rel.includes('noopener')&&img.alt.includes('总架构');})};`);
- assert.deepEqual(arch,{count:7,loaded:true,links:true});
+ assert.deepEqual(arch,{count:9,loaded:true,links:true});
 
  const term=await b.run(`${helpers}
   const term=$('.term');term.focus();const tip=$('#term-tip');
@@ -141,6 +159,24 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
    return {stage,correct,reset,done,flowReset,tooltip};
   });`);
  assert.deepEqual(additions,['s03','s04'].map(stage=>({stage,correct:true,reset:true,done:true,flowReset:true,tooltip:true})));
+
+ const assemblyToolsMemory=await b.run(`${helpers}
+  return [['s05','s05-quiz'],['s06','m3-quiz'],['s07','s07-quiz']].map(([stage,id])=>{
+   const module=$('#module-'+stage),quiz=$('#'+id,module),questions=$$('.quiz-question-block',quiz);
+   for(const question of questions) $('.quiz-option[data-value="'+question.dataset.correct+'"]',question).click();
+   $('.quiz-check-btn',module).click();
+   const correct=$$('.quiz-feedback',quiz).every(el=>el.classList.contains('success'));
+   $('.quiz-reset-btn',module).click();
+   const reset=$$('.quiz-option',quiz).every(el=>!el.disabled&&!el.classList.contains('is-selected'))&&$$('.quiz-feedback',quiz).every(el=>el.textContent==='');
+   const first=questions[0],wrong=$$('.quiz-option',first).find(el=>el.dataset.value!==first.dataset.correct);
+   wrong.click();$('.quiz-check-btn',module).click();
+   const explained=$('.quiz-feedback',first).classList.contains('error')&&$('.quiz-feedback',first).textContent.includes(first.dataset.explanationWrong);
+   $('.quiz-reset-btn',module).click();
+   const term=$('.term',module);term.focus();
+   const tooltip=!$('#term-tip').hidden&&$('#term-tip').textContent===term.dataset.definition;
+   return {stage,count:questions.length>=3,correct,reset,explained,tooltip};
+  });`);
+ assert.deepEqual(assemblyToolsMemory,['s05','s06','s07'].map(stage=>({stage,count:true,correct:true,reset:true,explained:true,tooltip:true})));
 
  const directory=await b.run(`${helpers}
   const targets=[];
@@ -181,14 +217,16 @@ test('长文旧书签：首次打开与页内 hash 跳转兼容五章旧锚点�
   await assertChapter(stage);
  }
  const retained=await b.run(`${helpers}
-  const ids=['module-s03','module-s04',...[1,2,3,4,5].map(n=>$('.screen[id^="m'+n+'-"]').id)];
+  const ids=['module-s03','module-s04','module-s06','module-s07',...[1,2,4,5].map(n=>$('.screen[id^="m'+n+'-"]').id),...Object.keys(${JSON.stringify(retainedAnchors)})];
+  const retained=${JSON.stringify(retainedAnchors)};
   for(const id of ids){
    location.hash='#'+id;
    if(!await until(()=>$('#'+id).getBoundingClientRect().top>=0&&$('#'+id).getBoundingClientRect().top<200))throw Error('锚点未到达 '+id);
    if(location.hash!=='#'+id)throw Error('锚点被错误改写 '+id);
+   if(retained[id]&&$('#'+id).closest('.module').id!=='module-'+retained[id])throw Error('锚点所属章节错误 '+id);
   }
   return ids.length;`);
- assert.equal(retained,7);
+ assert.equal(retained,8+Object.keys(retainedAnchors).length);
  assert.deepEqual(b.errors,[],'旧链接兼容不应产生脚本错误或 CSP 拦截');
 });
 

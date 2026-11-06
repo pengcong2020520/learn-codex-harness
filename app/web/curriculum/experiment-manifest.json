@@ -349,6 +349,30 @@
       ]
     },
     {
+      "id": "s07-memory",
+      "stage": "s07-memory",
+      "title": "记忆开关由服务端掌握",
+      "question": "客户端能不能自己打开记忆、指定路径读记忆文件？",
+      "command": "npm run lesson -- s07-memory",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "记忆默认关闭，配置非法时拒绝启动",
+        "启动时读回 Codex 实际配置，不一致就报错，不假报开启",
+        "只读三个固定文件，拒绝符号链接和硬链接",
+        "开启请求检查总开关；开关请求均检查项目归属和活动 Turn。本实验使用会话 fixture，模式修改通过 thread/memoryMode/set 提交；真实链路还可能查询、恢复会话。"
+      ],
+      "why": "提炼交给 Codex，开关、位置和可见范围留在服务端；客户端只能查看和提出设置。",
+      "boundary": "离线临时目录与真实记忆模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(记忆默认关闭|只读核验实际配置|记忆读取拒绝|参与设置只调用原生接口)",
+        "tests/memory.test.mjs"
+      ]
+    },
+    {
       "id": "s08-persistence",
       "stage": "s08-data-layer",
       "title": "把产品状态落进事务",
