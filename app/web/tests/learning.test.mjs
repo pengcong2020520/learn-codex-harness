@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWorkbench} from '../server.mjs';
 import {browser,helpers,chrome} from './browser.mjs';
+import fs from 'node:fs';
+const curriculum=JSON.parse(fs.readFileSync(new URL('../public/course/curriculum.json',import.meta.url),'utf8'));
 
 const options={skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'};
 async function setup(t){
@@ -11,7 +13,7 @@ async function setup(t){
 
 test('阅读器按阶段哈希定位，兼容五个旧 Demo 链接与课时链接',options,async t=>{
  const {url,b}=await setup(t);
- for(const [hash,id] of [['s01','s01-transport'],['s02','s02-fifo'],['s05','s05-agent-config'],['s06','s06-tool-registry'],['s08','s08-persistence'],['s09','s09-gate'],['module-1','s01-transport'],['module-2','s02-fifo'],['module-3','s05-agent-config'],['module-4','s08-persistence'],['module-5','s09-gate']]){
+ for(const [hash,id] of [['s01','s01-transport'],['s02','s02-fifo'],['s03','s03-resident'],['s04','s04-queue'],['s05','s05-agent-config'],['s06','s06-tool-registry'],['s08','s08-persistence'],['s09','s09-gate'],['module-1','s01-transport'],['module-2','s02-fifo'],['module-3','s05-agent-config'],['module-4','s08-persistence'],['module-5','s09-gate']]){
   await b.open(`${url}/course/#${hash}`);
   assert.equal(await b.run(`${helpers} return await until(()=>$('[data-learn-action="lesson"][aria-current="page"]')?.dataset.id===${JSON.stringify(id)});`),true,hash);
  }
@@ -43,7 +45,7 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
  assert.equal(result.selected,'s06-mcp');assert.deepEqual(result.groups,['S05 · Agent 装配','S06 · 工具']);
  assert.equal(result.image,'/course/assets/s06-architecture.svg');
  assert.match(result.command,/^cd stages\/s06-tools\n/);assert.equal(result.live,'/app/index.html?stage=s03&view=run');
- assert.equal(result.all.length,17);assert.equal(result.allGroups.length,6);assert.equal(result.empty,'该阶段暂无机制课程');
+ assert.equal(result.all.length,curriculum.lessons.length);assert.equal(result.allGroups.length,curriculum.chapters.length);assert.equal(result.empty,'该阶段暂无机制课程');
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 

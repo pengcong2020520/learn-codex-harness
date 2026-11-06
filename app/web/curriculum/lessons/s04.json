@@ -1,0 +1,579 @@
+[
+  {
+    "id": "s04-queue",
+    "stage": "s04-events-messages",
+    "title": "消息先记录，再由服务端排队",
+    "principle": "POST /messages 先保存 queued 记录；调度器按 Thread 逐条交付普通消息，客户端离线不改变执行顺序。",
+    "problem": "模型还在回答，又连着提交了两条，服务端怎么保证不丢、不乱序、不并发？",
+    "change": {
+      "before": "如果待发消息只留在终端内存中，客户端退出后就没有人负责继续提交。",
+      "added": "消息先写 .data/messages.json，再由服务端按 Thread 串行调度；相同消息 ID 用于识别重复提交。",
+      "kept": "一个 Turn 内的模型执行循环和 Thread 上下文仍归 Codex。"
+    },
+    "ownership": {
+      "codex": "接收 turn/start 执行新轮次，显式追加时接收 turn/steer，并发布终态通知。",
+      "product": "保存消息、校验幂等冲突、控制发起顺序、关联 turn id，并在失败时暂停队列。"
+    },
+    "concepts": [
+      {
+        "term": "queued / starting / running",
+        "meaning": "queued 是已记录待调度，starting 是发起前已写盘，running 是拿到 turn id 后的执行状态。"
+      },
+      {
+        "term": "clientMessageId",
+        "meaning": "客户端给每条提交的稳定标识。相同 ID 且内容、Thread、模式、目标都一致时返回既有记录；任一不同则 409。"
+      },
+      {
+        "term": "按 Thread 串行",
+        "meaning": "同一会话的状态操作经 serial 排序，活动 Turn 或执行中任务会阻止普通消息再次发起；不同 Thread 可以分别推进。"
+      }
+    ],
+    "mechanism": "submit 先 ensure 会话，再在该 Thread 的 serial 内查 clientMessageId：相同提交返回已有记录，冲突返回 409。新消息经 store.create 保存 queued 后才 publish 和 schedule，HTTP 返回 202，不等模型回答。dispatch 只在队列未暂停且没有活动 Turn 或执行中记录时选择待执行普通消息，先条件更新为 starting 并写盘，再发 turn/start，响应后 bind 为 running 或已到达的终态。completed 更新记录并唤醒下一次调度；失败或中断会暂停。FIFO 指普通 enqueue 消息：显式 append 可以优先，目标仍活动时走 turn/steer；普通文字中说“接着之前那个”不会触发追加。",
+    "design": {
+      "decision": "持久记录负责接收，服务端调度器负责何时发出。",
+      "reason": "客户端提交成功后即可离线，调度仍能看到待执行消息；起始状态先落盘也为重启核对留下证据。",
+      "alternative": "客户端收到文本就并发 turn/start 无法保证同一会话一次一轮；仅保存内存数组又不能跨服务重启保留。",
+      "cost": "JSON 每次整体写入，适用于本机单进程；每个 Thread 最多 100 条 queued，显式 append 的优先级意味着不是所有消息都严格 FIFO。"
+    },
+    "source": {
+      "file": "stages/s04-events-messages/server/modules/messages/index.mjs",
+      "needle": "    if (active || all.some((j) => executing.includes(j.status))) return;",
+      "before": 8,
+      "after": 11,
+      "explanation": "先寻找指向活动 Turn 的 append，再检查活动轮次和 executing 记录。选中任务后用 expected=[queued] 条件更新 starting，随后才进入 turn/start 分支。submit 中 store.create 位于 schedule 前，二者共同构成先记录再执行。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "三条普通消息排队，客户端可以离开",
+        "steps": [
+          {
+            "title": "三条输入先被接收",
+            "actor": "客户端 → MessageService",
+            "event": "教学模拟 · POST /messages(A/B/C) → store.create → 202",
+            "explain": "示意此时调度尚未取出第一条；每条都有独立 clientMessageId。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A/B/C: queued（示意）",
+              "activeTurnId": "无",
+              "paused": "否",
+              "client": "已连接"
+            },
+            "lines": []
+          },
+          {
+            "title": "只启动队首 A",
+            "actor": "调度器",
+            "event": "教学模拟 · A: queued → starting → turn/start → running",
+            "explain": "starting 先写盘；A 执行时 B、C 保持 queued，不抢跑。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: running；B/C: queued",
+              "activeTurnId": "U-A（示意）",
+              "paused": "否",
+              "client": "已连接"
+            },
+            "lines": []
+          },
+          {
+            "title": "客户端离开，A 完成",
+            "actor": "Codex → 服务端",
+            "event": "教学模拟 · 客户端退出；turn/completed(A) → completed → wake",
+            "explain": "完成通知由服务接收，客户端退出不会清空服务端消息记录。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: completed；B/C: queued",
+              "activeTurnId": "无",
+              "paused": "否",
+              "client": "离线"
+            },
+            "lines": []
+          },
+          {
+            "title": "B、C 依次获得各自轮次",
+            "actor": "调度器",
+            "event": "教学模拟 · dispatch(B) → completed(B) → dispatch(C)",
+            "explain": "每次都在上一轮终态后推进；这里不含显式 append。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A/B: completed；C: running",
+              "activeTurnId": "U-C（示意）",
+              "paused": "否",
+              "client": "离线"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "同一消息 ID 换内容，拒绝覆盖已有任务",
+        "steps": [
+          {
+            "title": "A 已经进入执行",
+            "actor": "MessageService",
+            "event": "教学模拟 · clientMessageId=M-A, text=A → running",
+            "explain": "稳定 ID 关联的是这一条具体提交，不能拿来修改已有任务正文。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "M-A: running，text=A",
+              "activeTurnId": "U-A（示意）",
+              "paused": "否",
+              "client": "已连接"
+            },
+            "lines": []
+          },
+          {
+            "title": "相同 ID 带来不同正文",
+            "actor": "客户端 → MessageService",
+            "event": "教学模拟 · POST /messages { clientMessageId: M-A, text: B }",
+            "explain": "服务端在 serial 内读到已有记录，检查输入是否完全匹配。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "M-A: running，text=A",
+              "activeTurnId": "U-A（示意）",
+              "paused": "否",
+              "client": "等待提交响应"
+            },
+            "lines": []
+          },
+          {
+            "title": "返回幂等冲突",
+            "actor": "MessageService → HTTP",
+            "event": "教学模拟 · IDEMPOTENCY_CONFLICT → 409",
+            "explain": "没有新建记录、没有覆盖 A、没有第二次 turn/start；这类提交冲突本身不暂停 A 的执行。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "M-A: running，text=A；B 未入队",
+              "activeTurnId": "U-A（示意）",
+              "paused": "否",
+              "client": "收到 409"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s04-queue",
+      "action": "在 s04-events-messages 目录运行命令，对照 A/B/C 的 turn/start 次序、CLI 退出后的任务状态和相同 ID 重复提交测试。观察普通 enqueue 的 FIFO，勿把显式 append 也理解为总在队尾。",
+      "observe": [
+        "提交立即返回 queued，不等模型回复",
+        "同一会话先进先出，每条是一个新的 turn，同时只跑一轮",
+        "客户端退出后，已提交的消息由服务端继续执行"
+      ],
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。"
+    },
+    "quiz": {
+      "question": "服务仍正常运行，消息已被接受，但客户端没有收到响应。用同一个 clientMessageId 和完全相同内容再次提交，会怎样？",
+      "options": [
+        "服务端返回既有记录，不为这个 ID 再执行一遍。",
+        "一定新建一个 Turn，因为每个 HTTP 请求都算新消息。",
+        "把正文换成更清楚的版本也会覆盖原任务。"
+      ],
+      "answer": 0,
+      "explanation": "A 是已有记录的幂等返回。更换 ID 会被视为新消息，同一 ID 改内容则冲突；这不是客户端自动重试策略，也不是外部副作用恰好一次的保证。"
+    },
+    "reference": {
+      "session": "s10",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s10_task_system",
+      "adaptation": "借用“任务状态离开临时对话、先记录再推进”的教学方法。参考保存带 owner 与 blockedBy 的任务卡；本项目保存用户消息并按 Thread 调度，没有依赖 DAG 或多执行器领取机制。"
+    }
+  },
+  {
+    "id": "s04-reconnect",
+    "stage": "s04-events-messages",
+    "title": "断线重连，先同步快照再接事件",
+    "principle": "SSE 重连只重新订阅；先给当前快照，再发送订阅期间暂存的事件，不重新提交消息。",
+    "problem": "SSE 连接断了又连上，客户端会漏掉中间的状态，或者把旧消息再发一遍吗？",
+    "change": {
+      "before": "只看实时通知，客户端离线期间发生的变化就可能不在本地视图里。",
+      "added": "GET /events 先登记监听，再发送会话与队列快照，最后发送快照准备期间暂存的事件。",
+      "kept": "提交仍走 POST /messages；执行和任务记录不依赖 SSE 连接在线。"
+    },
+    "ownership": {
+      "codex": "向服务端发布 Thread/Turn 通知，不直接维护终端的 SSE 连接。",
+      "product": "将通知整理为 session / queue 状态，按 Thread 过滤 SSE 事件；客户端处理断线并重新订阅。"
+    },
+    "concepts": [
+      {
+        "term": "SSE",
+        "meaning": "Server-Sent Events，服务端持续向客户端写事件的 HTTP 长连接；本阶段客户端读取 data 帧。"
+      },
+      {
+        "term": "snapshot",
+        "meaning": "每次订阅首先发送的会话与队列当前视图；会话视图只包含最近 30 轮，并非全部原生历史。"
+      },
+      {
+        "term": "sequence",
+        "meaning": "事件中心在进程内递增的事件序号，辅助观察顺序；没有按 Last-Event-ID 重放历史事件的协议。"
+      }
+    ],
+    "mechanism": "GET /events 先 ensure Thread，然后注册 hub listener。snapshotSent=false 时，属于该 Thread 的事件先放 buffered；取得队列快照后写出 snapshot，将 snapshotSent 置为 true，再发送 buffered。之后 session / queue 事件直接写出；无 threadId 的 fatal / shutdown 是全局通知。连接关闭会移除监听和心跳，慢连接积压超限也会被关闭。客户端 subscribe 遇到非主动取消的断流，报告 reconnecting，约一秒后重新 GET /events，因此用新快照恢复当前视图。重连路径不调用 POST /messages，不会重发旧输入；快照不能保证逐条补回离线期间的所有事件，也不是会话与队列的跨模块事务快照。",
+    "design": {
+      "decision": "使用每次连接的快照加后续事件，并将提交与订阅作为独立入口。",
+      "reason": "先监听能接住准备快照时发生的变化，先输出快照能让客户端先建立完整当前视图。",
+      "alternative": "只在重连后监听新增事件会留下旧视图；按序号补全每条事件则需要持久事件日志和重放协议。",
+      "cost": "允许快照与后续事件包含重复状态；只覆盖当前保留视图，不提供所有历史事件的恰好一次投递。"
+    },
+    "source": {
+      "file": "stages/s04-events-messages/server/modules/http/index.mjs",
+      "needle": "        hub.on(\"event\", listener);",
+      "before": 5,
+      "after": 7,
+      "explanation": "listener 在 snapshotSent 为 false 时缓冲事件；hub.on 先于 await messages.snapshot。snapshot 写出后才打开直接推送，并补发 buffered；这里没有提交消息或按 sequence 回放历史的调用。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "首次订阅时有事件恰好到达",
+        "steps": [
+          {
+            "title": "先登记 Thread 监听",
+            "actor": "HTTP 服务",
+            "event": "教学模拟 · hub.on(event, listener)",
+            "explain": "示意订阅 T-A；其他 Thread 的 session / queue 不发给此连接。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "已连上",
+              "snapshotSent": "否",
+              "buffered": "0 条",
+              "jobs": "已有 1 条（示意），未新增"
+            },
+            "lines": []
+          },
+          {
+            "title": "快照准备中暂存事件",
+            "actor": "HTTP listener",
+            "event": "教学模拟 · queue(T-A) → buffered.push(event)",
+            "explain": "正在 await 队列快照，收到的事件先不写给客户端。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "已连上",
+              "snapshotSent": "否",
+              "buffered": "1 条（示意）",
+              "jobs": "已有 1 条（示意），未新增"
+            },
+            "lines": []
+          },
+          {
+            "title": "第一帧建立视图",
+            "actor": "HTTP 服务 → 客户端",
+            "event": "教学模拟 · write({ type: snapshot, data: { session, queue } })",
+            "explain": "客户端先得到当前保留范围内的会话与队列，随后才消费缓冲事件。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "已连上",
+              "snapshotSent": "是",
+              "buffered": "1 条待发送（示意）",
+              "jobs": "已有 1 条（示意），未新增"
+            },
+            "lines": []
+          },
+          {
+            "title": "发送缓冲后持续推送",
+            "actor": "HTTP 服务",
+            "event": "教学模拟 · for (const event of buffered) write(event)",
+            "explain": "此后属于 T-A 的新事件直接写出；状态可能与快照重复，不代表执行了两次。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "持续接收",
+              "snapshotSent": "是",
+              "buffered": "暂存事件已发送",
+              "jobs": "已有 1 条（示意），未新增"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "事件连接中断后重新订阅",
+        "steps": [
+          {
+            "title": "流中断，服务仍在执行",
+            "actor": "客户端 / HTTP 服务",
+            "event": "教学模拟 · response body ends → reconnecting",
+            "explain": "客户端报告断线；服务端连接关闭时移除该 listener，不取消任务。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "断线",
+              "snapshotSent": "旧连接已结束",
+              "buffered": "旧连接不再接收",
+              "jobs": "A: running（示意）"
+            },
+            "lines": []
+          },
+          {
+            "title": "离线期间任务完成",
+            "actor": "Codex → 服务端",
+            "event": "教学模拟 · turn/completed(A)",
+            "explain": "服务端更新会话和任务记录；客户端此刻没有收到这条事件。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "等待约一秒后重连",
+              "snapshotSent": "等待新连接",
+              "buffered": "不保存离线历史事件",
+              "jobs": "A: completed（示意）"
+            },
+            "lines": []
+          },
+          {
+            "title": "新连接先给最新快照",
+            "actor": "客户端 → HTTP 服务",
+            "event": "教学模拟 · GET /events?threadId=T-A → snapshot",
+            "explain": "快照能展示 A 已完成；重连只有 GET，既有消息数仍是一条。",
+            "state": {
+              "thread": "T-A（示意）",
+              "connection": "重新连接",
+              "snapshotSent": "新连接已发送",
+              "buffered": "仅缓冲新订阅期间事件",
+              "jobs": "A: completed；没有新消息"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s04-reconnect",
+      "action": "在 s04-events-messages 目录运行命令，检查已完成任务在再次订阅的第一帧中可见，消息记录数没有增加。既有 HTTP 测试验证完成后订阅的首帧，并未模拟网络断流后自动重试或所有缓冲竞争时序；断流处理须结合 subscribe 源码阅读。",
+      "observe": [
+        "连接建立后先收到当前保留范围的组合 snapshot，随后收到携带 session / queue 状态快照的事件",
+        "重连只是重新订阅，不会产生新的消息",
+        "session / queue 按 Thread 过滤；无 threadId 的 fatal / shutdown 向所有订阅者广播"
+      ],
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。"
+    },
+    "quiz": {
+      "question": "重连收到 snapshot 显示任务已完成，是否意味着中间每一条 delta 都被补发了？",
+      "options": [
+        "是，sequence 会让服务端永久保存并补发每条事件。",
+        "不一定；这里恢复当前保留视图，没有历史事件逐条重放。",
+        "必须再 POST /messages 一次才能补齐状态。"
+      ],
+      "answer": 1,
+      "explanation": "B 区分当前状态同步与历史事件回放。sequence 只在进程内递增，订阅入口不提交任务。"
+    },
+    "reference": {
+      "session": "s11",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s11_background_tasks",
+      "adaptation": "借用“执行结果与结果通知分开观察”的方法。参考在后续模型调用前收集后台结果；本项目把当前状态通过 SSE 推给终端，重连读快照，不新增后台任务唤醒模型的循环。"
+    }
+  },
+  {
+    "id": "s04-restart",
+    "stage": "s04-events-messages",
+    "title": "重启以后，哪些任务还能继续",
+    "principle": "queued 可以等待执行；starting、running、steering 在恢复时变成 unconfirmed，并暂停对应 Thread，不能猜测结果后重发。",
+    "problem": "服务重启时有一条在执行、一条在排队，重启后会怎样？",
+    "change": {
+      "before": "进程中断时，只凭“没有看到成功”无法判断 Codex 是否已经执行过。",
+      "added": "恢复任务记录时保留 queued，隔离执行中状态，并通过显式 /continue 解除会话暂停。",
+      "kept": "Thread 历史仍由 Codex 保存，消息记录负责业务执行状态，不替代历史正文。"
+    },
+    "ownership": {
+      "codex": "执行 Turn 并保留原生历史；服务失去连接后，应用不能仅凭本地记录推断最终结果。",
+      "product": "在发起前记录 starting，启动与关闭时恢复状态，暂停未知结果，阻止迟到回包覆盖 unconfirmed。"
+    },
+    "concepts": [
+      {
+        "term": "unconfirmed",
+        "meaning": "应用无法确认执行结果，可能已执行也可能未完成；不是确认失败，也不是可自动重试的待办。"
+      },
+      {
+        "term": "recover",
+        "meaning": "扫描持久记录，将 starting / running / steering 改为 unconfirmed，并把其 Thread 加入暂停集合。"
+      },
+      {
+        "term": "/continue",
+        "meaning": "用户核对后请求 POST /queue/continue，解除暂停并唤醒调度；不会把失败或未确认项改回 queued。"
+      }
+    ],
+    "mechanism": "JsonJobs 用整体原子替换保存 jobs 和 paused。MessageService.open 先调用 store.recover，再为有记录的 Thread 安排调度；正常 close 也会 recover。恢复将 starting / running / steering 标为 unconfirmed，已有 unconfirmed 也会使对应 Thread 暂停；queued 保持原状，其他未暂停且可载入的会话可以继续。dispatch 检查暂停状态，不自动投递未知结果。bind 在服务关闭或失效时直接返回；仍存活的实例也只允许 executing 集合中的记录更新，迟到绑定不能把 unconfirmed 改回 running。用户核对后 /continue 仅解除暂停并唤醒调度，不重跑未确认项。普通 enqueue 需要无活动 Turn、无 executing 记录；指向活动 Turn 的显式 queued append 会优先走 turn/steer，不受这两项空闲条件限制。",
+    "design": {
+      "decision": "宁可暂停核对，也不把未知结果当成安全可重发的失败。",
+      "reason": "服务可能在 Codex 已接收任务而本地尚未记录结果时停止；重新执行会带来重复工作。",
+      "alternative": "把所有 running 在启动时改回 queued 虽然能自动推进，却把结果未知的工作再次提交。",
+      "cost": "需要用户核对历史并决定后续动作；没有自动判定外部副作用或将 unconfirmed 自动结案的机制，本地 JSON 也不是分布式事务。"
+    },
+    "source": {
+      "file": "stages/s04-events-messages/server/modules/data/index.mjs",
+      "needle": "  recover(reason) {",
+      "before": 6,
+      "after": 8,
+      "explanation": "recover 只转换三种执行中状态，保留 queued，并为 unconfirmed 所属 Thread 保存暂停状态。上方 patch 的 expected 检查配合 MessageService.bind 的 executing 参数，阻止迟到绑定改变未确认状态。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "只有排队项的会话，重启后继续",
+        "steps": [
+          {
+            "title": "消息已落盘但尚未发出",
+            "actor": "JsonJobs",
+            "event": "教学模拟 · create(B) → queued",
+            "explain": "B 是普通 enqueue 消息；示意 T-B 没有其他执行中或未确认项，也没有人为暂停。",
+            "state": {
+              "thread": "T-B（示意）",
+              "jobs": "B: queued（示意）",
+              "paused": "否",
+              "activeTurnId": "无",
+              "next": "等待调度"
+            },
+            "lines": []
+          },
+          {
+            "title": "重新打开并检查记录",
+            "actor": "MessageService / JsonJobs",
+            "event": "教学模拟 · open → recover → schedule(T-B)",
+            "explain": "queued 不会被改成 unconfirmed；本会话不因其他 Thread 的未知结果而暂停。",
+            "state": {
+              "thread": "T-B（示意）",
+              "jobs": "B: queued（示意）",
+              "paused": "否",
+              "activeTurnId": "无",
+              "next": "载入会话并检查空闲"
+            },
+            "lines": []
+          },
+          {
+            "title": "通过检查后执行队首",
+            "actor": "调度器",
+            "event": "教学模拟 · ensure(T-B) → starting → turn/start → bind",
+            "explain": "本例会话载入成功，没有活动 Turn，也没有 executing 记录，普通 enqueue 消息 B 才能获得新的 turn id。",
+            "state": {
+              "thread": "T-B（示意）",
+              "jobs": "B: running（示意）",
+              "paused": "否",
+              "activeTurnId": "U-B（示意）",
+              "next": "等待 B 终态"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "执行结果未知，暂停后由用户核对",
+        "steps": [
+          {
+            "title": "服务在一轮执行中停止",
+            "actor": "服务进程",
+            "event": "教学模拟 · A: running；B: queued → 服务停止",
+            "explain": "B 是普通 enqueue 消息；示意停止前 A 已发给 Codex，但最终结果尚未被本地确认。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: running；B: queued",
+              "paused": "否",
+              "activeTurnId": "U-A（旧进程视图，示意）",
+              "next": "本地结果未知"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复时隔离 A",
+            "actor": "JsonJobs",
+            "event": "教学模拟 · recover → A: unconfirmed; pause(T-A)",
+            "explain": "B 保持 queued，但整个 T-A 暂停，不会越过待核对的 A。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: unconfirmed；B: queued",
+              "paused": "是",
+              "activeTurnId": "需从原生会话核对",
+              "next": "等待用户查看历史和队列"
+            },
+            "lines": []
+          },
+          {
+            "title": "用户核对历史和队列",
+            "actor": "用户 → 会话与队列视图",
+            "event": "教学模拟 · 查看原生会话历史与 /queue",
+            "explain": "用户核对 A 的结果和恢复后的活动 Turn；本例恢复视图已无活动 Turn，也无 executing 记录，队列仍暂停，A 仍为 unconfirmed。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: unconfirmed；B: queued",
+              "paused": "是",
+              "activeTurnId": "核对后无活动 Turn（示意）",
+              "next": "仍需明确继续"
+            },
+            "lines": []
+          },
+          {
+            "title": "核对后继续下一条",
+            "actor": "用户 → MessageService",
+            "event": "教学模拟 · /continue → POST /queue/continue → dispatch(B)",
+            "explain": "本例恢复视图已无活动 Turn，也无 executing 记录，普通 enqueue 消息 B 可发起；若仍有活动 Turn 或 executing 记录，B 继续等待。A 的 unconfirmed 不会被此操作结案。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: unconfirmed；B: running",
+              "paused": "否",
+              "activeTurnId": "U-B（示意）",
+              "next": "只执行 B，不重发 A"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "late-bind",
+        "name": "独立防护：存活实例拒绝迟到绑定",
+        "steps": [
+          {
+            "title": "发起结果不确定，记录暂停",
+            "actor": "测试夹具 → MessageService",
+            "event": "测试示例 · uncertain-start → A: unconfirmed; pause(T-A)",
+            "explain": "这是独立测试分支：同一实例仍存活，turn/start 的不确定错误使 A 变成 unconfirmed；没有发生进程重启。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: unconfirmed",
+              "paused": "是",
+              "instance": "同一实例仍存活",
+              "next": "测试手动调用 bind"
+            },
+            "lines": []
+          },
+          {
+            "title": "expected 条件拒绝更新",
+            "actor": "测试夹具 → MessageService.bind",
+            "event": "测试示例 · 手动 bind(A, U-A) → patch(..., executing) returns false",
+            "explain": "测试手动调用 bind 验证 expected 条件：A 已不在 executing 集合，保持 unconfirmed 且不重发。源码在 patch 返回 false 后直接返回，不启动计时或唤醒调度；已关闭的旧实例则在 bind 开头直接返回，不进入 patch。",
+            "state": {
+              "thread": "T-A（示意）",
+              "jobs": "A: unconfirmed",
+              "paused": "是",
+              "instance": "同一实例仍存活",
+              "next": "仍需核对，不自动重发"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s04-restart",
+      "action": "在 s04-events-messages 目录运行命令，分别检查真实 JSON 重新打开后的状态、MessageService 恢复、失败后继续以及独立的迟到 bind 防护。恢复测试重建服务对象，未模拟整机断电；迟到绑定测试在 uncertain-start 后手动调用仍存活实例的 bind，验证 patch 的 expected 条件，并非旧进程响应进入新服务。/continue 的既有断言直接覆盖 failed 后继续；unconfirmed 后继续时，普通 enqueue 的空闲条件及匹配活动 Turn 的 append 分支需结合 dispatch 阅读。",
+      "observe": [
+        "排队中的消息保留下来",
+        "执行中的消息标为 unconfirmed，队列暂停，不自动重发",
+        "/continue 明确继续后才处理下一条，不重跑失败项"
+      ],
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。"
+    },
+    "quiz": {
+      "question": "重启后 A=unconfirmed、B=queued，且 B 是普通 enqueue 消息。用户核对后执行 /continue，代码会怎样处理？",
+      "options": [
+        "自动重试 A，成功后再处理 B。",
+        "把 A 标为 completed，代表用户已经确认成功。",
+        "保留 A=unconfirmed；无活动 Turn、无 executing 记录等条件满足后才调度普通 enqueue 消息 B。"
+      ],
+      "answer": 2,
+      "explanation": "C 符合 continue 只解除暂停的实现。它既不重试 A，也不判断 A 已成功；如果以后再次恢复时 A 仍为 unconfirmed，recover 仍会暂停这个 Thread。"
+    },
+    "reference": {
+      "session": "s10",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s10_task_system",
+      "adaptation": "借用“持久状态的转移要有明确前提”的讲法。参考按状态、owner 和依赖领取任务；本项目用执行状态、暂停标记和 expected 条件保护恢复，不实现依赖任务图，也不把存盘等同于恰好一次执行。"
+    }
+  }
+]

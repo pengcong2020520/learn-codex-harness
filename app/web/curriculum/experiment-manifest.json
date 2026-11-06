@@ -90,6 +90,150 @@
       ]
     },
     {
+      "id": "s03-resident",
+      "stage": "s03-service",
+      "title": "客户端断开，这一轮还在跑",
+      "question": "终端客户端在回复途中被关掉，服务端那一轮会被取消吗？",
+      "command": "npm run lesson -- s03-resident",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "收到 turn/start RPC 响应后返回 202 和 turn id；不额外等待完成通知，返回时也可能已经完成",
+        "客户端进程被杀掉后，服务端这一轮照常完成",
+        "重新连接后用 /sessions/resume 能看到完整回复"
+      ],
+      "why": "一轮由服务端发起并持有；客户端只是查看者，断开不影响执行。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(真实本机 HTTP|客户端在回复途中被关掉)",
+        "tests/http-cli.test.mjs"
+      ]
+    },
+    {
+      "id": "s03-one-turn",
+      "stage": "s03-service",
+      "title": "一次只跑一轮，服务端还不排队",
+      "question": "上一轮还没答完就再发一条，服务端会怎么处理？",
+      "command": "npm run lesson -- s03-one-turn",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "同一会话上一轮未结束时，再提交返回 409",
+        "并发提交只有一个真正发出 turn/start",
+        "客户端自己等上一轮结束，再发下一条"
+      ],
+      "why": "本阶段服务端只负责发起与查看；排队调度要等下一章的任务队列。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(同一会话一次只跑一轮|上一轮没结束时再提交|上一轮结束前不发送下一条)",
+        "tests/sessions.test.mjs",
+        "tests/http-cli.test.mjs",
+        "tests/client-rendering.test.mjs"
+      ]
+    },
+    {
+      "id": "s03-cleanup",
+      "stage": "s03-service",
+      "title": "运行目录怎么清理才不误删",
+      "question": "服务常驻后每次启动都留下 .runs/app-server-*，能直接按时间全删吗？",
+      "command": "npm run lesson -- s03-cleanup",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "只清理按最新修改时间排序不在前 5 个合法缓存候选内、且最新修改时间超过 7 天的运行目录",
+        "检查当前运行、会话加载或引用、运行进程标记及本轮扫描发现的打开文件；保存索引后不重扫打开文件，不能完全排除外部进程新增占用",
+        "删除前先把会话索引落盘，删掉日志后历史会话仍能检索"
+      ],
+      "why": "运行目录是缓存，但会话检索和正在运行的进程依赖它；先保住索引、再确认无人使用才删除。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(默认只清理|删除日志后|当前运行、已加载会话)",
+        "tests/maintenance.test.mjs"
+      ]
+    },
+    {
+      "id": "s04-queue",
+      "stage": "s04-events-messages",
+      "title": "排队搬到服务端",
+      "question": "模型还在回答，又连着提交了两条，服务端怎么保证不丢、不乱序、不并发？",
+      "command": "npm run lesson -- s04-queue",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "提交立即返回 queued，不等模型回复",
+        "同一会话先进先出，每条是一个新的 turn，同时只跑一轮",
+        "客户端退出后，已提交的消息由服务端继续执行"
+      ],
+      "why": "输入先写进任务记录，再由调度器按会话逐条发出；执行顺序不再依赖客户端在线。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(普通消息由服务端 FIFO|CLI 管道连续输入|同消息 ID 重复提交)",
+        "tests/scheduling.test.mjs",
+        "tests/http-cli.test.mjs"
+      ]
+    },
+    {
+      "id": "s04-reconnect",
+      "stage": "s04-events-messages",
+      "title": "断线重连，不漏状态、不重发消息",
+      "question": "SSE 连接断了又连上，客户端会漏掉中间的状态，或者把旧消息再发一遍吗？",
+      "command": "npm run lesson -- s04-reconnect",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "连接建立后先收到当前保留范围的组合 snapshot，随后收到携带 session / queue 状态快照的事件",
+        "重连只是重新订阅，不会产生新的消息",
+        "session / queue 按 Thread 过滤；无 threadId 的 fatal / shutdown 向所有订阅者广播"
+      ],
+      "why": "快照兜住断线期间的变化；提交和订阅是两件事，重连永远不会重发。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(重连先同步快照|会话快照变化都经事件中心发布|不同 thread 的事件)",
+        "tests/http-cli.test.mjs",
+        "tests/sessions.test.mjs",
+        "tests/scheduling.test.mjs"
+      ]
+    },
+    {
+      "id": "s04-restart",
+      "stage": "s04-events-messages",
+      "title": "重启以后，哪些任务还能继续",
+      "question": "服务重启时有一条在执行、一条在排队，重启后会怎样？",
+      "command": "npm run lesson -- s04-restart",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "observations": [
+        "排队中的消息保留下来",
+        "执行中的消息标为 unconfirmed，队列暂停，不自动重发",
+        "/continue 明确继续后才处理下一条，不重跑失败项"
+      ],
+      "why": "结果不确定的执行宁可停下来等人核对，也不重复执行。",
+      "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-timeout=30000",
+        "--test-name-pattern=^(任务记录 JSON|服务重启保留排队项|失败后暂停队列|迟到的响应)",
+        "tests/json-storage.test.mjs",
+        "tests/scheduling.test.mjs"
+      ]
+    },
+    {
       "id": "s05-agent-config",
       "stage": "s05-agent-assembly",
       "title": "把 Agent 定义变成有效约束",
