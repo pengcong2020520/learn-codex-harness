@@ -46,9 +46,6 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   const turnTimeoutMs = Number(environment.AGENT_TURN_TIMEOUT_MS || 600_000);
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
   const launch = buildRestrictedLaunch(environment);
-  const data = { databaseUrl: environment.DATABASE_URL, redisUrl: environment.REDIS_URL };
-  // Product credentials must not leak into Codex, model tool subprocesses or protocol logs.
-  for (const key of Object.keys(launch.env)) if (/^(DATABASE_URL|REDIS_URL|PG[A-Z_]+)$/.test(key)) delete launch.env[key];
   const memoryModel = name => {
     const model = environment[name]?.trim() || launch.model;
     if (model && (model.length > 200 || /[\u0000-\u001f\u007f]/.test(model))) throw new Error(`${name} 模型名称无效。`);
@@ -63,5 +60,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
     extractModel: memoryModel("AGENT_MEMORY_EXTRACT_MODEL"),
     consolidationModel: memoryModel("AGENT_MEMORY_CONSOLIDATION_MODEL"), minIdleHours
   };
-  return { root, agentFile: path.resolve(root, environment.AGENT_DEFINITION || "agents/writing-agent.json"), port, host: "127.0.0.1", turnTimeoutMs, launch, memory, data };
+  return { root, agentFile: path.resolve(root, environment.AGENT_DEFINITION || "agents/writing-agent.json"), port, host: "127.0.0.1", turnTimeoutMs, launch, memory };
 }

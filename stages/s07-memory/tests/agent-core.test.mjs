@@ -7,7 +7,7 @@ import { prepareRun, resolveWorkspace } from "../server/modules/codex/runtime.mj
 import { createFileTools } from "../server/modules/data/files.mjs";
 import { createToolService } from "../server/modules/tools/loader.mjs";
 import { verifySkills } from "../server/modules/codex/skills.mjs";
-import { fixture, installToolFixture, tempRoot, rig, until } from "./helpers.mjs";
+import { fixture, installAgentFixture, installToolFixture, tempRoot, rig, until } from "./helpers.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 
 function edit(root, change) {
@@ -23,6 +23,98 @@ async function assemble(t, change = () => {}) {
   const registry = await createToolService(root, { agent, files }); agent.activate(registry.version);
   return { root, config, agent, runtime, files, registry };
 }
+
+test("Agent schema 拒绝未知字段、缺失必需引用、原生权限提升和越出目录的角色路径", t => {
+  const root = installAgentFixture(tempRoot(t)), original = fs.readFileSync(path.join(root, "agents/writing-agent.json"));
+  for (const change of [v => v.extra = true, v => v.agent.executionRef = "missing", v => delete v.agent.instructions,
+    v => v.bindings.executions["restricted-local"].nativeShell = true, v => v.bindings.executions["restricted-local"].sandbox = "workspace-write",
+    v => v.agent.instructions = "../.env", v => v.agent.id = "1-bad"]) {
+    fs.writeFileSync(path.join(root, "agents/writing-agent.json"), original); edit(root, change);
+    assert.throws(() => new AgentDefinition(root));
+  }
+});
+
+test("角色由 Agent 定义指定的文件装配，进入模型目录和会话的 baseInstructions", async t => {
+  const { config, agent } = await assemble(t);
+  assert.match(agent.instructions, /^你是“AI 知识整理助手”/);
+  assert.equal(config.agent, agent);
+  const r = await rig(t);
+  const start = r.rpc.calls.find(call => call.method === "thread/start").params;
+  assert.equal(start.baseInstructions, r.config.agent.instructions);
+  const withCatalog = loadServerConfig(r.root, { ...fixture, CODEX_MODEL_CATALOG_ENABLED: "true", CODEX_MODEL_CONTEXT_WINDOW: "128000" });
+  new AgentDefinition(r.root).configure(withCatalog, r.runtime);
+  assert.equal(withCatalog.launch.catalog.models[0].model_messages.instructions_template, withCatalog.agent.instructions);
+});
+
+test("定义、角色任一文件变了，旧版本立即作废；恢复原文件也不能免重启", async t => {
+  const { root, agent } = await assemble(t);
+  agent.assertCurrent();
+  const role = path.join(root, "agents/roles/writing-assistant.md"), original = fs.readFileSync(role);
+  fs.appendFileSync(role, "\n多一句");
+  assert.throws(() => agent.assertCurrent(), /已变更/);
+  fs.writeFileSync(role, original);
+  assert.throws(() => agent.assertCurrent(), /已变更/, "撤销被检测后，恢复文件也不能免重启");
+});
+
+test("描述符不复制角色正文或密钥；无绑定的旧会话和不兼容版本明确拒绝", async t => {
+  const { agent, root } = await assemble(t);
+  agent.bind("thread-test"); agent.assertCompatible("thread-test");
+  assert.throws(() => agent.assertCompatible("legacy"), /旧会话/);
+  assert.throws(() => agent.assertCompatible("thread-test", "old-job"), /不兼容/);
+  const descriptor = fs.readFileSync(path.join(root, ".data/agent-descriptors", `${agent.descriptor.hash}.json`), "utf8");
+  assert.ok(!descriptor.includes(fixture.CODEX_API_KEY)); assert.ok(!descriptor.includes("你的任务是"));
+  agent.activate(agent.descriptor.toolVersion, [{ name: "new-skill", path: "/skills/new/SKILL.md", version: "v2" }]);
+  assert.throws(() => agent.assertCompatible("thread-test"), /不兼容/, "Skill 集合变化也会产生新版本");
+});
+
+test("排队执行前检查版本；版本变化不发送下一轮、不重复重发", async t => {
+  const r = await rig(t); await r.submit("first", "a");
+  await until(() => r.messages.job("a").status === "running");
+  await r.submit("next", "b");
+  r.config.agent.activate(r.config.agent.descriptor.toolVersion, [{ name: "changed", path: "/skills/changed/SKILL.md", version: "v1" }]); r.rpc.finish(r.session.id);
+  await until(() => r.messages.job("b").status === "failed");
+  assert.equal(r.rpc.calls.filter(call => call.method === "turn/start").length, 1);
+});
+
+test("原生 Skill 发现核验与显式输入；新发现的范围外 Skill 被禁用", async t => {
+  const { agent, runtime } = await assemble(t);
+  const discovered = [{ path: "/allowed/SKILL.md", name: "allowed", enabled: false }, { path: "/other/SKILL.md", name: "other", enabled: true }];
+  // 仅接口夹具：不声称此处证明原生 Skill 解析行为。
+  const configured = { ...agent, skills: [{ id: "allowed-id", path: discovered[0].path, required: true, version: "v1" }] };
+  const rpc = { async request(method, params) {
+    if (method === "skills/list") return { data: [{ skills: structuredClone(discovered) }] };
+    if (method === "skills/config/write") { discovered.find(item => item.path === params.path).enabled = params.enabled; return {}; }
+    throw new Error(method);
+  } };
+  const skills = await verifySkills(rpc, configured, runtime.workspaceDir);
+  assert.equal(discovered[1].enabled, false); assert.equal(skills[0].name, "allowed");
+  agent.availableSkills = skills;
+  agent.deniedSkillNames = configured.deniedSkillNames;
+  assert.equal(agent.input("$allowed 提炼观点")[1].type, "skill");
+  assert.throws(() => agent.input("$other 执行"), /未授权/);
+  assert.equal(agent.input("请解释 $HOME 变量").length, 1, "普通变量文字不能被误当成非法 Skill");
+  assert.equal(agent.input("$allowed-longer").length, 1, "Skill 名称不能按前缀误匹配");
+});
+
+test("必需 Skill 缺失或有未满足依赖启动报错；可选引用明确降级", t => {
+  const root = installAgentFixture(tempRoot(t));
+  edit(root, v => v.agent.skills = [{ id: "missing", required: true }]);
+  assert.throws(() => new AgentDefinition(root), /缺少必需 Skill/);
+  edit(root, v => v.agent.skills[0].required = false);
+  assert.match(new AgentDefinition(root).warnings[0], /可选 Skill/);
+  edit(root, v => { v.agent.skills[0].required = true; v.bindings.skills.missing = { path: "not-installed", requires: ["shell"] }; });
+  assert.throws(() => new AgentDefinition(root), /依赖尚未支持/);
+});
+
+test("多轮消息仍原样提交，不将角色 prompt 重复拼入用户输入", async t => {
+  const r = await rig(t);
+  r.rpc.mode = "early";
+  await r.submit("先帮我提取观点", "first");
+  await r.submit("只润色上面那段话", "second");
+  await until(() => r.messages.job("second").status === "completed");
+  const requests = r.rpc.calls.filter(call => call.method === "turn/start");
+  assert.deepEqual(requests.map(call => call.params.input[0].text), ["先帮我提取观点", "只润色上面那段话"]);
+});
 
 test("稳定工作区与 runDir 分离；缺失外部工作区和服务状态目录显式拒绝", async t => {
   const { root, runtime } = await assemble(t);
@@ -123,41 +215,16 @@ test("描述符不复制正文或密钥；无绑定的旧会话和不兼容版�
   agent.activate("other-tools"); assert.throws(() => agent.assertCompatible("thread-test"), /不兼容/);
 });
 
-test("排队执行前检查版本；版本变化不发送下一轮、不重复重发", async t => {
-  const r = await rig(t); await r.submit("first", "a");
-  await until(() => r.messages.job("a").status === "running");
-  await r.submit("next", "b");
-  r.config.agent.activate("changed-tools"); r.rpc.finish(r.session.id);
+test("描述符记录工具与数据实现版本，工具变化阻止排队旧任务", async t => {
+  const { agent, registry } = await assemble(t);
+  assert.equal(agent.descriptor.toolVersion, registry.version);
+  assert.deepEqual(agent.descriptor.tools, agent.definition.agent.tools.allow);
+  assert.match(agent.descriptor.dataVersion, /^[a-f0-9]{64}$/);
+  assert.deepEqual(agent.descriptor.sources, agent.sources);
+  assert.match(agent.instructions, /有效资源规则/);
+  const r = await rig(t);
+  await r.submit("first", "a"); await until(() => r.messages.job("a").status === "running");
+  await r.submit("next", "b"); r.config.agent.activate("changed-tools"); r.rpc.finish(r.session.id);
   await until(() => r.messages.job("b").status === "failed");
   assert.equal(r.rpc.calls.filter(call => call.method === "turn/start").length, 1);
-});
-
-test("原生 Skill 发现核验与显式输入；新发现的范围外 Skill 被禁用", async t => {
-  const { agent, runtime } = await assemble(t);
-  const discovered = [{ path: "/allowed/SKILL.md", name: "allowed", enabled: false }, { path: "/other/SKILL.md", name: "other", enabled: true }];
-  // 仅接口夹具：不声称此处证明原生 Skill 解析行为。
-  const configured = { ...agent, skills: [{ id: "allowed-id", path: discovered[0].path, required: true, version: "v1" }] };
-  const rpc = { async request(method, params) {
-    if (method === "skills/list") return { data: [{ skills: structuredClone(discovered) }] };
-    if (method === "skills/config/write") { discovered.find(item => item.path === params.path).enabled = params.enabled; return {}; }
-    throw new Error(method);
-  } };
-  const skills = await verifySkills(rpc, configured, runtime.workspaceDir);
-  assert.equal(discovered[1].enabled, false); assert.equal(skills[0].name, "allowed");
-  agent.availableSkills = skills;
-  agent.deniedSkillNames = configured.deniedSkillNames;
-  assert.equal(agent.input("$allowed 提炼观点")[1].type, "skill");
-  assert.throws(() => agent.input("$other 执行"), /未授权/);
-  assert.equal(agent.input("请解释 $HOME 变量").length, 1, "普通变量文字不能被误当成非法 Skill");
-  assert.equal(agent.input("$allowed-longer").length, 1, "Skill 名称不能按前缀误匹配");
-});
-
-test("必需 Skill 缺失或有未满足依赖启动报错；可选引用明确降级", t => {
-  const root = installToolFixture(tempRoot(t));
-  edit(root, v => v.agent.skills = [{ id: "missing", required: true }]);
-  assert.throws(() => new AgentDefinition(root), /缺少必需 Skill/);
-  edit(root, v => v.agent.skills[0].required = false);
-  assert.match(new AgentDefinition(root).warnings[0], /可选 Skill/);
-  edit(root, v => { v.agent.skills[0].required = true; v.bindings.skills.missing = { path: "not-installed", requires: ["shell"] }; });
-  assert.throws(() => new AgentDefinition(root), /依赖尚未支持/);
 });

@@ -115,25 +115,22 @@ export class AgentDefinition {
       dataVersion: digest(['files.mjs'].map(name =>
         digest(fs.readFileSync(new URL(`../data/${name}`, import.meta.url))))) };
     this.descriptor = freeze({ ...descriptor, hash: digest(descriptor) });
-    if (this.repository) return this.repository.saveAgent(this.descriptor);
     writeJson(path.join(this.root, ".data/agent-descriptors", `${this.descriptor.hash}.json`), this.descriptor);
   }
   get bindingsFile() { return path.join(this.root, ".data/thread-agents.json"); }
   bind(threadId) {
     if (!this.descriptor) throw new Error("Agent 尚未完成能力核验。");
-    if (this.repository) return this.repository.bind(threadId, this.descriptor.hash, this.runtime.workspaceDir);
     const bindings = readJson(this.bindingsFile, {});
     if (Object.hasOwn(bindings, threadId) && bindings[threadId] !== this.descriptor.hash) this.assertCompatible(threadId);
     bindings[threadId] = this.descriptor.hash; writeJson(this.bindingsFile, bindings);
   }
   assertCompatible(threadId, jobHash) {
     this.assertCurrent();
-    if (this.repository) return this.repository.conversation(threadId).then(row => this.checkBinding(row.agent_hash, jobHash));
     const previous = readJson(this.bindingsFile, {})[threadId];
     this.checkBinding(previous, jobHash);
   }
   checkBinding(previous, jobHash) {
-    if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不自动迁移权限，请新建会话。", 409, "LEGACY_THREAD");
+    if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不会把旧会话自动迁到新版本，请新建会话。", 409, "LEGACY_THREAD");
     if (previous !== this.descriptor?.hash || (jobHash && jobHash !== previous)) throw new AppError("会话/排队消息的 Agent 版本与当前不兼容，请新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
   input(text) {

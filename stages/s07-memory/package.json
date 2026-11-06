@@ -11,15 +11,14 @@
     "chat": "node client/main.mjs",
     "server": "node server/main.mjs",
     "app-server": "node server/main.mjs",
-    "demo": "node 05-app-server.mjs",
     "check": "node server/check.mjs",
     "check:server": "node server/check.mjs --codex",
     "smoke": "node scripts/smoke.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "lesson": "node lessons/run.mjs",
     "tools": "node server/modules/tools/web-cli.mjs",
     "test:codex-tools": "node --test tests/codex-tools.integration.mjs",
-    "test:codex-memory": "node --test tests/codex-memory.integration.mjs",
-    "test": "node --test 05-app-server.test.mjs tests/*.test.mjs",
-    "lesson": "node lessons/run.mjs"
+    "test:codex-memory": "node --test tests/codex-memory.integration.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

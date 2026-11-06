@@ -24,8 +24,6 @@ export class CodexConnection extends EventEmitter {
     this.log = log;
     this.cli = cli;
     this.pending = new Map();
-    this.toolCalls = new Map();
-    this.toolHandler = null;
     this.sequence = 0;
     this.closing = false;
     this.failure = null;
@@ -93,10 +91,8 @@ export class CodexConnection extends EventEmitter {
   receive(message) {
     this.record("server", message);
     if (message.id !== undefined && message.method) {
-      // 保留原案例的安全策略，不因架构拆分放宽工具权限。
-      if (message.method === "item/tool/call" && this.toolHandler) {
-        this.handleToolRequest(message);
-      } else if (["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].includes(message.method)) {
+      // 本服务不放开命令执行和改文件：审批请求一律拒绝，其他服务端请求不支持。
+      if (["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].includes(message.method)) {
         this.send({ id: message.id, result: { decision: "decline" } });
       } else {
         this.send({ id: message.id, error: { code: -32601, message: "Unsupported server request" } });
@@ -112,42 +108,7 @@ export class CodexConnection extends EventEmitter {
       else waiter.resolve(message.result);
       return;
     }
-    if (message.method === "turn/completed") {
-      for (const call of this.toolCalls.values()) {
-        if (call.threadId === message.params?.threadId && call.turnId === message.params?.turn?.id) call.controller.abort();
-      }
-    }
     this.emit("notification", message);
-  }
-
-  handleToolRequest(message) {
-    const params = message.params || {};
-    const failure = text => ({ success: false, contentItems: [{ type: "inputText", text: JSON.stringify({ error: text }) }] });
-    const reply = result => {
-      if (this.closing || this.failure) return;
-      try { this.send({ id: message.id, result }); } catch (error) { this.fail(error); }
-    };
-    if ([params.threadId, params.turnId, params.callId].some(id => typeof id !== "string" || !id)) {
-      reply(failure("工具调用缺少 Thread id、turn id 或 callId。")); return;
-    }
-    const key = JSON.stringify([params.threadId, params.turnId, params.callId]);
-    const signature = JSON.stringify([params.namespace, params.tool, params.arguments]);
-    let call = this.toolCalls.get(key);
-    if (call && call.signature !== signature) { reply(failure("重复的工具调用 ID 携带了不同参数，已拒绝。")); return; }
-    if (!call) {
-      if (this.toolCalls.size >= 128) {
-        for (const [id, old] of this.toolCalls) { if (old.done) { this.toolCalls.delete(id); break; } }
-        if (this.toolCalls.size >= 128) { reply(failure("同时执行的工具调用过多。")); return; }
-      }
-      const controller = new AbortController();
-      call = { threadId: params.threadId, turnId: params.turnId, signature, controller, done: false };
-      // 请求回包仍按 JSON-RPC id 关联；执行按 callId 去重，不阻塞通知和其他 RPC 响应。
-      call.promise = Promise.resolve().then(() => this.toolHandler(params, {
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)])
-      })).catch(error => failure(this.redact(error.message))).finally(() => { call.done = true; });
-      this.toolCalls.set(key, call);
-    }
-    void call.promise.then(reply);
   }
 
   fail(error) {
@@ -155,7 +116,6 @@ export class CodexConnection extends EventEmitter {
     const safe = new Error(this.redact(error.message));
     safe.uncertain = true;
     this.failure = safe;
-    for (const call of this.toolCalls.values()) call.controller.abort();
     for (const waiter of this.pending.values()) {
       clearTimeout(waiter.timer);
       waiter.reject(safe);
@@ -167,7 +127,6 @@ export class CodexConnection extends EventEmitter {
   async close() {
     if (this.closing) return this.exited;
     this.closing = true;
-    for (const call of this.toolCalls.values()) call.controller.abort();
     for (const waiter of this.pending.values()) {
       clearTimeout(waiter.timer);
       waiter.reject(new Error("服务正在关闭，请求结果可能未确认。"));

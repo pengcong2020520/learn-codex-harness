@@ -3,15 +3,14 @@ import path from "node:path";
 import { writeText } from "../storage/index.mjs";
 
 const HEADER = "# project-managed Codex configuration";
-const LEGACY_HEADER = "# project-managed MCP configuration";
 
 export function codexPaths(root) {
   const home = path.join(root, ".data", "codex");
   return { home, configFile: path.join(home, "config.toml"), memories: path.join(home, "memories") };
 }
 
-// 公共状态位置与配置只有这一处负责；工具模块只提供自己的 MCP 配置。
-export function prepareCodexConfig(config, mcpServers) {
+// 公共状态位置与配置只有这一处负责；原生历史写在本服务自己的 .data/codex，不碰个人目录。
+export function prepareCodexConfig(config, mcpServers = {}) {
   const paths = codexPaths(config.root);
   for (const directory of [path.join(config.root, ".data"), paths.home]) {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -22,7 +21,7 @@ export function prepareCodexConfig(config, mcpServers) {
     const stat = fs.lstatSync(paths.configFile);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error("Codex 配置必须是独立普通文件。");
     const previous = fs.readFileSync(paths.configFile, "utf8");
-    if (![HEADER, LEGACY_HEADER].some(header => previous.startsWith(header + "\n"))) {
+    if (!previous.startsWith(HEADER + "\n")) {
       throw new Error(".data/codex/config.toml 不是本项目生成的配置；为保护文件已停止启动。");
     }
   } catch (error) { if (error.code !== "ENOENT") throw error; }

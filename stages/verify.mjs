@@ -23,7 +23,7 @@ const docs = [
   ...CHAPTERS.map(dir => [`${dir}/README.md`, "chapter"]),
   ...Object.values(STAGES).map(dir => [`${dir}/docs/design.md`, "design"]),
   ["s00-sdk-quickstart/docs/guide.md", "reference"],
-  ["s07-memory/docs/tools.md", "reference"],
+  ["s06-tools/docs/tools.md", "reference"],
   ["s08-data-layer/docs/data-layer.md", "reference"],
   ["s09-knowledge-layer/docs/knowledge-implementation.md", "reference"],
   ["s10-skill-workflow/docs/skill-workflow-design.md", "reference"],

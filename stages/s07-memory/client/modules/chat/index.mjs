@@ -88,6 +88,7 @@ export async function runChat(api, terminal) {
         queuePaused = queue.paused;
       }
       if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
+      if (event.type === "shutdown") terminal.write(event.data.message);
       if (event.type === "tools") terminal.write(toolStatus(event.data));
     }, (status, message) => { if (status === "reconnecting") terminal.write(`${message} 正在重连；不会自动重发消息。`); });
   }
@@ -101,7 +102,9 @@ export async function runChat(api, terminal) {
       const command = text.slice(7).trim();
       if (!command) {
         const state = await api.request("/memory");
-        terminal.write(`记忆总开关：${state.effective.enabled ? "开启" : "关闭"}\n使用已有记忆：${state.effective.use ? "开启" : "关闭"}\n新 Thread 默认参与提炼：${state.effective.generate ? "是" : "否"}\n记忆摘要：${state.hasSummary ? "已有产物" : "尚无产物"}\n记忆目录：${state.directory}\n${state.generationWarning}\n${state.note}`);
+        // 读取和后台生成都受总开关约束：总开关关着时，配置为开启也不生效。
+        const gated = value => !value ? "关闭" : state.effective.enabled ? "开启" : "已配置，总开关关闭时不生效";
+        terminal.write(`记忆总开关：${state.effective.enabled ? "开启" : "关闭"}\n使用已有记忆：${gated(state.effective.use)}\n后台生成记忆：${gated(state.effective.generate)}\n新 Thread 默认参与提炼：${state.effective.contribute ? "是" : "否"}\n记忆摘要：${state.hasSummary ? "已有产物" : "尚无产物"}\n记忆目录：${state.directory}\n${state.generationWarning}\n${state.note}`);
         return;
       }
       if (command === "show") {

@@ -1,4 +1,3 @@
-import { testDataFactory } from './jobs-fixture.mjs';
 // 真 Codex 0.154.0 + 本机模拟 Responses，不读取 .env，不使用真实模型密钥。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -48,7 +47,7 @@ test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重�
   });
   let app;
   cleanup(root, () => app?.close());
-  app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  app = await startAgentServer({ config: configFor(root, provider), log: () => {} });
   const session = await app.sessions.create(), other = await app.sessions.create();
   assert.notEqual(session.id, other.id);
   assert.equal(app.sessions.sessions.get(session.id).cwd, app.runtime.workspaceDir);
@@ -65,10 +64,12 @@ test("真实 Codex：角色装配、受限 MCP 文件闭环、稳定 cwd、重�
   const oldRun = app.runtime.runDir, workspaceDir = app.runtime.workspaceDir;
   const descriptor = app.agent.descriptor.hash;
   await app.close();
-  app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  app = await startAgentServer({ config: configFor(root, provider), log: () => {} });
   assert.equal(app.agent.descriptor.hash, descriptor);
   assert.equal(app.runtime.workspaceDir, workspaceDir);
   assert.notEqual(app.runtime.runDir, oldRun);
+  // 重启后任务记录会在后台恢复上一会话；恢复期间清理会保护所有运行目录，等它结束再清理。
+  await app.sessions.ensure(session.id); await until(() => app.sessions.loading.size === 0);
   const maintenance = new RunMaintenance({ root, runtime: app.runtime, sessions: app.sessions,
     policy: { ...RUN_RETENTION, keep: 1 }, inspectOpenPaths: async () => [] });
   const result = await maintenance.sweep({ now: Date.now() + 8 * 86400000 });
@@ -102,7 +103,7 @@ test("真实 Codex：原生 Skill 发现、显式正文注入与范围外拒绝"
     assert.ok(!JSON.stringify(body).includes("CORE_DENIED_INSTRUCTIONS"));
     return answer("已使用允许的 Skill。");
   });
-  const app = await startAgentServer({ dataFactory: testDataFactory, config: configFor(root, provider), log: () => {} });
+  const app = await startAgentServer({ config: configFor(root, provider), log: () => {} });
   cleanup(root, () => app.close());
   assert.equal(app.agent.availableSkills[0].name, "core-allowed");
   const session = await app.sessions.create();

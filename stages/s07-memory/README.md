@@ -56,11 +56,11 @@ Codex 会在会话空闲一段时间后，从历史里提炼出记忆、再合�
 
 | 开关 | 在哪设置 | 管什么 |
 |------|---------|--------|
-| 总开关 | `.env` 的 `AGENT_MEMORY_ENABLED` | 是否启用原生记忆；修改后需重启服务 |
-| Agent 策略 | `agents/writing-agent.json` 的 `agent.memory` | 这个 Agent 是否使用（`use`）、是否贡献（`contribute`）记忆 |
+| 总开关 | `.env` 的 `AGENT_MEMORY_ENABLED` | 是否启用原生记忆；修改后需重启服务。下面的设置都要它开着才生效 |
+| Agent 策略 | `agents/writing-agent.json` 的 `agent.memory` | 这个 Agent 是否使用（`use`）记忆、新会话默认是否贡献（`contribute`）；本阶段默认两项都是 `false` |
 | 会话参与 | `/memory contribute on|off` | 这一个 Thread 之后是否参与提炼 |
 
-读取与贡献是分开的：`AGENT_MEMORY_USE` 与 `agent.memory.use` 同时为真才使用记忆；`contribute` 关闭不禁止读取，也不会删除过去已经提炼的内容。
+读取与贡献是分开的：`AGENT_MEMORY_USE` 与 `agent.memory.use` 同时为真才使用记忆；`contribute` 关闭不禁止读取，也不会删除过去已经提炼的内容。此外 `AGENT_MEMORY_GENERATE` 单独控制原生后台是否生成记忆，同样受总开关约束。
 
 ### 开了不等于已经生成
 
@@ -88,6 +88,7 @@ Codex 会在会话空闲一段时间后，从历史里提炼出记忆、再合�
 cd stages/s07-memory
 npm ci
 cp .env.example .env    # 填入模型配置；需要体验记忆时设 AGENT_MEMORY_ENABLED=true
+# 想让这个 Agent 使用、贡献记忆，还要把 agents/writing-agent.json 里 agent.memory 的 use、contribute 改成 true
 ```
 
 **运行**（两个终端）：
@@ -103,7 +104,7 @@ npm run chat            # 终端 2：CLI 客户端
 2. `/memory show`：查看记忆摘要；还没有生成时会明确说明。
 3. `/memory contribute off`：让当前会话之后不参与提炼。总开关关闭时，`/memory contribute on` 会被拒绝。
 
-**这次运行多了什么**：`.data/codex/config.toml` 里多了 `[features] memories` 与 `[memories]` 两段；开启记忆并空闲足够长时间后，`.data/codex/memories/` 下会出现记忆文件。
+**这次运行多了什么**：`.data/codex/config.toml` 的 `[features] memories` 按总开关写入，并多了 `[memories]` 一段。三道开关都打开、会话空闲足够长时间后，原生后台会开始提炼，`.data/codex/memories/` 下会出现中间产物；本阶段关闭了原生 shell 和写文件，最终摘要的合并写不出来，`/memory` 会如实显示。
 
 **离线实验**：
 
@@ -125,8 +126,10 @@ const content = `${HEADER}\nsqlite_home = ${JSON.stringify(paths.home)}\n` +
     use_memories: memory.use, generate_memories: memory.generate,
     extract_model: memory.extractModel, consolidation_model: memory.consolidationModel,
     min_rollout_idle_hours: memory.minIdleHours,
-// …
-config.launch.env = { ...config.launch.env, CODEX_HOME: paths.home, CODEX_SQLITE_HOME: paths.home };
+    // 禁用通用 Shell 时，召回细节使用原生的受限记忆工具。
+    dedicated_tools: true
+  }) + Object.entries(mcpServers).map(([name, settings]) => table(`mcp_servers.${name}`, settings)).join("");
+writeText(paths.configFile, content);
 ```
 
 **启动时读回实际配置并逐项比对**（[`server/modules/memory/index.mjs`](server/modules/memory/index.mjs)）。不一致就拒绝启动：
@@ -136,21 +139,24 @@ const { config: actual } = await this.rpc.request("config/read", { includeLayers
 const memory = actual?.memories;
 const requested = this.config.memory;
 if (actual?.features?.memories !== requested.enabled || memory?.use_memories !== requested.use ||
-// …
+    memory?.generate_memories !== requested.generate || memory?.extract_model !== (requested.extractModel ?? null) ||
+    memory?.consolidation_model !== (requested.consolidationModel ?? null) || memory?.min_rollout_idle_hours !== requested.minIdleHours || memory?.dedicated_tools !== true) {
   throw new Error("Codex 记忆配置与服务端配置不一致，请检查配置覆盖；不会假报开启成功。");
 }
 ```
 
-**会话参与设置只走原生接口，先过三道检查**：
+**会话参与设置：先查总开关和 Agent 策略，再确认会话属于本项目，一轮结束后才调用原生接口**：
 
 ```javascript
 if (enabled && !this.effective?.enabled) throw new AppError("记忆总开关尚未开启，请配置 AGENT_MEMORY_ENABLED 并重启服务。", 409);
 if (enabled && this.config.agent && !this.config.memory.contribute) throw new AppError("当前 Agent 策略禁止会话贡献记忆。", 409);
 await this.sessions.ensure(threadId); // 复用项目会话校验，不能操作其他项目的 Thread。
-// …
+return this.sessions.atBoundary(async () => {
   if (this.sessions.sessions.get(threadId)?.activeTurnId) throw new AppError("请在当前 turn 结束后修改记忆参与设置。", 409);
   const mode = enabled ? "enabled" : "disabled";
   await this.rpc.request("thread/memoryMode/set", { threadId, mode });
+  return { threadId, mode, note: "设置已提交：只控制此 Thread 后续参与提炼的资格；不停止已运行的后台任务，不立即删除过去贡献的记忆，也不控制读取。" };
+}, { allowBusy: true });
 ```
 
 ---

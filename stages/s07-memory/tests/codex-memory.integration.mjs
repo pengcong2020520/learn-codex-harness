@@ -1,4 +1,3 @@
-import { testDataFactory } from './jobs-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -43,15 +42,15 @@ test("真实 Codex：原生提炼、参与设置持久化，以及禁用写工�
   config.port = 0;
   let app;
   cleanup(root, () => app?.close());
-  app = await startAgentServer({ dataFactory: testDataFactory, config, log: line => logs.push(line) });
+  app = await startAgentServer({ config, log: line => logs.push(line) });
   assert.equal(app.memory.snapshot().effective.enabled, true);
   assert.equal(app.memory.snapshot().generationCapability, "blocked");
   const session = await app.sessions.create();
   await app.messages.submit({ threadId: session.id, clientMessageId: "seed", text: "我是测试用户，我的文章偏好是先用具体案例开头。".repeat(80) });
-  await until(() => app.messages.job("seed")?.status === "completed", 10000);
+  await until(async () => (await app.messages.job("seed"))?.status === "completed", 10000);
   const excluded = await app.sessions.create();
   await app.messages.submit({ threadId: excluded.id, clientMessageId: "excluded", text: "EXCLUDED_MEMORY_FIXTURE：不参与提炼的合成会话。".repeat(80) });
-  await until(() => app.messages.job("excluded")?.status === "completed", 10000);
+  await until(async () => (await app.messages.job("excluded"))?.status === "completed", 10000);
   await app.memory.contribute(excluded.id, false);
   await app.close();
   const home = path.join(root, ".data/codex");
@@ -62,7 +61,7 @@ test("真实 Codex：原生提炼、参与设置持久化，以及禁用写工�
     state.prepare("UPDATE threads SET created_at = ?, updated_at = ? WHERE id = ?").run(Math.floor(Date.now()/1000)-14400, Math.floor(Date.now()/1000)-7200, session.id);
     state.prepare("UPDATE threads SET created_at = ?, updated_at = ? WHERE id = ?").run(Math.floor(Date.now()/1000)-14400, Math.floor(Date.now()/1000)-7200, excluded.id);
   } finally { state.close(); }
-  app = await startAgentServer({ dataFactory: testDataFactory, config, log: line => logs.push(line) });
+  app = await startAgentServer({ config, log: line => logs.push(line) });
   const trigger = await app.sessions.create();
   await app.messages.submit({ threadId: trigger.id, clientMessageId: "trigger", text: "你好，这是触发记忆检查的合成测试。" });
   await until(() => phase2 > 0, 12000).catch(error => { throw new Error(`${error.message}；提炼=${phase1} 合并=${phase2}；${logs.join("\n")}`); });
@@ -88,7 +87,7 @@ test("真实 Codex：预置合成摘要在新 Thread 自动注入，读取关闭
   cleanup(root, () => app?.close());
   async function start(extra = {}) {
     const config = loadServerConfig(root, { ...env, ...extra }); config.port = 0;
-    return startAgentServer({ dataFactory: testDataFactory, config, log: () => {} });
+    return startAgentServer({ config, log: () => {} });
   }
   app = await start();
   const directory = path.join(root, ".data/codex/memories");
@@ -98,7 +97,7 @@ test("真实 Codex：预置合成摘要在新 Thread 自动注入，读取关闭
   async function turn(id) {
     const thread = await app.sessions.create();
     await app.messages.submit({ threadId: thread.id, clientMessageId: id, text: "介绍一下写作方法。" });
-    await until(() => app.messages.job(id)?.status === "completed", 10000);
+    await until(async () => (await app.messages.job(id))?.status === "completed", 10000);
     return thread;
   }
   const first = await turn("read");

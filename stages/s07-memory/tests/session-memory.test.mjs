@@ -20,7 +20,7 @@ test("会话内存只保留最近的轮次：长会话不会无限增长，快�
   assert.deepEqual(snapshot.turns.map(turn => turn.id), all.slice(-SESSION_TURN_LIMIT));
 });
 
-test("执行中的轮次不会被丢掉：工具请求与完成事件仍能找到它", async t => {
+test("执行中的轮次不会被丢掉：流式回复与完成事件仍能找到它", async t => {
   const r = await rig(t);
   r.sessions.recordTurn(r.session.id, { id: "running", status: "inProgress", items: [] });
   completed(r, ids(0, SESSION_TURN_MEMORY + 20));
@@ -28,6 +28,8 @@ test("执行中的轮次不会被丢掉：工具请求与完成事件仍能找�
   assert.equal(session.turns.size, SESSION_TURN_MEMORY);
   assert.equal(r.sessions.getTurn(r.session.id, "running")?.status, "inProgress");
   assert.equal(session.activeTurnId, "running");
+  r.rpc.notify("item/agentMessage/delta", { threadId: r.session.id, turnId: "running", itemId: "answer", delta: "还在写" });
+  assert.equal(r.sessions.getTurn(r.session.id, "running").answers.answer, "还在写");
   r.rpc.notify("item/completed", { threadId: r.session.id, turnId: "running",
     item: { id: "tool", type: "dynamicToolCall", tool: "read_file", status: "completed" } });
   assert.equal(r.sessions.getTurn(r.session.id, "running").tools.tool.status, "completed");

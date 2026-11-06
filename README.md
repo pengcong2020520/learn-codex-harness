@@ -35,7 +35,7 @@ flowchart LR
 | [s04-events-messages](stages/s04-events-messages/README.md) | 事件与消息 | 输入先写进任务记录、在服务端排队；状态经 SSE 推给客户端，断线重连不漏状态、不重发消息，重启不重发 | 离线实验 3 节（暂未接入互动课程） |
 | [s05-agent-assembly](stages/s05-agent-assembly/README.md) | Agent 装配 | 一份 JSON 决定角色、Skill 和执行策略；校验不过就不启动，内容一变旧版本作废 | 离线实验 2 节（互动课程第 3 章的 `s05-agent-config`、`s05-skills`） |
 | [s06-tools](stages/s06-tools/README.md) | 工具 | 工具来自配置；白名单和参数先核对，资料按目录授权，写过的不覆盖；Codex 经 MCP 回调 | 离线实验 3 节（互动课程第 3 章的 `s06-tool-registry`、`s06-mcp`、`s06-workspace`） |
-| [s07-memory](stages/s07-memory/README.md) | 记忆 | 记忆交给 Codex 提炼，开关和参与范围由服务端掌握 | 互动课程第 3 章的源码暂取自本快照；离线实验 4 节 |
+| [s07-memory](stages/s07-memory/README.md) | 记忆 | 记忆交给 Codex 提炼，开关和参与范围由服务端掌握 | 离线实验 1 节（`s07-memory`）；工作台的 Demo 3 连接本快照 |
 | [s08-data-layer](stages/s08-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
 | [s10-skill-workflow](stages/s10-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |

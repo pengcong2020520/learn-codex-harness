@@ -38,6 +38,5 @@ export async function prepareRun(launch, root = PROJECT_ROOT, { workspaceDir, in
     await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + "\n", { mode: 0o600, flag: "wx" });
     args.push("-c", `model_catalog_json=${JSON.stringify(catalogFile)}`);
   }
-  // workspace 只为旧 05 单文件示例保留别名；正式服务不再使用该含糊字段。
-  return { serviceRoot: path.resolve(root), workspaceDir: stableWorkspace, runDir: workspace, codexHome: path.join(root, ".data/codex"), workspace, args, catalogFile };
+  return { serviceRoot: path.resolve(root), workspaceDir: stableWorkspace, runDir: workspace, codexHome: path.join(root, ".data/codex"), args, catalogFile };
 }

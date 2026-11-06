@@ -41,7 +41,7 @@ export class MemoryService {
     const requested = this.config.memory;
     if (actual?.features?.memories !== requested.enabled || memory?.use_memories !== requested.use ||
         memory?.generate_memories !== requested.generate || memory?.extract_model !== (requested.extractModel ?? null) ||
-        memory?.consolidation_model !== (requested.consolidationModel ?? null) || memory?.min_rollout_idle_hours !== requested.minIdleHours) {
+        memory?.consolidation_model !== (requested.consolidationModel ?? null) || memory?.min_rollout_idle_hours !== requested.minIdleHours || memory?.dedicated_tools !== true) {
       throw new Error("Codex 记忆配置与服务端配置不一致，请检查配置覆盖；不会假报开启成功。");
     }
     this.effective = { ...requested };

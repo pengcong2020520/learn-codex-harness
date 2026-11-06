@@ -7,13 +7,17 @@ import { loadServerConfig, createLogRedactor } from "../server/modules/config/in
 import { prepareRun } from "../server/modules/codex/runtime.mjs";
 import { SessionService } from "../server/modules/sessions/index.mjs";
 import { MessageService } from "../server/modules/messages/index.mjs";
+import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { EventHub } from "../server/modules/events/index.mjs";
 import { RpcError } from "../server/modules/codex/connection.mjs";
-import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { TestJobs } from './jobs-fixture.mjs';
-export { testDataFactory } from './jobs-fixture.mjs';
 
 export const fixture = { CODEX_API_KEY: "test-key-not-real", CODEX_BASE_URL: "https://provider.invalid/v1", CODEX_MODEL: "unit-model", DEMO_TIMEOUT_MS: "3000" };
+// 把本阶段的 Agent 定义目录复制进临时项目：测试改的是副本，不碰真实定义。
+export function installAgentFixture(root) {
+  cpSync(fileURLToPath(new URL("../agents", import.meta.url)), path.join(root, "agents"), { recursive: true });
+  return root;
+}
 export function installToolFixture(root) {
   const project = fileURLToPath(new URL("../", import.meta.url));
   cpSync(path.join(project, "config/tools"), path.join(root, "config/tools"), { recursive: true });
@@ -98,11 +102,11 @@ export class FakeRpc extends EventEmitter {
 }
 
 export async function rig(t) {
-  const root = installToolFixture(tempRoot(t));
+  const root = installAgentFixture(tempRoot(t));
   const config = loadServerConfig(root, fixture);
   config.port = 0;
   const runtime = await prepareRun(config.launch, root);
-  const agent = new AgentDefinition(root); agent.configure(config, runtime); agent.activate("unit-tools");
+  const agent = new AgentDefinition(root); agent.configure(config, runtime); agent.activate("unit-tools", []);
   const rpc = new FakeRpc();
   const hub = new EventHub();
   const redact = createLogRedactor(fixture.CODEX_API_KEY);

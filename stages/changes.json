@@ -226,10 +226,6 @@
       "surface": {
         "tools": [],
         "routes": [
-          "GET /workbench",
-          "GET /resources/read",
-          "GET /preferences",
-          "POST /preferences",
           "GET /memory",
           "GET /memory/summary",
           "POST /memory/contribution"
@@ -270,7 +266,12 @@
       ],
       "surface": {
         "tools": [],
-        "routes": [],
+        "routes": [
+          "GET /workbench",
+          "GET /resources/read",
+          "GET /preferences",
+          "POST /preferences"
+        ],
         "env": [
           "DATABASE_URL",
           "REDIS_URL"
