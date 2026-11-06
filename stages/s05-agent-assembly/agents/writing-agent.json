@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "agent": {
+    "id": "writing-assistant",
+    "version": "1.0.0",
+    "instructions": "roles/writing-assistant.md",
+    "skills": [],
+    "executionRef": "restricted-local"
+  },
+  "bindings": {
+    "workspaceDir": "../workspace",
+    "skills": {},
+    "executions": { "restricted-local": { "sandbox": "read-only", "approvalPolicy": "never", "nativeShell": false, "nativeFileWrite": false } }
+  }
+}

@@ -1,6 +1,6 @@
 # s07: 记忆 — Codex 提炼，服务端管控
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → `s07` → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → `s07` → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"记忆交给 Codex 提炼，开不开、谁能参与由服务端说了算"* — 客户端只能查看和提出设置，不能传路径，也不能绕过总开关。
 >
 > **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？
@@ -68,7 +68,7 @@ Codex 会在会话空闲一段时间后，从历史里提炼出记忆、再合�
 
 ### 这一版快照里已经有的部分
 
-本阶段的代码是完整的 Agent 核心，除了记忆，还包含任务排队与事件推送（`messages/`、`events/`）、Agent 定义与 Skills（`agents/`、`role/`、`codex/skills.mjs`）、工具白名单与资料边界（`tools/`、`data/files.mjs`）。这些单元的讲解见 [设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
+本阶段的代码是完整的 Agent 核心：任务排队与事件推送见 [s04](../s04-events-messages/)，Agent 定义与 Skills 见 [s05](../s05-agent-assembly/)；工具白名单与资料边界（`tools/`、`data/files.mjs`）的讲解见 [设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
 
 ---
 
@@ -115,7 +115,7 @@ npm run chat            # 终端 2：CLI 客户端
 npm run lesson -- s07-memory   # 默认关闭、配置核验、固定文件读取、会话参与设置
 ```
 
-本快照还带着 Agent 装配与工具相关的实验，用 `npm run lesson -- list` 查看全部课时。
+本快照还带着工具相关的实验，用 `npm run lesson -- list` 查看全部课时。
 
 ---
 

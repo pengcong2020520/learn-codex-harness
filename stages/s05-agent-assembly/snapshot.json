@@ -1,0 +1,19 @@
+{
+  "stage": 5,
+  "name": "Agent 装配：一份 JSON 决定角色与 Skills",
+  "snapshotDate": "2026-10-04",
+  "source": "../../app",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".env",
+    ".data",
+    ".runs",
+    "workspace",
+    "node_modules",
+    "output"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  }
+}

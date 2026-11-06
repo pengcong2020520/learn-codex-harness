@@ -1,0 +1,48 @@
+[
+  {
+    "id": "s05-agent-config",
+    "demo": 5,
+    "title": "把 Agent 定义变成有效约束",
+    "question": "角色说“可以执行 shell”，是否就获得了 shell 权限？",
+    "command": "npm run lesson -- s05-agent-config",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "未知字段、缺失引用、原生权限提升被 schema 拒绝",
+      "定义或角色文件一改，旧版本立即作废；恢复旧文件也不能免重启",
+      "没有版本绑定或版本不兼容的会话被拒绝"
+    ],
+    "why": "一份定义同时决定角色、Skill、执行策略和版本；自然语言写的角色不能扩大代码授权。",
+    "boundary": "离线临时目录与真实 Agent 装配模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(Agent schema|定义、角色任一文件变了|描述符不复制)",
+      "tests/agent-core.test.mjs"
+    ]
+  },
+  {
+    "id": "s05-skills",
+    "demo": 5,
+    "title": "发现 Skill 不等于授权 Skill",
+    "question": "工作区出现一个新 Skill，能否自动让当前 Agent 使用？",
+    "command": "npm run lesson -- s05-skills",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "范围外发现结果被禁用",
+      "授权 Skill 生成显式 skill 输入；未授权名称被拒绝",
+      "必需缺失会报错，可选缺失明确降级"
+    ],
+    "why": "发现接口与产品允许清单分别负责“存在”和“可使用”。",
+    "boundary": "离线临时目录与真实 Agent 装配模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(原生 Skill|必需 Skill)",
+      "tests/agent-core.test.mjs"
+    ]
+  }
+]

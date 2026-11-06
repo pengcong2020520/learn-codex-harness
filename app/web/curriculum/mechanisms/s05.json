@@ -1,0 +1,372 @@
+[
+  {
+    "id": "s05-definition",
+    "title": "一份 JSON 决定角色与 Skills",
+    "question": "换一个角色、换一套 Skill，要改服务端代码吗？定义写错了会怎样？",
+    "file": "stages/s05-agent-assembly/server/modules/agents/index.mjs",
+    "start": 27,
+    "end": 44,
+    "expect": "const directory = path.dirname(this.file);",
+    "notes": {
+      "28": "定义文件超过 1 MiB 直接拒绝",
+      "29": "不跟随符号链接读取定义",
+      "30": "schema 校验：未知字段、缺字段、放宽沙箱都不通过",
+      "33": "角色文件路径必须在 Agent 定义目录内",
+      "34": "读取角色正文（独立的 .md 文件）",
+      "35": "工作区目录也由定义决定",
+      "36": "执行策略：只读沙箱、不审批、不开原生 shell 和写文件",
+      "37": "引用了不存在的执行策略：拒绝启动",
+      "40": "逐个核对定义里声明的 Skill",
+      "43": "必需的 Skill 缺绑定：拒绝启动；可选的只记一条警告"
+    },
+    "actors": [
+      [
+        "server",
+        "服务端",
+        "proc"
+      ],
+      [
+        "json",
+        "writing-agent.json"
+      ],
+      [
+        "role",
+        "角色文件"
+      ],
+      [
+        "codex",
+        "Codex"
+      ]
+    ],
+    "state0": {
+      "启动": "未开始",
+      "角色": "—",
+      "Skill": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "server",
+          "json",
+          "读取 Agent 定义"
+        ],
+        "say": "服务启动时读取 agents/writing-agent.json。",
+        "actors": {
+          "server": "启动中"
+        },
+        "state": {
+          "启动": "读取定义"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          30,
+          30
+        ],
+        "say": "换一种情况：有人在定义里把 sandbox 改成 workspace-write。schema 只允许 read-only，校验不过，服务直接拒绝启动。",
+        "state": {
+          "启动": "拒绝（定义无效时）"
+        }
+      },
+      {
+        "lines": [
+          33,
+          34
+        ],
+        "flow": [
+          "json",
+          "role",
+          "agent.instructions"
+        ],
+        "say": "按定义里的路径读取角色正文 roles/writing-assistant.md。",
+        "state": {
+          "角色": "AI 知识整理助手"
+        }
+      },
+      {
+        "lines": [
+          35,
+          37
+        ],
+        "say": "工作区目录和执行策略也来自这份定义。"
+      },
+      {
+        "lines": [
+          40,
+          44
+        ],
+        "say": "逐个核对声明的 Skill：必需的缺了就拒绝启动，可选的缺了只记警告。",
+        "state": {
+          "Skill": "按定义核对"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "skills/list + skills/config/write"
+        ],
+        "say": "启动 Codex 后，只启用定义里声明的 Skill，范围外的一律关掉。",
+        "actors": {
+          "codex": "已连接"
+        },
+        "state": {
+          "启动": "就绪",
+          "Skill": "只启用声明的"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "thread/start：baseInstructions"
+        ],
+        "say": "新建会话时，角色正文作为 baseInstructions 交给 Codex。"
+      }
+    ],
+    "takeaway": "换角色、换 Skill 只改定义文件，不改服务端代码；定义写错、越权或缺了必需的部分，服务宁可不启动。"
+  },
+  {
+    "id": "s05-revoke",
+    "title": "运行中改了角色，会怎样",
+    "question": "服务运行时有人改了角色文件，正在进行的会话会悄悄换成新角色，还是继续用旧的？",
+    "file": "stages/s05-agent-assembly/server/modules/agents/index.mjs",
+    "start": 60,
+    "end": 73,
+    "expect": "this.expected = this.sourceHash();",
+    "notes": {
+      "60": "启动时把定义、角色、Skill 文件的内容一起算一个哈希",
+      "65": "定义文件和角色文件的原文",
+      "66": "每个 Skill 文件的内容",
+      "68": "每次新建会话、发出一轮之前都会调用",
+      "69": "重新计算；和启动时不一样（或文件读不到）就标记作废",
+      "70": "一旦作废，就一直作废",
+      "71": "409 AGENT_CHANGED：要求受控重启、新建会话"
+    },
+    "actors": [
+      [
+        "admin",
+        "管理员",
+        "proc"
+      ],
+      [
+        "files",
+        "定义与角色文件"
+      ],
+      [
+        "agent",
+        "Agent 装配"
+      ],
+      [
+        "messages",
+        "任务与消息"
+      ]
+    ],
+    "state0": {
+      "启动时的哈希": "—",
+      "当前状态": "有效",
+      "下一轮": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          60,
+          60
+        ],
+        "flow": [
+          "agent",
+          "files",
+          "计算内容哈希"
+        ],
+        "say": "启动时记下定义、角色和 Skill 内容的哈希。",
+        "state": {
+          "启动时的哈希": "a1b2…"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "files",
+          "修改角色文件"
+        ],
+        "say": "服务运行中，有人改了角色文件里的一个字。",
+        "actors": {
+          "admin": "编辑中"
+        }
+      },
+      {
+        "flow": [
+          "messages",
+          "agent",
+          "发出前核对"
+        ],
+        "say": "下一条排队的消息要发出前，先让 Agent 装配模块核对一次。",
+        "actors": {
+          "admin": "已退出"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          68,
+          71
+        ],
+        "flow": [
+          "agent",
+          "messages",
+          "409 AGENT_CHANGED"
+        ],
+        "say": "哈希对不上：这个 Agent 版本作废，消息标为失败、队列暂停，不发给 Codex。",
+        "state": {
+          "当前状态": "已作废",
+          "下一轮": "失败，未发出"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "files",
+          "改回原文"
+        ],
+        "say": "把文件改回去也不行：作废一旦发生就不会自动恢复。",
+        "actors": {
+          "admin": "编辑中"
+        },
+        "state": {
+          "当前状态": "仍作废"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "agent",
+          "重启服务"
+        ],
+        "say": "只有受控重启、新建会话，才会用新的定义装配出新版本。",
+        "actors": {
+          "admin": "已退出"
+        },
+        "state": {
+          "当前状态": "新版本有效",
+          "启动时的哈希": "c3d4…"
+        }
+      }
+    ],
+    "takeaway": "角色和 Skill 不会在运行中悄悄变化：内容一变旧版本立即作废，必须重启、新建会话，新旧版本不会混在同一个会话里。"
+  },
+  {
+    "id": "s05-binding",
+    "title": "会话认的是哪个版本",
+    "question": "重启后 Agent 定义变了，昨天的会话和还在排队的消息，能接着用新版本执行吗？",
+    "file": "stages/s05-agent-assembly/server/modules/agents/index.mjs",
+    "start": 79,
+    "end": 103,
+    "expect": "activate(skills = this.availableSkills || []) {",
+    "notes": {
+      "80": "核验过 Skill 之后才生成版本",
+      "81": "描述符：Agent id、版本、定义和角色的哈希……",
+      "83": "……实际启用的 Skill、工作区",
+      "84": "……执行策略；不含角色正文和密钥",
+      "85": "整份描述符再算一个哈希，作为这个 Agent 版本的标识",
+      "86": "写入 .data/agent-descriptors/，便于事后核对",
+      "89": "新建会话时调用：记下这个 Thread 用的是哪个版本",
+      "93": "写入 .data/thread-agents.json",
+      "95": "恢复会话、发出一轮之前都要核对",
+      "101": "没有版本绑定的会话：拒绝，请新建",
+      "102": "会话或排队消息的版本与当前不同：拒绝，原历史不改"
+    },
+    "actors": [
+      [
+        "sessions",
+        "会话"
+      ],
+      [
+        "agent",
+        "Agent 装配"
+      ],
+      [
+        "bindings",
+        "thread-agents.json"
+      ],
+      [
+        "messages",
+        "任务与消息"
+      ]
+    ],
+    "state0": {
+      "当前版本": "—",
+      "会话 T1 绑定": "—",
+      "消息 M2": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          79,
+          86
+        ],
+        "say": "启动并核验 Skill 后生成描述符，算出这一版的哈希。",
+        "state": {
+          "当前版本": "v-a1b2"
+        }
+      },
+      {
+        "lines": [
+          89,
+          93
+        ],
+        "flow": [
+          "sessions",
+          "bindings",
+          "记录 T1 → v-a1b2"
+        ],
+        "say": "新建会话 T1 时，把它和当前版本绑在一起。",
+        "state": {
+          "会话 T1 绑定": "v-a1b2"
+        }
+      },
+      {
+        "say": "排队的消息 M2 在任务记录里记下提交时的版本（agentHash）。",
+        "state": {
+          "消息 M2": "排队（v-a1b2）"
+        }
+      },
+      {
+        "flow": [
+          "agent",
+          "agent",
+          "重启：定义已改"
+        ],
+        "say": "服务重启，定义改过了，生成新的版本。",
+        "state": {
+          "当前版本": "v-c3d4"
+        }
+      },
+      {
+        "warn": true,
+        "lines": [
+          95,
+          102
+        ],
+        "flow": [
+          "messages",
+          "agent",
+          "恢复 T1 前核对"
+        ],
+        "say": "要发 M2，先得恢复会话 T1：T1 绑的是旧版本，核对不通过，队列暂停，M2 不发出；原来的历史不改。",
+        "state": {
+          "消息 M2": "不发出（队列暂停）"
+        }
+      },
+      {
+        "flow": [
+          "sessions",
+          "bindings",
+          "新会话 T2 → v-c3d4"
+        ],
+        "say": "用户新建会话 T2，绑定新版本，之后的消息都按新的角色和 Skill 执行。"
+      }
+    ],
+    "takeaway": "每个会话、每条排队消息都记着自己的 Agent 版本；版本对不上就拒绝执行，不会用新角色接着跑旧会话。"
+  }
+]

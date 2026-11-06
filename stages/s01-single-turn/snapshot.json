@@ -49,6 +49,20 @@
       "memoryManagement": false
     },
     {
+      "directory": "s05-agent-assembly",
+      "capabilities": [
+        "client-server",
+        "server-queue",
+        "sse-events",
+        "agent-definition",
+        "native-skills"
+      ],
+      "serverEntry": "server/main.mjs",
+      "clientEntry": "client/main.mjs",
+      "examplePort": 4323,
+      "memoryManagement": false
+    },
+    {
       "directory": "s07-memory",
       "capabilities": [
         "client-server",

@@ -7,34 +7,16 @@ npm run lesson -- list
 npm run lesson -- s07-memory
 ```
 
-每课先输出学习问题、真实校验命令、预期观察、原因和证据边界，再运行本目录的模块测试。预期观察不是成功宣告；以 Node 测试报告的 pass / fail / skip 为准。参数只接受列出的课时 ID 和该课显式门禁，不接收任意 shell。
+每课先输出学习问题、真实校验命令、预期观察、原因和证据边界，再运行本目录的模块测试。预期观察不是成功宣告；以 Node 测试报告的 pass / fail / skip 为准。参数只接受列出的课时 ID，不接收任意 shell。
 
 | 课时 | 要验证的问题 | 运行方式 |
 | --- | --- | --- |
-| s07-memory | 客户端能不能自己打开记忆、指定路径读记忆文件？ | `npm run lesson -- s07-memory` |
-| s05-agent-config | 角色说“可以执行 shell”，是否就获得了 shell 权限？ | `npm run lesson -- s05-agent-config` |
-| s05-skills | 工作区出现一个新 Skill，能否自动让当前 Agent 使用？ | `npm run lesson -- s05-skills` |
 | s06-tool-registry | 新增工具为何不需要在主程序再加一个 if 分支？ | `npm run lesson -- s06-tool-registry` |
 | s06-mcp | 工具正在运行时切换 MCP 注册表，会留下什么不一致？ | `npm run lesson -- s06-mcp` |
 | s06-workspace | 把每次 runDir 当工作区，为什么会丢失上次产物？ | `npm run lesson -- s06-workspace` |
+| s07-memory | 客户端能不能自己打开记忆、指定路径读记忆文件？ | `npm run lesson -- s07-memory` |
 
-离线实验使用临时目录、假 RPC 或本地协议进程，调用真实产品模块并执行 assert；不读取本阶段的 .env、不连接外部模型、不访问生产资料。子测试只继承系统路径与临时目录环境，不继承提供商凭据。测试结束清理自己创建的临时文件。
-
-## s05-agent-config · 把 Agent 定义变成有效约束
-
-装配定义同时决定工具、来源和版本；自然语言不能扩大代码授权。
-
-观察：未知字段、缺失引用、权限提升被 schema 拒绝；Agent 改动立即撤销旧工具权限；恢复旧文件也不能免重启；不兼容 Thread 版本被拒绝。
-
-边界：离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。
-
-## s05-skills · 发现 Skill 不等于授权 Skill
-
-发现接口与产品允许清单分别负责“存在”和“可使用”。
-
-观察：范围外发现结果被禁用；授权 Skill 生成显式 skill 输入；未授权名称被拒绝；必需缺失会报错，可选缺失明确降级。
-
-边界：离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。
+离线实验使用临时目录、假 RPC 或本地协议进程，调用真实服务模块并执行 assert；不读取本阶段的 .env、不连接外部模型。子测试只继承系统路径与临时目录环境，不继承提供商凭据。测试结束清理自己创建的临时文件。
 
 ## s06-tool-registry · 从配置装配可调用工具
 

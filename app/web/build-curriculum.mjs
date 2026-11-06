@@ -11,7 +11,9 @@ if(lessons.length!==17||experiments.size!==17)throw Error('Expected 17 lessons a
 const ids=new Set();
 for(const lesson of lessons){
  if(ids.has(lesson.id))throw Error('Duplicate lesson '+lesson.id);ids.add(lesson.id);
- const s=lesson.source;if(!s.file.startsWith(`${stageDirs[lesson.demo-1]}/`)||s.file.includes('..')||! /\.(mjs|json)$/.test(s.file))throw Error('Invalid source path '+s.file);
+ // 默认从该 Demo 对应的阶段目录取源码；课时内容已归到别的阶段时，用可选的 stage 字段指定（必须是已有阶段目录）。
+ if(lesson.stage!==undefined&&(!/^s\d\d-[a-z0-9-]+$/.test(lesson.stage)||!fs.existsSync(path.join(repo,'stages',lesson.stage,'package.json'))))throw Error('Invalid lesson stage '+lesson.stage);
+ const s=lesson.source,base=lesson.stage?`stages/${lesson.stage}`:stageDirs[lesson.demo-1];if(!s.file.startsWith(`${base}/`)||s.file.includes('..')||! /\.(mjs|json)$/.test(s.file))throw Error('Invalid source path '+s.file);
  const text=fs.readFileSync(path.join(repo,s.file),'utf8'),at=text.indexOf(s.needle);
  if(at<0||text.indexOf(s.needle,at+1)>=0)throw Error(`Source needle missing or ambiguous: ${lesson.id} ${s.needle}`);
  const lines=text.split('\n'),anchor=text.slice(0,at).split('\n').length-1,start=Math.max(0,anchor-(s.before||0)),end=Math.min(lines.length,anchor+s.needle.split('\n').length+(s.after||0));
