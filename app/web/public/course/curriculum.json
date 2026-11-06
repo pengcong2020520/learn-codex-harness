@@ -1177,7 +1177,7 @@
         "cost": "新增能力需要实现、规格、授权都齐全，只改配置不会产生新能力。工具版本与撤销还需边界协调，不能在任务中途任意替换。"
       },
       "source": {
-        "file": "stages/s07-memory/server/modules/tools/loader.mjs",
+        "file": "stages/s06-tools/server/modules/tools/loader.mjs",
         "needle": "    validate(name, args) {",
         "before": 0,
         "after": 18,
@@ -1308,7 +1308,7 @@
       ],
       "experiment": {
         "command": "npm run lesson -- s06-tool-registry",
-        "action": "在 s07-memory 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
+        "action": "在 s06-tools 目录运行参数合同测试，查看空参数、额外参数、未知工具和命名空间被拒绝的断言。",
         "observe": [
           "echo_note 真正经 registry.call 返回输入",
           "重复名、缺实现、坏 schema、越界模块被拒绝",
@@ -1330,7 +1330,8 @@
         "session": "s02",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
         "adaptation": "借用“增加工具时稳定执行骨架，只扩展合同和分发”的教学对比。参考 TOOLS+TOOL_HANDLERS 是小字典；本项目增加受信配置、Schema 编译、白名单与版本快照，而不修改 Codex loop。"
-      }
+      },
+      "stage": "s06-tools"
     },
     {
       "id": "s06-mcp",
@@ -1369,7 +1370,7 @@
         "cost": "多了一层本地协议、版本与连接生命周期。它用于本机单 owner 开发，没有实现公网多用户授权，也不是浏览器业务 API。"
       },
       "source": {
-        "file": "stages/s07-memory/server/modules/tools/mcp-server.mjs",
+        "file": "stages/s06-tools/server/modules/tools/mcp-server.mjs",
         "needle": "    const registry = registries.get(request.url?.slice(1));",
         "before": 2,
         "after": 15,
@@ -1500,7 +1501,7 @@
       ],
       "experiment": {
         "command": "npm run lesson -- s06-mcp",
-        "action": "在 s07-memory 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
+        "action": "在 s06-tools 目录运行入口测试；测试临时启动本机 MCP 服务，并用 fetch 检查拒绝条件。",
         "observe": [
           "活动 Thread 存在时不发布新 registry",
           "刷新失败回滚旧配置",
@@ -1522,7 +1523,8 @@
         "session": "s02",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
         "adaptation": "沿用参考“稳定骨架、统一分发”的可视化方式，将模型名义调用追到真正 handler；本项目中间多了 MCP 传输与入口核验。参考 s02 的直接字典调用不能冒充本项目的跨进程协议。"
-      }
+      },
+      "stage": "s06-tools"
     },
     {
       "id": "s06-workspace",
@@ -1561,7 +1563,7 @@
         "cost": "默认格式、大小和新建限制牺牲部分通用编辑能力；这是受限文件服务，不是隔离同机恶意进程的操作系统沙箱。"
       },
       "source": {
-        "file": "stages/s07-memory/server/modules/data/files.mjs",
+        "file": "stages/s06-tools/server/modules/data/files.mjs",
         "needle": "  const readable = (relative) =>",
         "before": 2,
         "after": 23,
@@ -1677,7 +1679,7 @@
       ],
       "experiment": {
         "command": "npm run lesson -- s06-workspace",
-        "action": "在 s07-memory 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
+        "action": "在 s06-tools 目录运行收窄来源与路径绕过测试；测试只操作临时项目副本。",
         "observe": [
           "两次运行共用 workspaceDir，但 runDir 不同",
           "来源过滤同时约束 list/read；产物不能覆盖",
@@ -1699,7 +1701,8 @@
         "session": "s03",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
         "adaptation": "借用“在实际副作用之前画出判断闸门”的教学方式。参考通过规则与人工确认示意权限位置；本项目用明确来源/动作、文件属性和不可覆盖规则执行边界，不把示例黑名单当强沙箱。"
-      }
+      },
+      "stage": "s06-tools"
     },
     {
       "id": "s08-persistence",

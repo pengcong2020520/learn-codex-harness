@@ -1,6 +1,6 @@
 # s05: Agent 装配 — 一份 JSON 决定它是谁
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → `s05` → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → `s05` → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"改配置就能换 Agent，但改了就得重新开始"* — 角色、Skill 和执行策略写在同一份定义里，一起生效；内容一变，旧版本立即作废。
 >
 > **对应六个问题**：① 我是谁？ ⑥ 谁说了算？
@@ -177,4 +177,4 @@ for (const skill of discovered) {
 
 Agent 有了角色和工作方法，可它还碰不到任何资料：读不了你给的文件，也不能把写好的文章保存下来。
 
-下一章给它装上工具：一份工具配置、一个白名单、每次调用都校验参数；资料目录按用途授权，能读的不一定能写，写过的不能覆盖。模型能不能凭名字调用一个没给它的工具？在那一章写好之前，可以先看已经包含工具的 [s07 记忆](../s07-memory/)。
+下一章给它装上工具：一份工具配置、一个白名单、每次调用都校验参数；资料目录按用途授权，能读的不一定能写，写过的不能覆盖。模型能不能凭名字调用一个没给它的工具？见 [s06 工具](../s06-tools/)。

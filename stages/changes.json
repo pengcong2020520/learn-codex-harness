@@ -175,16 +175,21 @@
       }
     },
     {
-      "id": "s07",
-      "dir": "s07-memory",
-      "title": "记忆：Codex 提炼，服务端管控",
-      "summary": "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
+      "id": "s06",
+      "dir": "s06-tools",
+      "title": "工具：读得到资料、存得下文章",
+      "summary": "工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。",
       "previous": "s05-agent-assembly",
       "modules": [
         {
-          "layer": "运行支撑",
-          "name": "记忆",
-          "desc": "Codex 提炼，服务端管控"
+          "layer": "Agent 装配",
+          "name": "工具与资料边界",
+          "desc": "白名单 + 参数校验"
+        },
+        {
+          "layer": "Agent 装配",
+          "name": "MCP 工具入口",
+          "desc": "Codex 回调本地工具"
         }
       ],
       "surface": {
@@ -195,16 +200,39 @@
           "read_webpage"
         ],
         "routes": [
-          "GET /workbench",
+          "GET /tools",
           "GET /workspace",
-          "GET /workspace/read",
+          "GET /workspace/read"
+        ],
+        "env": [
+          "NODE_ENV"
+        ],
+        "migrations": []
+      }
+    },
+    {
+      "id": "s07",
+      "dir": "s07-memory",
+      "title": "记忆：Codex 提炼，服务端管控",
+      "summary": "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
+      "previous": "s06-tools",
+      "modules": [
+        {
+          "layer": "运行支撑",
+          "name": "记忆",
+          "desc": "Codex 提炼，服务端管控"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /workbench",
           "GET /resources/read",
           "GET /preferences",
           "POST /preferences",
           "GET /memory",
           "GET /memory/summary",
-          "POST /memory/contribution",
-          "GET /tools"
+          "POST /memory/contribution"
         ],
         "env": [
           "AGENT_MEMORY_ENABLED",

@@ -1,6 +1,6 @@
 # s07: 记忆 — Codex 提炼，服务端管控
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → `s07` → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → `s07` → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"记忆交给 Codex 提炼，开不开、谁能参与由服务端说了算"* — 客户端只能查看和提出设置，不能传路径，也不能绕过总开关。
 >
 > **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？
@@ -66,10 +66,6 @@ Codex 会在会话空闲一段时间后，从历史里提炼出记忆、再合�
 
 服务启动时，服务端会向 Codex 读回实际生效的配置（`config/read`），和自己写入的逐项比对，不一致就拒绝启动，不会"假报开启成功"。即使配置一致，也只代表"允许提炼"：原生后台按空闲时间等条件处理，不是每轮即时保存。本阶段关闭了原生 Shell 和写文件工具，Codex 0.154.0 的后台合并因此写不出最终摘要，`/memory` 会如实报告这一点。
 
-### 这一版快照里已经有的部分
-
-本阶段的代码是完整的 Agent 核心：任务排队与事件推送见 [s04](../s04-events-messages/)，Agent 定义与 Skills 见 [s05](../s05-agent-assembly/)；工具白名单与资料边界（`tools/`、`data/files.mjs`）的讲解见 [设计说明](docs/design.md) 和 [工具机制详解](docs/tools.md)。
-
 ---
 
 ## 分工：Codex 做什么，我们做什么
@@ -115,7 +111,6 @@ npm run chat            # 终端 2：CLI 客户端
 npm run lesson -- s07-memory   # 默认关闭、配置核验、固定文件读取、会话参与设置
 ```
 
-本快照还带着工具相关的实验，用 `npm run lesson -- list` 查看全部课时。
 
 ---
 

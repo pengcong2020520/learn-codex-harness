@@ -63,6 +63,23 @@
       "memoryManagement": false
     },
     {
+      "directory": "s06-tools",
+      "capabilities": [
+        "client-server",
+        "server-queue",
+        "sse-events",
+        "agent-definition",
+        "native-skills",
+        "mcp-tools",
+        "tool-hot-reload",
+        "workspace-boundary"
+      ],
+      "serverEntry": "server/main.mjs",
+      "clientEntry": "client/main.mjs",
+      "examplePort": 4324,
+      "memoryManagement": false
+    },
+    {
       "directory": "s07-memory",
       "capabilities": [
         "client-server",

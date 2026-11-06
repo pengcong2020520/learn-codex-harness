@@ -1,0 +1,71 @@
+[
+  {
+    "id": "s06-tool-registry",
+    "demo": 6,
+    "title": "从配置装配可调用工具",
+    "question": "新增工具为何不需要在主程序再加一个 if 分支？",
+    "command": "npm run lesson -- s06-tool-registry",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "echo_note 真正经 registry.call 返回输入",
+      "重复名、缺实现、坏 schema、越界模块被拒绝",
+      "两份代码快照分别返回 v1 / v2"
+    ],
+    "why": "注册表将 schema 与实现配对；版本快照使旧调用和新实现分开。",
+    "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(配置驱动新工具|拒绝重名|工具代码和相对依赖)",
+      "tests/tool-loading.test.mjs"
+    ]
+  },
+  {
+    "id": "s06-mcp",
+    "demo": 6,
+    "title": "工具通道也要有刷新边界",
+    "question": "工具正在运行时切换 MCP 注册表，会留下什么不一致？",
+    "command": "npm run lesson -- s06-mcp",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "活动 Thread 存在时不发布新 registry",
+      "刷新失败回滚旧配置",
+      "真实回环 HTTP 入口拒绝无令牌和跨源请求"
+    ],
+    "why": "空闲边界将工具切换与新轮开始串行化；HTTP 入口继续执行认证。",
+    "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。 MCP HTTP 服务是真实本地监听；Codex config RPC 是模拟。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(全部 Thread 空闲|RPC 刷新失败|MCP 入口)",
+      "tests/tool-loading.test.mjs"
+    ]
+  },
+  {
+    "id": "s06-workspace",
+    "demo": 6,
+    "title": "稳定工作区与受限文件入口",
+    "question": "把每次 runDir 当工作区，为什么会丢失上次产物？",
+    "command": "npm run lesson -- s06-workspace",
+    "mode": "offline",
+    "offlineOrIntegration": "offline",
+    "observations": [
+      "两次运行共用 workspaceDir，但 runDir 不同",
+      "来源过滤同时约束 list/read；产物不能覆盖",
+      "父路径、遍历和符号链接绕过被拒绝"
+    ],
+    "why": "工作资料需要稳定位置；允许写 outputs 不代表所有路径都能读写。",
+    "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。",
+    "args": [
+      "--test",
+      "--test-reporter=tap",
+      "--test-timeout=30000",
+      "--test-name-pattern=^(稳定工作区|来源范围收窄|工作区内的窄来源)",
+      "tests/agent-core.test.mjs"
+    ]
+  }
+]

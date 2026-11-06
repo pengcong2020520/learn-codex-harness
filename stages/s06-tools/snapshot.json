@@ -1,0 +1,19 @@
+{
+  "stage": 6,
+  "name": "工具：配置注册、MCP 与受限工作区",
+  "snapshotDate": "2026-10-04",
+  "source": "../../app",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    ".env",
+    ".data",
+    ".runs",
+    "workspace",
+    "node_modules",
+    "output"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  }
+}

@@ -15,7 +15,8 @@
 | [s03-service](s03-service/README.md) | 服务化 | 常驻服务端 + 终端客户端、连接令牌、生命周期、运行目录清理 | 4313 |
 | [s04-events-messages](s04-events-messages/README.md) | 事件与消息 | 服务端任务队列（先进先出、追加、暂停与继续）、JSON 任务记录、SSE 事件推送与快照重连 | 4319 |
 | [s05-agent-assembly](s05-agent-assembly/README.md) | Agent 装配 | Agent JSON 定义与 schema 校验、角色文件、原生 Skill 白名单、版本描述符与会话绑定 | 4323 |
-| [s07-memory](s07-memory/README.md) | 记忆 | Codex 原生记忆、服务端开关与会话参与；快照同时包含任务与事件、Agent 装配、工具（工具的章节 s06 编写中） | 4325 |
+| [s06-tools](s06-tools/README.md) | 工具 | 配置装配工具注册表、Agent 工具白名单与参数校验、按用途授权的资料目录、MCP 回调 | 4324 |
+| [s07-memory](s07-memory/README.md) | 记忆 | Codex 原生记忆、服务端开关与会话参与 | 4325 |
 | [s08-data-layer](s08-data-layer/README.md) | 数据层 | PostgreSQL 持久任务 + outbox、Redis 调度、资源版本 | 4314 |
 | [s09-knowledge-layer](s09-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
 | [s10-skill-workflow](s10-skill-workflow/README.md) | Skill 与 Workflow | Agent 包、Skill 同步与隐式读取、Workflow（授权 / 步骤 / 验收）、任务提议 | 4316 |
