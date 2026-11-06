@@ -84,7 +84,7 @@
 
 **新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
 
-**新增接口**：`GET /workbench`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`
+**新增接口**：`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`
 
 **新增环境变量**：`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
 
@@ -95,6 +95,8 @@
 相比 [s07-memory](s07-memory/)：业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。
 
 **新增模块**：PostgreSQL（数据，业务状态的依据）；Outbox + Redis（数据，提交后再唤醒）；资源版本（数据，产物可追溯来源）
+
+**新增接口**：`GET /workbench`、`GET /resources/read`、`GET /preferences`、`POST /preferences`
 
 **新增环境变量**：`DATABASE_URL`、`REDIS_URL`
 

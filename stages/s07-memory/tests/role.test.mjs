@@ -2,9 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
-import { AGENT_INSTRUCTIONS } from "../05-app-server.mjs";
+const AGENT_INSTRUCTIONS = readFileSync(new URL("../agents/roles/writing-assistant.md", import.meta.url), "utf8").trim();
 import { loadServerConfig } from "../server/modules/config/index.mjs";
-import { buildAppServerLaunch } from "../05-app-server.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { prepareRun } from "../server/modules/codex/runtime.mjs";
 import { SessionService } from "../server/modules/sessions/index.mjs";
@@ -46,13 +45,6 @@ test("旧 .env 角色不覆盖项目角色，也不改写原文件或改变模�
   assert.equal(config.launch.catalog.models[0].apply_patch_tool_type, null);
   assert.ok(config.launch.args.includes('web_search="disabled"'));
   assert.equal(readFileSync(file, "utf8"), original);
-});
-
-test("旧 demo 的目录也只使用角色模块，缺少或残留环境提示词都不影响角色", () => {
-  for (const environment of [catalogConfig, { ...catalogConfig, AGENT_INSTRUCTIONS: "旧案例自定义指令" }]) {
-    const launch = buildAppServerLaunch(environment);
-    assert.equal(launch.catalog.models[0].model_messages.instructions_template, AGENT_INSTRUCTIONS);
-  }
 });
 
 test("无模型目录时，新建会话也传装配后的角色，且不放宽权限", async t => {

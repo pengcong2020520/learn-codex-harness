@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
-import { tempRoot, fixture, until, FakeRpc, installToolFixture } from "./helpers.mjs";
+import { tempRoot, fixture, until, FakeRpc, installToolFixture, rig } from "./helpers.mjs";
 import { createFileTools } from "../server/modules/data/files.mjs";
 import { createToolService, runWebCommand } from "../server/modules/tools/index.mjs";
 import { publicUrl, publicTarget, isPublicAddress, fetchPublic } from "../server/modules/tools/public-web.mjs";
@@ -168,7 +168,7 @@ test("网页只读静态正文，剔除脚本导航并标记截断，纯文本�
   assert.equal(plain.content, "a < b");
 });
 
-test("搜索工具已移除；网页失败不缓存，文件调用不受网络失败影响", async t => {
+test("没有注册搜索工具；网页失败不缓存，文件调用不受网络失败影响", async t => {
   let failures = 0;
   const broken = await createToolService(installToolFixture(tempRoot(t)), { runWeb: async () => { failures++; throw new Error("网页不可用"); } });
   assert.ok(!broken.specs.some(spec => spec.name === "search_web"));
@@ -204,39 +204,9 @@ function connection(t) {
   return { rpc, output };
 }
 
-test("动态工具 RPC 不阻塞通知，按 callId 去重，回包仍对应请求 id", async t => {
-  const { rpc, output } = connection(t);
-  const wait = Promise.withResolvers(); let executed = 0, notified = 0;
-  rpc.toolHandler = async () => { executed++; return wait.promise; };
-  rpc.on("notification", () => notified++);
-  const request = { id: "r1", method: "item/tool/call", params: { threadId: "thread", turnId: "turn", callId: "call", namespace: null, tool: "list_files", arguments: {} } };
-  rpc.receive(request); rpc.receive({ ...request, id: "r2" });
-  rpc.receive({ method: "item/started", params: {} });
-  await until(() => executed === 1); assert.equal(notified, 1); assert.equal(output.length, 0);
-  wait.resolve({ success: true, contentItems: [{ type: "inputText", text: "{}" }] });
-  await until(() => output.length === 2);
-  assert.deepEqual(output.map(x => x.id), ["r1", "r2"]);
-  rpc.receive({ ...request, id: "r3", params: { ...request.params, arguments: { path: "drafts" } } });
-  assert.equal(output[2].result.success, false); assert.equal(executed, 1);
-});
-
-test("轮次结束与连接关闭会取消执行中的工具；其他审批仍拒绝", async t => {
-  const { rpc, output } = connection(t); let signal;
-  rpc.toolHandler = async (_params, context) => { signal = context.signal; return new Promise(resolve => signal.addEventListener("abort", () => resolve({ success: false, contentItems: [] }), { once: true })); };
-  rpc.receive({ id: 1, method: "item/tool/call", params: { threadId: "t", turnId: "r", callId: "c", tool: "read_webpage", arguments: { url: "https://example.com" } } });
-  await until(() => signal);
-  rpc.receive({ method: "turn/completed", params: { threadId: "t", turn: { id: "r" } } });
-  assert.equal(signal.aborted, true);
-  await until(() => output.length === 1);
-  rpc.receive({ id: 2, method: "item/commandExecution/requestApproval", params: {} });
-  assert.equal(output[1].result.decision, "decline");
-  await rpc.close();
-});
-
-test("新 Thread 不重复注册 dynamicTools；兼容旧工具事件并进入快照", async t => {
-  const root = tempRoot(t), config = loadServerConfig(root, fixture), rpc = new FakeRpc();
-  fs.mkdirSync(path.join(root, ".runs/app-server-test"), { recursive: true });
-  const runtime = await prepareRun(config.launch, root);
+test("新 Thread 不注册 dynamicTools；工具事件进入快照", async t => {
+  const { config, rpc, runtime, sessions: previous } = await rig(t);
+  previous.close();
   const sessions = new SessionService({ rpc, config, runtime, hub: new EventHub(), redact: x => x, tools: { label: name => name === "read_file" ? "读取文件" : name } });
   t.after(() => sessions.close());
   const session = await sessions.create();
@@ -258,3 +228,4 @@ test("正式服务禁用任意命令/原生写文件，研究轮次超时与 RPC
   assert.ok(config.launch.args.includes("features.shell_tool=false"));
   assert.throws(() => loadServerConfig(tempRoot(t), { ...fixture, AGENT_TURN_TIMEOUT_MS: "0" }), /AGENT_TURN_TIMEOUT/);
 });
+

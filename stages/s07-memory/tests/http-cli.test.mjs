@@ -1,4 +1,3 @@
-import { testDataFactory } from './jobs-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, readFileSync, statSync, existsSync } from "node:fs";
@@ -12,11 +11,7 @@ import { fixture, tempRoot, cleanup, until, installToolFixture } from "./helpers
 
 const mock = `
 import {createInterface} from 'node:readline';
-import {createToolService} from './server/modules/tools/loader.mjs';
-import {dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {readFileSync} from 'node:fs';
-const registry=await createToolService(dirname(fileURLToPath(import.meta.url)));
 const send=m=>process.stdout.write(JSON.stringify(m)+'\\n');
 const threads=new Map(); let number=0;
 createInterface({input:process.stdin}).on('line',line=>{
@@ -25,13 +20,14 @@ createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='config/read') {
   const file=readFileSync(process.env.CODEX_HOME+'/config.toml','utf8');
   const value=k=>JSON.parse(file.match(new RegExp('^'+k+' = (.+)$','m'))[1]);
-  send({id:m.id,result:{config:{features:{memories:value('memories'),shell_tool:false,apply_patch_freeform:false},memories:Object.fromEntries(['use_memories','generate_memories','extract_model','consolidation_model','min_rollout_idle_hours'].map(k=>[k,value(k)]))}}});
+  send({id:m.id,result:{config:{features:{memories:value('memories'),shell_tool:false,apply_patch_freeform:false},memories:Object.fromEntries(['use_memories','generate_memories','extract_model','consolidation_model','min_rollout_idle_hours','dedicated_tools'].map(k=>[k,value(k)]))}}});
  }
  if(m.method==='thread/memoryMode/set') send({id:m.id,result:{}});
  if(m.method==='skills/list') send({id:m.id,result:{data:[{cwd:process.cwd(),skills:[],errors:[]}]}});
- if(m.method==='mcpServerStatus/list') send({id:m.id,result:{data:[{name:'project_tools',runtimeStatus:'connected',tools:Object.fromEntries(registry.specs.map(t=>[t.name,t])),toolsError:null}],nextCursor:null}});
+ if(m.method==='mcpServerStatus/list') send({id:m.id,result:{data:[{name:'project_tools',tools:Object.fromEntries(['list_files','read_file','write_file','read_webpage'].map(name=>[name,{name}]))}],nextCursor:null}});
+ if(m.method==='model/list') send({id:m.id,result:{data:[{model:'unit-model'}]}});
  if(m.method==='thread/list') send({id:m.id,result:{data:[...threads.values()],nextCursor:null}});
- if(m.method==='thread/start') {const thread={id:'thread-'+(threads.size+1),cwd:p.cwd,turns:[]}; threads.set(thread.id,thread);send({id:m.id,result:{thread,model:'unit-model',modelProvider:'project_api'}});}
+ if(m.method==='thread/start') {const thread={id:'thread-'+(threads.size+1),cwd:p.cwd,turns:[],originator:'app_server_project'}; threads.set(thread.id,thread);send({id:m.id,result:{thread,model:'unit-model',modelProvider:'project_api'}});}
  if(m.method==='thread/resume') send({id:m.id,result:{thread:threads.get(p.threadId),model:'unit-model',modelProvider:'project_api'}});
  if(m.method==='turn/start') {
   const thread=threads.get(p.threadId); const turn={id:'turn-'+(++number),status:'inProgress',items:[]}; thread.turns.push(turn);
@@ -57,7 +53,7 @@ async function appFixture(t) {
   const cli = path.join(root, "mock-codex.mjs");
   writeFileSync(cli, mock);
   const config = loadServerConfig(root, fixture); config.port = 0;
-  const app = await startAgentServer({ dataFactory: testDataFactory, config, cli, log: () => {} });
+  const app = await startAgentServer({ config, cli, log: () => {} });
   cleanup(root, () => app.close());
   const api = new AgentClient({ url: app.url, token: app.token });
   return { root, app, api };
@@ -138,17 +134,50 @@ test("认证令牌私有保存；拒绝未认证、跨源和错误 JSON 请求",
 
 test("重复启动同项目会明确拒绝，不出现两个调度器", async t => {
   const { app } = await appFixture(t);
-  await assert.rejects(startAgentServer({ dataFactory: testDataFactory, config: app.config, log: () => {} }), /已有 Agent 服务/);
+  await assert.rejects(startAgentServer({ config: app.config, log: () => {} }), /已有 Agent 服务/);
 });
 
-test("工具状态接口只返回名称和状态，不泄露 MCP 令牌、模块路径或密钥", async t => {
+test("重连先同步快照，不把客户端再次连接当成新消息", async t => {
   const { app, api } = await appFixture(t);
-  const state = await api.request("/tools");
-  assert.equal(state.status, "ready"); assert.equal(state.tools.length, 4, "去掉失效的 search_web 后剩 4 个工具");
-  assert.ok(state.tools.some(tool => tool.name === "write_file"));
-  const text = JSON.stringify(state);
-  assert.ok(!text.includes(app.tools.token)); assert.ok(!text.includes(fixture.CODEX_API_KEY));
-  assert.ok(!text.includes(".mjs"));
+  const session = await api.request("/sessions", {});
+  await api.request("/messages", { threadId: session.id, clientMessageId: "only-once", text: "A" });
+  await until(() => app.messages.job("only-once").status === "completed");
+  const events = [];
+  const subscription = api.subscribe(session.id, event => events.push(event));
+  await until(() => events.length > 0);
+  subscription.close(); await subscription.done;
+  assert.equal(events[0].type, "snapshot");
+  assert.equal(events[0].data.session.turns[0].status, "completed");
+  assert.equal(app.messages.store.state.jobs.length, 1);
+});
+
+test("提交错误返回明确的状态码：同一 ID 换内容 409，排队超过 100 条 429", async t => {
+  const { app, api } = await appFixture(t);
+  const session = await api.request("/sessions", {});
+  await api.request("/messages", { threadId: session.id, clientMessageId: "same", text: "A" });
+  const post = body => fetch(app.url + "/messages", { method: "POST", headers: { authorization: `Bearer ${app.token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  const conflict = await post({ threadId: session.id, clientMessageId: "same", text: "B" });
+  assert.equal(conflict.status, 409);
+  assert.equal((await conflict.json()).error.code, "IDEMPOTENCY_CONFLICT");
+  await app.messages.store.pause(session.id);
+  for (let i = 0; i < 100; i++) app.messages.store.create({ id: `q${i}`, threadId: session.id, text: "x", mode: "enqueue", targetTurnId: null, createdAt: 0 });
+  const full = await post({ threadId: session.id, clientMessageId: "overflow", text: "C" });
+  assert.equal(full.status, 429);
+  assert.equal((await full.json()).error.code, "QUEUE_FULL");
+});
+
+test("正常关闭推送 shutdown，不推 fatal；排队中的消息保留在任务记录里", async t => {
+  const { root, app, api } = await appFixture(t);
+  const session = await api.request("/sessions", {});
+  const events = [];
+  const stream = api.subscribe(session.id, event => events.push(event));
+  await until(() => events.some(event => event.type === "snapshot"));
+  await app.close();
+  await until(() => events.some(event => event.type === "shutdown"));
+  stream.close(); await stream.done;
+  assert.ok(!events.some(event => event.type === "fatal"));
+  assert.match(events.find(event => event.type === "shutdown").data.message, /正在关闭/);
+  assert.ok(existsSync(path.join(root, ".data", "messages.json")));
 });
 
 test("记忆 HTTP 管理复用认证和会话边界，不提供任意路径或清空接口", async t => {
@@ -167,18 +196,4 @@ test("记忆 HTTP 管理复用认证和会话边界，不提供任意路径或�
   await assert.rejects(api.request("/memory/contribution", { threadId: session.id, enabled: false, path: "../../.env" }), /只接受/);
   await assert.rejects(api.request("/memory/reset", {}), /不存在/);
   await assert.rejects(api.request("/memory/contribution", { threadId: "foreign", enabled: false }), /未找到/);
-});
-
-test("重连先同步快照，不把客户端再次连接当成新消息", async t => {
-  const { app, api } = await appFixture(t);
-  const session = await api.request("/sessions", {});
-  await api.request("/messages", { threadId: session.id, clientMessageId: "only-once", text: "A" });
-  await until(() => app.messages.job("only-once").status === "completed");
-  const events = [];
-  const subscription = api.subscribe(session.id, event => events.push(event));
-  await until(() => events.length > 0);
-  subscription.close(); await subscription.done;
-  assert.equal(events[0].type, "snapshot");
-  assert.equal(events[0].data.session.turns[0].status, "completed");
-  assert.equal(app.messages.store.state.jobs.length, 1);
 });

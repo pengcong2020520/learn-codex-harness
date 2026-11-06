@@ -27,7 +27,7 @@ function authenticated(request, token) {
 }
 
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
-export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, files }) {
+export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, files }) {
   const streams = new Set();
   const server = createServer(async (request, response) => {
     const json = (status, data) => {
@@ -40,23 +40,6 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
       if (!authenticated(request, token)) throw new AppError("Agent 服务认证失败，请重新连接。", 401);
       const url = new URL(request.url, "http://127.0.0.1");
       const route = `${request.method} ${url.pathname}`;
-      if (route === 'GET /workbench') {
-        const definition = config.agent?.definition?.agent;
-        return json(200, { agent: definition ? { id: definition.id, version: definition.version,
-          skills: definition.skills, tools: definition.tools, memory: definition.memory,
-          outputs: definition.outputs, knowledge: definition.knowledge || [] } : null,
-          queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: false },
-          storage: { business: 'JSON', wakeup: 'process', content: 'workspace', history: 'Codex native' } });
-      }
-      if (route === 'GET /workspace' && files) return json(200, await files.list_files({ path: url.searchParams.get('path') || '' }));
-      if (route === 'GET /workspace/read' && files) return json(200, await files.read_file({ path: url.searchParams.get('path'), max_chars: 262144 }));
-
-      if (route === 'GET /resources/read' && resources) return json(200, await resources.readById(url.searchParams.get('id')));
-      if (route === 'GET /preferences' && data?.repository) return json(200, { preferences: await data.repository.preferences(), injectedIntoContext: false });
-      if (route === 'POST /preferences' && data?.repository) {
-        const body = await readBody(request);
-        await data.repository.setPreference(body.key, body.value); return json(200, { saved: true, injectedIntoContext: false });
-      }
       if (route === "GET /memory") return json(200, memory.snapshot());
       if (route === "GET /memory/summary") return json(200, memory.summary());
       if (route === "POST /memory/contribution") {
@@ -65,8 +48,9 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         return json(200, await memory.contribute(body.threadId, body.enabled));
       }
       if (route === "GET /tools") return json(200, tools.snapshot());
-      if (route === "GET /health") return json(messages.failure || tools?.broken || data?.queue?.healthy === false ? 503 : 200, { status: messages.failure || tools?.broken || data?.queue?.healthy === false ? "degraded" : "ready", model: config.launch.model, queueBackend: messages.backend,
-        tools: tools?.snapshot(),
+      if (route === "GET /workspace" && files) return json(200, await files.list_files({ path: url.searchParams.get("path") || "" }));
+      if (route === "GET /workspace/read" && files) return json(200, await files.read_file({ path: url.searchParams.get("path"), max_chars: 262144 }));
+      if (route === "GET /health") return json(messages.failure || tools?.broken ? 503 : 200, { status: messages.failure || tools?.broken ? "degraded" : "ready", model: config.launch.model, tools: tools?.snapshot(),
         ...(messages.failure ? { error: { message: "Codex 连接已失效，请重启服务并核对任务状态。" } } : {}) });
       if (route === "GET /sessions") return json(200, { sessions: await sessions.list(url.searchParams.get("q") || "") });
       if (route === "POST /sessions") { await readBody(request); return json(201, await sessions.create()); }

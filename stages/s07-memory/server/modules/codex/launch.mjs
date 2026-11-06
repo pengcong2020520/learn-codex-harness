@@ -98,7 +98,6 @@ export function buildRestrictedLaunch(environment) {
 export function buildAppServerLaunch(environment, instructions = "") {
   const args = ["app-server", "--listen", "stdio://"];
   const env = { ...environment };
-  for (const key of Object.keys(env)) if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|PG[A-Z_]+)$/.test(key)) delete env[key];
   const model = environment.CODEX_MODEL?.trim() || undefined;
   if (model && /[\u0000-\u001f\u007f]/.test(model)) throw new Error("CODEX_MODEL 不能包含控制字符。");
   const timeoutMs = Number(environment.DEMO_TIMEOUT_MS || 180_000);

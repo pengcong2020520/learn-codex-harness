@@ -1,257 +1,122 @@
-# s07 设计说明：记忆与完整 Agent 核心
+# s07 设计说明：原生记忆与服务端管控
 
-> 本文是设计说明，供深入阅读。章节入门（要回答的问题 → 核心概念 → 分工 → 跑起来看看 → 关键代码）见 [README](../README.md)。
+> 本文是设计说明，供深入阅读。章节入门（要回答的问题 → 核心概念 → 分工 → 跑起来看看 → 关键代码）见 [README](../README.md)；工具相关的细节见 [s06 工具机制详解](../../s06-tools/docs/tools.md)。
 
-本阶段是独立源码快照，包含完整的 Agent 核心：常驻服务、任务与事件、Agent 装配、工具与资料边界，以及本阶段新增的记忆管控。不共享 `app/` 的运行状态，不随 `app/` 自动更新。服务监听 `127.0.0.1:4325`，本机开发，无多用户公网授权。
-
-工具机制详见 [工具机制详解](tools.md)。
-
-本阶段业务状态以本地 JSON 文件保存（见"技术实现流程"），不依赖数据库；数据层见 [s08 数据层详解](../../s08-data-layer/docs/data-layer.md)。
+本阶段是独立源码快照。服务监听 `127.0.0.1:4325`，本机开发，单用户，不做公网授权。
 
 ## 设计原理
 
-前面几章打通了对话、把它变成常驻服务。本阶段的核心问题是：**如何让同一套服务代码支持不同的角色、工具、资料权限和 Skill，而不修改代码本身？**
+s06 的 Agent 能读资料、写文章，但每个会话都从零开始。本阶段只加一个单元：**打开 Codex 的原生记忆，由 Codex 提炼和使用，由服务端决定开不开、读不读、哪些会话参与**。
 
-答案是配置驱动：把"这个 Agent 是谁、能用什么工具、能访问哪些资料"全部写进一个 JSON 文件，服务启动时读取并装配。调整角色或授权范围只需改配置；新增能力仍需实现工具或适配器。
+三个设计约束：
 
-**三个设计约束**：
-
-1. **单机单用户**：每服务实例只服务一个 Agent，支持多 Thread，不做多账户或多 Agent 编排。
-2. **模型不能自行扩权**：工具白名单由配置决定，`list` 与 `call` 同时执行 allowlist；模型不能加载任意代码。
-3. **变更可检测**：配置、角色、Skill 任一文件变更后服务检测到差异并拒绝后续请求，必须重启，保证运行状态与配置一致。
+- **默认关闭**：总开关 `AGENT_MEMORY_ENABLED` 默认 `false`；开了也只是"允许提炼"，不等于已经生成。
+- **服务端说了算**：读不读、参不参与由环境变量与 Agent 定义共同决定；客户端只能查看状态、对单个会话提出参与设置，不能传路径、不能清空。
+- **不假报**：启动时向 Codex 读回实际生效的配置，和服务端写入的逐项比对，不一致就拒绝启动。
 
 ## 架构改进
 
-本阶段的 Agent 核心由以下几部分组成：
+### 1. 新增模块
 
-### 1. Agent 定义文件集中管理
+| 模块 | 文件 | 职责 |
+|------|------|------|
+| 记忆服务 | [`server/modules/memory/index.mjs`](../server/modules/memory/index.mjs) | 启动时核对 Codex 实际配置；只读三个固定产物文件；处理单个会话的参与设置 |
 
-[`agents/writing-agent.json`](../agents/writing-agent.json) 是唯一装配入口，遵循 `schemaVersion: "1.0"`，包含六项核心字段：`agent.instructions`（角色文件路径）、`agent.skills`、`agent.tools.allow`（工具白名单）、`agent.dataBindings`（资料源与目录映射）、`agent.outputs`（产物规则）、`agent.memory`（记忆开关）；以及 `agent.executionRef`（执行环境引用，指向 `bindings.executions` 策略条目）和 `bindings`（工作区目录、资料源、执行策略表）。未知字段直接拒绝。
+其他模块配合记忆的部分：
 
-### 2. 角色与服务解耦
+- 配置模块解析 `AGENT_MEMORY_*`（总开关、读取、后台生成、提炼与合并模型、最小空闲小时数），非法值拒绝启动。
+- Codex 配置的 `features.memories` 改为按总开关写入，并增加 `[memories]` 表；通用 shell 关闭时，召回细节使用 Codex 自带的受限记忆工具（`dedicated_tools`）。
+- Agent 定义增加 `agent.memory`（`use`、`contribute`），描述符里记下生效的记忆配置。
+- 会话模块在新建会话时调用 `thread/memoryMode/set`，按策略决定这个会话是否参与提炼。
+- HTTP 增加 `GET /memory`、`GET /memory/summary`、`POST /memory/contribution`；客户端增加 `/memory`、`/memory show`、`/memory contribute on|off`。
 
-角色正文位于 [`agents/roles/writing-assistant.md`](../agents/roles/writing-assistant.md)，路径在 JSON 的 `agent.instructions` 字段中声明。加载器只读取文件，不读取环境变量中的角色路径指令。`AGENT_DEFINITION` 环境变量可改变定义入口文件。
+### 2. 开关怎么叠加
 
-### 3. 描述符版本机制
+README 里的"三道开关"（总开关、Agent 策略、会话参与）落到配置上是这几项：
 
-每次启动生成 Agent 描述符，记录角色哈希、Skill 版本、工具版本、有效资源策略，并写入本地 `.data/agent-descriptors/` 目录；会话绑定描述符版本（`.data/thread-agents.json`）。配置文件是唯一可编辑入口。旧 Thread 检测到版本不匹配时提示用户执行 `/new`，不自动迁移。
+| 项 | 来源 | 生效条件 |
+|------|------|---------|
+| 总开关 | `AGENT_MEMORY_ENABLED` | 默认 `false`；下面各项都要它开着才生效 |
+| 读记忆 | `AGENT_MEMORY_USE` 与 `agent.memory.use` | 两者都为 true，且总开关开启 |
+| 新会话默认贡献 | `AGENT_MEMORY_ENABLED` 与 `agent.memory.contribute` | 两者都为 true；`contribute: false` 不禁止读取，也不删除旧记忆 |
+| 单个会话参与 | `POST /memory/contribution`（`/memory contribute on|off`） | 只改这个 Thread 之后是否参与提炼 |
+| 后台生成 | `AGENT_MEMORY_GENERATE` | 受总开关约束 |
 
-### 4. 文件服务从工具层独立提取
+### 3. 状态放在哪
 
-[`server/modules/data/files.mjs`](../server/modules/data/files.mjs) 提供安全文件访问，文件权限边界（路径、扩展名、大小、操作类型）由文件服务自身执行，不依赖沙箱 cwd 约束。工具快照工厂注入文件服务，无跨快照引用。
-
-### 5. 边界锁与模块职责分离
-
-边界锁位于 [`server/modules/agents/boundary.mjs`](../server/modules/agents/boundary.mjs)，不在 `agents/index.mjs`。[`server/main.mjs`](../server/main.mjs) 只做编排：读定义 → 准备路径 → 注册服务 → 连接 Codex → 核验 → 生成描述符 → HTTP 就绪。各模块内部逻辑不上浮到 main。
-
-### 6. 业务状态本地 JSON
-
-本阶段不依赖数据库：
-
-| 文件 | 用途 |
+| 位置 | 内容 |
 |------|------|
-| `.data/messages.json` | 业务任务消息（原子替换写入） |
-| `.data/thread-agents.json` | Thread 与 Agent 描述符绑定 |
-| `.data/agent-descriptors/*.json` | 每次启动生成的描述符快照 |
-| `.data/codex/` | Codex 原生 SQLite/JSONL，不修改结构 |
-
-`server/modules/data/index.mjs` 中的 `JsonJobs` 使用原子 JSON 替换；服务重启后执行中任务恢复为 unconfirmed 并暂停，不重发。
+| `.data/codex/memories/` | Codex 生成的记忆产物；服务端只读 `memory_summary.md`、`MEMORY.md`、`raw_memories.md` |
+| `.data/codex/config.toml` | 服务端写入的记忆配置 |
 
 ## 技术实现流程
 
-```
-本地 CLI
-  │  HTTP / SSE
-  ▼
-Node 服务（server/main.mjs）
-  │  解析 agents/writing-agent.json（schemaVersion 1.0）
-  │  装配角色指令 + 工具白名单 + 资料绑定
-  │  生成 Agent 描述符 → .data/agent-descriptors/
-  │  stdio
-  ▼
-本机 Codex 进程（@openai/codex 0.154.0）
-  │  原生 loop / Responses API
-  ▼
-模型 API（CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL）
+### 启动
+
+```text
+loadServerConfig()      解析 AGENT_MEMORY_*；非法值拒绝启动
+agent.configure()       与 agent.memory 取交集，得到生效的 use / contribute
+prepareCodexConfig()    写入 features.memories 与 [memories]
+CodexConnection.open()
+memory.verify()         config/read 读回实际配置，逐项比对，不一致就拒绝启动
+                        通用 shell 与写文件关闭时，标记"后台合并写不出最终摘要"
 ```
 
-**Thread 生命周期**：
+### 会话参与设置
 
-- **新建**：`cwd` 设为工作区目录，跨重启保留；绑定写入 `.data/thread-agents.json`。
-- **恢复**：检索 Codex 原生项目历史，再通过 `.data/thread-agents.json` 检查描述符版本；匹配则恢复，不匹配提示 `/new`。未绑定的旧历史不自动接管。
-- **排队执行**：用户消息按 FIFO 调度，模型执行循环由 Codex 负责；不确定性失败不自动重发。
-
-**工具传输**：MCP bridge（`server/modules/tools/mcp-server.mjs`）。
-
-**运行目录**：`.runs/app-server-*`，保留最近 5 次和 7 天内记录。
+```text
+新建会话                 thread/memoryMode/set：按生效的 contribute 设为 enabled / disabled
+POST /memory/contribution { threadId, enabled }
+  1. 只接受这两个字段，threadId 格式合法、enabled 是布尔值      否则 400
+  2. 要开启时：总开关已开                                      否则 409
+  3. 要开启时：Agent 策略允许贡献                              否则 409
+  4. sessions.ensure()：会话属于本项目、Agent 版本兼容          否则拒绝
+  5. 在会话边界内：这个会话没有正在执行的一轮                  否则 409
+  6. 调用 thread/memoryMode/set
+```
 
 ## 核心代码
 
-以下为**伪代码**，展示关键流程，非直接可执行代码。
-
-### 启动装配
+以下为伪代码，说明结构，不是逐行源码。
 
 ```js
-// server/main.mjs（伪代码）
-config = loadServerConfig()
-agent = loadAgentDefinition(config.agentFile)   // 校验 JSON schema 1.0
-runtime = preparePaths(agent.workspacePath)
-files = createScopedFileService(runtime.workspaceDir, agent.sources, agent.outputs)
-tools = registerAllowedTools(agent.tools.allow, files)
-codex = connectLocalCodex(runtime, agent.instructions, tools)
-
-skills = verifyNativeSkills(codex, agent)
-verifyNativeToolsAndMemory(codex)
-descriptor = agent.activate(tools.version, skills)  // 写 .data/agent-descriptors/
-startHttpService(sessions, messages, tools)
-```
-
-### 工具调用（list 与 call 均执行 allowlist）
-
-```js
-// server/modules/tools 工厂（伪代码）
-function createToolHandler(toolAllowlist, fileService) {
-  return {
-    list() {
-      return allTools.filter(t => toolAllowlist.has(t.name));
-    },
-    async call(name, params) {
-      if (!toolAllowlist.has(name)) throw new ForbiddenError(name);
-      const tool = toolRegistry.get(name);
-      return tool.execute(params, { fileService });
-    }
-  };
-}
-```
-
-### 版本校验（Thread 恢复前检查描述符）
-
-```js
-// sessions/index.mjs（伪代码）
-async function resumeThread(threadId) {
-  const binding = await loadFromJson('.data/thread-agents.json', threadId);
-  const currentDescriptor = await loadCurrentDescriptor();
-  if (binding.descriptorHash !== currentDescriptor.hash) {
-    throw new VersionMismatchError('配置已变更，请使用 /new 新建会话');
+// server/modules/memory/index.mjs（伪代码）
+class MemoryService {
+  async verify() {
+    const actual = await rpc.request("config/read");
+    if (!matches(actual, written)) throw Error("Codex 记忆配置与服务端配置不一致");   // 逐项比对，含 dedicated_tools；不假报开启
+    this.generationBlocked = shellOff(actual) && applyPatchOff(actual);
   }
-  return nativeCodex.resumeThread(threadId);
+  snapshot() { return { effective, artifacts: readFixedFiles(), generationWarning }; }   // 只读三个固定文件
+  async contribute(threadId, enabled) {
+    require(validId(threadId) && typeof enabled === "boolean");
+    if (enabled) require(memory.enabled && agentAllowsContribute);          // 409
+    await sessions.ensure(threadId);                                        // 属于本项目、版本兼容
+    atTurnBoundary(() => { require(!activeTurn(threadId));                  // 409
+      rpc.request("thread/memoryMode/set", { threadId, mode }); });
+  }
 }
 ```
-
-### 原子 JSON 写入
-
-```js
-// server/modules/data/index.mjs JsonJobs（伪代码）
-async function atomicWrite(path, data) {
-  const tmp = path + '.tmp.' + Date.now();
-  await fs.writeFile(tmp, JSON.stringify(data));
-  await fs.rename(tmp, path);   // 原子替换，避免写一半损坏
-}
-```
-
-## 快速开始
-
-```bash
-cd stages/s07-memory
-npm ci
-
-# 准备环境变量
-test -f .env || cp .env.example .env
-# 编辑 .env：填写 CODEX_API_KEY / CODEX_BASE_URL / CODEX_MODEL
-# 端口默认 4325
-
-# 启动服务（本阶段不依赖数据库，无需 data:migrate）
-npm run server
-
-# 另开终端
-npm run chat
-```
-
-## 六项配置真实位置
-
-| 配置字段 | 文件位置 |
-|---------|---------|
-| `agent.instructions` | [`agents/writing-agent.json`](../agents/writing-agent.json) → [`agents/roles/writing-assistant.md`](../agents/roles/writing-assistant.md) |
-| `agent.skills` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
-| `agent.tools.allow` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
-| `agent.dataBindings` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
-| `agent.outputs` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
-| `agent.memory` | [`agents/writing-agent.json`](../agents/writing-agent.json) |
-
-服务主文件：[`server/main.mjs`](../server/main.mjs)  
-装配与校验：[`server/modules/agents/index.mjs`](../server/modules/agents/index.mjs)  
-边界锁：[`server/modules/agents/boundary.mjs`](../server/modules/agents/boundary.mjs)  
-文件权限服务：[`server/modules/data/files.mjs`](../server/modules/data/files.mjs)
-
-## 文件工具与资料绑定
-
-详细流程、自动归类规则和验证语句见 [工具机制详解](tools.md)。以下为摘要：
-
-工具：`read_file`、`write_file`、`list_files`。默认目录：`inputs / research / drafts / outputs`（`articles` 是指向 `outputs` 的来源 ID，不是另一份目录）。
-
-- `inputs` 只读；`research` / `drafts` 可读可创建；`outputs` 通过产物规则允许创建，读取来自独立的 `articles` 来源绑定。
-- 默认仅 `.md`/`.txt`，256 KiB，创建新文件，不覆盖，不跟随软链接/硬链接。
-- `list_files` 只返回已授权路径下的文件，不能通过父目录访问其他来源。
-- 文件成功落盘后检查文件存在性与扩展名，并归入 `turn.artifacts`；不证明语义正确或引用真实性。
-
-## CLI 命令
-
-| 命令 | 说明 |
-|------|------|
-| `/new` | 新建会话 |
-| `/resume [关键词]` | 搜索 Thread，显示结果后输入完整 Thread ID 选择恢复 |
-| `/append 内容` | 向当前轮次追加内容 |
-| `/append-to <turnId> 内容` | 向指定 turn 追加内容 |
-| `/continue` | 继续暂停的队列，不重发未确认任务 |
-| `/queue` | 查看排队任务 |
-| `/tools` | 查看当前可用工具 |
-| `/memory` | 查看记忆状态 |
-| `/exit` | 退出 CLI 客户端，不停止服务端进程 |
-| `/help` | 显示帮助 |
-
-## 记忆边界
-
-- **读记忆**：`AGENT_MEMORY_USE` 与 `agent.memory.use` 的交集，两者均为 true 且总开关开启后才允许原生召回。
-- **贡献记忆**：`AGENT_MEMORY_ENABLED` 与 `agent.memory.contribute` 的交集；`contribute: false` 不禁止读取，不删除旧记忆。
-- **后台生成**：`AGENT_MEMORY_GENERATE` 独立控制，整体受 `AGENT_MEMORY_ENABLED` 总开关约束。
-- 当前禁用原生写工具，合并摘要仍处于 blocked 状态。
 
 ## 验证
 
 ```bash
-npm test
-npm run test:codex-tools
-npm run test:codex-memory
-npm run check
-npm run check:server   # 需先停止本阶段的服务
+npm test                  # 本机假 Codex，不调用模型
+npm run test:codex-tools  # 真实 Codex + 本地模拟模型：工具闭环
+npm run test:codex-memory # 真实 Codex + 本地模拟模型：原生提炼、参与设置持久化、摘要注入与读取开关
+npm run check             # 校验配置与 Agent 定义，不启动 Codex
+npm run smoke             # 需先 npm run server；会调用真实模型
 ```
-
-测试使用本机模拟模型，无需真实 API Key。`check` 校验配置，可能创建默认模板目录；`check:server` 复用完整启动流程。
-
-集成验证从 stages 目录执行：
-
-```bash
-cd stages
-node verify.mjs --integration
-node verify.mjs --docs-only
-```
-
-结果写入 [`../verification.json`](../../verification.json)，文档不预填数字。
 
 ## 限制说明
 
 | 限制项 | 说明 |
 |--------|------|
-| 单机单用户 | 每实例一个 Agent 多 Thread，不支持多账户或多 Agent 编排 |
-| 无数据库 | 业务状态存本地 JSON，不依赖 PG / Redis；数据层升级见 s08 |
-| 工具热增 | 新增工具需同时配置 allow 并受控重启 |
-| Skill 支持范围 | 仅验证原生文本指令型 Skill；带脚本/附件的工作流不保证运行 |
-| 记忆链路 | 读开关与提炼限制路径已测；合并摘要当前 blocked，完整链路未最终验收 |
+| 不是即时保存 | 原生后台按空闲时间等条件提炼，不是每轮结束就生成 |
+| 合并摘要受限 | 本阶段关闭了原生 shell 和写文件工具，Codex 0.154.0 的后台合并写不出最终摘要，`/memory` 会如实报告 |
+| 不能清空 | 不提供清空或任意路径读取接口 |
+| 单机单用户 | 记忆存在本服务的状态目录，不区分用户；多用户见后续阶段 |
 
-## 本地 Web 外部客户端
+## 机制实验
 
-启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
-
-## 机制课程与逐课实验
-
-本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-3)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](../lessons/README.md)。页面推演与终端运行结果分开展示。
+在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](../lessons/README.md)。

@@ -1,12 +1,12 @@
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
-import { executing, terminal } from "../data/jobs.mjs";
+import { executing, terminal } from "../data/index.mjs";
 
-// Product input scheduling only. Codex continues to own its Agent loop and context.
+// 只负责输入的排队与调度；执行循环和上下文仍归 Codex。
+// 对任务记录（store）的调用统一写成 await：本阶段的 JSON 实现是同步的，await 普通返回值不改变行为，换成异步存储时调度代码不用改。
 export class MessageService {
-  constructor({ rpc, sessions, hub, config, store, queue }) {
-    Object.assign(this, { rpc, sessions, hub, config, store, queue });
+  constructor({ rpc, sessions, hub, config, store }) {
+    Object.assign(this, { rpc, sessions, hub, config, store });
     if (!store) throw new Error("必须注入任务仓储。");
-    this.backend = queue ? "external" : "local-json";
     this.locks = new Map();
     this.scheduled = new Set();
     this.timers = new Map();
@@ -25,11 +25,7 @@ export class MessageService {
   }
   async open() {
     await this.store.recover("服务曾重启，执行结果待核对，不会自动重发。");
-    if (!this.queue) for (const id of new Set((await this.store.list()).map(job => job.threadId))) this.schedule(id);
-    this.queue?.start(
-      (id) => this.schedule(id),
-      (error) => this.fail(error),
-    );
+    for (const id of new Set((await this.store.list()).map(job => job.threadId))) this.schedule(id);
     return this;
   }
   serial(id, operation) {
@@ -81,23 +77,10 @@ export class MessageService {
       }
       if (mode === "append" && !this.sessions.getTurn(threadId, targetTurnId))
         throw new AppError("追加目标不属于该会话或尚不可定位。", 409);
-      try {
-        await this.store.create({
-          id,
-          threadId,
-          text,
-          mode,
-          targetTurnId,
-          agentHash: this.config.agent?.descriptor?.hash,
-          createdAt: Date.now(),
-        });
-      } catch (error) {
-        if (error.code === "23505")
-          throw new AppError("消息 ID 冲突，请核对原消息。", 409);
-        throw error;
-      }
+      // 先写进任务记录，再排队：这时服务重启也不会丢。
+      await this.store.create({ id, threadId, text, mode, targetTurnId, agentHash: this.config.agent.descriptor.hash, createdAt: Date.now() });
       await this.publish(threadId);
-      if (!this.queue) this.schedule(threadId); // Local durable JSON queue.
+      this.schedule(threadId);
       return this.publicJob(await this.job(id));
     });
   }
@@ -123,7 +106,7 @@ export class MessageService {
         return;
       }
     }
-    const all = await this.store.list(threadId, { history: false }),
+    const all = await this.store.list(threadId),
       pending = all.filter((j) => j.status === "queued");
     const active = this.sessions.snapshot(threadId).activeTurnId;
     const append = pending.find(
@@ -153,11 +136,7 @@ export class MessageService {
       await this.sessions.atBoundary(async () => {
         if (this.closed || this.failure)
           throw new Error("服务已关闭或连接失效。");
-        const prepared = await this.sessions.prepareInput(
-          threadId,
-          input,
-          job.agentHash,
-        );
+        const prepared = await this.sessions.prepareInput(threadId, input, job.agentHash);
         sent = true;
         const result = await this.rpc.request("turn/start", {
           threadId,
@@ -178,11 +157,7 @@ export class MessageService {
       return;
     let sent = false;
     try {
-      const input = await this.sessions.prepareInput(
-        job.threadId,
-        job.text,
-        job.agentHash,
-      );
+      const input = await this.sessions.prepareInput(job.threadId, job.text, job.agentHash);
       sent = true;
       const result = await this.rpc.request("turn/steer", {
         threadId: job.threadId,
@@ -217,8 +192,6 @@ export class MessageService {
     const job = await this.job(id),
       turn = this.sessions.getTurn(job.threadId, turnId);
     const status = terminal.includes(turn?.status) ? turn.status : "running";
-    if (terminal.includes(status))
-      await this.sessions.persistTurn?.(job.threadId, turn);
     if (
       !(await this.store.patch(
         id,
@@ -253,7 +226,6 @@ export class MessageService {
   async completed(threadId, turn) {
     clearTimeout(this.timers.get(turn.id));
     this.timers.delete(turn.id);
-    await this.sessions.persistTurn?.(threadId, turn);
     for (const job of await this.store.list(threadId))
       if (job.turnId === turn.id && executing.includes(job.status))
         await this.store.patch(
@@ -266,8 +238,7 @@ export class MessageService {
     await this.wake(threadId);
   }
   async wake(threadId) {
-    await this.store.wake(threadId);
-    if (!this.queue) this.schedule(threadId);
+    this.schedule(threadId);
   }
   async continue(threadId) {
     requireId(threadId, "会话 ID");
@@ -320,7 +291,6 @@ export class MessageService {
   async close() {
     if (this.closed) return;
     this.closed = true;
-    await this.queue?.close();
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.sessions.off("turnCompleted", this.onCompleted);
     this.rpc.off("fatal", this.onFatal);

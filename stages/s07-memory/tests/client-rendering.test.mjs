@@ -8,16 +8,6 @@ import { until } from "./helpers.mjs";
 const THREAD_ID = "01a0b819-39cf-74b3-b786-54d303c0aa57";
 const TURN_ID = "01a0b819-3a46-7a33-b2b5-49692ca7ecdd";
 
-test("/tools 无需创建会话即可查看工具，不发模型消息", async t => {
-  const f = terminalFixture(t), calls = [];
-  const api = { async request(route) { calls.push(route); return { status: "ready", pending: false, error: null, tools: [{ name: "read_file", label: "读取文件" }] }; } };
-  const done = runChat(api, f.terminal);
-  f.input.end("/tools\n/exit\n");
-  await done;
-  assert.deepEqual(calls, ["/tools"]);
-  assert.match(f.text(), /read_file：读取文件/);
-});
-
 function terminalFixture(t, columns = null) {
   const input = new PassThrough();
   const output = new PassThrough();
@@ -36,24 +26,6 @@ function terminalFixture(t, columns = null) {
   return { input, output, terminal, text: () => text };
 }
 
-test("CLI 记忆查询不创建会话或发起模型请求，未选 Thread 不修改参与设置", async t => {
-  const f = terminalFixture(t), calls = [];
-  const api = { async request(route) {
-    calls.push(route);
-    return route === "/memory" ? { effective: { enabled: true, use: true, generate: true }, hasSummary: false,
-      directory: ".data/codex/memories", generationWarning: "测试限制", note: "不是即时生成" } : { text: "合成偏好", truncated: false };
-  } };
-  const done = runChat(api, f.terminal);
-  f.input.end("/memory\n/memory show\n/memory contribute on\n/memory reset\n/exit\n");
-  await done;
-  assert.deepEqual(calls, ["/memory", "/memory/summary"]);
-  assert.match(f.text(), /尚无产物/);
-  assert.match(f.text(), /合成偏好/);
-  assert.match(f.text(), /请先新建或恢复会话/);
-});
-
-// 小型终端屏幕模型：执行 readline 输出的光标/清屏指令，而不是简单删除 ANSI。
-// 这样能够发现“字符串拼对了，但实际屏幕把回复或输入擦掉了”的回归。
 function screen(text, columns) {
   let rows = [[]], x = 0, y = 0;
   function row() { return rows[y] ||= []; }
@@ -249,6 +221,25 @@ test("队列暂停只提示一次，普通队列变化不再逐条刷日志", as
   assert.doesNotMatch(f.text(), /队列：/);
 });
 
+
+test("服务端正常关闭时提示关闭，不显示为服务异常", async t => {
+  const f = await chatFixture(t);
+  await f.start();
+  f.event("shutdown", { message: "服务端正在关闭；排队中的消息会保留，重启后可继续。" });
+  assert.match(f.text(), /服务端正在关闭/);
+  assert.doesNotMatch(f.text(), /服务异常/);
+});
+
+test("/tools 无需创建会话即可查看工具，不发模型消息", async t => {
+  const f = terminalFixture(t), calls = [];
+  const api = { async request(route) { calls.push(route); return { status: "ready", pending: false, error: null, tools: [{ name: "read_file", label: "读取文件" }] }; } };
+  const done = runChat(api, f.terminal);
+  f.input.end("/tools\n/exit\n");
+  await done;
+  assert.deepEqual(calls, ["/tools"]);
+  assert.match(f.text(), /read_file：读取文件/);
+});
+
 test("工具状态变化只显示一次，不泄露工具 callId，不拆碎流式回复", async t => {
   const f = await chatFixture(t);
   await f.start();
@@ -263,4 +254,36 @@ test("工具状态变化只显示一次，不泄露工具 callId，不拆碎流�
   assert.equal(f.text().split("工具：读取网页 · 失败").length - 1, 1);
   assert.match(f.text(), /Agent：请提供文章链接。\n$/);
   assert.doesNotMatch(f.text(), /secretCallId/);
+});
+
+test("CLI 记忆查询不创建会话或发起模型请求，未选 Thread 不修改参与设置", async t => {
+  const f = terminalFixture(t), calls = [];
+  const api = { async request(route) {
+    calls.push(route);
+    return route === "/memory" ? { effective: { enabled: true, use: true, generate: true, contribute: false }, hasSummary: false,
+      directory: ".data/codex/memories", generationWarning: "测试限制", note: "不是即时生成" } : { text: "合成偏好", truncated: false };
+  } };
+  const done = runChat(api, f.terminal);
+  f.input.end("/memory\n/memory show\n/memory contribute on\n/memory reset\n/exit\n");
+  await done;
+  assert.deepEqual(calls, ["/memory", "/memory/summary"]);
+  assert.match(f.text(), /尚无产物/);
+  assert.match(f.text(), /合成偏好/);
+  assert.match(f.text(), /请先新建或恢复会话/);
+  assert.match(f.text(), /后台生成记忆：开启/);
+  assert.match(f.text(), /新 Thread 默认参与提炼：否/);
+});
+
+test("记忆总开关关闭时，读取和后台生成显示为不生效", async t => {
+  const f = terminalFixture(t);
+  const api = { async request() {
+    return { effective: { enabled: false, use: true, generate: true, contribute: false }, hasSummary: false,
+      directory: ".data/codex/memories", generationWarning: "测试限制", note: "不是即时生成" };
+  } };
+  const done = runChat(api, f.terminal);
+  f.input.end("/memory\n/exit\n");
+  await done;
+  assert.match(f.text(), /记忆总开关：关闭/);
+  assert.match(f.text(), /后台生成记忆：已配置，总开关关闭时不生效/);
+  assert.doesNotMatch(f.text(), /后台生成记忆：开启/);
 });

@@ -6,15 +6,15 @@ import { AppError, requireId } from "../../../shared/errors.mjs";
 export const SESSION_TURN_MEMORY = 100;
 
 export class SessionService extends EventEmitter {
-  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository }) {
+  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn }) {
     super();
-    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository });
+    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn });
     this.sessions = new Map();
     this.loading = new Map();
     this.options = {
-      sandbox: config.agent?.execution.sandbox || "read-only",
-      approvalPolicy: config.agent?.execution.approvalPolicy || "never",
-      baseInstructions: config.agent?.instructions || "",
+      sandbox: config.agent.execution.sandbox,
+      approvalPolicy: config.agent.execution.approvalPolicy,
+      baseInstructions: config.agent.instructions,
       ...(config.launch.model ? { model: config.launch.model } : {}),
       ...(config.launch.authMode === "apiKey" ? { modelProvider: "project_api" } : {})
     };
@@ -24,23 +24,22 @@ export class SessionService extends EventEmitter {
 
   async create() {
     return this.atBoundary(async () => {
-      this.config.agent?.assertCurrent();
+      this.config.agent.assertCurrent();
       const result = await this.rpc.request("thread/start", { ...this.options, cwd: this.runtime.workspaceDir });
-      if (this.config.agent) {
-        await this.rpc.request("thread/memoryMode/set", { threadId: result.thread.id, mode: this.config.memory.contribute ? "enabled" : "disabled" });
-        await this.config.agent.bind(result.thread.id);
-      }
+      await this.rpc.request("thread/memoryMode/set", { threadId: result.thread.id, mode: this.config.memory.contribute ? "enabled" : "disabled" });
+      this.config.agent.bind(result.thread.id);
       return this.register(result);
     }, { allowBusy: true });
   }
 
   atBoundary(operation, options) { return this.boundary ? this.boundary.run(operation, options) : operation(); }
 
-  assertCompatible(threadId, jobHash) { return this.config.agent?.assertCompatible(threadId, jobHash); }
+  assertCompatible(threadId, jobHash) { return this.config.agent.assertCompatible(threadId, jobHash); }
+  // 每一轮发出前：核对会话与排队消息的 Agent 版本、Skill 有效集合，再由 Agent 生成输入（含显式引用的 Skill）。
   async prepareInput(threadId, text, jobHash) {
-    await this.assertCompatible(threadId, jobHash);
+    this.assertCompatible(threadId, jobHash);
     await this.beforeTurn?.();
-    return this.config.agent?.input(text) || [{ type: "text", text, text_elements: [] }];
+    return this.config.agent.input(text);
   }
 
   register(result) {
@@ -55,7 +54,6 @@ export class SessionService extends EventEmitter {
   }
 
   async list(keyword = "") {
-    if (this.repository) return this.repository.listConversations(keyword);
     const stored = await listProjectThreads(this.rpc.request.bind(this.rpc), this.config.root, keyword, this.runtime.workspaceDir);
     const found = new Map(stored.map(thread => [thread.id, thread]));
     const query = keyword.toLocaleLowerCase();
@@ -69,7 +67,7 @@ export class SessionService extends EventEmitter {
 
   async ensure(threadId) {
     requireId(threadId, "会话 ID");
-    if (this.sessions.has(threadId)) { await this.assertCompatible(threadId); return this.snapshot(threadId); }
+    if (this.sessions.has(threadId)) { this.assertCompatible(threadId); return this.snapshot(threadId); }
     if (!this.loading.has(threadId)) {
       const promise = this.load(threadId).finally(() => this.loading.delete(threadId));
       this.loading.set(threadId, promise);
@@ -78,12 +76,11 @@ export class SessionService extends EventEmitter {
   }
 
   async load(threadId) {
-    const selected = this.repository ? await this.repository.conversation(threadId) :
-      (await listProjectThreads(this.rpc.request.bind(this.rpc), this.config.root, "", this.runtime.workspaceDir)).find(thread => thread.id === threadId);
+    const selected = (await listProjectThreads(this.rpc.request.bind(this.rpc), this.config.root, "", this.runtime.workspaceDir)).find(thread => thread.id === threadId);
     if (!selected) throw new AppError("未找到本项目的这个会话。", 404, "THREAD_NOT_FOUND");
     return this.atBoundary(async () => {
-      await this.assertCompatible(threadId);
-      const legacyPath = this.tools && !this.repository ? await importLegacyThread(this.config.root, selected) : undefined;
+      this.assertCompatible(threadId);
+      const legacyPath = await importLegacyThread(this.config.root, selected);
       await ensureThreadDirectory(this.config.root, selected.cwd, this.runtime.workspaceDir);
       const result = await this.rpc.request("thread/resume", {
         ...this.options, threadId, cwd: selected.cwd, excludeTurns: false,
@@ -95,7 +92,6 @@ export class SessionService extends EventEmitter {
   }
 
   getTurn(threadId, turnId) { return this.sessions.get(threadId)?.turns.get(turnId); }
-  persistTurn(threadId, turn) { return this.repository?.recordArtifacts(threadId, turn); }
 
   recordTurn(threadId, turn) {
     const session = this.sessions.get(threadId);

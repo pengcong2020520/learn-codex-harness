@@ -73,7 +73,7 @@
         "flow": [
           "server",
           "codex",
-          "config/read"
+          "核验 config/read"
         ],
         "say": "服务端不假设写进去就生效，而是向 Codex 读回实际配置。",
         "state": {
@@ -156,6 +156,10 @@
         "记忆模块"
       ],
       [
+        "sessions",
+        "会话模块"
+      ],
+      [
         "codex",
         "Codex"
       ]
@@ -171,9 +175,9 @@
         "flow": [
           "client",
           "http",
-          "POST /memory/contribution"
+          "提交参与设置"
         ],
-        "say": "用户输入 /memory contribute on，想让当前会话参与提炼。",
+        "say": "POST /memory/contribution：用户输入 /memory contribute on，想让当前会话参与提炼。",
         "actors": {
           "client": "运行中"
         }
@@ -203,9 +207,9 @@
         "flow": [
           "client",
           "http",
-          "POST /memory/contribution"
+          "提交参与设置"
         ],
-        "say": "改成 /memory contribute off。服务端确认这是本项目的会话，但它正在执行一轮：409，等这一轮结束再改。",
+        "say": "POST /memory/contribution：改成 /memory contribute off。服务端确认这是本项目的会话，但它正在执行一轮：409，等这一轮结束再改。",
         "state": {
           "最近一次设置": "409 等本轮结束"
         }
@@ -213,10 +217,10 @@
       {
         "flow": [
           "codex",
-          "memory",
-          "turn/completed"
+          "sessions",
+          "接收 turn/completed"
         ],
-        "say": "这一轮结束了，会话里不再有执行中的轮次。",
+        "say": "这一轮结束了：会话模块收到 turn/completed，清除这个会话的进行中标记。记忆模块不订阅这个通知，只在下一次请求时读取会话状态。",
         "state": {
           "当前一轮": "已结束"
         }
@@ -229,7 +233,7 @@
         "flow": [
           "memory",
           "codex",
-          "thread/memoryMode/set"
+          "设置 memoryMode"
         ],
         "say": "再次提交 off：通过 Codex 原生接口把这个 Thread 设为不参与。只影响之后的提炼，不删除过去的记忆。",
         "state": {

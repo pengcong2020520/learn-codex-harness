@@ -1,4 +1,4 @@
-// Unit-test double only; production has no JSON or memory fallback.
+// 测试用的内存任务记录；服务端实际使用 data/index.mjs 里的 JSON 文件。
 export class TestJobs {
   constructor(state = { jobs: [], paused: [] }) {
     this.state = state;
@@ -34,7 +34,6 @@ export class TestJobs {
     this.state.paused = this.state.paused.filter((x) => x !== id);
     if (value) this.state.paused.push(id);
   }
-  wake() {}
   recover(reason) {
     for (const job of this.state.jobs) {
       if (["starting", "running", "steering"].includes(job.status)) {
@@ -44,7 +43,4 @@ export class TestJobs {
       if (job.status === "unconfirmed") this.pause(job.threadId);
     }
   }
-}
-export async function testDataFactory() {
-  return { jobs: new TestJobs(), async close() {} };
 }

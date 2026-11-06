@@ -79,7 +79,7 @@ test("当前运行、已加载会话、活进程及正在打开的文件都受�
   const alive = run(root, "alive", 10 * day, { "run.json": JSON.stringify({ version: 1, pid: process.pid, startedAt: 1 }) });
   const idle = run(root, "idle");
   const sessions = { loading: new Map(), sessions: new Map([["thread", { cwd: loaded }]]) };
-  const result = await retainOne(root, { runtime: { workspace: current }, sessions,
+  const result = await retainOne(root, { runtime: { runDir: current }, sessions,
     inspectOpenPaths: async () => [path.join(opened, "protocol.jsonl")] }).sweep();
   assert.deepEqual(result.removed, [path.basename(idle)]);
   [current, loaded, opened, alive].forEach(dir => assert.ok(fs.existsSync(dir)));
@@ -107,15 +107,15 @@ test("无法确认进程状态时不删除；索引落盘失败时也不删除",
   assert.equal(failed.removed.length, 0); assert.ok(fs.existsSync(directory));
 });
 
-test("合法工具快照可清理，但最新文件修改时间决定保留期", async t => {
-  const root = tempRoot(t), old = run(root, "old", 10 * day, {
-    "tools-abc/config/tools/files.json": "{}", "tools-abc/server/modules/tools/files.mjs": "export {};", "protocol.jsonl": ""
-  });
+test("运行目录里多出子目录时保留；最新文件修改时间决定保留期", async t => {
+  const root = tempRoot(t), unknown = run(root, "old", 10 * day, { "extra/notes.md": "x", "protocol.jsonl": "" });
   const freshContent = run(root, "recent-change", 10 * day);
   fs.writeFileSync(path.join(freshContent, "protocol.jsonl"), "{}\n");
   const cleaner = retainOne(root);
-  assert.deepEqual((await cleaner.sweep()).removed, [path.basename(old)]);
-  assert.ok(fs.existsSync(freshContent));
+  const result = await cleaner.sweep();
+  assert.deepEqual(result.removed, []);
+  assert.ok(result.skipped.includes(path.basename(unknown)));
+  assert.ok(fs.existsSync(unknown)); assert.ok(fs.existsSync(freshContent));
 });
 
 test("检查期间开始恢复会话会跳过删除，重复清理请求复用同一轮", async t => {
@@ -138,11 +138,11 @@ test("索引拒绝越界目录；重建会话目录拒绝符号链接", async t 
 
 test("运行生命周期标记进程身份和结束时间，重复结束不会反复改写", async t => {
   const root = tempRoot(t), runtime = await prepareRun({ args: [] }, root);
-  const file = path.join(runtime.workspace, "run.json");
+  const file = path.join(runtime.runDir, "run.json");
   assert.equal(JSON.parse(fs.readFileSync(file)).pid, process.pid);
-  finishRun(runtime.workspace);
+  finishRun(runtime.runDir);
   const state = fs.readFileSync(file, "utf8"); assert.ok(JSON.parse(state).stoppedAt);
-  finishRun(runtime.workspace); assert.equal(fs.readFileSync(file, "utf8"), state);
+  finishRun(runtime.runDir); assert.equal(fs.readFileSync(file, "utf8"), state);
 });
 
 test("启动立即检查、定期重复检查、关闭后停止；dryRun 不改索引或缓存", async t => {
@@ -168,4 +168,15 @@ test("真实 lsof 检查保护打开的旧日志，关闭句柄后才清理", as
   finally { fs.closeSync(file); }
   const result = await cleaner.sweep();
   assert.equal(result.error, undefined); assert.equal(result.removed.length, 1);
+});
+
+test("合法工具快照可清理，但最新文件修改时间决定保留期", async t => {
+  const root = tempRoot(t), old = run(root, "old", 10 * day, {
+    "tools-abc/config/tools/files.json": "{}", "tools-abc/server/modules/tools/files.mjs": "export {};", "protocol.jsonl": ""
+  });
+  const freshContent = run(root, "recent-change", 10 * day);
+  fs.writeFileSync(path.join(freshContent, "protocol.jsonl"), "{}\n");
+  const cleaner = retainOne(root);
+  assert.deepEqual((await cleaner.sweep()).removed, [path.basename(old)]);
+  assert.ok(fs.existsSync(freshContent));
 });

@@ -8,8 +8,8 @@ const session = await api.request("/sessions", {});
 console.log(`验证会话：${session.id}`);
 const word = "木星钟摆";
 const first = randomUUID(), second = randomUUID();
-await api.request("/messages", { threadId: session.id, clientMessageId: first, text: `这是脚手架验证。请记住测试词：${word}。不要调用工具，只回复：已记住。` });
-await api.request("/messages", { threadId: session.id, clientMessageId: second, text: "上一条消息让我记住的测试词是什么？不要调用工具，只回复测试词。" });
+await api.request("/messages", { threadId: session.id, clientMessageId: first, text: `这是脚手架验证。请记住测试词：${word}。只回复：已记住。` });
+await api.request("/messages", { threadId: session.id, clientMessageId: second, text: "上一条消息让我记住的测试词是什么？只回复测试词。" });
 const deadline = Date.now() + 180000;
 let state;
 while (Date.now() < deadline) {
