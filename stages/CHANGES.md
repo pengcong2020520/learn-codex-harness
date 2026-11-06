@@ -62,17 +62,29 @@
 
 **新增环境变量**：`AGENT_DEFINITION`
 
+<a id="s06"></a>
+
+## s06：工具：读得到资料、存得下文章
+
+相比 [s05-agent-assembly](s05-agent-assembly/)：工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。
+
+**新增模块**：工具与资料边界（Agent 装配，白名单 + 参数校验）；MCP 工具入口（Agent 装配，Codex 回调本地工具）
+
+**新增工具**：`list_files`、`read_file`、`write_file`、`read_webpage`
+
+**新增接口**：`GET /tools`、`GET /workspace`、`GET /workspace/read`
+
+**新增环境变量**：`NODE_ENV`
+
 <a id="s07"></a>
 
 ## s07：记忆：Codex 提炼，服务端管控
 
-相比 [s05-agent-assembly](s05-agent-assembly/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
+相比 [s06-tools](s06-tools/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
 
 **新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
 
-**新增工具**：`list_files`、`read_file`、`write_file`、`read_webpage`
-
-**新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`
+**新增接口**：`GET /workbench`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`
 
 **新增环境变量**：`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
 

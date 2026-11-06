@@ -1,6 +1,6 @@
 # 导论：Codex harness 是什么，为什么用它来做 Agent
 
-`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [app](../app/)
+`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s06](s06-tools/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [app](../app/)
 > *"Agent = 模型 + Harness"* — 模型负责想，harness 负责做。这套教程带你亲手做一个云端 Agent：不自己造 harness，而是把 OpenAI Codex 的 harness 接进来，把精力留给业务。
 
 ---
@@ -34,7 +34,7 @@
 | [s03](s03-service/) | 常驻：拆成服务端和客户端，客户端关掉，服务和正在执行的一轮还在 |
 | [s04](s04-events-messages/) | 排队搬进服务端：输入先记下来再逐条执行，状态主动推给客户端，断线重连不漏状态、不重发消息 |
 | [s05](s05-agent-assembly/) | 有了身份：一份 JSON 决定它是谁、按什么方法工作、启用哪些 Skill，改了就得重启、新建会话 |
-| s06（编写中） | 工具白名单与资料边界 |
+| [s06](s06-tools/) | 能动手了：读得到你给的资料、存得下写好的文章；能用什么由白名单说了算，原始资料只读、写过的不覆盖 |
 | [s07](s07-memory/) | 记忆：Codex 提炼，开不开、谁能参与由服务端说了算 |
 | [s08](s08-data-layer/) | 靠得住：任务排队，重启不丢不重，资料和产物有版本 |
 | [s09](s09-knowledge-layer/) | 守得住：身份由服务端认定，所有访问过一道门禁；资料整理成知识库 |
@@ -233,8 +233,12 @@ flowchart LR
   intro["导论<br/>认识引擎"] --> s00["s00 先体验<br/>用 SDK 交一个任务"]
   s00 --> s01["s01 心脏<br/>打通到模型的链路"]
   s01 --> s02["s02 多轮<br/>断开也能接着聊"]
-  s02 --> s03["s03 成为服务<br/>角色、工具、记忆"]
-  s03 --> s08["s08 靠得住<br/>任务与版本落库"]
+  s02 --> s03["s03 成为服务<br/>客户端走了服务还在"]
+  s03 --> s04["s04 排队与推送<br/>事件与消息"]
+  s04 --> s05["s05 有了身份<br/>角色与 Skills"]
+  s05 --> s06["s06 能动手<br/>工具与资料边界"]
+  s06 --> s07["s07 记得住<br/>原生记忆"]
+  s07 --> s08["s08 靠得住<br/>任务与版本落库"]
   s08 --> s09["s09 守得住<br/>门禁与知识库"]
   s09 --> s10["s10 会干活<br/>Skill 与 Workflow"]
   s10 --> s11["s11 管好模型<br/>模型网关"]

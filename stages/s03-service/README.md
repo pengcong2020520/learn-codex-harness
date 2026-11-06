@@ -1,6 +1,6 @@
 # s03: 服务化 — 服务端常驻，客户端随时连上来
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"客户端走了，服务还在"* — Codex、模型密钥和正在执行的那一轮都归服务端；客户端只负责提交和查看。
 >
 > **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？

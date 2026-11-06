@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway"];
 // 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
 export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
@@ -77,6 +77,8 @@ const stageList = [
     path: [["user", "连续提交"], ["api", "POST /messages"], ["jobs", "写入任务记录"], ["messages", "按会话排队"], ["codex", "turn/start 执行"], ["events", "SSE 推送进度"]] },
   { title: "一份 JSON 装配 Agent：角色与 Skills", sub: "Agent 定义决定角色、Skill、执行策略和工作区；启动时校验，内容一变旧版本就作废，会话与排队消息都要核对版本。",
     path: [["def", "校验 Agent 定义"], ["roles", "装配角色与 Skill"], ["codex", "skills/list 核验"], ["api", "POST /messages"], ["def", "核对版本"], ["codex", "带角色执行一轮"]] },
+  { title: "工具：读得到资料、存得下文章", sub: "工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。",
+    path: [["api", "发起任务"], ["messages", "任务排队"], ["codex", "Codex 执行一轮"], ["mcp", "MCP 回调工具"], ["tools", "核对名单与参数"], ["events", "推送进度"]] },
   { title: "记忆：Codex 提炼，服务端管控", sub: "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
     path: [["user", "/memory contribute"], ["api", "提交参与设置"], ["memory", "查总开关与策略"], ["codex", "memoryMode/set"], ["codex", "空闲后提炼"], ["api", "GET /memory 查看"]] },
   { title: "让任务与产物有据可查", sub: "业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。",

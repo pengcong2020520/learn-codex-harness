@@ -1,0 +1,450 @@
+[
+  {
+    "id": "s06-allowlist",
+    "title": "模型点名一个没给它的工具",
+    "question": "清单里没有的工具、填错的参数，实现会被执行吗？",
+    "file": "stages/s06-tools/server/modules/tools/loader.mjs",
+    "start": 98,
+    "end": 118,
+    "expect": "validate(name, args) {",
+    "notes": {
+      "99": "按名字找注册表里的工具",
+      "100": "没注册、不在 Agent 的 tools.allow 里、或不在当前清单里：一律「未授权」",
+      "101": "参数先按预编译的 JSON Schema 校验，不合法就拒绝",
+      "104": "Codex 经 MCP 发来的每次 tools/call 都走这里",
+      "105": "Agent 版本作废时，正在进行的调用也会被取消",
+      "108": "不接受命名空间：只有本项目这一个入口",
+      "109": "先核对名单和参数，通过了才拿到实现",
+      "110": "真正执行工具实现",
+      "111": "结果以 JSON 文本交回 Codex",
+      "116": "任何失败都变成错误结果交回模型，不让服务崩溃"
+    },
+    "actors": [
+      [
+        "model",
+        "模型"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ],
+      [
+        "mcp",
+        "MCP 入口"
+      ],
+      [
+        "registry",
+        "工具注册表"
+      ],
+      [
+        "impl",
+        "工具实现"
+      ]
+    ],
+    "state0": {
+      "Codex 看到的清单": "list_files、read_file、write_file、read_webpage",
+      "最近一次调用": "—",
+      "实现被执行": "0 次"
+    },
+    "steps": [
+      {
+        "flow": [
+          "codex",
+          "mcp",
+          "请求 tools/list"
+        ],
+        "say": "一轮开始前，Codex 经 MCP 要工具清单。清单只包含 Agent 定义 tools.allow 里的工具。"
+      },
+      {
+        "flow": [
+          "mcp",
+          "codex",
+          "返回 4 个工具"
+        ],
+        "say": "模型只会在清单里看到这 4 个工具。"
+      },
+      {
+        "flow": [
+          "model",
+          "codex",
+          "想用 run_shell"
+        ],
+        "say": "模型想用一个清单里没有的工具。清单是第一道关：Codex 只认它拿到的工具。",
+        "warn": true
+      },
+      {
+        "lines": [
+          104,
+          109
+        ],
+        "flow": [
+          "codex",
+          "mcp",
+          "发送 tools/call（绕过清单）"
+        ],
+        "say": "假设有一次调用绕过了清单，直接以 run_shell 为名发到 MCP 入口（比如清单更新前发出的旧调用）。注册表是第二道关。"
+      },
+      {
+        "lines": [
+          99,
+          100
+        ],
+        "flow": [
+          "mcp",
+          "registry",
+          "核对名单"
+        ],
+        "say": "注册表里没有这个工具，也不在 tools.allow 里：直接判定未授权，实现根本不会被找到。",
+        "warn": true,
+        "state": {
+          "最近一次调用": "run_shell → 未授权的工具"
+        }
+      },
+      {
+        "lines": [
+          112,
+          116
+        ],
+        "flow": [
+          "registry",
+          "codex",
+          "返回错误：未授权"
+        ],
+        "say": "失败作为错误结果交回，模型据此如实说明做不到。"
+      },
+      {
+        "flow": [
+          "model",
+          "codex",
+          "调用 read_file（缺参数）"
+        ],
+        "say": "这次换了名单里的 read_file，但参数漏了 path。"
+      },
+      {
+        "lines": [
+          101,
+          101
+        ],
+        "flow": [
+          "mcp",
+          "registry",
+          "按 schema 校验参数"
+        ],
+        "say": "参数不符合 JSON Schema，同样在执行前拒绝。",
+        "warn": true,
+        "state": {
+          "最近一次调用": "read_file → 工具参数不合法"
+        }
+      },
+      {
+        "flow": [
+          "model",
+          "codex",
+          "调用 read_file"
+        ],
+        "say": "名字和参数都对了：path 是 inputs/notes.md。"
+      },
+      {
+        "lines": [
+          109,
+          111
+        ],
+        "flow": [
+          "registry",
+          "impl",
+          "执行 read_file"
+        ],
+        "say": "通过核对后才拿到实现并执行，结果交回 Codex。",
+        "state": {
+          "最近一次调用": "read_file → 成功",
+          "实现被执行": "1 次"
+        }
+      }
+    ],
+    "takeaway": "能用什么由 Agent 定义说了算，不由模型说了算：名单外的名字、不合法的参数都在执行前被拒绝，实现一次都不会被调用。"
+  },
+  {
+    "id": "s06-workspace",
+    "title": "原始资料能改吗？同名文件能覆盖吗？",
+    "question": "模型想改 inputs 里的原始资料，或者把文章存成一个已经存在的文件名，会怎样？",
+    "file": "stages/s06-tools/server/modules/data/files.mjs",
+    "start": 207,
+    "end": 237,
+    "expect": "write_file({ path: relative, content }) {",
+    "notes": {
+      "208": "Agent 版本作废后不再允许写入",
+      "209": "按 dataBindings 判断这个目录有没有「新建」权限",
+      "212": "产物格式只允许 outputs 规则里的 md / txt",
+      "215": "单个文件最大 256 KiB",
+      "217": "解析路径：只能在四个资料目录内，不能经过符号链接",
+      "220": "wx：文件不存在才创建，已存在就失败",
+      "221": "新文件权限设为 0600：只有文件所有者能读写",
+      "225": "已存在：不覆盖，提示换一个新版本文件名",
+      "232": "写完再确认是普通文件，不是链接",
+      "237": "created: true 让会话把它登记为可信产物"
+    },
+    "actors": [
+      [
+        "model",
+        "模型"
+      ],
+      [
+        "registry",
+        "工具注册表"
+      ],
+      [
+        "files",
+        "资料边界"
+      ],
+      [
+        "disk",
+        "workspace 目录"
+      ]
+    ],
+    "state0": {
+      "inputs/notes.md": "原始资料（只读）",
+      "research/points.md": "不存在",
+      "最近一次写入": "—"
+    },
+    "steps": [
+      {
+        "flow": [
+          "model",
+          "registry",
+          "调用 write_file"
+        ],
+        "say": "模型想用 write_file 直接改写你给的原始资料 inputs/notes.md。"
+      },
+      {
+        "lines": [
+          209,
+          209
+        ],
+        "flow": [
+          "registry",
+          "files",
+          "检查新建权限"
+        ],
+        "say": "inputs 绑定的是 originals，只有 read 权限，没有 create：拒绝写入。",
+        "warn": true,
+        "state": {
+          "最近一次写入": "inputs/notes.md → 未授权写入"
+        }
+      },
+      {
+        "flow": [
+          "model",
+          "registry",
+          "调用 write_file"
+        ],
+        "say": "改存到 research/points.md，这里允许读和新建。"
+      },
+      {
+        "lines": [
+          210,
+          217
+        ],
+        "flow": [
+          "registry",
+          "files",
+          "检查格式、大小、路径"
+        ],
+        "say": "格式是 md、不超过 256 KiB、路径在四个目录内且没有符号链接。"
+      },
+      {
+        "lines": [
+          218,
+          223
+        ],
+        "flow": [
+          "files",
+          "disk",
+          "新建文件"
+        ],
+        "say": "用 wx 方式写入：文件不存在才创建。",
+        "state": {
+          "research/points.md": "已创建",
+          "最近一次写入": "research/points.md → 成功"
+        }
+      },
+      {
+        "lines": [
+          231,
+          237
+        ],
+        "flow": [
+          "files",
+          "registry",
+          "返回新建结果"
+        ],
+        "say": "写完再确认是普通文件，返回 created: true，会话把它登记进这一轮的产物。"
+      },
+      {
+        "flow": [
+          "model",
+          "registry",
+          "再次调用 write_file"
+        ],
+        "say": "模型又想存一次同名的 research/points.md。"
+      },
+      {
+        "lines": [
+          224,
+          228
+        ],
+        "flow": [
+          "files",
+          "registry",
+          "返回错误：未覆盖"
+        ],
+        "say": "文件已存在，写入失败，原内容不变；提示改用 points-v2.md 这样的新文件名。",
+        "warn": true,
+        "state": {
+          "最近一次写入": "research/points.md → 已存在，未覆盖"
+        }
+      }
+    ],
+    "takeaway": "资料按用途授权：原始资料只读，新建文件不覆盖。模型想改就只能另存一个新版本，你给的资料和它已经写过的东西都不会被悄悄改掉。"
+  },
+  {
+    "id": "s06-mcp",
+    "title": "Codex 怎么调到我们的工具",
+    "question": "工具跑在我们的服务里，Codex 是另一个进程。中间这个入口，别的程序能不能也来调？",
+    "file": "stages/s06-tools/server/modules/tools/mcp-server.mjs",
+    "start": 8,
+    "end": 48,
+    "expect": "export async function createMcpToolServer({ token, redact }) {",
+    "notes": {
+      "11": "构造预期的 Bearer 认证值，用来比对每个请求",
+      "14": "带 Origin（浏览器发来的）或令牌不对：403",
+      "15": "地址里带着注册表版本，旧版本的地址找不到",
+      "17": "只接受 POST",
+      "23": "tools/list：返回当前注册表的清单",
+      "24": "tools/call：转给注册表核对后执行",
+      "28": "单次调用最多 30 秒，连接断开也会取消",
+      "29": "结果脱敏后交回，失败标记为 isError",
+      "36": "请求体超过 1 MiB 直接拒绝",
+      "48": "只监听 127.0.0.1，随机端口"
+    },
+    "actors": [
+      [
+        "server",
+        "Agent 服务"
+      ],
+      [
+        "mcp",
+        "MCP 入口"
+      ],
+      [
+        "codex",
+        "Codex App Server"
+      ],
+      [
+        "web",
+        "网页"
+      ],
+      [
+        "other",
+        "其他程序"
+      ]
+    ],
+    "state0": {
+      "MCP 入口": "未启动",
+      "Codex 配置里的地址": "—",
+      "令牌": "—"
+    },
+    "steps": [
+      {
+        "lines": [
+          48,
+          48
+        ],
+        "flow": [
+          "server",
+          "mcp",
+          "启动 MCP 入口"
+        ],
+        "say": "服务启动时在 127.0.0.1 的随机端口开一个 MCP 入口。",
+        "state": {
+          "MCP 入口": "127.0.0.1:随机端口"
+        }
+      },
+      {
+        "flow": [
+          "server",
+          "codex",
+          "写入 MCP 地址"
+        ],
+        "say": "入口地址写进 Codex 配置，配置里只记令牌所在的环境变量名，令牌本身经环境变量传给 Codex 进程（tools/index.mjs、codex/config.mjs）。",
+        "state": {
+          "Codex 配置里的地址": "已写入",
+          "令牌": "仅在环境变量"
+        }
+      },
+      {
+        "lines": [
+          23,
+          23
+        ],
+        "flow": [
+          "codex",
+          "mcp",
+          "请求 tools/list（带令牌）"
+        ],
+        "say": "Codex 带着令牌来要工具清单。"
+      },
+      {
+        "lines": [
+          24,
+          29
+        ],
+        "flow": [
+          "codex",
+          "mcp",
+          "发送 tools/call"
+        ],
+        "say": "模型要读文件，Codex 经 MCP 发送 tools/call 调用 read_file；入口把调用转给注册表核对后执行，结果脱敏后交回。"
+      },
+      {
+        "lines": [
+          14,
+          14
+        ],
+        "flow": [
+          "web",
+          "mcp",
+          "发送跨源请求"
+        ],
+        "say": "一个网页想偷偷调这个入口：浏览器请求带 Origin，直接 403。",
+        "warn": true
+      },
+      {
+        "lines": [
+          14,
+          14
+        ],
+        "flow": [
+          "other",
+          "mcp",
+          "发送无令牌请求"
+        ],
+        "say": "本机的其他程序扫到了这个端口，但没有令牌，同样 403。",
+        "warn": true
+      },
+      {
+        "lines": [
+          36,
+          36
+        ],
+        "flow": [
+          "other",
+          "mcp",
+          "发送超大请求体"
+        ],
+        "say": "就算格式对，请求体超过 1 MiB 也直接拒绝。",
+        "warn": true
+      }
+    ],
+    "takeaway": "Codex 和我们的工具之间只有一条路：本机回环地址上的 MCP 入口，凭随机令牌进门。Codex 自己的 shell 和写文件关着，资料只能经由这条路、经过注册表核对后才碰得到。"
+  }
+]
