@@ -38,7 +38,7 @@
   - [Memories 使用指南][s01]：聚焦于本地 Codex 运行时的记忆机制（涵盖客户端交互控制）。URL 中的 `surface=app` 仅为前端文档展示入口参数，不能据此推断存在一个 App 专用的独立云端后端。
   - [Config Reference 配置参考手册][s02]：官方配置项定义与说明。
 - **本地项目环境与依赖**：
-  - 项目依赖定义见 [package.json](../../package.json)，锁定 `@openai/codex=0.154.0` 与 `@openai/codex-sdk=0.154.0`。
+  - 项目依赖定义见 [package.json](../../../stages/s00-sdk-quickstart/package.json)，锁定 `@openai/codex=0.154.0` 与 `@openai/codex-sdk=0.154.0`。
   - 本地二进制通过 `node_modules/.bin/codex --version` 查询，确认为 `codex-cli 0.154.0`。
 - **源码发布切片（Release Tag）**：
   - Git 标签 `rust-v0.154.0` 对应的实际代码提交为 `6b9826e3aa83b1a5947db50f4332cb9c65f1b340`（提交时间 2026-09-09T14:43:48-07:00）。
@@ -484,8 +484,8 @@ main 分支在 `app-server` 中增加了 `memory/status` 实验接口 [s26]、[s
 
 审查本地项目代码可知：
 
-- 项目依赖在 [package.json](../../package.json) 中声明为 `@openai/codex=0.154.0` 与 `@openai/codex-sdk=0.154.0`；
-- 在通用初始化文件 [lib/common.mjs](../../lib/common.mjs) 中，实例创建代码如下：
+- 项目依赖在 [package.json](../../../stages/s00-sdk-quickstart/package.json) 中声明为 `@openai/codex=0.154.0` 与 `@openai/codex-sdk=0.154.0`；
+- 在通用初始化文件 [lib/common.mjs](../../../stages/s00-sdk-quickstart/lib/common.mjs) 中，实例创建代码如下：
   ```javascript
   // 来源：lib/common.mjs
   const codex = new Codex({
@@ -514,7 +514,7 @@ main 分支在 `app-server` 中增加了 `memory/status` 实验接口 [s26]、[s
 
 ### 9.3 本地 App Server 示例的局限
 
-项目提供的示例 [examples/05-app-server.mjs](../../examples/05-app-server.mjs) 尝试与本地 `app-server` 建立连接。
+项目提供的示例 [examples/05-app-server.mjs](../../../stages/s00-sdk-quickstart/examples/05-app-server.mjs) 尝试与本地 `app-server` 建立连接。
 
 - 在 `app-server` 请求处理中，普通 app-server 入口默认使用 `SessionSource::VSCode` [s36]，该来源虽处于候选白名单内；
 - 但该示例脚本的逻辑仅为发起一次简短连接、发送 "hello"、随后立即终止子进程退出；
@@ -694,7 +694,7 @@ Codex 记忆流水线并没有在账号层级设置“仅限官方 ChatGPT 订�
 | 触发及两阶段生成 | [轮次触发][s40] → [启动门控][s09] → [单会话提炼][s10] → [跨会话合并][s11] |
 | 保存与读取 | [数据库选拔和统计][s08]、[摘要组装][s11]、[本地检索][s13] |
 | 用户控制 | [便笺工具][s14]、[CLI 配置持久化][s41]、[管理接口][s18] |
-| SDK 与当前项目 | [SDK 子进程调用][s21]、[Exec 来源][s22]、[本地创建入口](../../lib/common.mjs) |
+| SDK 与当前项目 | [SDK 子进程调用][s21]、[Exec 来源][s22]、[本地创建入口](../../../stages/s00-sdk-quickstart/lib/common.mjs) |
 
 仓库自带的 [Memories README][s31] 可辅助理解，但其中的启动描述、目录位置和部分排序说明不能代替上述实际调用链与 SQL；本报告据代码处理这些差异。
 
