@@ -1,6 +1,6 @@
 # s03: 服务化 — 服务端常驻，客户端随时连上来
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → `s03` → [s04](../s04-events-messages/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"客户端走了，服务还在"* — Codex、模型密钥和正在执行的那一轮都归服务端；客户端只负责提交和查看。
 >
 > **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？
@@ -185,4 +185,4 @@ await rememberRunHistory(this.root, directory, this.runtime?.workspaceDir);
 
 服务端常驻了，可它还不会排队：上一轮没结束，新的输入只能在客户端等着，客户端一关，没发出去的就丢了。客户端也只能一遍遍地查快照，才知道回复写到了哪里。
 
-下一章把排队搬进服务端，用任务记录保住每一条输入，并把状态变化主动推给客户端（SSE）；断线重连后，事件不丢也不重。在那一章写好之前，可以先看已经包含这些能力的 [s07 记忆](../s07-memory/)。
+[s04 事件与消息](../s04-events-messages/) → 把排队搬进服务端，用任务记录保住每一条输入，并把状态变化主动推给客户端（SSE）。断线重连以后，客户端怎么知道自己错过了什么，又不会把旧消息再发一遍？

@@ -40,17 +40,29 @@
 
 **新增环境变量**：`AGENT_PORT`
 
+<a id="s04"></a>
+
+## s04：排队搬进服务端，状态推给客户端
+
+相比 [s03-service](s03-service/)：输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。
+
+**新增模块**：任务与消息（接入与会话，任务排队与调度）；事件推送（接入与会话，状态变化推给客户端）；任务记录（数据，任务状态，重启后可核对）
+
+**新增接口**：`POST /messages`、`POST /queue/continue`、`GET /events`
+
+**新增环境变量**：`AGENT_TURN_TIMEOUT_MS`
+
 <a id="s07"></a>
 
 ## s07：记忆：Codex 提炼，服务端管控
 
-相比 [s03-service](s03-service/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
+相比 [s04-events-messages](s04-events-messages/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
 
 **新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
 
 **新增工具**：`list_files`、`read_file`、`write_file`、`read_webpage`
 
-**新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`、`POST /messages`、`POST /queue/continue`、`GET /events`
+**新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`
 
 **新增环境变量**：`AGENT_DEFINITION`、`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
 

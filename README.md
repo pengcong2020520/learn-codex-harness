@@ -14,7 +14,8 @@ flowchart LR
   s00 --> s01["s01 单轮问答<br/>接上模型 / JSON-RPC"]
   s01 --> s02["s02 多轮会话<br/>FIFO 输入 / 原生历史"]
   s02 --> s03["s03 服务化<br/>常驻服务端 / 终端客户端"]
-  s03 --> s07["s07 记忆<br/>Codex 提炼 / 服务端管控"]
+  s03 --> s04["s04 事件与消息<br/>服务端排队 / SSE 推送"]
+  s04 --> s07["s07 记忆<br/>Codex 提炼 / 服务端管控"]
   s07 --> s08["s08 数据层<br/>PG outbox / Redis 调度 / 资源版本"]
   s08 --> s09["s09 知识层<br/>可信门禁 / Wiki / RAG"]
   s09 --> s10["s10 Skill 与 Workflow<br/>Agent 包 / 确认点 / 提议"]
@@ -29,6 +30,7 @@ flowchart LR
 | [s01-single-turn](stages/s01-single-turn/README.md) | 单轮问答 | 接上模型；不用 SDK，直接说 App Server 协议；怎样判断一轮真的结束了 | 2 |
 | [s02-multi-turn](stages/s02-multi-turn/README.md) | 多轮会话 | Thread 与 Turn；连续输入不丢、不抢跑；恢复会话而不是重新拼历史 | 2 |
 | [s03-service](stages/s03-service/README.md) | 服务化 | 服务端常驻、客户端随时来去；关掉客户端，交出去的一轮照样跑完 | 离线实验 3 节（暂未接入互动课程） |
+| [s04-events-messages](stages/s04-events-messages/README.md) | 事件与消息 | 输入先写进任务记录、在服务端排队；状态经 SSE 推给客户端，断线重连不丢不重，重启不重发 | 离线实验 3 节（暂未接入互动课程） |
 | [s07-memory](stages/s07-memory/README.md) | 记忆 | 记忆交给 Codex 提炼，开关和参与范围由服务端掌握；快照含完整 Agent 核心（角色、工具、Skill、工作区） | 5（互动课程第 3 章，源码暂取自本快照）+ 离线实验 1 节 |
 | [s08-data-layer](stages/s08-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
@@ -94,6 +96,7 @@ learn-codex-harness/
 │   ├── s01-single-turn/        #   s01：单轮问答
 │   ├── s02-multi-turn/         #   s02：多轮会话
 │   ├── s03-service/            #   s03：常驻服务端 + 终端客户端
+│   ├── s04-events-messages/    #   s04：服务端任务队列 + SSE 事件推送
 │   ├── s07-memory/             #   s07：记忆（含完整 Agent 核心）
 │   ├── s08-data-layer/         #   s08：PostgreSQL + Redis 数据层
 │   ├── s09-knowledge-layer/    #   s09：知识层 + 通用门禁

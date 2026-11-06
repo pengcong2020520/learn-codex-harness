@@ -1,0 +1,44 @@
+// 配置模块：只在服务端读取模型密钥，不向客户端返回完整环境变量。
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { parseEnv } from "node:util";
+import { PROJECT_ROOT } from "../../../shared/paths.mjs";
+import { buildRestrictedLaunch } from "../codex/launch.mjs";
+export { buildAppServerLaunch, buildModelCatalog } from "../codex/launch.mjs";
+
+// ---------- 1. 配置读取：只读本项目 .env；终端环境变量优先 ----------
+export function loadEnvironment(root = PROJECT_ROOT, inherited = process.env) {
+  let fileValues;
+  try {
+    fileValues = parseEnv(readFileSync(path.join(root, ".env"), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") fileValues = {};
+    else throw new Error("无法读取项目 .env，请检查文件格式和权限。");
+  }
+  return { ...fileValues, ...inherited };
+}
+
+// ---------- 2. 输出保护与命令行选项 ----------
+export function createLogRedactor(apiKey = "", additional = []) {
+  const secrets = [...new Set([apiKey, apiKey.trim(), ...additional].filter(Boolean))]
+    .flatMap(value => [value, JSON.stringify(value).slice(1, -1)])
+    .sort((a, b) => b.length - a.length);
+  return value => {
+    let text = typeof value === "string" ? value : JSON.stringify(value, (key, entry) =>
+      /^(api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)$/i.test(key) ? "[REDACTED]" : entry
+    );
+    for (const secret of secrets) text = text.split(secret).join("[REDACTED]");
+    return text;
+  };
+}
+
+
+export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
+  const environment = loadEnvironment(root, inherited);
+  const port = Number(environment.AGENT_PORT || 4319);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_PORT 必须是 1 到 65535 的整数。");
+  const turnTimeoutMs = Number(environment.AGENT_TURN_TIMEOUT_MS || 600_000);
+  if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
+  const launch = buildRestrictedLaunch(environment);
+  return { root, port, host: "127.0.0.1", turnTimeoutMs, launch };
+}

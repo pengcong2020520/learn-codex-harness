@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway"];
 // 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
 export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
@@ -19,9 +19,11 @@ function entry(n) {
     : n === 1 ? M("client", "单轮客户端", "发请求、核对终态", 1)
     : n === 2 ? M("client", "多轮客户端", "只发新输入", 1)
     : n === 3 ? M("api", "HTTP 接口", "常驻服务的入口", 3, ["http/"])
-    : M("api", "HTTP / SSE 接口", "终端与浏览器接入", 3, ["http/"]);
-  // s03 服务端还不排队（上一轮没结束返回 409），会话卡片按阶段写清楚。
-  const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"]) : M("sessions", "会话与排队", "先进先出，复用 Thread", 2, ["sessions/"]);
+    : M("api", "HTTP / SSE 接口", n < 7 ? "终端客户端接入" : "终端与浏览器接入", 3, ["http/"]);
+  // s03 服务端还不排队（上一轮没结束返回 409）；s04 起排队归「任务与消息」，会话只复用 Thread、整理快照。
+  const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"])
+    : n >= 4 && n < 7 ? M("sessions", "会话", "复用 Thread，整理快照", 2, ["sessions/"])
+    : M("sessions", "会话与排队", "先进先出，复用 Thread", 2, ["sessions/"]);
   return [first, sessions,
     M("messages", "任务与消息", "任务排队与调度", 4, ["messages/"]), M("events", "事件推送", "状态变化推给客户端", 4, ["events/"])];
 }
@@ -30,7 +32,7 @@ const layers = n => [
   { name: "Agent 装配", mods: [M("def", "Agent 定义", "JSON 校验 + 版本哈希", 5, ["agents/"]), M("roles", "角色与 Skills", "做什么、怎么做", 5, ["role/", "codex/skills.mjs"]),
     M("tools", "工具与资料边界", "白名单 + 参数校验", 6, ["tools/", "data/files.mjs"]), M("mcp", "MCP 工具入口", "Codex 回调本地工具", 6, ["tools/mcp-server.mjs"])] },
   { name: "运行支撑", mods: [M("lifecycle", "生命周期与清理", "启停、运行目录回收", 3, ["lifecycle/", "maintenance/"]), M("memory", "记忆", "Codex 提炼，服务端管控", 7, ["memory/"])] },
-  { name: "数据", mods: [M("jobs", "任务记录", "任务状态与产物登记", 4, ["data/index.mjs", "data/jobs.mjs"]), M("pg", "PostgreSQL", "业务状态的依据", 8, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/"]),
+  { name: "数据", mods: [M("jobs", "任务记录", n < 6 ? "任务状态，重启后可核对" : "任务状态与产物登记", 4, ["data/index.mjs", "data/jobs.mjs"]), M("pg", "PostgreSQL", "业务状态的依据", 8, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/"]),
     M("outbox", "Outbox + Redis", "提交后再唤醒", 8, ["data/queue.mjs"]), M("versions", "资源版本", "产物可追溯来源", 8, ["data/resources.mjs"])] },
   { name: "知识与工作流", mods: [M("gate", "可信门禁", "服务端签发身份", 9, ["permissions/"]), M("wiki", "Wiki / RAG", "带原文依据的知识", 9, ["knowledge/", "tools/knowledge.mjs"]),
     M("flow", "Workflow", "步骤、确认与验收", 10, ["workflows/"]), M("approve", "审批与提权", "可以提议，不能自批", 10, ["tools/tasks.mjs"])] },
@@ -71,6 +73,8 @@ const stageList = [
     path: [["user", "连续输入"], ["sessions", "排队等上一轮"], ["client", "只发新输入"], ["codex", "复用同一 Thread"], ["codex", "原生历史"], ["client", "逐轮核对终态"]] },
   { title: "变成常驻服务：客户端走了，服务还在", sub: "服务端常驻运行、持有 Codex；终端客户端经 HTTP 提交和查看，关掉客户端不影响正在执行的一轮。",
     path: [["user", "提交一句话"], ["api", "POST /turns"], ["sessions", "复用 Thread"], ["codex", "Codex 执行一轮"], ["api", "GET /state 查看"], ["lifecycle", "常驻，定期清理"]] },
+  { title: "排队搬进服务端，状态推给客户端", sub: "输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。",
+    path: [["user", "连续提交"], ["api", "POST /messages"], ["jobs", "写入任务记录"], ["messages", "按会话排队"], ["codex", "turn/start 执行"], ["events", "SSE 推送进度"]] },
   { title: "记忆：Codex 提炼，服务端管控", sub: "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
     path: [["user", "/memory contribute"], ["api", "提交参与设置"], ["memory", "查总开关与策略"], ["codex", "memoryMode/set"], ["codex", "空闲后提炼"], ["api", "GET /memory 查看"]] },
   { title: "让任务与产物有据可查", sub: "业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。",
@@ -103,7 +107,7 @@ function render(n) {
   [[c.card, c.line, "", "前面阶段已有", c.muted], [c.accentBg, c.accent, "", "本阶段新增", c.accent], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]]
     .forEach(([f, s, d, l, col], i) => { const x = 48 + i * 170; box(x, 138, 22, 16, f, s, d, 4); t(l, x + 30, 152, 15, col); });
 
-  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n <= 3 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
+  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n < 7 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
   pos.user = { x: 48, y: 330, w: 120, h: 104 };
 
   // 我们的程序：每层一行，只画到本阶段为止；s03 起常驻为服务。

@@ -1,6 +1,6 @@
 # s11: 模型网关 — Codex 只连网关，网关替它对接各家模型
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → `s11` → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → `s11` → [app](../../app/)
 > *"Codex 只认一个地址，换模型、加模型、管花费都在网关这一层"* — 线上的 Agent 不可能只跑一个模型：协议要统一，模型要协调，token 和花费要管住。
 >
 > **对应六个问题**：⑤ 能用什么？ ⑥ 谁说了算？
