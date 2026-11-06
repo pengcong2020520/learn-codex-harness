@@ -63,9 +63,20 @@ export function buildCurriculum({check=false}={}){
 const output=buildCurriculumData(),lessons=output.lessons;
 const course=path.join(project,'web/public/course'),serialized=JSON.stringify(output,null,2)+'\n';
 // 章节长文：_handbook.html 模板 + modules/*.html 拼成 handbook.html；课程首页 index.html 由 _reader.html 生成。
-const chapters=fs.readdirSync(path.join(course,'modules')).filter(f=>f.endsWith('.html')).sort().map(f=>{const html=fs.readFileSync(path.join(course,'modules',f),'utf8'),id=html.match(/<section class="module" id="([^"]+)"/)?.[1],title=html.match(/<h2 class="module-title">([^<]+)<\/h2>/)?.[1];if(!id||!title)throw Error(`章节 ${f} 缺少 module id 或标题`);if(/\son[a-z]+=/i.test(html))throw Error(`章节 ${f} 含内联事件；交互统一放在 handbook.js`);return {id,title,html};});
-const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-tooltip="${c.title}" aria-label="${c.title}"></button>`).join('\n      ');
-const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/learning.js'),'utf8'),'learning.css':fs.readFileSync(path.join(project,'web/public/app/learning.css'),'utf8'),'curriculum.json':serialized,'index.html':fs.readFileSync(path.join(course,'_reader.html'),'utf8'),'handbook.html':fs.readFileSync(path.join(course,'_handbook.html'),'utf8').replace('{{dots}}',()=>dots).replace('{{modules}}',()=>chapters.map(c=>c.html.trimEnd()).join('\n\n'))};
+const chapterStages=new Set();
+const chapters=fs.readdirSync(path.join(course,'modules')).filter(f=>f.endsWith('.html')).sort().map(f=>{
+ const stage=f.match(/^(s\d{2})-[a-z0-9-]+\.html$/)?.[1];
+ const html=fs.readFileSync(path.join(course,'modules',f),'utf8'),id=html.match(/<section class="module" id="([^"]+)"/)?.[1],title=html.match(/<h2 class="module-title">([^<]+)<\/h2>/)?.[1];
+ const number=html.match(/<span class="module-number">([^<]+)<\/span>/)?.[1];
+ if(!stage||id!==`module-${stage}`||number!==stage||!title)throw Error(`章节 ${f} 的文件名、module id、阶段号或标题无效`);
+ if(chapterStages.has(stage))throw Error(`章节阶段重复：${stage}`);
+ chapterStages.add(stage);
+ if(/\son[a-z]+=/i.test(html))throw Error(`章节 ${f} 含内联事件；交互统一放在 handbook.js`);
+ return {stage,id,title,html};
+});
+const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-tooltip="${c.stage} ${c.title}" aria-label="${c.stage} ${c.title}"></button>`).join('\n      ');
+const coursePath=chapters.map(c=>`  <a href="#${c.id}">${c.stage} ${c.title}</a>`).join('\n');
+const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/learning.js'),'utf8'),'learning.css':fs.readFileSync(path.join(project,'web/public/app/learning.css'),'utf8'),'curriculum.json':serialized,'index.html':fs.readFileSync(path.join(course,'_reader.html'),'utf8'),'handbook.html':fs.readFileSync(path.join(course,'_handbook.html'),'utf8').replace('{{firstModule}}',()=>chapters[0]?.id||'main').replace('{{dots}}',()=>dots).replace('{{coursePath}}',()=>coursePath).replace('{{modules}}',()=>chapters.map(c=>c.html.trimEnd()).join('\n\n'))};
 // 课程里的总架构图直接取自各阶段 README 用的同一份生成结果（stages/build-architecture.mjs），不再单独绘制。
 for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
 // 阶段演示页：模块与新增能力来自 stages/changes.json（node stages/build-changes.mjs 生成），机制演示来自 curriculum/mechanisms/sNN.json（每个阶段一个文件），源码按行号截取并核对。

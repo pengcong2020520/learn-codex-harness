@@ -1,8 +1,8 @@
-<section class="module" id="module-4">
+<section class="module" id="module-s08">
   <div class="module-content">
 
     <header class="module-header">
-      <span class="module-number">04</span>
+      <span class="module-number">s08</span>
       <h2 class="module-title">数据：状态有据可查</h2>
       <p class="module-subtitle">
         从单文件 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span> 到关系型<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>——理解 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 账本、<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 提醒铃、不可变 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 与原生历史各司其职，读完能向 AI 程序员准确定位状态与权限问题。
@@ -16,15 +16,15 @@
       <h2 class="screen-heading">四层架构：谁存什么、谁唤醒谁</h2>
 
       <p>
-        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s08 在此基础上新增关系事务与内容版本追踪。
+        s04 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s08 在此基础上新增关系事务与内容版本追踪。
         s08 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout">
         <div class="callout-text">
-          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为本阶段新增或变化的部分。图描述的是职责划分，不是四个独立进程。
         </div>
       </div>
 

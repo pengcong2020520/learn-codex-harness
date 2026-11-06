@@ -255,3 +255,14 @@ function setupChat(box) {
   render();
 }
 document.querySelectorAll('.chat-window').forEach(setupChat);
+
+// 兼容旧章节书签；首次打开和页内 hash 跳转都定位到新的阶段锚点。
+const legacyModules = { '#module-1': 'module-s01', '#module-2': 'module-s02', '#module-3': 'module-s05', '#module-4': 'module-s08', '#module-5': 'module-s09' };
+function resolveLegacyHash() {
+  const chapter = document.getElementById(legacyModules[location.hash]);
+  if (!chapter) return;
+  history.replaceState(history.state, '', `#${chapter.id}`);
+  chapter.scrollIntoView({ behavior: 'instant' });
+}
+addEventListener('hashchange', resolveLegacyHash);
+resolveLegacyHash();
