@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {buildCurriculumData} from '../build-curriculum.mjs';
 
 const source=fileURLToPath(new URL('../curriculum/',import.meta.url));
+const stagesWithLessons=()=>fs.readdirSync(path.join(source,'lessons')).filter(f=>/^s\d\d\.json$/.test(f)&&JSON.parse(fs.readFileSync(path.join(source,'lessons',f),'utf8')).length).map(f=>f.slice(0,3)).sort();
 function fixture(t){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'course-validation-'));
  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
@@ -21,7 +22,7 @@ function fixture(t){
 test('课程按源码阶段排序，章节目录与课时、实验一一对应',()=>{
  const output=buildCurriculumData();
  assert.equal('demos' in output,false);
- assert.deepEqual(output.chapters.map(c=>c.id),['s01','s02','s05','s06','s08','s09']);
+ assert.deepEqual(output.chapters.map(c=>c.id),stagesWithLessons());
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons;
  const lessons=fs.readdirSync(path.join(source,'lessons')).sort().flatMap(f=>JSON.parse(fs.readFileSync(path.join(source,'lessons',f),'utf8')));
  assert.deepEqual(output.lessons.map(l=>l.id),lessons.map(l=>l.id));
@@ -82,7 +83,7 @@ test('课时数量不写死，空阶段不输出章节',t=>{
  f.edit('experiment-manifest.json',m=>{m.lessons=m.lessons.filter(l=>l.stage!=='s01-single-turn');});
  const output=f.build();assert.ok(output.lessons.length>0);
  assert.equal(output.lessons.some(l=>l.stage==='s01-single-turn'),false);
- assert.deepEqual(output.chapters.map(c=>c.id),['s02','s05','s06','s08','s09']);
+ assert.deepEqual(output.chapters.map(c=>c.id),stagesWithLessons().filter(id=>id!=='s01'));
 });
 
 test('没有任何课时时报错',t=>{

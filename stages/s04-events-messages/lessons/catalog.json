@@ -32,9 +32,9 @@
     "mode": "offline",
     "offlineOrIntegration": "offline",
     "observations": [
-      "每次连接先收到一份完整快照，之后才是增量事件",
+      "连接建立后先收到当前保留范围的组合 snapshot，随后收到携带 session / queue 状态快照的事件",
       "重连只是重新订阅，不会产生新的消息",
-      "事件只推给对应 Thread 的订阅者"
+      "session / queue 按 Thread 过滤；无 threadId 的 fatal / shutdown 向所有订阅者广播"
     ],
     "why": "快照兜住断线期间的变化；提交和订阅是两件事，重连永远不会重发。",
     "boundary": "离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。",
