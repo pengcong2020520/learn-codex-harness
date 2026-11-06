@@ -11,6 +11,7 @@ export const packages = [
   "stages/s02-multi-turn",
   "stages/s03-service",
   "stages/s04-events-messages",
+  "stages/s05-agent-assembly",
   "stages/s07-memory",
   "stages/s08-data-layer",
   "stages/s09-knowledge-layer",

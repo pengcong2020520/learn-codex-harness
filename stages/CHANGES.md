@@ -52,11 +52,21 @@
 
 **新增环境变量**：`AGENT_TURN_TIMEOUT_MS`
 
+<a id="s05"></a>
+
+## s05：一份 JSON 装配 Agent：角色与 Skills
+
+相比 [s04-events-messages](s04-events-messages/)：Agent 定义决定角色、Skill、执行策略和工作区；启动时校验，内容一变旧版本就作废，会话与排队消息都要核对版本。
+
+**新增模块**：Agent 定义（Agent 装配，JSON 校验 + 版本哈希）；角色与 Skills（Agent 装配，做什么、怎么做）
+
+**新增环境变量**：`AGENT_DEFINITION`
+
 <a id="s07"></a>
 
 ## s07：记忆：Codex 提炼，服务端管控
 
-相比 [s04-events-messages](s04-events-messages/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
+相比 [s05-agent-assembly](s05-agent-assembly/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
 
 **新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
 
@@ -64,7 +74,7 @@
 
 **新增接口**：`GET /workbench`、`GET /workspace`、`GET /workspace/read`、`GET /resources/read`、`GET /preferences`、`POST /preferences`、`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`、`GET /tools`
 
-**新增环境变量**：`AGENT_DEFINITION`、`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
+**新增环境变量**：`AGENT_MEMORY_ENABLED`、`AGENT_MEMORY_USE`、`AGENT_MEMORY_GENERATE`、`AGENT_MEMORY_EXTRACT_MODEL`、`AGENT_MEMORY_CONSOLIDATION_MODEL`、`AGENT_MEMORY_MIN_IDLE_HOURS`
 
 <a id="s08"></a>
 

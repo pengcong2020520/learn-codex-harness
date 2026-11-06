@@ -880,7 +880,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='Agent schema|描述符不复制|工具双重' tests/agent-core.test.mjs",
-      "action": "在 s07-memory 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+      "action": "在 s05-agent-assembly 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
       "observe": [
         "未知字段、缺失引用、nativeShell=true 等定义被拒绝。",
         "无版本绑定的旧 Thread、不同描述符或排队消息版本不匹配会报错。",
@@ -1061,7 +1061,7 @@
     ],
     "experiment": {
       "command": "node --test --test-name-pattern='原生 Skill|必需 Skill' tests/agent-core.test.mjs",
-      "action": "在 s07-memory 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+      "action": "在 s05-agent-assembly 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
       "observe": [
         "接口夹具中的范围外 other 从 enabled=true 变成 false。",
         "$allowed 生成 type:skill；$other 被拒绝，而普通 $HOME 和前缀相近名称不误匹配。",

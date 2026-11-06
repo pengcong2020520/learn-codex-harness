@@ -1,6 +1,6 @@
 # s04: 事件与消息 — 排队搬进服务端，状态推给客户端
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → `s04` → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → `s04` → [s05](../s05-agent-assembly/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"先记下来，再一条条做"* — 每条输入先写进任务记录，由服务端按顺序交给 Codex；状态变化主动推给客户端，客户端在不在线都不影响执行。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？ ③ 之前聊过什么？
@@ -184,4 +184,4 @@ for (const event of buffered) write(event);
 
 现在的 Agent 能可靠地排队执行了，可它还是那个只会问答的助手：角色是代码里的一句固定文字，想换个角色、换一套方法，就得改代码。
 
-下一章用一份 JSON 定义 Agent：它是谁、按什么方法工作、启用哪些 Skill。配置改了以后，正在进行的会话凭什么知道自己已经不是原来那个 Agent？在那一章写好之前，可以先看已经包含这部分能力的 [s07 记忆](../s07-memory/)。
+[s05 Agent 装配](../s05-agent-assembly/) → 用一份 JSON 定义 Agent：它是谁、按什么方法工作、启用哪些 Skill。配置改了以后，正在进行的会话凭什么知道自己已经不是原来那个 Agent？

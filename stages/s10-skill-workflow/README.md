@@ -1,6 +1,6 @@
 # s10: Skill 与 Workflow — Skill 教方法，Workflow 管边界和终点
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → `s10` → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → `s10` → [s11](../s11-model-gateway/) → [app](../../app/)
 > *"可以提议，不能自批"* — 判断要不要做，交给模型；给不给权限，留在模型之外。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？ ⑤ 能用什么？ ⑥ 谁说了算？

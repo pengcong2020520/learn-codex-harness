@@ -929,13 +929,13 @@
       ],
       "experiment": {
         "command": "npm run lesson -- s05-agent-config",
-        "action": "在 s07-memory 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
+        "action": "在 s05-agent-assembly 目录运行定义校验、版本兼容和热变更撤销三个既有测试。",
         "observe": [
-          "未知字段、缺失引用、权限提升被 schema 拒绝",
-          "Agent 改动立即撤销旧工具权限；恢复旧文件也不能免重启",
-          "不兼容 Thread 版本被拒绝"
+          "未知字段、缺失引用、原生权限提升被 schema 拒绝",
+          "定义或角色文件一改，旧版本立即作废；恢复旧文件也不能免重启",
+          "没有版本绑定或版本不兼容的会话被拒绝"
         ],
-        "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。"
+        "boundary": "离线临时目录与真实 Agent 装配模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。"
       },
       "quiz": {
         "question": "把角色文件改回原内容后，已撤销的服务仍拒绝调用。这是需要清除的误报吗？",
@@ -1114,13 +1114,13 @@
       ],
       "experiment": {
         "command": "npm run lesson -- s05-skills",
-        "action": "在 s07-memory 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
+        "action": "在 s05-agent-assembly 目录运行发现集合与缺失依赖测试，不安装新 Skill、不调用模型。",
         "observe": [
           "范围外发现结果被禁用",
           "授权 Skill 生成显式 skill 输入；未授权名称被拒绝",
           "必需缺失会报错，可选缺失明确降级"
         ],
-        "boundary": "离线临时工作区与真实产品模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 与生产数据不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。"
+        "boundary": "离线临时目录与真实 Agent 装配模块；RPC 为 fixture，不启动真实 Codex 或外部模型。配置只使用测试输入，真实项目 .env 不会被读取。 skills/list 与 skills/config/write 是接口模拟，不验证原生 Skill 解析器。"
       },
       "quiz": {
         "question": "Skill 正文写着“使用 write_file”，但 tools.allow 中没有 write_file。应怎样解决？",
