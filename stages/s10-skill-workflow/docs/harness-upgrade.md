@@ -107,9 +107,9 @@ HTTP 先认证，再进入 user 范围，默认请求不再进入 operator。客
 
 为自定义场景复用 `scripts/real-smoke.mjs` 的用例结构：读取一份含随机验证码的资料 → 实际创建产物并核对正文/溯源 → 重启服务续用同一 Thread、确认新 Turn → 如启用知识库则维护并读回 Wiki → 验证身份伪造被拒绝。不要只判断模型说“成功”，必须断言实际文件/业务记录和 ID。
 
-本次真实验收使用 deepseek-flash + Codex 0.154.0，两个示例各通过六项检查；共六个真实 Turn、十三次工具调用。最新完整记录见 [真实模型报告](verification/real-model-smoke.json)。联网搜索、真实模型完整记忆生成和多用户并发不在本次真实验收结论内。研究实验员提供的脚本已接入，使用 `npm run test:protocol:research` 在隔离环境重跑；原件、适配方式和观测边界见 [协议探针说明](../tests/research-protocol/README.md)。其中多连接共享进程的风险属于复现结果，不代表产品已支持多用户。
+本次真实验收使用 deepseek-flash + Codex 0.154.0，两个示例各通过六项检查；共六个真实 Turn、十三次工具调用。最新完整记录见 [真实模型报告](../../../app/docs/verification/real-model-smoke.json)。联网搜索、真实模型完整记忆生成和多用户并发不在本次真实验收结论内。研究实验员提供的脚本已接入，使用 `npm run test:protocol:research` 在隔离环境重跑；原件、适配方式和观测边界见 [协议探针说明](../../../app/tests/research-protocol/README.md)。其中多连接共享进程的风险属于复现结果，不代表产品已支持多用户。
 
-自动回归：148 项单元/服务测试、15 项真实存储/RAG 集成、5 项原生 Codex 协议/工具/记忆集成通过，共 168 项。汇总见 [回归记录](verification/harness-upgrade.json)。
+自动回归：148 项单元/服务测试、15 项真实存储/RAG 集成、5 项原生 Codex 协议/工具/记忆集成通过，共 168 项。汇总见 [回归记录](../../../app/docs/verification/harness-upgrade.json)。
 
 
-研究探针另有 12 组断言通过，见 [本机探针结果](verification/research-protocol/summary.json)。工具超时现在会独立于 handler 返回错误，轮次结束后抑制迟到回复；不合作插件的底层副作用仍不能靠 Promise 取消强制终止，执行函数必须遵守 signal 并通过受限资源接口访问数据。该修复由真实 Codex + 本地模拟模型验证；上方真实模型报告保留其原执行时间，没有冒称本轮再次调用真实模型。
+研究探针另有 12 组断言通过，见 [本机探针结果](../../../app/docs/verification/research-protocol/summary.json)。工具超时现在会独立于 handler 返回错误，轮次结束后抑制迟到回复；不合作插件的底层副作用仍不能靠 Promise 取消强制终止，执行函数必须遵守 signal 并通过受限资源接口访问数据。该修复由真实 Codex + 本地模拟模型验证；上方真实模型报告保留其原执行时间，没有冒称本轮再次调用真实模型。

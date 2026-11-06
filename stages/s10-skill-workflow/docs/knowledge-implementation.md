@@ -10,7 +10,7 @@
 
 s09 / app 总体架构：01 交互入口 → 02 Agent 装配与任务调度 → 03 通用门禁 → 04 知识与资源服务 → 05 数据与索引。
 
-逐层说明与运行示例见 [s09 设计说明](../../stages/s09-knowledge-layer/docs/design.md)；下文保留实现约束和接口细节。
+逐层说明与运行示例见 [s09 设计说明](../../s09-knowledge-layer/docs/design.md)；下文保留实现约束和接口细节。
 
 ## 整体结构
 
@@ -101,7 +101,7 @@ Agent knowledge[].mode 声明期望模式，持久为 desired_mode；运行中 `
 
 ## 权限门禁与知识工具
 
-`server/modules/permissions/index.mjs` 统一同进程判定（见 [s09 设计说明](../../stages/s09-knowledge-layer/docs/design.md) 中的「03 通用门禁」一节）：
+`server/modules/permissions/index.mjs` 统一同进程判定（见 [s09 设计说明](../../s09-knowledge-layer/docs/design.md) 中的「03 通用门禁」一节）：
 
 - 工具名在 allow 列表 **AND** 资源所有权/KB 挂载合法 **AND** `actions` 包含当前操作。
 - 整库授权（不是页面级 ACL）；默认私有，未挂载不可见。
@@ -165,4 +165,4 @@ Agent API 需现有本机 Bearer 认证。Web 工作台通过本地同源接入�
 
 ## 验证状态
 
-实际测试结果见仓库根目录 [`../../stages/verification.json`](../../stages/verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。运行 npm run test:rag（需 Chroma CLI，或 CHROMA_TEST_BIN），或在演进目录运行 node verify.mjs --integration --rag 生成统一记录。test:data 不带 Chroma 时跳过该项。
+实际测试结果见仓库根目录 [`stages/verification.json`](../../verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。运行 npm run test:rag（需 Chroma CLI，或 CHROMA_TEST_BIN），或在演进目录运行 node verify.mjs --integration --rag 生成统一记录。test:data 不带 Chroma 时跳过该项。
