@@ -1,0 +1,218 @@
+<section class="module" id="module-s04">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">s04</span>
+  <h2 class="module-title">事件与消息：让任务有序执行</h2>
+  <p class="module-subtitle">这个云端 Agent 还缺可靠的连续提交与状态同步。亲手串起任务记录、按会话调度和 SSE，遇到不确定执行时保留证据、暂停核对。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s04-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么？能保存每条输入的任务记录</h2>
+
+<p>现在服务端能独立完成一轮了。试着在回答过程中再输入两条，然后关闭客户端：已经发出的那一轮可以继续，仍等在客户端的输入却没有服务端记录。一个能长期工作的云端 Agent，还要接住用户连续交来的事情，并告诉用户每一条走到了哪里。</p>
+<p>本章的验收场景是：连续提交三条普通消息，三条都被服务端接收；关闭客户端后，服务端依次完成它们；回来时能看到队列和会话状态。如果执行结果拿不准，就停下来让用户核对，避免把同一件事做两遍。</p>
+<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="754" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">messages：决定执行节奏</div><div class="pattern-desc">接收消息、按 Thread 排队、发 turn/start，处理追加、超时、暂停与继续。它决定哪条输入现在可以执行，不代替 Codex 内部的推理与工具循环。</div></div>
+<div class="pattern-card"><div class="pattern-title">data：保存任务事实</div><div class="pattern-desc">将消息和暂停状态写入 .data/messages.json，每次更新整体原子替换文件。进程退出后记录还在，重启时可据此判断哪些任务需要核对。</div></div>
+<div class="pattern-card"><div class="pattern-title">events：把变化交给订阅者</div><div class="pattern-desc">事件中心分发会话与队列状态，经 HTTP 的 SSE 连接交给对应 Thread 的客户端。它不负责启动下一轮，也不调用模型。</div></div>
+</div>
+<p>区分三个 ID：<code>threadId</code> 标识会话，<code>clientMessageId</code> 标识用户这次提交，<code>turnId</code> 标识 Codex 执行轮次。任务可以在还没有 turnId 时就处于 queued；追加也可能与已有任务关联到同一轮，三个 ID 不能相互替代。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">实现边界</p><p>服务默认监听 127.0.0.1:4319，仍是本机单用户、单进程队列。同目录只运行一个服务；每个会话最多 100 条 queued 消息。本章验证可靠提交与状态同步，不提供多机器调度。</p></div></div>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-2">
+<h2 class="screen-heading">提交先落盘：同一个消息 ID 为什么不会做两遍</h2>
+
+<p>客户端为每条输入生成 clientMessageId，再调用 <code>POST /messages</code>。服务端先校验文本、模式和会话，进入同一 Thread 的串行操作区间，然后检查这个 ID 是否已有记录。<span class="term" data-definition="同一个消息 ID 与相同内容重复提交，返回同一条任务记录，不重复创建执行。">幂等</span> 在这里解决的是“同一提交的重复请求”，不是“所有意思相同的文本都只执行一次”。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/messages/index.mjs · 第 63–84 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/messages/index.mjs" data-start="63" data-end="84">      const existing = await this.job(id);
+      if (existing) {
+        if (
+          existing.threadId !== threadId ||
+          existing.text !== text ||
+          existing.mode !== mode ||
+          existing.targetTurnId !== targetTurnId
+        )
+          throw new AppError(
+            "同一个消息 ID 不能用于不同的消息。",
+            409,
+            "IDEMPOTENCY_CONFLICT",
+          );
+        return this.publicJob(existing);
+      }
+      if (mode === "append" &amp;&amp; !this.sessions.getTurn(threadId, targetTurnId))
+        throw new AppError("追加目标不属于该会话或尚不可定位。", 409);
+      // 先写进任务记录，再排队：这时服务重启也不会丢。
+      await this.store.create({ id, threadId, text, mode, targetTurnId, createdAt: Date.now() });
+      await this.publish(threadId);
+      this.schedule(threadId);
+      return this.publicJob(await this.job(id));</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>63–64 行</strong>：按消息 ID 查找任务；已有记录时走重复提交分支。</p>
+    <p class="tl"><strong>65–70 行</strong>：逐项比较 Thread、文本、mode 和 targetTurnId；同一 ID 只能指向同一份提交。</p>
+    <p class="tl"><strong>71–75 行</strong>：任何一项不同就返回 409，错误码 IDEMPOTENCY_CONFLICT；不能用已有 ID 偷换要求。</p>
+    <p class="tl"><strong>76–77 行</strong>：内容一致就返回已有记录并结束该分支，不再创建任务。</p>
+    <p class="tl"><strong>78–79 行</strong>：如果是 append，目标 Turn 必须属于当前会话且能够定位，否则拒绝。</p>
+    <p class="tl"><strong>80–81 行</strong>：先把 id、会话、文本、模式、目标和时间写入任务记录；存储层赋予 queued 状态。</p>
+    <p class="tl"><strong>82 行</strong>：发布队列快照，让订阅者知道输入已经被记录。</p>
+    <p class="tl"><strong>83 行</strong>：唤醒调度器；schedule 使用 setImmediate 安排后续调度，不等待模型完成。</p>
+    <p class="tl"><strong>84 行</strong>：读取并返回这条任务的公开记录，HTTP 层以 202 响应。</p>
+
+  </div></div>
+</div>
+<p>首次提交返回 <code>202 queued</code> 表示已接收并记录。重复提交返回的可能是 running 或 completed，因为它返回的是已有任务当前状态。若用户用新的 ID 再发一遍同样文本，那是一个新的任务，服务端不会猜测它是不是重复意图。</p>
+<p>文件写入成功后才调度，因此即便随后进程退出，已接收消息也有记录。这里的持久性依赖本机 .data 目录；它不等同于远端备份，也不意味着系统能自动证明所有外部动作“恰好执行一次”。对于已经发出、结果未知的调用，还需要后面的 unconfirmed 处理。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-3">
+<h2 class="screen-heading">调度一次：普通消息 FIFO，显式追加另有去向</h2>
+
+<p><span class="term" data-definition="First In, First Out，先进先出。这里普通消息按进入任务记录的顺序执行。">FIFO</span> 的范围是同一个 Thread。调度器先看会话是否暂停，再看有没有正在执行的 Turn；不同 Thread 的任务互不阻塞，同一 Thread 的普通输入一次只启动一轮。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/messages/index.mjs · 第 119–124 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/messages/index.mjs" data-start="119" data-end="124">    if (active || all.some((j) =&gt; executing.includes(j.status))) return;
+    const job = pending.find((j) =&gt; j.mode === "append") || pending[0];
+    if (!job) return;
+    if (!(await this.store.patch(job.id, { status: "starting" }, ["queued"])))
+      return;
+    await this.publish(threadId);</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>119 行</strong>：如果会话已有 active Turn，或任一任务处于 starting、running、steering，就不启动新轮次。</p>
+    <p class="tl"><strong>120 行</strong>：优先取 queued 的 append，否则取最早的普通消息 pending[0]。不能把含追加的队列描述为无条件 FIFO。</p>
+    <p class="tl"><strong>121 行</strong>：没有候选任务就结束本次调度。</p>
+    <p class="tl"><strong>122–123 行</strong>：只有任务仍为 queued 才能改成 starting；状态写盘失败或条件不满足就不向下执行。</p>
+    <p class="tl"><strong>124 行</strong>：发布 starting 状态，随后才准备输入并请求 turn/start。</p>
+
+  </div></div>
+</div>
+<p>把 starting 先写盘，是为了留下“准备发送”的痕迹。若服务在这之后中止，重启时不能凭一个 queued 状态就自动重发。一轮收到 <code>turn/completed</code> 后，任务按结果进入 completed、failed 或 interrupted；只有成功时才自动处理下一条，失败或中断会暂停该 Thread。</p>
+<p>点击“下一步”追踪一次请求。以下是<strong>教学模拟，非真实执行结果</strong>。</p>
+<div class="flow-animation" id="s04-flow" data-steps='[{&quot;highlight&quot;: &quot;flow-s04-client&quot;, &quot;label&quot;: &quot;1. 提交 A、B 两条普通消息，各带独立 ID，先记录为 queued。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-client&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-store&quot;, &quot;label&quot;: &quot;2. 提交返回 202；调度器为该 Thread 选择最早的 A。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-store&quot;, &quot;to&quot;: &quot;s04-dispatch&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;3. A 从 queued 改为 starting 并写盘，B 保持 queued。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;4. 发 turn/start，绑定返回的 turnId，正常执行中记录为 running。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-codex&quot;}, {&quot;highlight&quot;: &quot;flow-s04-client&quot;, &quot;label&quot;: &quot;5. 客户端退出；A 的执行与 B 的排队仍归服务端。&quot;, &quot;packet&quot;: false, &quot;from&quot;: &quot;s04-client&quot;, &quot;to&quot;: &quot;s04-client&quot;}, {&quot;highlight&quot;: &quot;flow-s04-codex&quot;, &quot;label&quot;: &quot;6. A 成功完成，写入 completed 并唤醒调度器；若失败或不确定则暂停。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-codex&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;7. 成功路径下开始 B；同一 Thread 没有两条普通消息同时开轮次。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-codex&quot;}]'>
+<div class="flow-actors"><div class="flow-actor" id="flow-s04-client"><div class="flow-actor-icon">⌨️</div><strong>客户端</strong></div><div class="flow-actor" id="flow-s04-store"><div class="flow-actor-icon">📒</div><strong>任务记录</strong></div><div class="flow-actor" id="flow-s04-dispatch"><div class="flow-actor-icon">📋</div><strong>调度器</strong></div><div class="flow-actor" id="flow-s04-codex"><div class="flow-actor-icon">⚙️</div><strong>Codex</strong></div></div>
+<div class="flow-packet" hidden></div><div class="flow-step-label">点击“下一步”开始模拟</div>
+<div class="flow-controls"><button class="btn flow-next-btn">下一步</button><button class="btn flow-reset-btn">重置</button><span class="flow-progress">0 / 7</span></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">补给正在执行的一轮</div><div class="pattern-desc">显式输入 /append 内容，或 /append-to &lt;turn id&gt; 内容。目标仍在执行时调用 turn/steer，状态先为 steering，再与目标 Turn 绑定。自然语言里说“接着那个”不会自动成为 append。</div></div>
+<div class="pattern-card"><div class="pattern-title">目标已成功完成且仍可定位</div><div class="pattern-desc">当前队列未暂停时，这条 append 会在普通待执行消息之前新开一轮，输入包含目标任务的引用。如果调用 turn/steer 时目标恰好结束，明确的目标不匹配错误会让它回到 queued，等待调度。若目标 failed 或 interrupted，队列会暂停，追加不会自动执行，需核对后 /continue；若提交时目标已移出内存、无法定位，则直接拒绝追加。</div></div>
+</div>
+<p>默认执行上限是 10 分钟，由 <code>AGENT_TURN_TIMEOUT_MS</code> 控制。到达上限后服务端暂停队列，并请求 <code>turn/interrupt</code>；发出中断请求本身不等于已经收到最终状态，后续通知或连接错误处理仍需核对结果。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-4">
+<h2 class="screen-heading">让状态主动到达：SSE 先快照，后事件</h2>
+
+<p>客户端订阅 <code>GET /events?threadId=…</code>，建立 <span class="term" data-definition="Server-Sent Events：服务端通过持续打开的 HTTP 响应，向客户端单向发送事件。">SSE</span> 长连接。服务端有变化时发送数据，不需要客户端每 200 ms 询问一次。消息提交仍走 POST /messages；订阅只负责查看。</p>
+<p>重连时最容易漏掉的时间窗口在“读快照”和“开始监听”之间。这里先登记监听者，把快照准备期间收到的事件暂存，发送完整快照后再发送暂存事件。下面的 listener 已处于 GET /events 路由内，id 是正在订阅的 Thread。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/http/index.mjs · 第 78–89 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/http/index.mjs" data-start="78" data-end="89">        const listener = event =&gt; { if (!event.threadId || event.threadId === id) {
+          if (snapshotSent) write(event);
+          else if (buffered.length &lt; 1000) buffered.push(event);
+          else response.destroy();
+        } };
+        hub.on("event", listener);
+        response.once('close', () =&gt; { clearInterval(heartbeat); hub.off('event', listener); streams.delete(response); });
+        const queue = await messages.snapshot(id);
+        write({ type: "snapshot", threadId: id, data: { session: sessions.snapshot(id), queue } });
+        snapshotSent = true;
+        for (const event of buffered) write(event);
+        if (!response.destroyed) heartbeat = setInterval(() =&gt; { if (!response.destroyed) response.write(": heartbeat\n\n"); }, 15000);</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>78 行</strong>：事件没有 threadId 时视为全局事件；有 threadId 时只发送给相同会话的订阅者。</p>
+    <p class="tl"><strong>79 行</strong>：快照已发出，就直接把后续事件写入 SSE 响应。</p>
+    <p class="tl"><strong>80–82 行</strong>：快照未发出时暂存事件；缓冲达到上限则断开连接，避免无限堆积。</p>
+    <p class="tl"><strong>83 行</strong>：先把 listener 登记到事件中心，从此刻开始不会错过该连接准备期间的事件。</p>
+    <p class="tl"><strong>84 行</strong>：连接关闭时清除心跳、取消监听并移除连接记录，避免断开的客户端继续占用资源。</p>
+    <p class="tl"><strong>85–86 行</strong>：读取队列快照，与会话快照组成首条 snapshot 事件发送出去。</p>
+    <p class="tl"><strong>87–88 行</strong>：标记快照已发，然后按顺序写出暂存事件，确保首条数据是快照。</p>
+    <p class="tl"><strong>89 行</strong>：连接仍存活时每 15 秒写一条 SSE 心跳注释；心跳不表示任务已经完成。</p>
+
+  </div></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">snapshot / session / queue</div><div class="pattern-desc">snapshot 是每次连接的首条完整状态，含会话与队列；session 表示会话变化，queue 表示任务状态、暂停或继续。客户端用这些内容更新显示。</div></div>
+<div class="pattern-card"><div class="pattern-title">fatal / shutdown</div><div class="pattern-desc">fatal 提示执行连接失效、服务停止调度；shutdown 表示服务正常关闭。看到这类事件要核对服务与任务状态，不能据此认定所有任务已完成。</div></div>
+</div>
+<p>客户端断线后约一秒再尝试连接，每次都先获取快照。事件序号用于排查问题，本章不按 Last-Event-ID 重放历史事件。快照帮助客户端重新看到当前状态，不承诺补齐离线期间每一条事件；订阅过程也不会替用户再提交一次消息。</p>
+<p>普通事件写入积压超过 1 MiB 时连接会被断开，再由客户端重连取快照。快照之后的事件仍是状态更新，渲染时应以事件内容更新视图，不能把事件到达次数当作执行次数。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-5">
+<h2 class="screen-heading">遇到不确定：保留记录，暂停后续执行</h2>
+
+<p>服务重启时，文件里有 A=running、B=queued。你能直接把 A 再发一次吗？不能：程序只知道 A 没有拿到确定结果，不知道它在中止前做到了哪一步。用 <span class="term" data-definition="任务已进入发送或执行阶段，但结果无法确认；保留记录、暂停队列，不自动重发。">unconfirmed</span> 明确表达这份不确定性，比把它当成“什么也没做”更准确。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/data/index.mjs · 第 33–40 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/data/index.mjs" data-start="33" data-end="40">  recover(reason) {
+    this.mutate(s =&gt; {
+      for (const job of s.jobs) {
+        if (['starting','running','steering'].includes(job.status)) { job.status = 'unconfirmed'; job.error = reason; }
+        if (job.status === 'unconfirmed' &amp;&amp; !s.paused.includes(job.threadId)) s.paused.push(job.threadId);
+      }
+    });
+  }</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>33 行</strong>：recover 接收恢复原因，在启动恢复、正常关闭或连接失败处理中使用。</p>
+    <p class="tl"><strong>34–35 行</strong>：通过 mutate 修改持久状态，逐条检查已有任务。</p>
+    <p class="tl"><strong>36 行</strong>：starting、running、steering 全部改为 unconfirmed，并记录原因；queued 不在这个条件里。</p>
+    <p class="tl"><strong>37 行</strong>：只要存在 unconfirmed，就把所属 Thread 加入 paused，重复检查也不重复添加。</p>
+    <p class="tl"><strong>38–40 行</strong>：结束遍历和 mutate；存储层将更新后的状态整体写回文件。</p>
+
+  </div></div>
+</div>
+<p>启动时恢复任务记录，再为有任务的会话安排调度。只有 queued、且会话没有暂停的任务可以继续；含不确定执行的会话停住。因此“排队消息保留”不等于“重启后每个会话都立即继续”。</p>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">执行中连接断了</div><div class="pattern-desc">发出调用后没有明确结果，任务可能成为 unconfirmed；队列暂停。明确失败或中断同样会暂停，防止后续输入建立在错误前提上。</div></div>
+<div class="pattern-card"><div class="pattern-title">用户核对后继续</div><div class="pattern-desc">先 /queue 查看记录，并检查同一会话的回答与实际结果，再 /continue。它解除暂停、唤醒调度器，不把 failed 或 unconfirmed 改回 queued。</div></div>
+</div>
+<p>若确实需要再执行一次，必须由用户另行明确提交新任务，不能把 /continue 当作“重试上一条”。这项选择在具备外部工具的 Agent 中尤其关键：结果未确认时，重复动作可能产生第二份副作用。本章先把这个判断点做成可查看、可继续的队列状态。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-6">
+<h2 class="screen-heading">亲手验证：连续提交、断线重连、重启核对</h2>
+
+<p>在仓库根目录准备阶段环境。使用 Node.js 24 或更高版本，在 .env 中配置可用模型后运行检查。</p>
+<pre><code>cd stages/s04-events-messages
+npm ci
+test -f .env || cp .env.example .env
+npm run check
+npm run server</code></pre>
+<p>终端 1 保持服务运行；终端 2 进入相同目录运行 <code>npm run chat</code>。提交一个较长任务，不等回答结束就再输入两条普通消息，用 <code>/queue</code> 查看记录。预期同一 Thread 只有一轮执行，其余仍排队；若实际回答失败，应看到队列暂停，而不是强行把实验判成成功。</p>
+<ol>
+<li><strong>客户端退出：</strong>第一轮执行时 Ctrl+C 退出客户端，等待后重新连接并 /resume 同一 Thread。核对三条任务的状态、顺序与回答，不仅看终端是否出现文字。</li>
+<li><strong>显式追加：</strong>任务执行中输入 /append 请用三点概括，查看关联的 turnId。若目标已成功完成且仍可定位、当前队列未暂停，则观察它作为优先的新一轮执行；/append-to 可明确指定目标。队列暂停时先核对再 /continue；无法定位的目标会被拒绝。</li>
+<li><strong>服务重启：</strong>确保有一条正在执行、一条排队，再停止终端 1 的服务并重启。退出终端 2 的旧 CLI，重新运行 <code>npm run chat</code>，再 <code>/resume</code> 并选中同一 Thread。服务每次启动都会生成新令牌；旧 CLI 自动重连仍用旧令牌，会收到 401，重新启动 CLI 才会读取新的连接文件。此时 /queue 应显示执行项 unconfirmed、排队项保留且会话暂停；核对后 /continue，只处理后续排队项。</li>
+</ol>
+<pre><code>npm run lesson -- s04-queue
+npm run lesson -- s04-reconnect
+npm run lesson -- s04-restart
+npm test</code></pre>
+<p>这些离线实验用临时任务记录与假 Codex 验证顺序、重连和恢复规则，不调用模型；HTTP 实验需要本机监听权限。真实验证可在服务运行时执行 <code>npm run smoke</code>，会调用配置的模型；握手检查 <code>npm run check:server</code> 则要先停止服务。<a href="/course/changes.html#s04">→ 打开 s04 阶段演示与实践命令</a></p>
+<div class="quiz-container" id="s04-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="幂等键是消息 ID；内容一致才返回已有记录。" data-explanation-wrong="同 ID 相同内容复用记录，同 ID 不同内容返回 409；新 ID 即使文本相同也属于新提交。"><h3 class="quiz-question">一条消息的响应丢了，使用相同 clientMessageId 和相同内容再提交会怎样？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>总会新开一轮</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>返回已有任务记录，不重复创建</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>只要文本相同，任何 ID 都会合并</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="订阅和提交独立；快照同步当前状态，不重发用户输入。" data-explanation-wrong="本章不用 Last-Event-ID 补发历史，重连也不会调用 POST /messages。"><h3 class="quiz-question">SSE 连接断了又连上，客户端如何追上状态？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>重新提交所有未显示的输入</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>按事件序号重放所有历史事件</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>先收到完整快照，再接收后续事件；重连不提交消息</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="/continue 解除会话暂停并唤醒调度，不把不确定任务重新排队。" data-explanation-wrong="unconfirmed 表示结果未知；继续后续任务与重试这一条是两个不同决定。"><h3 class="quiz-question">服务重启后 A=unconfirmed、B=queued，你核对后执行 /continue，会怎样？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>解除暂停后处理 B，A 不自动重发</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>把 A 改回 queued 并重跑</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>删除 A 和 B，重新开始</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="b" data-explanation-right="目标已成功完成且仍可定位、当前队列未暂停时，追加优先于普通待执行消息新开一轮。队列暂停时不会自动执行；提交时目标无法定位则拒绝。" data-explanation-wrong="目标仍执行且队列未暂停时用 turn/steer；本题目标已成功完成，按追加优先规则新开一轮。failed 或 interrupted 会暂停队列，需核对后 /continue；提交时目标无法定位则拒绝。"><h3 class="quiz-question">你用 /append-to 指定的 Turn 已成功完成且仍可定位，当前队列未暂停，追加内容会去哪里？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>丢弃，因为只能修改执行中的 Turn</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>优先于普通待执行消息新开一轮，并引用目标任务</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>伪装成普通 FIFO 消息，永远排在最后</span></button></div><div class="quiz-feedback"></div></div>
+</div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s04-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s04-quiz">重新作答</button></div>
+<p>现在 Agent 能保存输入、控制执行顺序，并在客户端回来时同步状态。下一步给它明确的角色和工作方法：<a href="#module-s05">进入 s05 Agent 装配</a>。</p>
+
+</section>
+</div>
+</div>
+</section>

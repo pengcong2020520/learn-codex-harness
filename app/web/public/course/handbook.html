@@ -3,23 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent 工程 · 五次进化 · 章节长文</title>
+<title>Agent 工程 · 章节长文</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="handbook.css">
 <script type="module" src="handbook.js"></script>
 </head>
 <body>
-<!-- handbook.html 由 npm run course:build 生成：导航圆点按 modules/*.html 的章节生成，正文是各章原文。不要直接改 handbook.html。 -->
+<!-- handbook.html 由 npm run course:build 生成：目录与导航圆点按 modules/*.html 的阶段章节生成，正文是各章原文。不要直接改 handbook.html。 -->
 <nav class="nav" aria-label="章节导航">
   <div class="progress-bar" role="progressbar" aria-label="阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
   <div class="nav-inner">
-    <a class="nav-title" href="#module-1">Agent 工程 · 五次进化</a>
+    <a class="nav-title" href="#module-s01">Agent 工程 · 章节长文</a>
     <div class="nav-dots">
-      <button class="nav-dot" data-target="module-1" data-tooltip="单轮：打通执行引擎" aria-label="单轮：打通执行引擎"></button>
-      <button class="nav-dot" data-target="module-2" data-tooltip="多轮：让会话延续" aria-label="多轮：让会话延续"></button>
-      <button class="nav-dot" data-target="module-3" data-tooltip="配置：装配一个 Agent" aria-label="配置：装配一个 Agent"></button>
-      <button class="nav-dot" data-target="module-4" data-tooltip="数据：状态有据可查" aria-label="数据：状态有据可查"></button>
-      <button class="nav-dot" data-target="module-5" data-tooltip="知识：可用且有边界" aria-label="知识：可用且有边界"></button>
+      <button class="nav-dot" data-target="module-s01" data-tooltip="s01 单轮：打通执行引擎" aria-label="s01 单轮：打通执行引擎"></button>
+      <button class="nav-dot" data-target="module-s02" data-tooltip="s02 多轮：让会话延续" aria-label="s02 多轮：让会话延续"></button>
+      <button class="nav-dot" data-target="module-s03" data-tooltip="s03 服务：让 Agent 常驻" aria-label="s03 服务：让 Agent 常驻"></button>
+      <button class="nav-dot" data-target="module-s04" data-tooltip="s04 事件与消息：让任务有序执行" aria-label="s04 事件与消息：让任务有序执行"></button>
+      <button class="nav-dot" data-target="module-s05" data-tooltip="s05 配置：装配一个 Agent" aria-label="s05 配置：装配一个 Agent"></button>
+      <button class="nav-dot" data-target="module-s08" data-tooltip="s08 数据：状态有据可查" aria-label="s08 数据：状态有据可查"></button>
+      <button class="nav-dot" data-target="module-s09" data-tooltip="s09 知识：可用且有边界" aria-label="s09 知识：可用且有边界"></button>
     </div>
     <a class="workbench-link" href="/course/changes.html">阶段演示</a>
     <a class="workbench-link" href="/course/">机制课程</a>
@@ -27,14 +29,22 @@
   </div>
 </nav>
 <main id="main">
-<section class="module" id="module-1">
+<nav class="course-path" aria-label="课程目录">
+  <a href="#module-s01">s01 单轮：打通执行引擎</a>
+  <a href="#module-s02">s02 多轮：让会话延续</a>
+  <a href="#module-s03">s03 服务：让 Agent 常驻</a>
+  <a href="#module-s04">s04 事件与消息：让任务有序执行</a>
+  <a href="#module-s05">s05 配置：装配一个 Agent</a>
+  <a href="#module-s08">s08 数据：状态有据可查</a>
+  <a href="#module-s09">s09 知识：可用且有边界</a>
+</nav>
+<section class="module" id="module-s01">
 <div class="module-content">
 <header class="module-header animate-in">
-  <span class="module-number">01</span>
+  <span class="module-number">s01</span>
   <h2 class="module-title">单轮：打通执行引擎</h2>
   <p class="module-subtitle">控制台发问后，谁真正调用了模型？从 stdio 到 turn/completed，逐层拆解一次请求的完整生命周期。</p>
 </header>
-<nav class="course-path" aria-label="课程目录"><a href="#module-1">01 单轮</a><a href="#module-2">02 多轮</a><a href="#module-3">03 Agent 装配</a><a href="#module-4">04 数据层</a><a href="#module-5">05 知识层</a></nav>
 <div class="module-body">
 
 <!-- Screen 1: 总架构图 -->
@@ -42,7 +52,7 @@
   <h2 class="screen-heading">全景：一次请求怎样走完</h2>
   <p>先分清用户、我们的程序、Codex 和模型四个角色，再沿五步流程检查一轮问答。</p>
 
-<figure class="architecture-figure"><a href="/course/assets/s01-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S01 总架构 SVG 大图"><img src="/course/assets/s01-architecture.svg" width="1600" height="754" alt="S01 总架构：一次请求怎样走完。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s01-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S01 总架构 SVG 大图"><img src="/course/assets/s01-architecture.svg" width="1600" height="754" alt="S01 总架构：一次请求怎样走完。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
@@ -405,10 +415,10 @@
 </div>
 </section>
 
-<section class="module" id="module-2">
+<section class="module" id="module-s02">
 <div class="module-content">
 <header class="module-header animate-in">
-  <span class="module-number">02</span>
+  <span class="module-number">s02</span>
   <h2 class="module-title">多轮：让会话延续</h2>
   <p class="module-subtitle">同一本笔记本写下多页——理解 Thread 与 Turn 的层级、FIFO 缓冲的真实含义，以及 /resume 与长期记忆的本质区别。</p>
 </header>
@@ -419,7 +429,7 @@
   <h2 class="screen-heading">全景：从单轮到多轮的三个关键变化</h2>
   <p>s02 在 s01 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
 
-<figure class="architecture-figure"><a href="/course/assets/s02-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S02 总架构 SVG 大图"><img src="/course/assets/s02-architecture.svg" width="1600" height="754" alt="S02 总架构：多轮对话怎样延续。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s02-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S02 总架构 SVG 大图"><img src="/course/assets/s02-architecture.svg" width="1600" height="754" alt="S02 总架构：多轮对话怎样延续。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
@@ -499,7 +509,7 @@
     </div>
     <div class="pattern-card">
       <div class="pattern-title">超时后恢复原会话</div>
-      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s03 的服务能力。</div>
+      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s04 的服务能力。</div>
     </div>
   </div>
 </section>
@@ -612,7 +622,7 @@
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
         <strong>s01 → s02</strong>：新增 FIFO 输入缓冲、Thread 跨 Turn 复用、/resume 会话恢复、会话元数据本地索引。<br>
-        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层、配置驱动 Agent、MCP 工具协议、沿用 FIFO，并增加持久化任务状态与重启暂停。<br>
+        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层，让执行由常驻服务端持有；s04 提供持久任务队列与重启暂停，s05 讲 Agent 装配，s06 讲工具。<br>
         s02 <strong>仍无独立 HTTP 服务</strong>，不提供网页连接入口。
       </div>
     </div>
@@ -634,7 +644,7 @@
       <div class="pattern-desc">
         无跨会话原生记忆沉淀，/resume 恢复的是会话上下文而非长期记忆。<br>
         回答仍为整段聚合输出，不支持流式打印。<br>
-        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s03 起引入）。<br>
+        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s06 引入）。<br>
         单机单 owner 单 Agent，不支持多账户或多 Agent 编排。
       </div>
     </div>
@@ -715,21 +725,434 @@
 </div>
 </section>
 
-<section class="module" id="module-3">
+<section class="module" id="module-s03">
 <div class="module-content">
 <header class="module-header animate-in">
-  <span class="module-number">03</span>
+  <span class="module-number">s03</span>
+  <h2 class="module-title">服务：让 Agent 常驻</h2>
+  <p class="module-subtitle">这个云端 Agent 还缺一个独立运行的服务端。亲手接通 HTTP 入口，追踪一轮的执行归属，验证客户端离线后的结果与资源收尾。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s03-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么？一个能一直工作的服务端</h2>
+
+<p>我们已经能在一个 Thread 里连续对话，也能用 /resume 找回历史。现在请它写一份长回答，回答到一半关掉终端：如果终端程序持有 Codex 子进程，这次执行就会跟着结束。要亲手做一个云端 Agent，先让执行拥有独立于用户窗口的生命周期。</p>
+<p>本章要完成的体验很具体：在一个终端启动服务，在另一个终端聊天；关掉聊天窗口，服务继续工作；重新连接同一个 Thread，查看这一轮的结果。先在本机验证这条链路，服务默认只监听 <code>127.0.0.1:4313</code>，本章不提供公网部署或多用户授权。</p>
+<figure class="architecture-figure"><a href="/course/assets/s03-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S03 总架构 SVG 大图"><img src="/course/assets/s03-architecture.svg" width="1600" height="754" alt="S03 总架构：客户端经 HTTP 提交，常驻服务持有 Codex 与会话快照。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">服务端持有什么</div><div class="pattern-desc">读取 .env 中的模型配置，启动 Codex App Server，持有会话与执行中的 Turn。服务端接收 Codex 通知，即使此刻没有客户端查看，也会更新状态。</div></div>
+<div class="pattern-card"><div class="pattern-title">客户端持有什么</div><div class="pattern-desc">读取 .data/connection.json 中的地址与连接令牌，保存当前选中的 Thread id，通过 HTTP 提交和查看。客户端不读取 .env，不启动 Codex，不需要模型 API Key。</div></div>
+</div>
+<p><span class="term" data-definition="可持续恢复的会话，一个 Thread 内可以有多个 Turn。">Thread</span> 是会话，<span class="term" data-definition="一次用户请求在 Codex 内的执行轮次，可能持续产生多条通知。">Turn</span> 是其中的一轮。服务端进程、客户端进程、Codex 子进程则是运行边界。把这三种概念分清，就能回答“关掉哪一个进程会停止哪一部分工作”。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">先定验收条件</p><p>客户端退出只停止提交与查看，已交给服务端的一轮继续执行。停止服务端会结束 Codex 子进程；原生历史保留，但 s03 没有持久任务记录来核对中途执行。</p></div></div>
+
+</section>
+
+<section class="screen animate-in" id="s03-screen-2">
+<h2 class="screen-heading">接好入口：HTTP 请求先过连接校验</h2>
+
+<p>给 Agent 一个入口，并不意味着把模型密钥交给每个客户端。服务启动时生成随机连接令牌，写入权限为 <code>0600</code> 的连接文件。客户端每次发送 <code>Authorization: Bearer &lt;令牌&gt;</code>；这个令牌只用于访问 Agent 服务，与远端模型的 API Key 分别管理。</p>
+<p><span class="term" data-definition="客户端发送请求，服务端返回状态码和数据的协议。这里用它连接 CLI 与 Agent 服务。">HTTP</span> 负责外层请求；服务端通过 <span class="term" data-definition="用 JSON 表达方法调用、响应和通知的协议。这里连接服务端与 Codex App Server。">JSON-RPC</span> 调用 Codex。读源码时先看谁在和谁说话，再看同样名为“请求”的操作实际跨过了哪条边界。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s03-service/server/modules/http/index.mjs · 第 38–41 行</span>
+    <pre><code data-source="stages/s03-service/server/modules/http/index.mjs" data-start="38" data-end="41">      if (request.headers.origin) throw new AppError("当前接口仅供本机 CLI 使用。", 403);
+      if (!authenticated(request, token)) throw new AppError("Agent 服务认证失败，请重新连接。", 401);
+      const url = new URL(request.url, "http://127.0.0.1");
+      const route = `${request.method} ${url.pathname}`;</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>38 行</strong>：只要请求带 Origin 就返回 403。这是本阶段对网页入口的限制，并不是让浏览器自行决定是否放行。</p>
+    <p class="tl"><strong>39 行</strong>：authenticated 校验 Bearer 令牌；认证不通过就返回 401，后面的业务路由不会执行。</p>
+    <p class="tl"><strong>40 行</strong>：用本机地址作为基准解析请求 URL，取出路径和查询参数。</p>
+    <p class="tl"><strong>41 行</strong>：把 HTTP 方法和路径组合成路由键，例如 POST /turns。</p>
+
+  </div></div>
+</div>
+<p>点击“下一步”追踪一次请求。以下是<strong>教学模拟，非真实执行结果</strong>。</p>
+<div class="flow-animation" id="s03-flow" data-steps='[{&quot;highlight&quot;: &quot;flow-s03-client&quot;, &quot;label&quot;: &quot;1. 客户端用 POST /sessions 建立会话，再提交 POST /turns。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-client&quot;, &quot;to&quot;: &quot;s03-http&quot;}, {&quot;highlight&quot;: &quot;flow-s03-http&quot;, &quot;label&quot;: &quot;2. 入口校验 Origin 与令牌，读取 JSON，把 threadId 和 text 交给会话模块。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-http&quot;, &quot;to&quot;: &quot;s03-session&quot;}, {&quot;highlight&quot;: &quot;flow-s03-session&quot;, &quot;label&quot;: &quot;3. 检查同一会话是否空闲，发送 turn/start，等待启动响应。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-session&quot;, &quot;to&quot;: &quot;s03-codex&quot;}, {&quot;highlight&quot;: &quot;flow-s03-http&quot;, &quot;label&quot;: &quot;4. 返回 202 和 turnId；这不代表模型已经回答完。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-http&quot;, &quot;to&quot;: &quot;s03-client&quot;}, {&quot;highlight&quot;: &quot;flow-s03-codex&quot;, &quot;label&quot;: &quot;5. 服务端接收增量与完成通知，更新内存里的会话快照。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-codex&quot;, &quot;to&quot;: &quot;s03-session&quot;}, {&quot;highlight&quot;: &quot;flow-s03-client&quot;, &quot;label&quot;: &quot;6. 客户端反复 GET /state 查看；客户端退出后，第 5 步仍由服务端处理。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s03-client&quot;, &quot;to&quot;: &quot;s03-http&quot;}]'>
+<div class="flow-actors"><div class="flow-actor" id="flow-s03-client"><div class="flow-actor-icon">⌨️</div><strong>CLI 客户端</strong></div><div class="flow-actor" id="flow-s03-http"><div class="flow-actor-icon">🔑</div><strong>HTTP 入口</strong></div><div class="flow-actor" id="flow-s03-session"><div class="flow-actor-icon">📋</div><strong>会话模块</strong></div><div class="flow-actor" id="flow-s03-codex"><div class="flow-actor-icon">⚙️</div><strong>Codex</strong></div></div>
+<div class="flow-packet" hidden></div><div class="flow-step-label">点击“下一步”开始模拟</div>
+<div class="flow-controls"><button class="btn flow-next-btn">下一步</button><button class="btn flow-reset-btn">重置</button><span class="flow-progress">0 / 6</span></div>
+</div>
+<p>入口只接收 JSON，请求体上限为 512 KiB。<code>GET /health</code> 用来查看服务是否就绪；Codex 连接失效时返回 503。连接校验、参数读取和业务执行各有位置，定位故障时就能先区分“进不去服务”和“这一轮没执行成功”。</p>
+
+</section>
+
+<section class="screen animate-in" id="s03-screen-3">
+<h2 class="screen-heading">发起一轮：为什么要同时检查 activeTurnId 和 starting</h2>
+
+<p>试想两个客户端几乎同时向同一个 Thread 提交。只检查 activeTurnId 不够：第一条请求可能已发出 turn/start，却还没拿到 turn id，第二条就趁这个空隙进来了。因此需要一个“正在发起”的标记。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s03-service/server/modules/sessions/index.mjs · 第 32–43 行</span>
+    <pre><code data-source="stages/s03-service/server/modules/sessions/index.mjs" data-start="32" data-end="43">  async startTurn(threadId, text) {
+    requireText(text);
+    await this.ensure(threadId);
+    const session = this.sessions.get(threadId);
+    if (session.activeTurnId || this.starting.has(threadId)) throw new AppError("上一轮还在执行，请等它结束再发送。", 409, "TURN_IN_PROGRESS");
+    this.starting.add(threadId);
+    try {
+      const result = await this.rpc.request("turn/start", { threadId, input: [{ type: "text", text: text.trim(), text_elements: [] }] });
+      const turn = this.recordTurn(threadId, result.turn);
+      return { threadId, turnId: turn.id, status: turn.status };
+    } finally { this.starting.delete(threadId); }
+  }</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>32–35 行</strong>：startTurn 接收会话与文本；先校验非空输入，再确保会话已载入，最后取到服务端保存的会话对象。</p>
+    <p class="tl"><strong>36 行</strong>：activeTurnId 表示已有一轮在执行；starting 表示启动请求还没结束。任一条件成立都返回 409 和 TURN_IN_PROGRESS。</p>
+    <p class="tl"><strong>37–38 行</strong>：在等待 RPC 之前写入 starting，再进入 try，挡住同一会话的第二个启动请求。</p>
+    <p class="tl"><strong>39 行</strong>：把文本包装成 Codex 的 input 数组，发 turn/start；await 等待的是启动响应，不是完整回答。</p>
+    <p class="tl"><strong>40 行</strong>：recordTurn 登记 turn id 与状态；它也保护已经收到的完成状态，避免早到通知被启动响应覆盖。</p>
+    <p class="tl"><strong>41 行</strong>：把 threadId、turnId 和状态返回给 HTTP 层，客户端从此按这两个 ID 查看结果。</p>
+    <p class="tl"><strong>42–43 行</strong>：finally 在成功和抛错时都会清除 starting；方法在此结束，后续通知由服务端订阅者接收。</p>
+
+  </div></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">202 表示这一轮已被接受</div><div class="pattern-desc">POST /turns 会等待 startTurn 返回，然后响应 202。它省去了等待完整模型回答的时间，但不是“收到 HTTP 就直接返回”，也没有把输入写入持久队列。</div></div>
+<div class="pattern-card"><div class="pattern-title">409 表示当前不能再开一轮</div><div class="pattern-desc">s03 服务端不排队。同一会话上一轮未结束时拒绝新提交；CLI 会等上一轮完成再发送下一条。仍留在客户端、尚未发送的输入不会因服务常驻而自动保存。</div></div>
+</div>
+<p>服务端收到 <code>turn/started</code>、<code>item/agentMessage/delta</code>、<code>turn/completed</code> 等通知后，把文字与状态整理成 <span class="term" data-definition="某一时刻可供读取的状态集合；这里包含会话标识、近期轮次、回答和执行状态。">快照</span>。完整历史仍由 Codex 原生持久化，服务端的近期视图不承担历史数据库的职责。</p>
+
+</section>
+
+<section class="screen animate-in" id="s03-screen-4">
+<h2 class="screen-heading">查看一轮：停止轮询为什么不会取消执行</h2>
+
+<p>客户端要显示回复，先得知道回复写到了哪里。s03 使用 <span class="term" data-definition="客户端间隔一段时间主动查询状态，服务端每次返回当时的快照。">轮询</span>：默认每隔 200 ms 查询一次会话快照，把新增的文字渲染到终端。界面可以逐渐出现文字，但传输方式仍是多次 HTTP 查询。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s03-service/client/modules/connection/index.mjs · 第 42–54 行</span>
+    <pre><code data-source="stages/s03-service/client/modules/connection/index.mjs" data-start="42" data-end="54">  async follow(threadId, turnId, onSession, { signal, interval = 200 } = {}) {
+    while (!signal?.aborted) {
+      const { session } = await this.request(`/state?threadId=${encodeURIComponent(threadId)}`);
+      onSession(session);
+      const turn = session.turns.find(item =&gt; item.id === turnId);
+      if (turn &amp;&amp; turn.status !== "inProgress") return turn;
+      await new Promise(resolve =&gt; {
+        const finish = () =&gt; { clearTimeout(timer); signal?.removeEventListener("abort", finish); resolve(); };
+        const timer = setTimeout(finish, interval);
+        signal?.addEventListener("abort", finish, { once: true });
+      });
+    }
+  }</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>42 行</strong>：follow 接收 threadId、目标 turnId、渲染回调和可选取消信号；默认间隔是 200 ms。</p>
+    <p class="tl"><strong>43–45 行</strong>：没有停止查看就继续循环，GET /state 后把快照交给 onSession；这里没有提交文本。</p>
+    <p class="tl"><strong>46–47 行</strong>：在快照中定位这一轮；找到且状态不再是 inProgress 时返回，包括成功、失败或被中断。</p>
+    <p class="tl"><strong>48–50 行</strong>：等待下一次查询；finish 清除计时器和取消监听，并结束本次等待。</p>
+    <p class="tl"><strong>51 行</strong>：接到 abort 信号可提前结束等待；它不发送 turn/interrupt。</p>
+    <p class="tl"><strong>52–54 行</strong>：等待结束后回到循环条件，决定继续查询还是退出 follow。</p>
+
+  </div></div>
+</div>
+<p>现在可以解释验收现象：客户端 Ctrl+C 后，follow 不再运行，但服务端的 Codex 连接仍在接收通知。重新运行客户端并 /resume 选中同一个 Thread，只会读取并显示一次快照，不会自动继续轮询。若这一轮仍在执行，显示的可能只是部分回复；稍后再次 /resume 并选中同一 Thread，或通过带连接令牌的 <code>GET /state?threadId=&lt;Thread id&gt;</code> 核验最终状态。若模型报错，应看到失败状态；“客户端可离线”保证的是执行归属，不保证每次模型调用都成功。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">断线不等于未提交</p><p>如果 POST /turns 的响应在网络中丢失，客户端可能不知道服务端是否已经发起执行。s03 没有 clientMessageId 去重记录，不要把“没收到响应”当成“肯定没执行”而直接重复发送。下一章会为每条输入建立任务记录。</p></div></div>
+
+</section>
+
+<section class="screen animate-in" id="s03-screen-5">
+<h2 class="screen-heading">让服务长期运行：资源要能收回，历史要能找回</h2>
+
+<p>常驻服务还需要回答两个实际问题：启动到一半失败，已经拿到的端口和子进程怎么办？每次运行留下的日志，什么时候能清理？先把资源的生命周期写清楚，再处理运行目录的保留。</p>
+<p>启动顺序是：配置与独占锁 → 运行目录 → Codex 配置和连接 → 会话模块 → 运行目录维护 → HTTP 监听 → 发布连接文件。每得到一个资源，就登记清理动作；关闭时倒序执行，先收回入口，再关闭内部依赖。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s03-service/server/modules/lifecycle/index.mjs · 第 9–16 行</span>
+    <pre><code data-source="stages/s03-service/server/modules/lifecycle/index.mjs" data-start="9" data-end="16">    defer(action) { cleanup.push(action); },
+    close() {
+      closing ||= (async () =&gt; {
+        const failures = [];
+        for (const action of cleanup.reverse()) { try { await action(); } catch (error) { failures.push(error); } }
+        if (failures.length) throw new AggregateError(failures, "部分资源未能正常关闭。");
+      })();
+      return closing;</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>9 行</strong>：defer 把清理函数放进 cleanup 数组，登记时不执行。</p>
+    <p class="tl"><strong>10–11 行</strong>：close 首次调用时创建关闭 Promise；closing ||= 让后续关闭请求复用同一个过程。</p>
+    <p class="tl"><strong>12 行</strong>：准备 failures 收集各资源的关闭错误。</p>
+    <p class="tl"><strong>13 行</strong>：reverse 按登记的反方向逐个 await；某个动作失败会被记录，其余动作仍继续。</p>
+    <p class="tl"><strong>14 行</strong>：所有动作都尝试完后，若有错误则统一抛出 AggregateError。</p>
+    <p class="tl"><strong>15–16 行</strong>：保存并返回同一个关闭 Promise，让调用者等待完整收尾。</p>
+
+  </div></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">长期保留的状态</div><div class="pattern-desc">workspace/ 是固定工作目录；.data/codex/ 保存 Codex 原生历史和配置；.data/session-index.json 保存会话位置。它们与每次启动的运行缓存有不同生命周期。</div></div>
+<div class="pattern-card"><div class="pattern-title">仅在运行时需要的入口</div><div class="pattern-desc">同一目录由 .data/server.lock 保证只运行一个服务；.data/connection.json 发布本次地址与令牌。正常关闭时回收这些入口，运行目录则标记结束。</div></div>
+<div class="pattern-card"><div class="pattern-title">有条件清理的缓存</div><div class="pattern-desc">维护模块启动时检查一次，此后每小时检查。保留最近 5 次运行和 7 天内修改过的目录，候选目录还需确认没有活进程、打开的文件或正在使用的会话。</div></div>
+</div>
+<p>清理 <code>.runs/app-server-*</code> 前，程序先把日志中的会话位置保存到索引，再核对目录有没有变化。出现链接、非缓存内容，或无法完整检查占用时，就跳过。这样删掉过期日志后，/resume 仍能定位历史；这里不要求你手工删除目录来完成练习。</p>
+
+</section>
+
+<section class="screen animate-in" id="s03-screen-6">
+<h2 class="screen-heading">亲手验证：关掉客户端，再回来找这一轮</h2>
+
+<p>在仓库根目录打开终端。使用 Node.js 24 或更高版本；真实问答还需要可用的模型配置。先运行本地配置检查，再启动两个进程。</p>
+<pre><code>cd stages/s03-service
+npm ci
+test -f .env || cp .env.example .env
+npm run check
+npm run server</code></pre>
+<p>在 .env 中配置模型地址、密钥和模型名后再运行 check。终端 1 保持服务运行；终端 2 进入同一个阶段目录，运行 <code>npm run chat</code>。输入一个需要长回答的问题，记下 Thread id，看到回复后按 Ctrl+C 退出客户端。稍后重新 <code>npm run chat</code>，用 <code>/resume</code> 找到并选中同一会话。恢复只读取一次快照；若这一轮尚未结束，终端不会自动更新，请稍后再次 <code>/resume</code> 并选中同一 Thread。也可通过带连接令牌的 <code>GET /state?threadId=&lt;Thread id&gt;</code> 核验状态；确认这一轮为 <code>completed</code> 后再恢复查看完整回复，失败或中断则核对对应状态。</p>
+<p>接着在另一个终端尝试 <code>npm run server</code>：同目录重复启动应被拒绝。最后停止终端 1 的服务，确认客户端不能继续连接。不要把关闭客户端与停止服务混为同一个动作。</p>
+<pre><code>npm run lesson -- s03-resident
+npm run lesson -- s03-one-turn
+npm run lesson -- s03-cleanup
+npm test</code></pre>
+<p>这些离线实验使用临时目录与假 Codex，不调用真实模型；其中 HTTP 验证需要允许本机监听端口。<code>npm run check:server</code> 会实际启动 Codex 并握手，运行前先停服务；<code>npm run smoke</code> 则要求服务已启动并调用真实模型。<a href="/course/changes.html#s03">→ 打开 s03 阶段演示与实践命令</a></p>
+<div class="quiz-container" id="s03-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="执行中的一轮由服务端持有，客户端退出只是停止查看。" data-explanation-wrong="关闭客户端不关闭服务端；但仍在客户端、没有提交的输入不会持久化。"><h3 class="quiz-question">服务返回 202 和 turnId 后，你关闭了聊天客户端。哪一项符合本章设计？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>这一轮立刻取消，服务端等待客户端回来</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>服务端继续接收 Codex 通知，回来可按会话查看结果</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>所有尚未发出的客户端输入也自动保存了</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="starting 覆盖了已发请求但尚未拿到 turn id 的时间窗口。" data-explanation-wrong="s03 没有服务端任务队列；activeTurnId 与 starting 共同阻止同一会话并发启动。"><h3 class="quiz-question">同一 Thread 的 turn/start 响应还没回来，第二个客户端提交会怎样？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>starting 标记会阻止第二次启动，返回 409</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>第二条写入服务端持久队列</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>两个 turn/start 必然同时执行</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="时间只决定候选范围；保护检查和索引保存同样必要。" data-explanation-wrong="服务端或历史恢复可能仍依赖该目录；超过保留期并不等于确认闲置。"><h3 class="quiz-question">一个运行目录已经超过 7 天，是否可以直接删除？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>可以，时间是唯一条件</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>可以，只要客户端都退出了</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>不可以，还要检查保留数量、会话、进程与文件占用，并保存会话索引</span></button></div><div class="quiz-feedback"></div></div>
+</div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s03-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s03-quiz">重新作答</button></div>
+<p>做完本章，Agent 的执行已经不依赖聊天窗口。下一步让连续提交的输入也能脱离窗口保存，并让状态主动到达客户端：<a href="#module-s04">进入 s04 事件与消息</a>。</p>
+
+</section>
+</div>
+</div>
+</section>
+
+<section class="module" id="module-s04">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">s04</span>
+  <h2 class="module-title">事件与消息：让任务有序执行</h2>
+  <p class="module-subtitle">这个云端 Agent 还缺可靠的连续提交与状态同步。亲手串起任务记录、按会话调度和 SSE，遇到不确定执行时保留证据、暂停核对。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s04-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么？能保存每条输入的任务记录</h2>
+
+<p>现在服务端能独立完成一轮了。试着在回答过程中再输入两条，然后关闭客户端：已经发出的那一轮可以继续，仍等在客户端的输入却没有服务端记录。一个能长期工作的云端 Agent，还要接住用户连续交来的事情，并告诉用户每一条走到了哪里。</p>
+<p>本章的验收场景是：连续提交三条普通消息，三条都被服务端接收；关闭客户端后，服务端依次完成它们；回来时能看到队列和会话状态。如果执行结果拿不准，就停下来让用户核对，避免把同一件事做两遍。</p>
+<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="754" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">messages：决定执行节奏</div><div class="pattern-desc">接收消息、按 Thread 排队、发 turn/start，处理追加、超时、暂停与继续。它决定哪条输入现在可以执行，不代替 Codex 内部的推理与工具循环。</div></div>
+<div class="pattern-card"><div class="pattern-title">data：保存任务事实</div><div class="pattern-desc">将消息和暂停状态写入 .data/messages.json，每次更新整体原子替换文件。进程退出后记录还在，重启时可据此判断哪些任务需要核对。</div></div>
+<div class="pattern-card"><div class="pattern-title">events：把变化交给订阅者</div><div class="pattern-desc">事件中心分发会话与队列状态，经 HTTP 的 SSE 连接交给对应 Thread 的客户端。它不负责启动下一轮，也不调用模型。</div></div>
+</div>
+<p>区分三个 ID：<code>threadId</code> 标识会话，<code>clientMessageId</code> 标识用户这次提交，<code>turnId</code> 标识 Codex 执行轮次。任务可以在还没有 turnId 时就处于 queued；追加也可能与已有任务关联到同一轮，三个 ID 不能相互替代。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">实现边界</p><p>服务默认监听 127.0.0.1:4319，仍是本机单用户、单进程队列。同目录只运行一个服务；每个会话最多 100 条 queued 消息。本章验证可靠提交与状态同步，不提供多机器调度。</p></div></div>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-2">
+<h2 class="screen-heading">提交先落盘：同一个消息 ID 为什么不会做两遍</h2>
+
+<p>客户端为每条输入生成 clientMessageId，再调用 <code>POST /messages</code>。服务端先校验文本、模式和会话，进入同一 Thread 的串行操作区间，然后检查这个 ID 是否已有记录。<span class="term" data-definition="同一个消息 ID 与相同内容重复提交，返回同一条任务记录，不重复创建执行。">幂等</span> 在这里解决的是“同一提交的重复请求”，不是“所有意思相同的文本都只执行一次”。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/messages/index.mjs · 第 63–84 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/messages/index.mjs" data-start="63" data-end="84">      const existing = await this.job(id);
+      if (existing) {
+        if (
+          existing.threadId !== threadId ||
+          existing.text !== text ||
+          existing.mode !== mode ||
+          existing.targetTurnId !== targetTurnId
+        )
+          throw new AppError(
+            "同一个消息 ID 不能用于不同的消息。",
+            409,
+            "IDEMPOTENCY_CONFLICT",
+          );
+        return this.publicJob(existing);
+      }
+      if (mode === "append" &amp;&amp; !this.sessions.getTurn(threadId, targetTurnId))
+        throw new AppError("追加目标不属于该会话或尚不可定位。", 409);
+      // 先写进任务记录，再排队：这时服务重启也不会丢。
+      await this.store.create({ id, threadId, text, mode, targetTurnId, createdAt: Date.now() });
+      await this.publish(threadId);
+      this.schedule(threadId);
+      return this.publicJob(await this.job(id));</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>63–64 行</strong>：按消息 ID 查找任务；已有记录时走重复提交分支。</p>
+    <p class="tl"><strong>65–70 行</strong>：逐项比较 Thread、文本、mode 和 targetTurnId；同一 ID 只能指向同一份提交。</p>
+    <p class="tl"><strong>71–75 行</strong>：任何一项不同就返回 409，错误码 IDEMPOTENCY_CONFLICT；不能用已有 ID 偷换要求。</p>
+    <p class="tl"><strong>76–77 行</strong>：内容一致就返回已有记录并结束该分支，不再创建任务。</p>
+    <p class="tl"><strong>78–79 行</strong>：如果是 append，目标 Turn 必须属于当前会话且能够定位，否则拒绝。</p>
+    <p class="tl"><strong>80–81 行</strong>：先把 id、会话、文本、模式、目标和时间写入任务记录；存储层赋予 queued 状态。</p>
+    <p class="tl"><strong>82 行</strong>：发布队列快照，让订阅者知道输入已经被记录。</p>
+    <p class="tl"><strong>83 行</strong>：唤醒调度器；schedule 使用 setImmediate 安排后续调度，不等待模型完成。</p>
+    <p class="tl"><strong>84 行</strong>：读取并返回这条任务的公开记录，HTTP 层以 202 响应。</p>
+
+  </div></div>
+</div>
+<p>首次提交返回 <code>202 queued</code> 表示已接收并记录。重复提交返回的可能是 running 或 completed，因为它返回的是已有任务当前状态。若用户用新的 ID 再发一遍同样文本，那是一个新的任务，服务端不会猜测它是不是重复意图。</p>
+<p>文件写入成功后才调度，因此即便随后进程退出，已接收消息也有记录。这里的持久性依赖本机 .data 目录；它不等同于远端备份，也不意味着系统能自动证明所有外部动作“恰好执行一次”。对于已经发出、结果未知的调用，还需要后面的 unconfirmed 处理。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-3">
+<h2 class="screen-heading">调度一次：普通消息 FIFO，显式追加另有去向</h2>
+
+<p><span class="term" data-definition="First In, First Out，先进先出。这里普通消息按进入任务记录的顺序执行。">FIFO</span> 的范围是同一个 Thread。调度器先看会话是否暂停，再看有没有正在执行的 Turn；不同 Thread 的任务互不阻塞，同一 Thread 的普通输入一次只启动一轮。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/messages/index.mjs · 第 119–124 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/messages/index.mjs" data-start="119" data-end="124">    if (active || all.some((j) =&gt; executing.includes(j.status))) return;
+    const job = pending.find((j) =&gt; j.mode === "append") || pending[0];
+    if (!job) return;
+    if (!(await this.store.patch(job.id, { status: "starting" }, ["queued"])))
+      return;
+    await this.publish(threadId);</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>119 行</strong>：如果会话已有 active Turn，或任一任务处于 starting、running、steering，就不启动新轮次。</p>
+    <p class="tl"><strong>120 行</strong>：优先取 queued 的 append，否则取最早的普通消息 pending[0]。不能把含追加的队列描述为无条件 FIFO。</p>
+    <p class="tl"><strong>121 行</strong>：没有候选任务就结束本次调度。</p>
+    <p class="tl"><strong>122–123 行</strong>：只有任务仍为 queued 才能改成 starting；状态写盘失败或条件不满足就不向下执行。</p>
+    <p class="tl"><strong>124 行</strong>：发布 starting 状态，随后才准备输入并请求 turn/start。</p>
+
+  </div></div>
+</div>
+<p>把 starting 先写盘，是为了留下“准备发送”的痕迹。若服务在这之后中止，重启时不能凭一个 queued 状态就自动重发。一轮收到 <code>turn/completed</code> 后，任务按结果进入 completed、failed 或 interrupted；只有成功时才自动处理下一条，失败或中断会暂停该 Thread。</p>
+<p>点击“下一步”追踪一次请求。以下是<strong>教学模拟，非真实执行结果</strong>。</p>
+<div class="flow-animation" id="s04-flow" data-steps='[{&quot;highlight&quot;: &quot;flow-s04-client&quot;, &quot;label&quot;: &quot;1. 提交 A、B 两条普通消息，各带独立 ID，先记录为 queued。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-client&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-store&quot;, &quot;label&quot;: &quot;2. 提交返回 202；调度器为该 Thread 选择最早的 A。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-store&quot;, &quot;to&quot;: &quot;s04-dispatch&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;3. A 从 queued 改为 starting 并写盘，B 保持 queued。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;4. 发 turn/start，绑定返回的 turnId，正常执行中记录为 running。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-codex&quot;}, {&quot;highlight&quot;: &quot;flow-s04-client&quot;, &quot;label&quot;: &quot;5. 客户端退出；A 的执行与 B 的排队仍归服务端。&quot;, &quot;packet&quot;: false, &quot;from&quot;: &quot;s04-client&quot;, &quot;to&quot;: &quot;s04-client&quot;}, {&quot;highlight&quot;: &quot;flow-s04-codex&quot;, &quot;label&quot;: &quot;6. A 成功完成，写入 completed 并唤醒调度器；若失败或不确定则暂停。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-codex&quot;, &quot;to&quot;: &quot;s04-store&quot;}, {&quot;highlight&quot;: &quot;flow-s04-dispatch&quot;, &quot;label&quot;: &quot;7. 成功路径下开始 B；同一 Thread 没有两条普通消息同时开轮次。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s04-dispatch&quot;, &quot;to&quot;: &quot;s04-codex&quot;}]'>
+<div class="flow-actors"><div class="flow-actor" id="flow-s04-client"><div class="flow-actor-icon">⌨️</div><strong>客户端</strong></div><div class="flow-actor" id="flow-s04-store"><div class="flow-actor-icon">📒</div><strong>任务记录</strong></div><div class="flow-actor" id="flow-s04-dispatch"><div class="flow-actor-icon">📋</div><strong>调度器</strong></div><div class="flow-actor" id="flow-s04-codex"><div class="flow-actor-icon">⚙️</div><strong>Codex</strong></div></div>
+<div class="flow-packet" hidden></div><div class="flow-step-label">点击“下一步”开始模拟</div>
+<div class="flow-controls"><button class="btn flow-next-btn">下一步</button><button class="btn flow-reset-btn">重置</button><span class="flow-progress">0 / 7</span></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">补给正在执行的一轮</div><div class="pattern-desc">显式输入 /append 内容，或 /append-to &lt;turn id&gt; 内容。目标仍在执行时调用 turn/steer，状态先为 steering，再与目标 Turn 绑定。自然语言里说“接着那个”不会自动成为 append。</div></div>
+<div class="pattern-card"><div class="pattern-title">目标已成功完成且仍可定位</div><div class="pattern-desc">当前队列未暂停时，这条 append 会在普通待执行消息之前新开一轮，输入包含目标任务的引用。如果调用 turn/steer 时目标恰好结束，明确的目标不匹配错误会让它回到 queued，等待调度。若目标 failed 或 interrupted，队列会暂停，追加不会自动执行，需核对后 /continue；若提交时目标已移出内存、无法定位，则直接拒绝追加。</div></div>
+</div>
+<p>默认执行上限是 10 分钟，由 <code>AGENT_TURN_TIMEOUT_MS</code> 控制。到达上限后服务端暂停队列，并请求 <code>turn/interrupt</code>；发出中断请求本身不等于已经收到最终状态，后续通知或连接错误处理仍需核对结果。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-4">
+<h2 class="screen-heading">让状态主动到达：SSE 先快照，后事件</h2>
+
+<p>客户端订阅 <code>GET /events?threadId=…</code>，建立 <span class="term" data-definition="Server-Sent Events：服务端通过持续打开的 HTTP 响应，向客户端单向发送事件。">SSE</span> 长连接。服务端有变化时发送数据，不需要客户端每 200 ms 询问一次。消息提交仍走 POST /messages；订阅只负责查看。</p>
+<p>重连时最容易漏掉的时间窗口在“读快照”和“开始监听”之间。这里先登记监听者，把快照准备期间收到的事件暂存，发送完整快照后再发送暂存事件。下面的 listener 已处于 GET /events 路由内，id 是正在订阅的 Thread。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/http/index.mjs · 第 78–89 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/http/index.mjs" data-start="78" data-end="89">        const listener = event =&gt; { if (!event.threadId || event.threadId === id) {
+          if (snapshotSent) write(event);
+          else if (buffered.length &lt; 1000) buffered.push(event);
+          else response.destroy();
+        } };
+        hub.on("event", listener);
+        response.once('close', () =&gt; { clearInterval(heartbeat); hub.off('event', listener); streams.delete(response); });
+        const queue = await messages.snapshot(id);
+        write({ type: "snapshot", threadId: id, data: { session: sessions.snapshot(id), queue } });
+        snapshotSent = true;
+        for (const event of buffered) write(event);
+        if (!response.destroyed) heartbeat = setInterval(() =&gt; { if (!response.destroyed) response.write(": heartbeat\n\n"); }, 15000);</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>78 行</strong>：事件没有 threadId 时视为全局事件；有 threadId 时只发送给相同会话的订阅者。</p>
+    <p class="tl"><strong>79 行</strong>：快照已发出，就直接把后续事件写入 SSE 响应。</p>
+    <p class="tl"><strong>80–82 行</strong>：快照未发出时暂存事件；缓冲达到上限则断开连接，避免无限堆积。</p>
+    <p class="tl"><strong>83 行</strong>：先把 listener 登记到事件中心，从此刻开始不会错过该连接准备期间的事件。</p>
+    <p class="tl"><strong>84 行</strong>：连接关闭时清除心跳、取消监听并移除连接记录，避免断开的客户端继续占用资源。</p>
+    <p class="tl"><strong>85–86 行</strong>：读取队列快照，与会话快照组成首条 snapshot 事件发送出去。</p>
+    <p class="tl"><strong>87–88 行</strong>：标记快照已发，然后按顺序写出暂存事件，确保首条数据是快照。</p>
+    <p class="tl"><strong>89 行</strong>：连接仍存活时每 15 秒写一条 SSE 心跳注释；心跳不表示任务已经完成。</p>
+
+  </div></div>
+</div>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">snapshot / session / queue</div><div class="pattern-desc">snapshot 是每次连接的首条完整状态，含会话与队列；session 表示会话变化，queue 表示任务状态、暂停或继续。客户端用这些内容更新显示。</div></div>
+<div class="pattern-card"><div class="pattern-title">fatal / shutdown</div><div class="pattern-desc">fatal 提示执行连接失效、服务停止调度；shutdown 表示服务正常关闭。看到这类事件要核对服务与任务状态，不能据此认定所有任务已完成。</div></div>
+</div>
+<p>客户端断线后约一秒再尝试连接，每次都先获取快照。事件序号用于排查问题，本章不按 Last-Event-ID 重放历史事件。快照帮助客户端重新看到当前状态，不承诺补齐离线期间每一条事件；订阅过程也不会替用户再提交一次消息。</p>
+<p>普通事件写入积压超过 1 MiB 时连接会被断开，再由客户端重连取快照。快照之后的事件仍是状态更新，渲染时应以事件内容更新视图，不能把事件到达次数当作执行次数。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-5">
+<h2 class="screen-heading">遇到不确定：保留记录，暂停后续执行</h2>
+
+<p>服务重启时，文件里有 A=running、B=queued。你能直接把 A 再发一次吗？不能：程序只知道 A 没有拿到确定结果，不知道它在中止前做到了哪一步。用 <span class="term" data-definition="任务已进入发送或执行阶段，但结果无法确认；保留记录、暂停队列，不自动重发。">unconfirmed</span> 明确表达这份不确定性，比把它当成“什么也没做”更准确。</p>
+<div class="translation-block">
+  <div class="translation-code">
+    <span class="translation-label">源码 · stages/s04-events-messages/server/modules/data/index.mjs · 第 33–40 行</span>
+    <pre><code data-source="stages/s04-events-messages/server/modules/data/index.mjs" data-start="33" data-end="40">  recover(reason) {
+    this.mutate(s =&gt; {
+      for (const job of s.jobs) {
+        if (['starting','running','steering'].includes(job.status)) { job.status = 'unconfirmed'; job.error = reason; }
+        if (job.status === 'unconfirmed' &amp;&amp; !s.paused.includes(job.threadId)) s.paused.push(job.threadId);
+      }
+    });
+  }</code></pre>
+  </div>
+  <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+    <p class="tl"><strong>33 行</strong>：recover 接收恢复原因，在启动恢复、正常关闭或连接失败处理中使用。</p>
+    <p class="tl"><strong>34–35 行</strong>：通过 mutate 修改持久状态，逐条检查已有任务。</p>
+    <p class="tl"><strong>36 行</strong>：starting、running、steering 全部改为 unconfirmed，并记录原因；queued 不在这个条件里。</p>
+    <p class="tl"><strong>37 行</strong>：只要存在 unconfirmed，就把所属 Thread 加入 paused，重复检查也不重复添加。</p>
+    <p class="tl"><strong>38–40 行</strong>：结束遍历和 mutate；存储层将更新后的状态整体写回文件。</p>
+
+  </div></div>
+</div>
+<p>启动时恢复任务记录，再为有任务的会话安排调度。只有 queued、且会话没有暂停的任务可以继续；含不确定执行的会话停住。因此“排队消息保留”不等于“重启后每个会话都立即继续”。</p>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">执行中连接断了</div><div class="pattern-desc">发出调用后没有明确结果，任务可能成为 unconfirmed；队列暂停。明确失败或中断同样会暂停，防止后续输入建立在错误前提上。</div></div>
+<div class="pattern-card"><div class="pattern-title">用户核对后继续</div><div class="pattern-desc">先 /queue 查看记录，并检查同一会话的回答与实际结果，再 /continue。它解除暂停、唤醒调度器，不把 failed 或 unconfirmed 改回 queued。</div></div>
+</div>
+<p>若确实需要再执行一次，必须由用户另行明确提交新任务，不能把 /continue 当作“重试上一条”。这项选择在具备外部工具的 Agent 中尤其关键：结果未确认时，重复动作可能产生第二份副作用。本章先把这个判断点做成可查看、可继续的队列状态。</p>
+
+</section>
+
+<section class="screen animate-in" id="s04-screen-6">
+<h2 class="screen-heading">亲手验证：连续提交、断线重连、重启核对</h2>
+
+<p>在仓库根目录准备阶段环境。使用 Node.js 24 或更高版本，在 .env 中配置可用模型后运行检查。</p>
+<pre><code>cd stages/s04-events-messages
+npm ci
+test -f .env || cp .env.example .env
+npm run check
+npm run server</code></pre>
+<p>终端 1 保持服务运行；终端 2 进入相同目录运行 <code>npm run chat</code>。提交一个较长任务，不等回答结束就再输入两条普通消息，用 <code>/queue</code> 查看记录。预期同一 Thread 只有一轮执行，其余仍排队；若实际回答失败，应看到队列暂停，而不是强行把实验判成成功。</p>
+<ol>
+<li><strong>客户端退出：</strong>第一轮执行时 Ctrl+C 退出客户端，等待后重新连接并 /resume 同一 Thread。核对三条任务的状态、顺序与回答，不仅看终端是否出现文字。</li>
+<li><strong>显式追加：</strong>任务执行中输入 /append 请用三点概括，查看关联的 turnId。若目标已成功完成且仍可定位、当前队列未暂停，则观察它作为优先的新一轮执行；/append-to 可明确指定目标。队列暂停时先核对再 /continue；无法定位的目标会被拒绝。</li>
+<li><strong>服务重启：</strong>确保有一条正在执行、一条排队，再停止终端 1 的服务并重启。退出终端 2 的旧 CLI，重新运行 <code>npm run chat</code>，再 <code>/resume</code> 并选中同一 Thread。服务每次启动都会生成新令牌；旧 CLI 自动重连仍用旧令牌，会收到 401，重新启动 CLI 才会读取新的连接文件。此时 /queue 应显示执行项 unconfirmed、排队项保留且会话暂停；核对后 /continue，只处理后续排队项。</li>
+</ol>
+<pre><code>npm run lesson -- s04-queue
+npm run lesson -- s04-reconnect
+npm run lesson -- s04-restart
+npm test</code></pre>
+<p>这些离线实验用临时任务记录与假 Codex 验证顺序、重连和恢复规则，不调用模型；HTTP 实验需要本机监听权限。真实验证可在服务运行时执行 <code>npm run smoke</code>，会调用配置的模型；握手检查 <code>npm run check:server</code> 则要先停止服务。<a href="/course/changes.html#s04">→ 打开 s04 阶段演示与实践命令</a></p>
+<div class="quiz-container" id="s04-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="幂等键是消息 ID；内容一致才返回已有记录。" data-explanation-wrong="同 ID 相同内容复用记录，同 ID 不同内容返回 409；新 ID 即使文本相同也属于新提交。"><h3 class="quiz-question">一条消息的响应丢了，使用相同 clientMessageId 和相同内容再提交会怎样？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>总会新开一轮</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>返回已有任务记录，不重复创建</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>只要文本相同，任何 ID 都会合并</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="订阅和提交独立；快照同步当前状态，不重发用户输入。" data-explanation-wrong="本章不用 Last-Event-ID 补发历史，重连也不会调用 POST /messages。"><h3 class="quiz-question">SSE 连接断了又连上，客户端如何追上状态？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>重新提交所有未显示的输入</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>按事件序号重放所有历史事件</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>先收到完整快照，再接收后续事件；重连不提交消息</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="/continue 解除会话暂停并唤醒调度，不把不确定任务重新排队。" data-explanation-wrong="unconfirmed 表示结果未知；继续后续任务与重试这一条是两个不同决定。"><h3 class="quiz-question">服务重启后 A=unconfirmed、B=queued，你核对后执行 /continue，会怎样？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>解除暂停后处理 B，A 不自动重发</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>把 A 改回 queued 并重跑</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>删除 A 和 B，重新开始</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="b" data-explanation-right="目标已成功完成且仍可定位、当前队列未暂停时，追加优先于普通待执行消息新开一轮。队列暂停时不会自动执行；提交时目标无法定位则拒绝。" data-explanation-wrong="目标仍执行且队列未暂停时用 turn/steer；本题目标已成功完成，按追加优先规则新开一轮。failed 或 interrupted 会暂停队列，需核对后 /continue；提交时目标无法定位则拒绝。"><h3 class="quiz-question">你用 /append-to 指定的 Turn 已成功完成且仍可定位，当前队列未暂停，追加内容会去哪里？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>丢弃，因为只能修改执行中的 Turn</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>优先于普通待执行消息新开一轮，并引用目标任务</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>伪装成普通 FIFO 消息，永远排在最后</span></button></div><div class="quiz-feedback"></div></div>
+</div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s04-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s04-quiz">重新作答</button></div>
+<p>现在 Agent 能保存输入、控制执行顺序，并在客户端回来时同步状态。下一步给它明确的角色和工作方法：<a href="#module-s05">进入 s05 Agent 装配</a>。</p>
+
+</section>
+</div>
+</div>
+</section>
+
+<section class="module" id="module-s05">
+<div class="module-content">
+<header class="module-header animate-in">
+  <span class="module-number">s05</span>
   <h2 class="module-title">配置：装配一个 Agent</h2>
   <p class="module-subtitle">如何让同一套服务代码支持不同角色、工具和权限——答案是配置驱动。从 JSON 装配文件到工具白名单，逐层拆解 Agent 的组装逻辑。</p>
 </header>
 <div class="module-body">
+<p>本章以 s05 装配为入口，同时讲解 s06 工具与 s07 记忆配置；源码和命令采用 s07-memory 快照。下图定位 s05，工具与记忆的阶段位置可见 <a href="/course/changes.html#s06">s06</a>、<a href="/course/changes.html#s07">s07</a>。</p>
 
 <!-- Screen 1: 总架构 -->
 <section class="screen animate-in" id="m3-screen-1">
   <h2 class="screen-heading">全景：配置怎样变成可执行的能力</h2>
   <p>先看配置、执行和结果的分工：同一套服务读取角色、方法、工具与资料边界，共同决定 <span class="term" data-definition="结合角色指令、工具和资源边界来执行任务的智能体；本实例只有一套 Agent 配置，可运行多个会话。">Agent</span> "是谁、能做什么、能碰什么"。</p>
 
-<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构（本章源码取自 s07-memory 快照）：角色与工具怎样装配。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="856" alt="S05 总架构：角色与 Skills 怎样装配。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
@@ -761,7 +1184,7 @@
     <div class="pattern-card">
       <div class="pattern-title"><span class="term" data-definition="Model Context Protocol，一种标准化协议，允许模型通过统一接口发现和调用外部工具，不是一工具一服务">MCP（模型上下文协议）</span></div>
       <div class="pattern-desc">
-        s03 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
+        s07 的工具通过 <code>mcp-server.mjs</code> 提供一个本地 <span class="term" data-definition="通过网络请求与响应传递消息的协议；这里的工具服务只运行在本机。">HTTP</span> MCP 服务端，Codex 通过 MCP 协议发现并调用工具。<strong>一个 MCP 服务端承载本项目的工具</strong>，不是每个工具单独一个服务。
       </div>
     </div>
     <div class="pattern-card">
@@ -815,7 +1238,7 @@
         <p class="tl"><strong>tools.allow</strong>：5 个工具名组成白名单，list 和 call 都受此约束，模型不可自行扩权。</p>
         <p class="tl"><strong>dataBindings</strong>：四个资料源，originals 和 articles 仅 read，research 和 drafts 可 read+create。articles 指向 outputs 目录，是来源绑定别名，不是新目录。</p>
         <p class="tl"><strong>executionRef</strong>：引用 bindings.executions 中的策略条目，当前为 restricted-local（只读沙箱，禁止原生 shell 和文件写）。</p>
-        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，s03 不读取也不贡献跨会话记忆。</p>
+        <p class="tl"><strong>memory.use/contribute</strong>：两者均 false，这份配置不读取也不贡献跨会话记忆。</p>
       </div>
     </div>
   </div>
@@ -908,8 +1331,8 @@
   <div class="callout callout-accent">
     <span class="callout-icon">⚠️</span>
     <div class="callout-content">
-      <p class="callout-title">业务状态存 JSON，不存数据库（s03 专属）</p>
-      <p>s03 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s08 引入。</p>
+      <p class="callout-title">业务状态存 JSON，不存数据库（本章示例）</p>
+      <p>s07 不依赖 <span class="term" data-definition="关系型数据库，适合持久保存业务记录；本章未依赖它。">PostgreSQL</span> 或 <span class="term" data-definition="常用于缓存和协调的内存数据服务；本章未依赖它。">Redis</span>。业务任务状态（messages.json）使用<span class="term" data-definition="先完整写好新文件，再一次替换目标文件，避免读到只写了一半的内容。">原子替换写入</span>：先写临时文件，再 rename 到目标路径，防止写一半损坏。数据库层能力从 s08 引入。</p>
     </div>
   </div>
 
@@ -946,22 +1369,22 @@
     <div class="pattern-card">
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
-        <strong>s02 → s03</strong>：新增配置驱动 Agent、HTTP 服务层、MCP 工具协议、描述符版本机制、文件服务权限边界。本阶段业务状态使用本地 JSON，数据层升级独立安排在 s08。<br>
-        <strong>s03 → s08</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
+        <strong>s05–s07</strong>：本章覆盖 Agent 装配、工具与记忆配置，示例源码使用 s07-memory。s05 聚焦角色与 Skills，s06 提供工具能力，s07 提供记忆配置。<br>
+        <strong>s07 → s08</strong>：数据层升级，引入 PG/Redis，业务状态从本地 JSON 迁移到数据库。<br>
         本章源码取自 s07-memory 快照，不共享 app/ 的运行状态，监听 <code>127.0.0.1:4325</code>，本机开发，无多用户公网授权。
       </div>
     </div>
     <div class="pattern-card">
-      <div class="pattern-title">⌨️ 实践命令（s03 HTTP 服务）</div>
+      <div class="pattern-title">⌨️ 实践命令（s07 HTTP 服务）</div>
       <div class="pattern-desc">
         <code>cd stages/s07-memory &amp;&amp; npm ci</code><br>
         <code>test -f .env || cp .env.example .env</code>（填入 API Key/URL/Model，端口默认 4325）<br>
         <code>npm run check</code>（本地配置校验）<br>
-        <code>npm run server</code>（启动服务，s03 无需数据库迁移）<br>
+        <code>npm run server</code>（启动服务，s07 无需数据库迁移）<br>
         另开终端：<code>npm run chat</code><br>
         验证工具：在 chat 中输入 <code>/tools</code><br>
         <code>npm test &amp;&amp; npm run test:codex-tools</code><br>
-        <a href="../../?stage=s03">→ 进入 s03 练习</a>
+        <a href="/course/changes.html#s07">→ 进入 s07 练习</a>
       </div>
     </div>
     <div class="pattern-card">
@@ -1021,8 +1444,8 @@
     </div>
 
     <div class="quiz-question-block" data-correct="b"
-         data-explanation-right="正确。s03 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
-         data-explanation-wrong="A选项错误：s03 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
+         data-explanation-right="正确。s07 使用一个本地 HTTP MCP 服务端（mcp-server.mjs）承载本项目的工具，不是每个工具单独一个服务。Codex 通过 MCP 协议统一发现和调用这些工具。"
+         data-explanation-wrong="A选项错误：s07 的工具不是直接以函数形式注入 Codex 进程内部，而是通过本地 HTTP MCP 服务端暴露，Codex 通过 MCP 协议调用，两者在进程层面是分离的。C选项错误：MCP 服务端是单一服务承载本项目的工具，不是一工具一服务的架构。如果为每个工具单独启动一个服务，会造成端口管理复杂、启动成本高等问题；这里选择统一服务是本项目的实现，并非协议禁止拆成多个服务。">
       <h3 class="quiz-question">你新增第六个已授权工具，担心还要开第六个端口。按本项目结构，应该怎样接入？</h3>
       <div class="quiz-options">
         <button class="quiz-option" data-value="a">
@@ -1051,11 +1474,11 @@
 </div>
 </section>
 
-<section class="module" id="module-4">
+<section class="module" id="module-s08">
   <div class="module-content">
 
     <header class="module-header">
-      <span class="module-number">04</span>
+      <span class="module-number">s08</span>
       <h2 class="module-title">数据：状态有据可查</h2>
       <p class="module-subtitle">
         从单文件 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span> 到关系型<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>——理解 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 账本、<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 提醒铃、不可变 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 与原生历史各司其职，读完能向 AI 程序员准确定位状态与权限问题。
@@ -1069,15 +1492,15 @@
       <h2 class="screen-heading">四层架构：谁存什么、谁唤醒谁</h2>
 
       <p>
-        s03 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s08 在此基础上新增关系事务与内容版本追踪。
+        s04 用单文件 JSON 管理业务状态，Codex 原生历史独立维护；已具备 <span class="term" tabindex="0" data-definition="先进先出：同一会话的待执行任务按进入顺序处理。">FIFO</span> 排队与重启时暂停不确定执行的能力。s08 在此基础上新增关系事务与内容版本追踪。
         s08 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout">
         <div class="callout-text">
-          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为相比 s03 新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为本阶段新增或变化的部分。图描述的是职责划分，不是四个独立进程。
         </div>
       </div>
 
@@ -1486,10 +1909,10 @@
   </div>
 </section>
 
-<section class="module" id="module-5">
+<section class="module" id="module-s09">
   <div class="module-content">
     <header class="module-header">
-      <span class="module-number">05</span>
+      <span class="module-number">s09</span>
       <h2 class="module-title">知识：可用且有边界</h2>
       <p class="module-subtitle">从散落文件到结构化 <span class="term" tabindex="0" data-definition="由原始资料整理出的知识页面；每个生效页面指向一个可追踪的正文版本。">Wiki</span>，从各自判断到统一门禁——Agent 如何安全地"知道"正确的事。</p>
     </header>
@@ -1502,7 +1925,7 @@
 
       <p>s08 已经能可靠存储业务数据并调度任务。s09 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="968" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="968" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout" id="m5-callout-arch">
         <div class="callout-text">图为逻辑职责划分。蓝色是我们的程序，绿色是 Codex 原生能力，橙色突出本阶段新增。门禁位于同一服务进程中，不是另起一个网络服务。</div>

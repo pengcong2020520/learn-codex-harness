@@ -1,7 +1,7 @@
-<section class="module" id="module-2">
+<section class="module" id="module-s02">
 <div class="module-content">
 <header class="module-header animate-in">
-  <span class="module-number">02</span>
+  <span class="module-number">s02</span>
   <h2 class="module-title">多轮：让会话延续</h2>
   <p class="module-subtitle">同一本笔记本写下多页——理解 Thread 与 Turn 的层级、FIFO 缓冲的真实含义，以及 /resume 与长期记忆的本质区别。</p>
 </header>
@@ -12,7 +12,7 @@
   <h2 class="screen-heading">全景：从单轮到多轮的三个关键变化</h2>
   <p>s02 在 s01 基础上做了三处结构性扩展，先看差异再逐步拆解。</p>
 
-<figure class="architecture-figure"><a href="/course/assets/s02-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S02 总架构 SVG 大图"><img src="/course/assets/s02-architecture.svg" width="1600" height="754" alt="S02 总架构：多轮对话怎样延续。橙色为本阶段新增，白色为前面阶段已有，虚线为后面阶段才有，绿色为 Codex。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s02-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S02 总架构 SVG 大图"><img src="/course/assets/s02-architecture.svg" width="1600" height="754" alt="S02 总架构：多轮对话怎样延续。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
   <div class="callout callout-accent">
     <span class="callout-icon">📌</span>
@@ -92,7 +92,7 @@
     </div>
     <div class="pattern-card">
       <div class="pattern-title">超时后恢复原会话</div>
-      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s03 的服务能力。</div>
+      <div class="pattern-desc">s02 超时后停止连接，提示重启并使用 /resume。任务状态持久化、unconfirmed 与 /continue 队列恢复属于 s04 的服务能力。</div>
     </div>
   </div>
 </section>
@@ -205,7 +205,7 @@
       <div class="pattern-title">🔖 版本变化说明</div>
       <div class="pattern-desc">
         <strong>s01 → s02</strong>：新增 FIFO 输入缓冲、Thread 跨 Turn 复用、/resume 会话恢复、会话元数据本地索引。<br>
-        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层、配置驱动 Agent、MCP 工具协议、沿用 FIFO，并增加持久化任务状态与重启暂停。<br>
+        <strong>s02 → s03</strong>：增加 <span class="term" data-definition="客户端通过网络请求与服务端交换数据的协议；本章尚未提供HTTP服务。">HTTP</span> 服务层，让执行由常驻服务端持有；s04 提供持久任务队列与重启暂停，s05 讲 Agent 装配，s06 讲工具。<br>
         s02 <strong>仍无独立 HTTP 服务</strong>，不提供网页连接入口。
       </div>
     </div>
@@ -227,7 +227,7 @@
       <div class="pattern-desc">
         无跨会话原生记忆沉淀，/resume 恢复的是会话上下文而非长期记忆。<br>
         回答仍为整段聚合输出，不支持流式打印。<br>
-        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s03 起引入）。<br>
+        未接入 <span class="term" data-definition="模型执行引擎发现和调用外部工具的通信约定；本章尚未启用。">MCP 协议</span>，不支持外部工具调用（s06 引入）。<br>
         单机单 owner 单 Agent，不支持多账户或多 Agent 编排。
       </div>
     </div>
