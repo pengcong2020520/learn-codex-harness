@@ -1,0 +1,560 @@
+[
+  {
+    "id": "s08-persistence",
+    "stage": "s08-data-layer",
+    "title": "消息收到了，为什么还需要一条 outbox？",
+    "principle": "任务正文和待唤醒记录在同一个 PostgreSQL 事务里提交，才不会留下“已接收却永远没人处理”的任务。",
+    "problem": "用户提交“生成文章”，界面收到成功；如果先存任务、后发 Redis，而进程在两步之间退出，任务会一直排队。恢复时必须知道哪些提交值得继续投递。",
+    "change": {
+      "before": "早期产品队列用本地 JSON 保存任务，缺少关系约束与事务内的投递记录。",
+      "added": "把产品 tasks 与 outbox 放进同一个数据库事务。",
+      "kept": "每条普通消息仍由调度器交给 Codex 的 turn/start；Codex 保留完整会话历史和模型工具循环。"
+    },
+    "ownership": {
+      "codex": "保存原生 Thread/Turn 历史并执行每一轮推理与工具调用。",
+      "product": "保存用户提交原文、消息 ID、队列顺序、任务状态、会话归属与 outbox；这些数据用于恢复和审计。"
+    },
+    "concepts": [
+      {
+        "term": "事务",
+        "meaning": "一组数据库变更一起提交或一起回滚。这里覆盖 task 和 outbox，不覆盖 Redis 与模型执行。"
+      },
+      {
+        "term": "outbox",
+        "meaning": "数据库里的待投递记录。本项目按 Thread 合并并带 generation，不把全文再存一份到 Redis。"
+      },
+      {
+        "term": "幂等消息 ID",
+        "meaning": "同一 clientMessageId 和相同内容重试返回原任务；同 ID 换内容是冲突，不能借重试创建另一项工作。"
+      }
+    ],
+    "mechanism": "MessageService 先核对消息 ID。PostgresJobs.create 锁住该会话行，限制待执行数量，再插入 queued 任务，并把同一 client 传给 wake。事务提交以后，两条记录才一起可见。outbox 后续提醒调度器检查 Thread，数据库仍决定执行哪条消息。PG 存的是产品事实；不会因此接管 Codex 的整段上下文。",
+    "design": {
+      "decision": "在数据库内原子保存“任务”与“需要唤醒这个 Thread”。",
+      "reason": "Redis 可稍后恢复；已经提交的意图仍可从 PG 找回，不依赖一次网络发送成功。",
+      "alternative": "先 INSERT 再直接 SADD 更短，但进程在中间退出会遗失唤醒；把任务全塞 Redis 又分裂了状态来源。",
+      "cost": "需要管理数据库迁移与单实例执行器锁。事务只保证产品记录一致，不能宣称模型或工具副作用全局只执行一次。"
+    },
+    "source": {
+      "file": "stages/s08-data-layer/server/modules/data/jobs.mjs",
+      "needle": "`INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,target_turn_id,turn_id,agent_hash,status,created_at,error)",
+      "before": 2,
+      "after": 17,
+      "explanation": "看 queued INSERT 后的 await this.wake(job.threadId, client)：同一个 client 把两次 SQL 纳入外层 transaction；不是先提交任务再补发通知。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "正常：先保存意图，再派发",
+        "steps": [
+          {
+            "title": "请求先有身份",
+            "actor": "MessageService",
+            "event": "教学模拟 · submit({ clientMessageId: \"m1\", threadId: \"t1\", text: \"生成文章\" })",
+            "explain": "没有相同 ID 的旧任务才继续创建。浏览器等待的是提交结果，不是文章成稿。",
+            "state": {
+              "task": "不存在",
+              "outbox": "不存在",
+              "redis": "空",
+              "receipt": "等待提交"
+            },
+            "lines": []
+          },
+          {
+            "title": "事务内写入两份职责不同的记录",
+            "actor": "PostgresJobs",
+            "event": "教学模拟 · INSERT tasks(status=queued); wake(t1, client)",
+            "explain": "task 保存全文，outbox 只记录需要检查 t1；事务尚未提交时，外部不能把半套状态当成成功。",
+            "state": {
+              "task": "queued（事务内）",
+              "outbox": "t1（事务内）",
+              "redis": "空",
+              "receipt": "等待提交"
+            },
+            "lines": []
+          },
+          {
+            "title": "一起提交",
+            "actor": "PostgreSQL",
+            "event": "教学模拟 · transaction COMMIT",
+            "explain": "task 与 outbox 一起持久化，服务才能把 queued 返回给调用者。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / generation=1",
+              "redis": "空",
+              "receipt": "已接收"
+            },
+            "lines": []
+          },
+          {
+            "title": "稍后投递",
+            "actor": "RedisQueue",
+            "event": "教学模拟 · deliveries() → SADD ready t1",
+            "explain": "Redis 中只出现 Thread ID；原始消息和是否可执行仍向 PG 查询。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / 可补投",
+              "redis": "{t1}",
+              "receipt": "已接收"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "失败：提交后 Redis 暂时断开",
+        "steps": [
+          {
+            "title": "提交已经落库",
+            "actor": "PostgreSQL",
+            "event": "教学模拟 · tasks + outbox 已 COMMIT",
+            "explain": "故障发生在事务之后，所以不能把任务当作未提交而生成一个新 ID 重发。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / 到期",
+              "redis": "空",
+              "receipt": "已接收"
+            },
+            "lines": []
+          },
+          {
+            "title": "通知网络失败",
+            "actor": "RedisQueue",
+            "event": "教学模拟 · SADD 抛错，healthy=false",
+            "explain": "poll 提前返回，没有把 outbox 标记为延后投递；任务本身保持 queued。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / 仍到期",
+              "redis": "不可用",
+              "receipt": "已接收"
+            },
+            "lines": []
+          },
+          {
+            "title": "用户重试同一个请求",
+            "actor": "MessageService",
+            "event": "教学模拟 · existing clientMessageId=m1 → publicJob(existing)",
+            "explain": "相同内容返回原记录，不插入第二条任务，也不声称任务已经执行。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / 仍到期",
+              "redis": "不可用",
+              "receipt": "仍是 m1"
+            },
+            "lines": []
+          },
+          {
+            "title": "连接恢复再补投",
+            "actor": "RedisQueue",
+            "event": "教学模拟 · 下一次 poll: deliveries() → SADD",
+            "explain": "补投依靠持久 outbox；正常调度器随后再领取任务。",
+            "state": {
+              "task": "queued",
+              "outbox": "t1 / 下一次检查延后",
+              "redis": "{t1}",
+              "receipt": "仍是 m1"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run test:data",
+      "action": "在 s08 目录运行，定位“提交与 outbox 同事务”和“Redis 投递失败保留 outbox”两项。测试主动注入 SADD 失败，再恢复命令接口。",
+      "observe": [
+        "失败期间任务仍为 queued，deliveries() 仍能找到 outbox。",
+        "恢复后 Thread 被投递；同消息 ID 的端到端重试没有增加模型夹具请求。"
+      ],
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
+    },
+    "quiz": {
+      "question": "任务已提交，但 Redis 断开。用户想确认是否需要重新发一条，最合理的依据是什么？",
+      "options": [
+        "生成新消息 ID 重新提交，确保至少有一条跑起来。",
+        "查询原任务与 outbox，保留原消息 ID，让恢复机制补投。",
+        "只看 Redis 队列是否有正文；没有就说明提交失败。"
+      ],
+      "answer": 1,
+      "explanation": "PG 是任务事实来源；Redis 为空或不可用不能证明任务没提交。新 ID 会成为另一条业务请求。"
+    },
+    "reference": {
+      "session": "s10",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s10_task_system",
+      "adaptation": "借鉴“把任务状态从易丢失上下文移到持久存储”的因果讲法。本项目持久化用户消息队列，不实现参考中的 blockedBy 任务 DAG；进一步用 PG 事务保护 outbox。"
+    }
+  },
+  {
+    "id": "s08-dispatch",
+    "stage": "s08-data-layer",
+    "title": "Redis 丢了，哪条任务还能继续？",
+    "principle": "Redis 只负责提醒检查某个 Thread；PG 的状态转换决定领取，未知结果不能自动重发。",
+    "problem": "服务重启时，一条消息还没发给 Codex，另一条已经发出却没收到结果。把两条都重新执行，可能重复写文件；把两条都丢弃，又会吞掉已接收请求。",
+    "change": {
+      "before": "进程重启后，仅凭内存中“正在执行”的标记无法辨别请求是否到达 Codex。",
+      "added": "持久 outbox 补投 queued；starting/running/steering 恢复为 unconfirmed 并暂停 Thread。",
+      "kept": "同 Thread 的普通输入继续按序调度；Codex 仍执行 turn/start/steer，而非由 Redis 运行模型。"
+    },
+    "ownership": {
+      "codex": "返回 Turn 状态与完成事件；原生历史可供核对。",
+      "product": "用 Set 降低重复唤醒、用 PG 条件更新领取，维护暂停与未确认状态。"
+    },
+    "concepts": [
+      {
+        "term": "Redis Set",
+        "meaning": "无重复成员、无顺序保证的集合。ready 集合成员是 Thread ID，不是完整任务或消息顺序。"
+      },
+      {
+        "term": "条件领取",
+        "meaning": "UPDATE 只有在任务仍为 queued 时才改成 starting；重复提醒不能让同一 queued 任务同时被领取两次。"
+      },
+      {
+        "term": "unconfirmed",
+        "meaning": "请求可能已发出，但产品没有可信终态。需要核对历史；它既不是成功，也不是确定失败。"
+      }
+    ],
+    "mechanism": "每次 poll 先把 PG 到期的 Thread 放进 Set，再 SPOP 唤醒调度器。调度器重新读取 PG 顺序、暂停状态和活动 Turn，以 queued→starting 的条件更新领取。启动恢复只给 queued 补 outbox；执行中的任务转为 unconfirmed 并暂停对应会话。continue 解除暂停后可处理剩余 queued，不会重跑 unconfirmed。",
+    "design": {
+      "decision": "把可重建的唤醒与不可猜测的执行结果分开。",
+      "reason": "Redis 丢失可以从 PG 重建，但模型已执行到哪一步无法从丢失响应推断。",
+      "alternative": "把每次超时都重入队列，恢复速度看似更快，却会把未知结果变成重复副作用。",
+      "cost": "某些故障需要操作者核对历史。当前是单实例执行器，不把 Set 包装成高可用分布式工作流系统。"
+    },
+    "source": {
+      "file": "stages/s08-data-layer/server/modules/data/queue.mjs",
+      "needle": "const rows = await this.jobs.deliveries();",
+      "before": 1,
+      "after": 25,
+      "explanation": "顺着 deliveries→sAdd→delivered→sPop→deliver 阅读：Redis 搬运的始终是 row.thread_id；真正领取在 MessageService.dispatch 调用 store.patch(...,[\"queued\"])。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "正常：重复唤醒只领取一次",
+        "steps": [
+          {
+            "title": "两条请求已排队",
+            "actor": "PostgreSQL",
+            "event": "教学模拟 · tasks: A(sequence=1), B(sequence=2)",
+            "explain": "Set 不负责排序，队列顺序来自 tasks.sequence。",
+            "state": {
+              "taskA": "queued",
+              "taskB": "queued",
+              "readySet": "空",
+              "thread": "未暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "重复放入同一 Thread",
+            "actor": "RedisQueue",
+            "event": "教学模拟 · SADD ready t1；SADD ready t1",
+            "explain": "Set 里仍只有一个 t1；这只是减少重复通知，不代替数据库领取条件。",
+            "state": {
+              "taskA": "queued",
+              "taskB": "queued",
+              "readySet": "{t1}",
+              "thread": "未暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "拿到提醒后领取 A",
+            "actor": "MessageService",
+            "event": "教学模拟 · SPOP → dispatch(t1) → patch(A, starting, [queued])",
+            "explain": "调度器查询 PG，先选 A。另一次相同条件更新影响零行，不会再次启动 A。",
+            "state": {
+              "taskA": "starting",
+              "taskB": "queued",
+              "readySet": "空",
+              "thread": "未暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "完成事件使下一项可运行",
+            "actor": "SessionService",
+            "event": "教学模拟 · turn/completed(A) → wake(t1)",
+            "explain": "只有可信终态到达并写回状态，普通队列才继续 B。这里尚未把 B 画成完成。",
+            "state": {
+              "taskA": "completed",
+              "taskB": "queued",
+              "readySet": "待补投 t1",
+              "thread": "未暂停"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "失败：重启遇到未知结果",
+        "steps": [
+          {
+            "title": "A 已发出，B 未发出",
+            "actor": "Codex RPC",
+            "event": "教学模拟 · turn/start(A) 已发送，服务断开",
+            "explain": "A 可能产生了副作用；B 仍确定没有被派发。",
+            "state": {
+              "taskA": "running",
+              "taskB": "queued",
+              "readySet": "可能为空",
+              "thread": "连接失效"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复执行中的项",
+            "actor": "PostgresJobs",
+            "event": "教学模拟 · recover(): executing → unconfirmed",
+            "explain": "恢复逻辑不猜 A 的结局，并暂停含未确认任务的 Thread。",
+            "state": {
+              "taskA": "unconfirmed",
+              "taskB": "queued",
+              "readySet": "空",
+              "thread": "已暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "为未发送项恢复通知",
+            "actor": "PostgresJobs",
+            "event": "教学模拟 · SELECT queued threads → wake(t1)",
+            "explain": "outbox 可重建，但 deliveries 会过滤暂停会话，所以 B 不会立刻越过核对环节。",
+            "state": {
+              "taskA": "unconfirmed",
+              "taskB": "queued",
+              "readySet": "未投递",
+              "thread": "已暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "明确继续剩余队列",
+            "actor": "操作者与 MessageService",
+            "event": "教学模拟 · 核对历史后 continue(t1)",
+            "explain": "解除暂停使 B 可以被领取；A 保持 unconfirmed，不因 continue 被改回 queued。",
+            "state": {
+              "taskA": "unconfirmed",
+              "taskB": "可领取的 queued",
+              "readySet": "待补投 t1",
+              "thread": "未暂停"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test tests/scheduling.test.mjs",
+      "action": "在 s08 目录执行，观察“服务重启保留排队项”和“迟到的响应”用例。需要真实 PG/Redis 证据时再运行 npm run test:data。",
+      "observe": [
+        "重启后 A 为 unconfirmed、B 为 queued、会话 paused=true。",
+        "迟到的绑定响应不能把 unconfirmed 改为 running；原 turn/start 只调用一次。"
+      ],
+      "boundary": "本命令使用 TestJobs 与 RPC 夹具，不启动数据库、不调用远程模型；真实 Redis 补投由 test:data 验证。"
+    },
+    "quiz": {
+      "question": "重启后 A=unconfirmed，B=queued。continue 的正确含义是什么？",
+      "options": [
+        "把 A 与 B 都重新发送。",
+        "认定 A 失败，删除它再运行 B。",
+        "允许尚未发送的 B 继续；A 的未知结果仍需核对。"
+      ],
+      "answer": 2,
+      "explanation": "只有 queued 代表确定还没派发；解除暂停不是重试未知副作用，也不是伪造终态。"
+    },
+    "reference": {
+      "session": "s11",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s11_background_tasks",
+      "adaptation": "借鉴“发起、后台运行、结果通知是三件事”的分层。我们的 Redis poll 是业务输入调度，不是参考中的后台 bash；任务记录持久化也不意味着未知结果可以自动重放。"
+    }
+  },
+  {
+    "id": "s08-versions",
+    "stage": "s08-data-layer",
+    "title": "原文改了一句，旧产物还能读吗？",
+    "principle": "资源 ID 指向同一份资料，版本 ID 指向一次内容快照；来源变化应让依赖旧版本的产物失效。",
+    "problem": "原文价格从 100 元改成 120 元，摘要文件和最终文章却仍显示旧价格。仅仅把路径记在文章旁边，无法证明文章依据的是哪次内容。",
+    "change": {
+      "before": "文件路径能定位内容，却不能表达资料身份、当时版本和派生依赖。",
+      "added": "PG 中登记稳定 resourceId、版本和依赖；正文按 SHA-256 存为不可覆盖的 blob 文件。",
+      "kept": "原始资料与输出文件仍在工作区；文件工具继续执行路径、格式、尺寸与不可覆盖检查。"
+    },
+    "ownership": {
+      "codex": "读取当前工具结果，生成内容并显式提交 source_versions；不负责数据库失效传播。",
+      "product": "保存版本与声明的来源关系，读取时刷新来源并拒绝 stale/revoked 内容。"
+    },
+    "concepts": [
+      {
+        "term": "resourceId / versionId",
+        "meaning": "前者是资料身份，后者是具体快照。正文变了，resourceId 可不变，versionId 必须变。"
+      },
+      {
+        "term": "内容 blob",
+        "meaning": "以正文 SHA-256 命名的 .txt 文件；PG 保存引用与元数据，不存完整知识正文。"
+      },
+      {
+        "term": "失效传播",
+        "meaning": "来源换版本、被撤销或不可读时，依赖它的派生资源及下游资源不能继续当成有效内容返回。"
+      }
+    ],
+    "mechanism": "首次读原文时登记 resourceId 与 versionId，正文落到校验过的 blob。创建产物时记录明确的 source_versions。以后检测到原文哈希变化，version() 新建版本并递归 invalidate 下游。直接读取派生内容也会 refreshSources，因此无需等待模型主动重新打开原文才发现变化。原文删掉时旧 blob 仍可能存在，但不能绕过来源检查返回。",
+    "design": {
+      "decision": "内容快照与资源身份分开，依赖绑定到精确版本。",
+      "reason": "可回答“这份产物依据哪份资料的哪次内容”，还可在来源变化时拒绝陈旧产物。",
+      "alternative": "只保存路径或只比较输出哈希无法发现上游事实已变化；全文存 PG 会把数据库变成正文仓库。",
+      "cost": "这是已声明来源的可追溯性检查，不是自动事实核验。模型未声明的依据不会被神奇发现；失效产物需要重新生成。"
+    },
+    "source": {
+      "file": "stages/s08-data-layer/server/modules/data/resources.mjs",
+      "needle": "async version(row, body, client, humanEdited = false) {",
+      "before": 0,
+      "after": 18,
+      "explanation": "先插入 resource_versions，再更新 current_version；最后一行 invalidate 使用不变的 row.id 找下游。blob 写入发生在调用 version 前，属于文件系统步骤。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "正常：一份原文，两级派生",
+        "steps": [
+          {
+            "title": "读原文建立版本",
+            "actor": "Resources",
+            "event": "教学模拟 · read_file(inputs/source.md) → R1/V1",
+            "explain": "R1 是稳定身份，V1 绑定当前正文；工具返回两者供后续引用。",
+            "state": {
+              "original": "R1/V1 ready",
+              "summary": "不存在",
+              "article": "不存在",
+              "bodyStorage": "V1 的 hash.txt"
+            },
+            "lines": []
+          },
+          {
+            "title": "摘要声明依据",
+            "actor": "Resources",
+            "event": "教学模拟 · write_file(research/summary.md, source_versions=[R1/V1])",
+            "explain": "产品校验来源可读且仍是当前版本，再记录摘要依赖。",
+            "state": {
+              "original": "R1/V1 ready",
+              "summary": "R2/V2 ready",
+              "article": "不存在",
+              "bodyStorage": "V1、V2 的 blob"
+            },
+            "lines": []
+          },
+          {
+            "title": "文章引用摘要",
+            "actor": "Resources",
+            "event": "教学模拟 · write_file(outputs/article.md, source_versions=[R2/V2])",
+            "explain": "依赖链形成 R1→R2→R3；PG 记录关系，正文继续在文件中。",
+            "state": {
+              "original": "R1/V1 ready",
+              "summary": "R2/V2 ready",
+              "article": "R3/V3 ready",
+              "bodyStorage": "3 份内容快照"
+            },
+            "lines": []
+          },
+          {
+            "title": "读文章时核对上游",
+            "actor": "Resources",
+            "event": "教学模拟 · readById(R3) → refreshSources → readable",
+            "explain": "上游仍匹配时才返回内容；这不是仅靠文件存在判定有效。",
+            "state": {
+              "original": "R1/V1 ready",
+              "summary": "R2/V2 ready",
+              "article": "R3/V3 可读",
+              "bodyStorage": "哈希校验通过"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "失败：原文在外部被修改",
+        "steps": [
+          {
+            "title": "人修改原文文件",
+            "actor": "文件系统",
+            "event": "教学模拟 · inputs/source.md: 100 元 → 120 元",
+            "explain": "磁盘先变化；数据库尚未检测时不能把旧版本画成已更新。",
+            "state": {
+              "original": "R1/V1，磁盘已变",
+              "summary": "R2/V2 ready",
+              "article": "R3/V3 ready",
+              "bodyStorage": "旧快照仍保留"
+            },
+            "lines": []
+          },
+          {
+            "title": "直接打开旧文章",
+            "actor": "Resources",
+            "event": "教学模拟 · readById(R3) → refreshSources(R3)",
+            "explain": "读取派生内容会检查递归上游，而非等待模型重读原文。",
+            "state": {
+              "original": "正在比较原文哈希",
+              "summary": "待校验",
+              "article": "待校验",
+              "bodyStorage": "旧快照仍保留"
+            },
+            "lines": []
+          },
+          {
+            "title": "登记新版本并失效下游",
+            "actor": "Resources",
+            "event": "教学模拟 · version(R1, newBody) → invalidate(R1)",
+            "explain": "R1 身份保持，新建 V4；依赖旧内容的摘要、文章都标记 stale。",
+            "state": {
+              "original": "R1/V4 ready",
+              "summary": "R2/V2 stale",
+              "article": "R3/V3 stale",
+              "bodyStorage": "新增 V4 blob"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝返回旧结论",
+            "actor": "Resources",
+            "event": "教学模拟 · readable(R3) 抛错",
+            "explain": "旧正文没有被悄悄删除或改写，但本次读取失败，需要依据新版本重新生成。",
+            "state": {
+              "original": "R1/V4 ready",
+              "summary": "stale / 待重建",
+              "article": "stale / 拒绝读取",
+              "bodyStorage": "历史快照保留"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run test:data",
+      "action": "在 s08 目录执行，定位“稳定 ID、版本更新、来源失效传播”与“直接读取派生内容也发现外部修改”。",
+      "observe": [
+        "原文变化前后 resourceId 相同，versionId 不同。",
+        "直接读取旧摘要或最终产物失败；撤销后通过路径与 ID 两种入口都不能读取。"
+      ],
+      "boundary": "Node.js 24+，先安装本阶段依赖，并使 initdb、pg_ctl、redis-server 可执行；脚本创建临时 PostgreSQL/Redis，结束清理，不读取 .env、不操作现有数据库。全链路用真实 Codex 进程连接本机模型响应夹具，不调用远程模型；通过只能证明流程契约，不能证明回答质量。"
+    },
+    "quiz": {
+      "question": "原文已更新，旧摘要文件仍在。哪项足以说明摘要可以继续使用？",
+      "options": [
+        "文件存在且可以读取字节。",
+        "摘要正文的哈希没有变化。",
+        "这两项都不够，还需核对它引用的来源版本和当前权限。"
+      ],
+      "answer": 2,
+      "explanation": "内容完整与来源仍有效是两种检查。旧摘要可以字节完整却事实过期。"
+    },
+    "reference": {
+      "session": "s09",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s09_memory",
+      "adaptation": "借鉴“跨轮次保留的信息必须有明确生命周期”的思路。参考用 Markdown 记忆抽取/合并；本项目用版本化资料与声明依赖，不把 Wiki 或 blob 称作自动长期记忆。"
+    }
+  }
+]

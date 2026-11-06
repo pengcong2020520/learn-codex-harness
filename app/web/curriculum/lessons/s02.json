@@ -1,0 +1,364 @@
+[
+  {
+    "id": "s02-fifo",
+    "stage": "s02-multi-turn",
+    "title": "连续输入如何不丢、不抢跑",
+    "principle": "输入队列只安排下一条用户消息何时提交，不控制当前 Turn 如何推理。",
+    "problem": "用户在模型回答前连续输入 first、second。若只在等待输入时监听一行，second 会丢；若两行一到就同时启动任务，会让会话推进难以解释。",
+    "change": {
+      "before": "s01 执行一次问题后退出，没有持续读取用户输入的需求。",
+      "added": "readline 始终收行，提前到达的行进入 FIFO；交互循环 await 当前 runTurn 后才取下一行。",
+      "kept": "每一轮仍使用 s01 的事件缓冲和完成等待，同一 Thread 的原生上下文继续由 Codex 管理。"
+    },
+    "ownership": {
+      "codex": "执行单个 Turn 内的模型任务，并维护该会话上下文。",
+      "product": "保存提前输入的行、按顺序取出、解析本地命令，并决定何时提交下一轮。"
+    },
+    "concepts": [
+      {
+        "term": "FIFO",
+        "meaning": "先进先出：先输入的行先被 question() 取走，使用 queue.push 与 queue.shift。"
+      },
+      {
+        "term": "等待输入 / 等待完成",
+        "meaning": "question() 等用户行；runTurn() 等任务终态。模型忙时前者并没有占用一个正在等行的回调，所以新行进入队列。"
+      },
+      {
+        "term": "ReAct / 内部循环",
+        "meaning": "模型在一个任务中推理、调用工具、读取结果的往返。本项目把该循环交给 Codex，不由 FIFO 重写。"
+      }
+    ],
+    "mechanism": "createChatInput 的 line 事件一直存在：有 waiting 回调就直接交付，没有就 queue.push。question 先 queue.shift，再考虑 EOF，最后才创建等待者。因此管道提前写入多行也能保留。外层 while 对普通消息 await runTurn(prompt)，本轮结束前不会再次 question。它解决的是输入交付与会话推进的顺序，不是给模型加一个执行循环；队列仅在内存里，关闭输入时会清空。",
+    "design": {
+      "decision": "持续接收输入，但串行提交用户任务。",
+      "reason": "让输入速度与模型速度解耦：用户先打完也不丢行，同时保持每条消息对应一次清晰的会话推进。",
+      "alternative": "阻止用户输入只能掩盖节奏差异；不排队直接并发提交需要额外定义同一会话的并发语义。",
+      "cost": "后面的消息要等待前面的任务；当前 CLI 队列不持久化，连接致命失败后不会把剩余输入自动重发。"
+    },
+    "source": {
+      "file": "stages/s02-multi-turn/05-app-server.mjs",
+      "needle": "  terminal.on(\"line\", line => {",
+      "before": 3,
+      "after": 15,
+      "explanation": "上半段在“直接交给 waiting”和“存入 queue”之间选择；下半段 question 先取 queue，再判断 ended。真正保证逐轮等待的是同文件交互 while 中的 await runTurn(prompt)，不是 queue 数组自己在执行模型。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "两条输入比模型更快",
+        "steps": [
+          {
+            "title": "第一行被交给等待者",
+            "actor": "终端 → Node",
+            "event": "教学模拟 · line(\"first\") → waiting.resolve(first)",
+            "explain": "交互循环拿到 first 后启动当前轮次，等待其结果；第二次 question 尚未开始。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "空",
+              "input": "打开",
+              "nextSubmission": "暂不允许"
+            },
+            "lines": []
+          },
+          {
+            "title": "第二行进入缓冲",
+            "actor": "Node",
+            "event": "教学模拟 · line(\"second\") → queue.push(second)",
+            "explain": "因为 waiting 已清空，second 被保存，而不是丢弃或立即 turn/start。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "等待 U-1"
+            },
+            "lines": []
+          },
+          {
+            "title": "当前轮次成功结束",
+            "actor": "Node",
+            "event": "教学模拟 · await runTurn(first) returns → question()",
+            "explain": "只有 runTurn 返回，外层循环才开始取下一行。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "无",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "可取队首"
+            },
+            "lines": []
+          },
+          {
+            "title": "队首成为下一轮",
+            "actor": "Node",
+            "event": "教学模拟 · queue.shift() → turn/start(threadId=T-A)",
+            "explain": "复用同一 Thread，获得不同的 Turn ID；队列顺序转化为实际提交顺序。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-2（示意）",
+              "queue": "空",
+              "input": "打开",
+              "nextSubmission": "等待 U-2"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "连接中断时，不偷偷重发排队输入",
+        "steps": [
+          {
+            "title": "任务运行中还有待处理行",
+            "actor": "Node",
+            "event": "教学模拟 · activeTurn=U-1; queue=[second]",
+            "explain": "second 只是尚未提交的输入；不能把队列中的一行说成已经在 Codex 执行。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1（示意）",
+              "queue": "[second]",
+              "input": "打开",
+              "nextSubmission": "等待 U-1"
+            },
+            "lines": []
+          },
+          {
+            "title": "子进程提前退出",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · child close → fail(...) → chatInput.close()",
+            "explain": "致命连接错误拒绝当前等待，并关闭输入；close 清空队列，停止继续提交。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "U-1 失败收敛中",
+              "queue": "已清空",
+              "input": "关闭",
+              "nextSubmission": "禁止"
+            },
+            "lines": []
+          },
+          {
+            "title": "退出而非自动补发",
+            "actor": "Node",
+            "event": "教学模拟 · fatalError → outer finally",
+            "explain": "原会话历史可用于之后手动恢复，但内存排队不等于持久任务系统；未确认工作需要用户检查。",
+            "state": {
+              "thread": "T-A（示意）",
+              "activeTurn": "无",
+              "queue": "空",
+              "input": "关闭",
+              "nextSubmission": "不会自动重发"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='命令行输入|循环聊天' 05-app-server.test.mjs",
+      "action": "在 s02 目录运行既有管道输入与双轮测试，检查 first、second 的提交次序及旧轮次事件隔离。",
+      "observe": [
+        "提前输入的 first、second 依次被 question() 取出，EOF 后返回 null。",
+        "协议中只有一个 thread/start，两个 turn/start 共用同一 Thread ID。",
+        "模拟器插入上一轮的 STALE 事件，但答案不包含 STALE；/help、/exit 等命令不发给模型。"
+      ],
+      "boundary": "测试使用本地 Node 假 App Server；验证排队、命令路由与轮次隔离，不代表模型理解上下文的质量。"
+    },
+    "quiz": {
+      "question": "用户建议把 FIFO 长度改成 1，以限制模型一次任务只能调用一个工具。应如何回应？",
+      "options": [
+        "可行，队列长度就是内部工具调用次数。",
+        "应该把每个工具调用拆成一个新 Thread。",
+        "两者属于不同层；FIFO 排用户消息，工具往返发生在 Codex 的单个 Turn 内。"
+      ],
+      "answer": 2,
+      "explanation": "C 区分外部提交节奏与内部执行。A 会改变用户输入缓冲，却无法限制模型内部调用；B 会破坏一次任务的上下文，也不是当前架构的调度方式。"
+    },
+    "reference": {
+      "session": "s09",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s05_todo_write",
+      "adaptation": "借用“同样叫任务状态，究竟改变规划还是执行”的分层辨析。参考 todo_write 记录模型计划；我们的 FIFO 是用户输入缓冲，没有引入 TodoManager 或其三轮提醒。"
+    }
+  },
+  {
+    "id": "s02-resume",
+    "stage": "s02-multi-turn",
+    "title": "恢复会话，为何不是重新拼历史",
+    "principle": "恢复成功后才切换当前 Thread；检索元数据与保存原生正文是两份不同职责。",
+    "problem": "用户想接着昨天的问题聊。客户端能查到标题，却没有完整历史数组；有人因此准备把聊天正文复制进 Node，再每次重新发送。",
+    "change": {
+      "before": "s01 每次运行新建会话，退出后缺少选择旧会话的交互入口。",
+      "added": "按本项目范围检索 Thread 元数据，数字选择后调用 thread/resume，并在响应成功后更新 threadId。",
+      "kept": "历史正文、上下文装配与原生持久化仍由 Codex 管理，Node 不实现摘要压缩。"
+    },
+    "ownership": {
+      "codex": "列出并恢复原生 Thread，管理该 Thread 的历史上下文。",
+      "product": "限制搜索范围、展示编号、校验选择与目录，等待恢复成功后才切换当前会话。"
+    },
+    "concepts": [
+      {
+        "term": "元数据索引",
+        "meaning": "用于查找会话的 ID、名称、预览、目录等信息，不是一份完整消息正文副本。"
+      },
+      {
+        "term": "thread/resume",
+        "meaning": "重新接入指定原生会话；后续 turn/start 使用恢复后的 Thread ID。"
+      },
+      {
+        "term": "恢复与记忆",
+        "meaning": "恢复延续同一个会话；跨会话记忆在新会话中召回信息。s02 关闭后者，不能用恢复成功证明记忆开启。"
+      }
+    ],
+    "mechanism": "listProjectThreads 从本项目的运行目录和索引限定范围，分页读取 thread/list，再按名称、开场预览、ID 过滤。用户选数字后先检查项目目录，再 await thread/resume；selectThread 只在成功响应之后执行。于是取消、无结果、无效选择或恢复失败都不会提前覆盖当前 threadId。excludeTurns=true 仅是不在响应里带回完整 Turn 列表，不是删除原生历史。",
+    "design": {
+      "decision": "客户端保存检索线索，把完整历史交给同一个原生引擎恢复。",
+      "reason": "避免应用与执行引擎维护两份不一致的历史，同时让切换会话成为“成功才提交”的状态变更。",
+      "alternative": "先改 threadId 再发恢复请求，会在失败后留下错误的当前会话；自行拼接历史还要承担排序、工具消息配对与压缩。",
+      "cost": "检索不是任意消息全文搜索；历史、目录或引擎状态不可用时恢复仍可能失败，且使用当前配置的模型。"
+    },
+    "source": {
+      "file": "stages/s02-multi-turn/05-app-server.mjs",
+      "needle": "      const result = await request(\"thread/resume\", {",
+      "before": 4,
+      "after": 6,
+      "explanation": "先看数字选择和 ensureThreadDirectory，再看 await 后才执行 selectThread(result)。错误发生时不会走到这个赋值点。excludeTurns 影响响应载荷，不代表清空历史。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "选择旧会话并继续提问",
+        "steps": [
+          {
+            "title": "搜索尚不切换当前会话",
+            "actor": "Node",
+            "event": "教学模拟 · listProjectThreads(request, root, keyword)",
+            "explain": "搜索只建立候选列表；当前 Thread A 保持不变，也没有模型生成。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "无",
+              "phase": "搜索候选",
+              "history": "由 Codex 保管",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "编号落到一个候选",
+            "actor": "用户 → Node",
+            "event": "教学模拟 · selected = threads[Number(value) - 1]",
+            "explain": "编号指向 Thread B；必须先验证它确实来自本项目候选和目录。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "选择已校验",
+              "history": "由 Codex 保管",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复成功才换引用",
+            "actor": "Node ↔ Codex",
+            "event": "教学模拟 · await thread/resume → selectThread(result)",
+            "explain": "成功响应返回 B，才把当前 threadId 从 A 改为 B。",
+            "state": {
+              "currentThread": "B（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复成功",
+              "history": "继续 B 的原生历史",
+              "generation": "尚未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "新问题进入恢复的会话",
+            "actor": "Node",
+            "event": "教学模拟 · turn/start({ threadId: B, input: [...] })",
+            "explain": "用户的新输入触发新的 Turn，沿用 B 的上下文；无需 Node 重发旧消息数组。",
+            "state": {
+              "currentThread": "B（示意）",
+              "selected": "B（示意）",
+              "phase": "新轮次已提交",
+              "history": "继续 B 的原生历史",
+              "generation": "此时才发起"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "恢复 B 失败，继续留在 A",
+        "steps": [
+          {
+            "title": "选择 B 但暂不提交切换",
+            "actor": "Node",
+            "event": "教学模拟 · await request(\"thread/resume\", { threadId: B, ... })",
+            "explain": "await 期间当前 threadId 仍是 A。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复等待中",
+              "history": "A、B 原生历史未改",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复请求报错",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · request rejects; selectThread(result) is skipped",
+            "explain": "没有成功结果就没有切换；交互循环捕获操作错误并允许继续输入。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "B（示意）",
+              "phase": "恢复失败",
+              "history": "A、B 原生历史未改",
+              "generation": "未发起"
+            },
+            "lines": []
+          },
+          {
+            "title": "下一条普通消息仍发给 A",
+            "actor": "Node",
+            "event": "教学模拟 · turn/start({ threadId: A, ... })",
+            "explain": "这是保留原状态的直接结果，不是失败后另外创建一个空会话。",
+            "state": {
+              "currentThread": "A（示意）",
+              "selected": "无",
+              "phase": "继续原会话",
+              "history": "沿用 A",
+              "generation": "用户下一次提问才发起"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='resume 搜索|resume 取消' 05-app-server.test.mjs",
+      "action": "在 s02 目录运行既有恢复测试，比较成功选择和 simulated resume failure 后的 turn/start 参数。",
+      "observe": [
+        "成功路径不调用 thread/start；后续问题沿用 selected Thread ID 和只读权限。",
+        "取消、无结果或恢复错误后，后续问题仍发给原 Thread。",
+        "模拟测试会覆盖无效编号，但不会向真实模型发送内容。"
+      ],
+      "boundary": "这些夹具验证的是会话引用和错误恢复。真实对话连贯性需在有模型配置时另做提问检查，不能由离线测试预先保证。"
+    },
+    "quiz": {
+      "question": "恢复接口设置 excludeTurns:true，产品经理担心旧聊天被清空。正确解释是什么？",
+      "options": [
+        "它减少恢复响应中的历史列表，原生历史仍由 Codex 管理；后续继续同一 Thread。",
+        "它会永久删除旧 Turn，所以每次恢复都应从业务库复制正文。",
+        "只要使用 /resume，就同时打开了跨会话长期记忆。"
+      ],
+      "answer": 0,
+      "explanation": "A 区分响应载荷与底层状态。B 将“不回传”误当成“删除”；C 将同一会话恢复误当成跨会话记忆，s02 明确关闭 memories。"
+    },
+    "reference": {
+      "session": "s08",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s08_context_compact",
+      "adaptation": "借用“当前请求、历史记录、摘要分别保存什么”的边界分析。参考自行裁剪 messages 并写 transcript；我们不移植其字符阈值或摘要器，恢复和上下文管理继续由 Codex 负责。"
+    }
+  }
+]

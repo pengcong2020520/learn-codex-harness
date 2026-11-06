@@ -48,3 +48,11 @@ test('静态服务不暴露状态、环境和课程brief；课程及工作台可
  const r=await fetch(f.url+'/');assert.equal(r.status,200);assert.match(await r.text(),/Agent Atelier/);
  const shared=await fetch(f.url+'/app/session-events.js');assert.equal(shared.status,200);assert.match(shared.headers.get('content-type'),/javascript/);assert.match(await shared.text(),/export function applySessionEvent/);
 });
+
+test('默认目标 id 与工作台前端的阶段键一致，旧 demoN 链接映射到对应目标', async () => {
+  const { defaultTargets } = await import('../server.mjs');
+  const main = fs.readFileSync(new URL('../public/app/main.js', import.meta.url), 'utf8');
+  const keys = [...main.slice(main.indexOf('const stages={'), main.indexOf('};', main.indexOf('const stages={'))).matchAll(/^ (s\d\d):\{/gm)].map(m => m[1]);
+  assert.deepEqual(defaultTargets.filter(t => t.id !== 'project').map(t => t.id), keys);
+  assert.match(main, /demo\(\[1-5\]\)\$\/,\(_,n\)=>\['s01','s02','s03','s08','s09'\]\[n-1\]/);
+});

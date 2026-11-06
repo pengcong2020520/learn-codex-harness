@@ -8,11 +8,12 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
 // CLI 与工作台共用的浏览器可用模块，从 shared/ 直接提供，不复制一份。
 const sharedModules = { '/app/session-events.js': fileURLToPath(new URL('../shared/session-events.mjs', import.meta.url)) };
-// Demo N 的源码快照位于仓库 stages/ 下；课程构建也从这里取目录，避免两处各写一份。
-// 过渡状态：Demo 3（可配置 Agent）的工作台连接与默认源码暂取自 s07-memory（课程里 s05-agent-config、s05-skills 两课和 s06-tool-registry、s06-mcp、s06-workspace 三课用 stage 字段改取 s05-agent-assembly、s06-tools 的源码，实验也在对应目录运行），下面的 port 只是编号推算的展示值，实际连接读取该目录的 .data/connection.json（s07 默认端口 4325）。
+// 仅供工作台默认目标使用，保留旧版目标编号与连接行为；课程构建独立扫描 stages/。
+// 可配置 Agent 目标连接 s07-memory；其机制课程对应 s05/s06。port 是展示值，实际连接读取各目录的 .data/connection.json。
 export const stageDirs = ['s01-single-turn','s02-multi-turn','s07-memory','s08-data-layer','s09-knowledge-layer'].map(name => `stages/${name}`);
 export const defaultTargets = [
-  ...[1,2,3,4,5].map(n => ({ id:`s0${n}`,name:`s0${n}`,root:path.resolve(root,'..',stageDirs[n-1]),live:n>=3,port:4310+n })),
+  // 目标 id 与工作台前端一致（s01、s02、s03、s08、s09）；n 是工作台序号。
+  ...['s01','s02','s03','s08','s09'].map((id, i) => ({ id,name:id,root:path.resolve(root,'..',stageDirs[i]),live:i>=2,port:4311+i })),
   {id:'project',name:'当前项目',root,live:true,port:4317}
 ];
 const readRoutes = new Set(['/health','/workbench','/workflows','/sessions','/state','/events','/tools','/memory','/preferences','/workspace','/workspace/read','/resources/read','/knowledge','/knowledge/pages','/knowledge/read','/knowledge/job']);

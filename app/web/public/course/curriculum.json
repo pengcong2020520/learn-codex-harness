@@ -4,37 +4,48 @@
     "commit": "ce8f9f186058939da54c9d6fead78dfb5d0fd6c3",
     "method": "每节一个机制：问题、结构、源码、推演、实验、增量。基于本项目重新编写，不搬运其执行循环。"
   },
-  "demos": [
+  "chapters": [
     {
+      "id": "s01",
+      "dir": "stages/s01-single-turn",
       "name": "单轮问答",
-      "focus": "复用 Codex 执行闭环",
-      "dir": "stages/s01-single-turn"
+      "focus": "复用 Codex 执行闭环"
     },
     {
+      "id": "s02",
+      "dir": "stages/s02-multi-turn",
       "name": "多轮会话",
-      "focus": "输入顺序与原生历史",
-      "dir": "stages/s02-multi-turn"
+      "focus": "输入顺序与原生历史"
     },
     {
-      "name": "可配置 Agent",
-      "focus": "装配、Skills、工具与工作区",
-      "dir": "stages/s07-memory"
+      "id": "s05",
+      "dir": "stages/s05-agent-assembly",
+      "name": "Agent 装配",
+      "focus": "定义、角色与 Skills"
     },
     {
+      "id": "s06",
+      "dir": "stages/s06-tools",
+      "name": "工具",
+      "focus": "工具白名单、资料边界与 MCP"
+    },
+    {
+      "id": "s08",
+      "dir": "stages/s08-data-layer",
       "name": "数据层",
-      "focus": "持久任务与资源版本",
-      "dir": "stages/s08-data-layer"
+      "focus": "持久任务与资源版本"
     },
     {
+      "id": "s09",
+      "dir": "stages/s09-knowledge-layer",
       "name": "知识层",
-      "focus": "可信门禁与 Wiki / RAG",
-      "dir": "stages/s09-knowledge-layer"
+      "focus": "可信门禁与 Wiki / RAG"
     }
   ],
   "lessons": [
     {
       "id": "s01-transport",
-      "demo": 1,
+      "stage": "s01-single-turn",
       "title": "先建立通信，再派发任务",
       "principle": "本地握手只证明 Node 能与 Codex 通信，不证明远端模型已经可用。",
       "problem": "终端打印了“握手成功”，用户便认为密钥和模型都验证通过；直到发送真实问题才失败。需要把本地连接与远端生成分成两项可观察的事实。",
@@ -218,7 +229,7 @@
     },
     {
       "id": "s01-lifecycle",
-      "demo": 1,
+      "stage": "s01-single-turn",
       "title": "收到请求，不等于完成任务",
       "principle": "用 Thread 定位会话、Turn 定位任务，并等待该 Turn 的成功终态后才输出答案。",
       "problem": "turn/start 已返回，界面却没有答案；另一次完成事件来得太早，程序又一直等待。若把请求响应当结果，或等拿到 turnId 才开始收事件，两种时序都会出错。",
@@ -402,7 +413,7 @@
     },
     {
       "id": "s02-fifo",
-      "demo": 2,
+      "stage": "s02-multi-turn",
       "title": "连续输入如何不丢、不抢跑",
       "principle": "输入队列只安排下一条用户消息何时提交，不控制当前 Turn 如何推理。",
       "problem": "用户在模型回答前连续输入 first、second。若只在等待输入时监听一行，second 会丢；若两行一到就同时启动任务，会让会话推进难以解释。",
@@ -586,7 +597,7 @@
     },
     {
       "id": "s02-resume",
-      "demo": 2,
+      "stage": "s02-multi-turn",
       "title": "恢复会话，为何不是重新拼历史",
       "principle": "恢复成功后才切换当前 Thread；检索元数据与保存原生正文是两份不同职责。",
       "problem": "用户想接着昨天的问题聊。客户端能查到标题，却没有完整历史数组；有人因此准备把聊天正文复制进 Node，再每次重新发送。",
@@ -770,7 +781,7 @@
     },
     {
       "id": "s05-agent-config",
-      "demo": 3,
+      "stage": "s05-agent-assembly",
       "title": "配置是装配合同，不是临时提示词",
       "principle": "让角色、Skill 和执行策略在启动时形成一个版本，运行中发现变更就停止继续使用旧版本。",
       "problem": "运营修改了角色文件，旧会话仍按旧角色执行；只看文件已经保存，无法判断运行中的 Agent 到底采用哪套规则。",
@@ -951,12 +962,11 @@
         "session": "s03",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
         "adaptation": "借用“在执行之前用代码形成边界”的推理方式。参考用 deny/rule/ask 三道门展示位置；本项目采用受限配置和版本检查，不移植字符串黑名单或交互审批流程。"
-      },
-      "stage": "s05-agent-assembly"
+      }
     },
     {
       "id": "s05-skills",
-      "demo": 3,
+      "stage": "s05-agent-assembly",
       "title": "Skill 给方法，权限仍要单独核验",
       "principle": "只有已声明且经 Codex 发现核验的 Skill 才进入有效集合；Skill 正文不会改变执行策略。",
       "problem": "把一个 SKILL.md 放进工作区后，用户以为其中提到的命令就自动可执行；另一个意外被原生引擎发现的 Skill 也可能超出这个 Agent 的装配范围。",
@@ -1137,12 +1147,11 @@
         "session": "s11",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
         "adaptation": "借用“目录与正文分开、需要时加载”的认知顺序。参考自己解析 YAML 并用 load_skill 返回 tool_result；这里原生 Codex 负责解析与注入，我们教的是发现核验、显式输入与权限边界。"
-      },
-      "stage": "s05-agent-assembly"
+      }
     },
     {
       "id": "s06-tool-registry",
-      "demo": 3,
+      "stage": "s06-tools",
       "title": "工具名、参数合同和实现怎样接在一起",
       "principle": "工具必须先登记并授权，参数校验通过后才会调用 handler。",
       "problem": "模型输出了一个看似正确的工具名，却夹带了额外参数；如果程序只按名称查函数，错误输入就可能直接进入文件或网络操作。",
@@ -1330,12 +1339,11 @@
         "session": "s02",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
         "adaptation": "借用“增加工具时稳定执行骨架，只扩展合同和分发”的教学对比。参考 TOOLS+TOOL_HANDLERS 是小字典；本项目增加受信配置、Schema 编译、白名单与版本快照，而不修改 Codex loop。"
-      },
-      "stage": "s06-tools"
+      }
     },
     {
       "id": "s06-mcp",
-      "demo": 3,
+      "stage": "s06-tools",
       "title": "MCP 是调用边界，不是一工具一服务",
       "principle": "同一个本地 MCP 入口承载一版工具注册表，发现与调用最终落到同一套授权和实现。",
       "problem": "开发者准备给五个工具开五个端口；另一个同事把产品网页直接指向 MCP URL，却收到 403。他们把工具数量、传输入口和调用身份混在了一起。",
@@ -1523,12 +1531,11 @@
         "session": "s02",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s02_tool_use",
         "adaptation": "沿用参考“稳定骨架、统一分发”的可视化方式，将模型名义调用追到真正 handler；本项目中间多了 MCP 传输与入口核验。参考 s02 的直接字典调用不能冒充本项目的跨进程协议。"
-      },
-      "stage": "s06-tools"
+      }
     },
     {
       "id": "s06-workspace",
-      "demo": 3,
+      "stage": "s06-tools",
       "title": "在工作区里，也不等于有权读写",
       "principle": "工具授权决定能调用什么，资料与产物规则进一步决定能访问哪个路径、执行哪种操作。",
       "problem": "Agent 被允许 write_file，也成功在 outputs 创建了文件，于是用户以为它一定能读取所有 outputs；但在收窄资料绑定的配置中，读回仍被拒绝。",
@@ -1701,12 +1708,11 @@
         "session": "s03",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
         "adaptation": "借用“在实际副作用之前画出判断闸门”的教学方式。参考通过规则与人工确认示意权限位置；本项目用明确来源/动作、文件属性和不可覆盖规则执行边界，不把示例黑名单当强沙箱。"
-      },
-      "stage": "s06-tools"
+      }
     },
     {
       "id": "s08-persistence",
-      "demo": 4,
+      "stage": "s08-data-layer",
       "title": "消息收到了，为什么还需要一条 outbox？",
       "principle": "任务正文和待唤醒记录在同一个 PostgreSQL 事务里提交，才不会留下“已接收却永远没人处理”的任务。",
       "problem": "用户提交“生成文章”，界面收到成功；如果先存任务、后发 Redis，而进程在两步之间退出，任务会一直排队。恢复时必须知道哪些提交值得继续投递。",
@@ -1898,7 +1904,7 @@
     },
     {
       "id": "s08-dispatch",
-      "demo": 4,
+      "stage": "s08-data-layer",
       "title": "Redis 丢了，哪条任务还能继续？",
       "principle": "Redis 只负责提醒检查某个 Thread；PG 的状态转换决定领取，未知结果不能自动重发。",
       "problem": "服务重启时，一条消息还没发给 Codex，另一条已经发出却没收到结果。把两条都重新执行，可能重复写文件；把两条都丢弃，又会吞掉已接收请求。",
@@ -2090,7 +2096,7 @@
     },
     {
       "id": "s08-versions",
-      "demo": 4,
+      "stage": "s08-data-layer",
       "title": "原文改了一句，旧产物还能读吗？",
       "principle": "资源 ID 指向同一份资料，版本 ID 指向一次内容快照；来源变化应让依赖旧版本的产物失效。",
       "problem": "原文价格从 100 元改成 120 元，摘要文件和最终文章却仍显示旧价格。仅仅把路径记在文章旁边，无法证明文章依据的是哪次内容。",
@@ -2282,7 +2288,7 @@
     },
     {
       "id": "s09-gate",
-      "demo": 5,
+      "stage": "s09-knowledge-layer",
       "title": "工具参数里的“我是管理员”为什么不算身份？",
       "principle": "身份由服务端从当前任务和 Turn 绑定产生，模型只能填写业务参数，不能自己授予权限。",
       "problem": "普通问答里模型调用 kb_submit_revision，并在 JSON 里自称 owner 或维护任务。如果服务端信这些字段，一段提示就可能扩大写入权限。",
@@ -2473,7 +2479,7 @@
     },
     {
       "id": "s09-mounts",
-      "demo": 5,
+      "stage": "s09-knowledge-layer",
       "title": "读得到 inputs，不等于读得到所有知识库",
       "principle": "知识库挂载决定可见范围，文件路径入口也必须经过同一边界，不能用宽目录权限绕过窄知识库权限。",
       "problem": "Agent 可以读取 inputs，但只挂载了 general。另一位 Agent 的 private 原文也位于 inputs/private；如果只检查父目录，read_file 就会绕过知识库隔离。",
@@ -2664,7 +2670,7 @@
     },
     {
       "id": "s09-wiki",
-      "demo": 5,
+      "stage": "s09-knowledge-layer",
       "title": "两次更新同时提交，谁能成为当前 Wiki？",
       "principle": "Wiki 提交必须同时证明“我依据的来源仍有效”和“我修改的页面版本仍是当前版本”。",
       "problem": "两个维护任务都读到页面 V1，分别改写并提交。若后到者直接覆盖，先到者的更新会消失；即使没有并发，原文变化也可能让新稿引用过时事实。",
@@ -2856,7 +2862,7 @@
     },
     {
       "id": "s09-rag",
-      "demo": 5,
+      "stage": "s09-knowledge-layer",
       "title": "新索引失败，为什么旧索引指针不能先切？",
       "principle": "向量与关键词索引属于同一个版本；两边完成并核对来源后才推进指针，检索再按名次融合。",
       "problem": "一次重建只写完 Chroma 的部分向量，BM25 文件尚未保存。如果立即切为新索引，检索会混合两套资料版本，或给出缺块结果。",
@@ -3048,7 +3054,7 @@
     },
     {
       "id": "s09-modes",
-      "demo": 5,
+      "stage": "s09-knowledge-layer",
       "title": "配置改成 RAG，为什么旧会话不能马上接着聊？",
       "principle": "期望模式、有效模式和 Thread 绑定是不同状态；配置变更经过重启，能力版本变化后新建 Thread。",
       "problem": "操作者把 general 从 Wiki 改成 RAG，索引尚未完成；或完成后继续在旧 Thread 聊天。如果界面只显示配置值，会让用户误以为本轮已经按新方式检索。",

@@ -1,0 +1,364 @@
+[
+  {
+    "id": "s01-transport",
+    "stage": "s01-single-turn",
+    "title": "先建立通信，再派发任务",
+    "principle": "本地握手只证明 Node 能与 Codex 通信，不证明远端模型已经可用。",
+    "problem": "终端打印了“握手成功”，用户便认为密钥和模型都验证通过；直到发送真实问题才失败。需要把本地连接与远端生成分成两项可观察的事实。",
+    "change": {
+      "before": "普通脚本能启动另一个程序，但尚不知道如何给执行引擎下指令、接收响应。",
+      "added": "通过 stdio 传输带请求 ID 的消息，按 initialize 响应 → initialized 通知的顺序完成握手。",
+      "kept": "远端模型调用、原生推理与工具循环继续由 Codex App Server 执行。"
+    },
+    "ownership": {
+      "codex": "接受初始化和后续 Thread/Turn 请求，内部对接远端模型服务。",
+      "product": "启动子进程、读写行消息、匹配请求 ID、记录脱敏日志、处理连接失败并释放资源。"
+    },
+    "concepts": [
+      {
+        "term": "stdio",
+        "meaning": "进程的标准输入与输出。Node 写 child.stdin，读取 child.stdout，每行是一条结构化消息；stderr 单独用于错误输出。"
+      },
+      {
+        "term": "请求与通知",
+        "meaning": "请求有 id，客户端要等待对应响应；initialized 是单向通知，不再等待一条同名响应。"
+      },
+      {
+        "term": "initialize / initialized",
+        "meaning": "先发初始化请求并等待成功，再通知对方客户端已就绪；它发生在用户任务之前。"
+      }
+    ],
+    "mechanism": "spawn 创建本机 Codex 子进程后，Node 建立输入输出管道。request() 先把等待者放入 pending，再把带 id 的消息写入 stdin；stdout 返回相同 id 时，找到并结束对应等待者。因此 await initialize 结束后才能发送 initialized。握手模式接着只请求 model/list，没有 turn/start，根本没有进入远端生成链路；不能据此承诺 API Key 有效。",
+    "design": {
+      "decision": "本地调用采用子进程管道，并把握手检查与真实任务分开。",
+      "reason": "无需为最小 Demo 另开 HTTP 服务；可以先定位协议或启动问题，再检查模型服务问题。",
+      "alternative": "Node 直接调用模型 API 会让产品层承担模型协议与执行循环，也失去本例复用 Codex 的边界。",
+      "cost": "子进程退出、消息解析失败或请求超时都需要显式收敛；本地就绪仍不能替代远端生成验收。"
+    },
+    "source": {
+      "file": "stages/s01-single-turn/05-app-server.mjs",
+      "needle": "    await request(\"initialize\", {",
+      "before": 1,
+      "after": 12,
+      "explanation": "先看 await 与后面的 send：初始化响应未完成时不会发送 initialized。再看 check-server 分支：只调用 model/list 并返回，日志明确说没有 turn/start。管道建立和 pending 匹配位于同文件上方。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "握手检查成功，尚未生成",
+        "steps": [
+          {
+            "title": "拉起本机执行引擎",
+            "actor": "Node",
+            "event": "教学模拟 · spawn(..., { stdio: [\"pipe\", \"pipe\", \"pipe\"] })",
+            "explain": "子进程拥有独立执行职责；现在只是管道可用，还没有完成协议初始化。",
+            "state": {
+              "connection": "管道已建立",
+              "pending": "无",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "等待 initialize 响应",
+            "actor": "Node → Codex",
+            "event": "教学模拟 · request(\"initialize\", { clientInfo, capabilities: null })",
+            "explain": "请求 ID 进入 pending；即使进程已经启动，也必须等对应响应回来。",
+            "state": {
+              "connection": "初始化中",
+              "pending": "initialize 请求",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认客户端就绪",
+            "actor": "Node",
+            "event": "教学模拟 · send({ method: \"initialized\", params: {} })",
+            "explain": "initialize 的等待者已完成，才发不需要响应的通知。就绪范围仍然只有本地协议。",
+            "state": {
+              "connection": "握手成功",
+              "pending": "无",
+              "initialized": "是",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "列出目录并结束检查",
+            "actor": "Node",
+            "event": "教学模拟 · request(\"model/list\", {}) → return → finally",
+            "explain": "能够读取本地模型目录，随后关闭子进程；这次执行没有提交生成任务。",
+            "state": {
+              "connection": "检查结束并清理",
+              "pending": "无",
+              "initialized": "是",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "initialize 一直没有响应",
+        "steps": [
+          {
+            "title": "已发送但仍在等待",
+            "actor": "Node",
+            "event": "教学模拟 · pending.set(id, { resolve, reject, timer })",
+            "explain": "写入管道不等于收到响应。等待者仍占着这个请求 ID，后续初始化步骤不能越过 await。",
+            "state": {
+              "connection": "初始化中",
+              "pending": "initialize 请求",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "请求超时成为连接失败",
+            "actor": "Node",
+            "event": "教学模拟 · setTimeout(() => fail(new Error(...)), launch.timeoutMs)",
+            "explain": "fail 拒绝 pending 中的等待者并记录 fatalError；不会为了继续演示而伪造握手成功。",
+            "state": {
+              "connection": "失败",
+              "pending": "已拒绝并清空",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          },
+          {
+            "title": "统一释放子进程",
+            "actor": "Node",
+            "event": "教学模拟 · finally → child.stdin.end() → child.kill(\"SIGTERM\")",
+            "explain": "初始化失败也经过外层 finally；没有后续 thread/start 或 turn/start。",
+            "state": {
+              "connection": "关闭",
+              "pending": "无",
+              "initialized": "否",
+              "turnStarted": "否",
+              "remoteGeneration": "未发生"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm start -- --handshake-only",
+      "action": "在 s01 目录、依赖和本地模型配置准备好后运行握手命令。页面若提供 early/success 受控测试，它会进入真实入口验证握手后的请求与事件分流；测试中的假 App Server 不连接远端模型。两项实验都不能据此证明远端认证有效。",
+      "observe": [
+        "成功时先显示握手成功，再显示已加载模型目录。",
+        "日志明确显示没有发送 turn/start、没有发起模型生成；随后输出协议日志位置。",
+        "若本地配置或 Codex 启动有问题，检查会失败；这与模型是否能回答仍是两层问题。"
+      ],
+      "boundary": "此命令运行本机 Codex 并可能创建 .runs 与本阶段状态目录，不提交模型生成。这里给出实验入口，不声称已用用户真实配置运行。"
+    },
+    "quiz": {
+      "question": "连接检查通过，但第一次提问报远端认证失败。应如何解释之前的“成功”？",
+      "options": [
+        "initialize 成功说明远端密钥已通过，所以应自动重发问题。",
+        "它只验证本地协议与目录可用；要单独检查远端认证，不能把任务自动重发当修复。",
+        "stdio 只能用于离线模型，因此远端失败是必然的。"
+      ],
+      "answer": 1,
+      "explanation": "正确的是本地与远端分层定位。A 把未发生的生成调用当成认证验证，还引入重复提交；C 混淆了 Node↔Codex 的本地管道与 Codex↔模型服务的远端连接。"
+    },
+    "reference": {
+      "session": "s01",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s01_agent_loop",
+      "adaptation": "借用“从一个具体请求追到实际执行者”的教学方式；参考直接写 Anthropic agent_loop，我们通过 App Server 协议复用 Codex，不能照搬 while 循环。"
+    }
+  },
+  {
+    "id": "s01-lifecycle",
+    "stage": "s01-single-turn",
+    "title": "收到请求，不等于完成任务",
+    "principle": "用 Thread 定位会话、Turn 定位任务，并等待该 Turn 的成功终态后才输出答案。",
+    "problem": "turn/start 已返回，界面却没有答案；另一次完成事件来得太早，程序又一直等待。若把请求响应当结果，或等拿到 turnId 才开始收事件，两种时序都会出错。",
+    "change": {
+      "before": "只有请求 ID 的收发匹配，尚不能判断一轮任务何时真正结束。",
+      "added": "建立本轮状态和早到事件缓冲，拿到 turnId 后重放匹配通知，再等待 turn/completed。",
+      "kept": "Thread 上下文和一个 Turn 内部的模型执行仍归 Codex；Node 不重写推理循环。"
+    },
+    "ownership": {
+      "codex": "分配 Thread/Turn ID，执行任务并发出 delta、item/completed、turn/completed 等通知。",
+      "product": "匹配 Thread 与 Turn、聚合回答、区分受理和成功终态、处理超时，并在两层 finally 中清理。"
+    },
+    "concepts": [
+      {
+        "term": "Thread / Turn",
+        "meaning": "Thread 是持续会话；Turn 是其中的一次用户任务。ID 由服务端产生，不能用第几轮的序号推算。"
+      },
+      {
+        "term": "早到事件缓冲",
+        "meaning": "尚未知道本轮 ID 时，先保存本 Thread 的通知，得到 ID 后按轮次检查，防止漏收或串轮。"
+      },
+      {
+        "term": "finally",
+        "meaning": "无论成功还是失败都执行的收尾：本轮清计时器，外层关闭连接与子进程。"
+      }
+    ],
+    "mechanism": "runTurn 先设置 activeTurn，才请求 turn/start。事件处理器先校验 Thread；若 turn.id 仍为空就暂存，拿到 ID 后重放并排除其他 Turn。请求响应只给出受理信息，await turn.completed.promise 才等待结果；事件处理器只有看到 status=completed 才 resolve，否则 reject。回答完成后按 item 聚合打印；异常不冒充成功，超时也不自动重发。",
+    "design": {
+      "decision": "将请求等待与任务完成等待分成两个独立的 Promise，并提前注册本轮状态。",
+      "reason": "响应和通知走同一条异步通道，先后顺序不能靠直觉保证；两个等待点分别表达“已受理”和“已完成”。",
+      "alternative": "收到 turn/start 响应就打印成功会过早结案；请求结束后才建监听则可能遗漏早到通知。",
+      "cost": "客户端必须维护 buffer、answers、activeTurn 和两个生命周期。断连后的真实执行结果仍可能未知，不能承诺恰好执行一次。"
+    },
+    "source": {
+      "file": "stages/s01-single-turn/05-app-server.mjs",
+      "needle": "      turn.id = result.turn.id;",
+      "before": 4,
+      "after": 12,
+      "explanation": "request 返回后只绑定 ID；接着重放 buffer，清空缓存，再 await completed。末尾 finally 清本轮计时器与 activeTurn。成功/失败状态判断在同文件 handleTurnEvent，外层 finally 另负责关闭进程，不能混为一处。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "完成通知早于受理响应",
+        "steps": [
+          {
+            "title": "先建立本轮状态",
+            "actor": "Node",
+            "event": "教学模拟 · activeTurn = turn; request(\"turn/start\", ...)",
+            "explain": "此时知道 Thread，但还不知道服务端生成的 Turn ID；已具备暂存通知的位置。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "未绑定",
+              "buffer": "0 条",
+              "result": "等待受理与完成",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "先到的通知被暂存",
+            "actor": "Node",
+            "event": "教学模拟 · if (!turn.id) { turn.buffer.push(message); return; }",
+            "explain": "本 Thread 的完成通知先到也不会丢失；尚未绑定 ID，所以此时还不能直接认定本轮完成。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "未绑定",
+              "buffer": "包含 U-A 的完成通知",
+              "result": "仍未确认",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "绑定 ID 并重放",
+            "actor": "Node",
+            "event": "教学模拟 · turn.id = result.turn.id; for (const message of turn.buffer) handleTurnEvent(message)",
+            "explain": "受理响应给出 U-A；重放时严格核对 ID，status=completed 才满足本轮完成等待。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "重放后清空",
+              "result": "已收到成功终态",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "输出后收尾",
+            "actor": "Node",
+            "event": "教学模拟 · await turn.completed.promise → console.log → finally",
+            "explain": "现在才输出聚合答案。本轮状态清空后，单轮入口结束，外层 finally 再关闭进程。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "整段答案已输出",
+              "process": "关闭"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "已受理，但后续轮次失败",
+        "steps": [
+          {
+            "title": "受理响应只给出 ID",
+            "actor": "Codex → Node",
+            "event": "教学模拟 · turn/start response: turn.id = U-A",
+            "explain": "pending 请求完成，任务完成等待仍未结束；两者不能共用一个“成功”标签。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "已受理，尚未完成",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "失败终态拒绝完成等待",
+            "actor": "Node",
+            "event": "教学模拟 · turn/completed with status=\"failed\" → turn.completed.reject(...)",
+            "explain": "方法名含 completed 表示轮次结束，不保证成功；必须读取其中的 status。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "failed，不输出成功答案",
+              "process": "运行中"
+            },
+            "lines": []
+          },
+          {
+            "title": "失败也释放资源",
+            "actor": "Node",
+            "event": "教学模拟 · runTurn finally → outer finally",
+            "explain": "清理不会改变失败结论，也不会自动再提交同一问题。",
+            "state": {
+              "thread": "T-A（示意）",
+              "turnId": "U-A（示意）",
+              "buffer": "0 条",
+              "result": "错误向上传播",
+              "process": "关闭"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "node --test --test-name-pattern='单轮闭环|单轮错误' tests/single-turn.test.mjs",
+      "action": "在 s01 目录运行四个既有夹具场景，特别对比 early 与 failed/hang。",
+      "observe": [
+        "success 与 early 都只创建一个 Thread、一个 Turn，并得到同一条模拟回复。",
+        "failed 与 hang 由测试确认 reject，不会显示为 completed。",
+        "这组测试没有真实服务商请求；夹具故意让事件先于响应或让任务挂起。"
+      ],
+      "boundary": "需要 Node 24+ 和项目依赖；只验证本地协议编排与清理，不验证真实模型质量。"
+    },
+    "quiz": {
+      "question": "日志已经出现 turn/completed，但 UI 显示失败。哪项排查最有价值？",
+      "options": [
+        "检查该事件的 threadId、turn.id 和 status；completed 是事件名，不等于成功状态。",
+        "把所有 turn/completed 都当成功，避免用户看到失败。",
+        "去掉早到事件缓存，因为任何异步事件都应在响应之后出现。"
+      ],
+      "answer": 0,
+      "explanation": "A 同时检查事件归属与终态，能区分其他轮次、失败终态和真实成功。B 会伪报成功；C 建立在不存在的消息顺序保证上，会重新引入漏事件。"
+    },
+    "reference": {
+      "session": "s01",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s01_agent_loop",
+      "adaptation": "借用“循环何时继续、何时结束”的问题。参考靠 tool_use 内容块控制自写循环；本项目的可见判据是本 Turn 的服务端终态，不是应用端读取 stop_reason。"
+    }
+  }
+]

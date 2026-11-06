@@ -7,7 +7,7 @@
 
 默认只监听本机。`WORKBENCH_PORT=4322 npm run web` 可更改端口。工作台默认打开「机制课堂」，「运行体验」保留对应版本的真实入口与服务状态。
 
-机制课程源文件位于 `curriculum/s01-s03.json` 与 `curriculum/s08-s09.json`；执行 `npm run course:build` 提取真实源码并生成 `public/course/curriculum.json`，`npm run course:check` 检查内容及源码快照是否过期。构建时会校验源码锚点唯一性、课时与实验对应关系。
+机制课程源文件位于 `curriculum/lessons/sNN.json`（每个阶段一个数组文件）；执行 `npm run course:build` 提取真实源码并生成 `public/course/curriculum.json`，`npm run course:check` 检查内容及源码快照是否过期。构建时会校验文件名与阶段归属、真实阶段目录、源码路径与锚点唯一性、课时 ID 唯一性及课时与实验清单的一一对应关系。章节索引由 `chapters` 提供，只列有课时的阶段；新增阶段需补充 `build-curriculum.mjs` 中的名称与重点映射。
 
 原先的 30 个长文单元保留在 `/course/handbook.html`，源文件仍在 `public/course/modules/`。运行 `npm run course:build` 会同时重建课程首页、机制课程数据和长文（模板 `_handbook.html` + `modules/*.html`）；`npm run course:check` 检查三者是否最新。长文的交互（测验、对话与流程推演、架构图、术语释义）都在 `handbook.js`，章节里不写内联脚本。
 
@@ -21,7 +21,7 @@
 | s08 | PG 事务、outbox、Redis 唤醒、资源版本 | 上述功能 + 资源与版本信息 |
 | s09 / app | 通用门禁、Wiki、Chroma + BM25 | 原文导入、维护任务、页面读取、知识搜索、索引任务 |
 
-新版主课程包含 17 节机制课、34 条正常/异常推演路径、17 道判断题，以及每版的 SVG 总架构图。按「问题 → 总图 → 概念 → 状态推演 → 源码与设计 → 实验 → 本节增量」组织。同一份课程数据用于工作台内嵌课堂与完整课程，避免两端解释不一致。s01 的运行体验另保留 7 个协议步骤的详细解读。
+新版主课程包含 17 节机制课、34 条正常/异常推演路径、17 道判断题，以及每阶段的 SVG 总架构图。按「问题 → 总图 → 概念 → 状态推演 → 源码与设计 → 实验 → 本节增量」组织。同一份课程数据用于工作台内嵌课堂与完整课程，避免两端解释不一致。s01 的运行体验另保留 7 个协议步骤的详细解读。
 
 在任一 Demo 目录运行 `npm run lesson -- list` 查看实验，运行 `npm run lesson -- <id>` 执行本节。12 个离线入口使用真实模块和本地测试夹具；5 个集成入口默认明确显示 NOT RUN，需显式参数才启动隔离的 PG / Redis 等依赖。具体命令与边界见每个阶段的 `lessons/README.md`，或课堂「动手实验」。前端按钮只复制命令，不在浏览器里执行 shell。
 
@@ -61,4 +61,6 @@
 
 长文的五章最初用 [zarazhangrui/codebase-to-course](https://github.com/zarazhangrui/codebase-to-course) 这个 Skill 生成。该仓库没有开源协议，所以长文阅读器的样式、脚本与页面模板（`handbook.css`、`handbook.js`、`_handbook.html`）已由本项目重新编写，不含来源代码；章节正文与课程模块均为本项目内容。
 
-本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s17 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。17 节本地课程围绕现有五版机制重新划分，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
+本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s17 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。17 节本地课程按 s01、s02、s05、s06、s08、s09 六个源码阶段组织，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
+
+课程链接支持 `/course/#sNN`；旧的 `#module-1` 至 `#module-5` 依次映射到 s01、s02、s05、s08、s09。工作台的可配置 Agent 目标继续连接 s07-memory，课堂显示 s05 与 s06 两章，其他服务行为不变。
