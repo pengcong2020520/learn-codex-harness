@@ -75,6 +75,7 @@ export async function runChat(api, terminal) {
         queuePaused = queue.paused;
       }
       if (event.type === "fatal") terminal.write(`服务异常：${event.data.message}`);
+      if (event.type === "shutdown") terminal.write(event.data.message);
     }, (status, message) => { if (status === "reconnecting") terminal.write(`${message} 正在重连；不会自动重发消息。`); });
   }
 

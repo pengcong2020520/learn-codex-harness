@@ -25,7 +25,7 @@ npm run lesson -- s04-queue
 
 边界：离线临时目录与真实服务模块；Codex 是 stdio 假进程或 fixture，不调用模型。真实项目 .env 不会被读取。
 
-## s04-reconnect · 断线重连，事件不丢不重
+## s04-reconnect · 断线重连，不漏状态、不重发消息
 
 快照兜住断线期间的变化；提交和订阅是两件事，重连永远不会重发。
 

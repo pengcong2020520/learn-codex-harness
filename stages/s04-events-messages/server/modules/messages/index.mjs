@@ -1,7 +1,8 @@
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
-import { executing, terminal } from "../data/jobs.mjs";
+import { executing, terminal } from "../data/index.mjs";
 
 // 只负责输入的排队与调度；执行循环和上下文仍归 Codex。
+// 对任务记录（store）的调用统一写成 await：本阶段的 JSON 实现是同步的，await 普通返回值不改变行为，换成异步存储时调度代码不用改。
 export class MessageService {
   constructor({ rpc, sessions, hub, config, store }) {
     Object.assign(this, { rpc, sessions, hub, config, store });

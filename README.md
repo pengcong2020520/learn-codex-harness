@@ -30,7 +30,7 @@ flowchart LR
 | [s01-single-turn](stages/s01-single-turn/README.md) | 单轮问答 | 接上模型；不用 SDK，直接说 App Server 协议；怎样判断一轮真的结束了 | 2 |
 | [s02-multi-turn](stages/s02-multi-turn/README.md) | 多轮会话 | Thread 与 Turn；连续输入不丢、不抢跑；恢复会话而不是重新拼历史 | 2 |
 | [s03-service](stages/s03-service/README.md) | 服务化 | 服务端常驻、客户端随时来去；关掉客户端，交出去的一轮照样跑完 | 离线实验 3 节（暂未接入互动课程） |
-| [s04-events-messages](stages/s04-events-messages/README.md) | 事件与消息 | 输入先写进任务记录、在服务端排队；状态经 SSE 推给客户端，断线重连不丢不重，重启不重发 | 离线实验 3 节（暂未接入互动课程） |
+| [s04-events-messages](stages/s04-events-messages/README.md) | 事件与消息 | 输入先写进任务记录、在服务端排队；状态经 SSE 推给客户端，断线重连不漏状态、不重发消息，重启不重发 | 离线实验 3 节（暂未接入互动课程） |
 | [s07-memory](stages/s07-memory/README.md) | 记忆 | 记忆交给 Codex 提炼，开关和参与范围由服务端掌握；快照含完整 Agent 核心（角色、工具、Skill、工作区） | 5（互动课程第 3 章，源码暂取自本快照）+ 离线实验 1 节 |
 | [s08-data-layer](stages/s08-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |

@@ -221,3 +221,11 @@ test("队列暂停只提示一次，普通队列变化不再逐条刷日志", as
   assert.doesNotMatch(f.text(), /队列：/);
 });
 
+
+test("服务端正常关闭时提示关闭，不显示为服务异常", async t => {
+  const f = await chatFixture(t);
+  await f.start();
+  f.event("shutdown", { message: "服务端正在关闭；排队中的消息会保留，重启后可继续。" });
+  assert.match(f.text(), /服务端正在关闭/);
+  assert.doesNotMatch(f.text(), /服务异常/);
+});

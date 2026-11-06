@@ -44,6 +44,3 @@ export class TestJobs {
     }
   }
 }
-export async function testDataFactory() {
-  return { jobs: new TestJobs(), async close() {} };
-}

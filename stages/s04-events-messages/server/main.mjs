@@ -15,15 +15,14 @@ import { RunMaintenance } from "./modules/maintenance/index.mjs";
 import { AGENT_INSTRUCTIONS } from "./modules/role/index.mjs";
 
 // 主流程只组装模块：配置 → 独占锁 → 任务记录 → Codex → 会话与事件 → 任务调度 → 运行目录维护 → HTTP → 就绪。
-export async function startAgentServer({ config = loadServerConfig(), cli, log = console.log, dataFactory = openData } = {}) {
+export async function startAgentServer({ config = loadServerConfig(), cli, log = console.log } = {}) {
   const lifecycle = createLifecycle();
   const redact = createLogRedactor(config.launch.env.CODEX_API_KEY);
   const safeLog = value => log(redact(value));
   try {
     // 1. 确保同一个项目只有一个服务在运行。
     lifecycle.defer(acquireServerLock(config.root));
-    const data = await dataFactory(config);
-    lifecycle.defer(() => data.close());
+    const data = openData(config);
 
     // 2. 准备运行目录，由自己的服务自动启动本机 Codex。
     const runtime = await prepareRun(config.launch, config.root, { instructions: AGENT_INSTRUCTIONS });
@@ -41,11 +40,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
 
     // 4. 任务调度：输入先写进任务记录，再按会话逐条发出；关闭时把未确认的执行标记出来。
     const messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs });
-    lifecycle.defer(async () => {
-      await messages.fail(new Error("服务正在关闭，执行结果待核对。"));
-      await rpc.close();
-      await messages.close();
-    });
+    // 正常关闭不是故障：停止派发，把执行中的标成待核对，Codex 连接随后关闭。
+    lifecycle.defer(() => messages.close());
     await messages.open();
 
     // 5. 服务常驻后，每次启动都会留下一个运行目录；定期清理旧的。
@@ -58,6 +54,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const token = randomBytes(32).toString("hex");
     const http = createHttpService({ config, token, sessions, messages, hub, redact });
     lifecycle.defer(() => http.close());
+    // 关闭时先告诉已连接的客户端（在断开事件流之前），客户端据此提示"服务端关闭"，而不是"服务异常"。
+    lifecycle.defer(() => hub.publish("shutdown", { message: "服务端正在关闭；排队中的消息会保留，重启后可继续。" }));
     const url = await http.listen();
     publishConnection(config.root, { url, token, pid: process.pid }, lifecycle);
 

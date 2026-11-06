@@ -9,7 +9,6 @@ import { MessageService } from "../server/modules/messages/index.mjs";
 import { EventHub } from "../server/modules/events/index.mjs";
 import { RpcError } from "../server/modules/codex/connection.mjs";
 import { TestJobs } from './jobs-fixture.mjs';
-export { testDataFactory } from './jobs-fixture.mjs';
 
 export const fixture = { CODEX_API_KEY: "test-key-not-real", CODEX_BASE_URL: "https://provider.invalid/v1", CODEX_MODEL: "unit-model", DEMO_TIMEOUT_MS: "3000" };
 const cleanups = new Map();

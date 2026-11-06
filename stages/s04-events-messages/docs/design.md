@@ -22,7 +22,7 @@ s03 的服务端能常驻、能替客户端发起一轮，但输入的顺序仍�
 |------|------|------|
 | 任务与消息 | [`server/modules/messages/index.mjs`](../server/modules/messages/index.mjs) | 提交（幂等）、按会话串行调度、追加（`turn/steer`）、超时中断、暂停与继续、失败处理 |
 | 事件推送 | [`server/modules/events/index.mjs`](../server/modules/events/index.mjs) | 事件中心：给每条事件编序号，按 Thread 分发；不调度、不调用模型 |
-| 任务记录 | [`server/modules/data/index.mjs`](../server/modules/data/index.mjs)、[`data/jobs.mjs`](../server/modules/data/jobs.mjs) | 任务与暂停状态写入 `.data/messages.json`（原子替换）；重启时恢复 |
+| 任务记录 | [`server/modules/data/index.mjs`](../server/modules/data/index.mjs) | 任务与暂停状态写入 `.data/messages.json`（原子替换）；重启时恢复 |
 
 会话模块不再发起轮次，只负责新建 / 恢复 Thread、把 Codex 通知整理成快照，并在每次变化时发布 `session` 事件、在一轮结束时通知调度器。
 
@@ -32,7 +32,7 @@ s03 的服务端能常驻、能替客户端发起一轮，但输入的顺序仍�
 |------|------|
 | `POST /messages` | 提交一条消息：`threadId`、`clientMessageId`、`text`，可选 `mode: "append"` 与 `targetTurnId`；返回 `202` 和任务记录 |
 | `POST /queue/continue` | 解除某个会话的暂停，继续处理排队中的消息 |
-| `GET /events?threadId=` | SSE 事件流：首条 `snapshot`，之后 `session` / `queue` / `fatal`，每 15 秒一次心跳 |
+| `GET /events?threadId=` | SSE 事件流：首条 `snapshot`，之后 `session` / `queue` / `fatal`，正常关闭时 `shutdown`，每 15 秒一次心跳 |
 | `GET /state?threadId=` | 会话快照 + 队列快照 |
 
 ### 3. 任务状态
