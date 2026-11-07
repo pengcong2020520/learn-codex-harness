@@ -28,7 +28,7 @@ const has=(id=state.target)=>{const {num}=stageOf(id);return {
 };};
 const legacyStages={demo1:'s01',demo2:'s02',demo3:'s07',demo4:'s08',demo5:'s09'};
 const resolveStage=id=>(Object.hasOwn(legacyStages,id)?legacyStages[id]:null)||(Object.hasOwn(stages,id)||id==='project'?id:'s09');
-const stageGroups=[['跑起来',['s00','s01','s02']],['变成服务',['s03','s04']],['装配 Agent',['s05','s06','s07']],['上生产',['s08','s09','s10','s11','s12']]];
+const stageGroups=[['跑起来',['s00','s01','s02']],['变成服务',['s03','s04']],['装配 Agent',['s05','s06','s07']],['上生产',['s08','s09','s10','s11']],['走向生产',['s12']]];
 const sample={pages:[{slug:'product-overview',versionId:'sample-wiki-v1',createdAt:'教学样例'},{slug:'service-scope',versionId:'sample-wiki-v2',createdAt:'教学样例'}],files:[{name:'product-notes.md',type:'file',bytes:524},{name:'service-guide.txt',type:'file',bytes:318}],content:'# 产品知识\n\n这个示例 Agent 用于将原始资料整理为可追溯的知识。\n\n## 使用范围\n- 读取授权资料\n- 维护有来源的 Wiki\n- 生成文章与摘要\n\n演示内容仅用于理解界面，不是服务中的真实知识。'};
 let state={target:resolveStage(new URLSearchParams(location.search).get('stage')),tab:new URLSearchParams(location.search).get('view')==='run'?'chat':'learn',preview:false,checking:null,connectionResult:null,sessionExpired:false,statuses:[],info:null,tools:null,memory:null,capabilityErrors:{},threads:[],thread:null,session:null,queue:null,kbs:[],kb:'general',pages:[],entries:[],path:'',doc:null,hits:null,error:'',epoch:0,stream:null,busy:false,sourceFile:null,indexJob:null,simStep:0,simTurns:[],query:'',drafts:{},compose:'chat',workflows:[],wf:'',wfParams:{}};
 let toastTimer;
