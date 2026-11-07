@@ -97,7 +97,7 @@ test('R3 --check 与 doctor 均拒绝阶段不接受的 URL', async t => {
   }
 });
 
-for (const id of ['s11', 'app']) {
+for (const id of ['s11', 's12', 'app']) {
   test(`R4 ${id} 缺网关 Key 时始终提示路线 C、不检查登录链接`, async t => {
     const f = fixture(t), stage = f.all.find(s => s.id === id);
     for (const values of [{}, { CODEX_API_KEY: 'fake', CODEX_BASE_URL: 'https://example.com', CODEX_MODEL: 'test' }]) {

@@ -435,16 +435,20 @@ test("A 默认仅 s01–s10；链接共用同一本机文件，未改 s00/s11/ap
   assert.equal(f.calls.length, 11);
 });
 
-test("C 默认只写 s11/app，各生成网关 Key，保留业务配置", async t => {
+test("C 默认只写 s11/s12/app，各生成网关 Key，保留业务配置", async t => {
   const f = fixture(t);
   const count = Object.values(JSON.parse(fs.readFileSync(path.join(f.root, "app/config/models.json"))).providers).filter(item => item.keyEnv).length;
   f.answers.push("C", "", secret, ...Array(count - 1).fill(""), "", "");
   assert.equal(await setup([], f), 0);
   for (const stage of f.all) {
-    if (["s11", "app"].includes(stage.id)) {
+    if (["s11", "s12", "app"].includes(stage.id)) {
       const values = envFor(stage).values;
       assert.match(values.AGENT_GATEWAY_KEY, /^sk-bf-[a-f0-9]{64}$/);
-      assert.ok(values.DATABASE_URL);
+      if (stage.id === "s12") {
+        assert.ok(Object.hasOwn(values, "AGENT_DB_PASSWORD"));
+        assert.ok(Object.hasOwn(values, "CONTAINER_APP_DIR"));
+        assert.equal(values.DATABASE_URL, undefined); // 由独立 Compose 注入。
+      } else assert.ok(values.DATABASE_URL);
     } else assert.equal(envFor(stage).exists, false);
   }
   assert.equal(f.logs.join("\n").includes(secret), false);
@@ -459,4 +463,12 @@ test("状态目录为符号链接时不写入、也不跨目录 unlink", t => {
   assert.throws(() => linkAuth(f.stage, f.target), /真实目录/);
   assert.match(unlinkAuth(f.stage), /跳过/);
   assert.equal(fs.lstatSync(path.join(external, "codex/auth.json")).isSymbolicLink(), true);
+});
+
+test("s12 启动说明指向独立部署与 SSH 隧道", () => {
+  const stage = stages(ROOT).find(stage => stage.id === "s12");
+  const commands = startCommands(stage).join("\n");
+  assert.match(commands, /s12-deploy\/README\.md/);
+  assert.match(commands, /remote\.sh tunnel/);
+  assert.doesNotMatch(commands, /npm .*run server/);
 });

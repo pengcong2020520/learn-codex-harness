@@ -1,6 +1,6 @@
 # s06: 工具 — 让它读得到资料、存得下文章
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → `s06` → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → `s06` → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [app](../../app/)
 > *"给它的工具，它才能用；给它的目录，它才能碰"* — 工具来自一份配置，Agent 定义里列出能用哪些；每次调用先核对名单和参数，资料目录按用途授权，写过的文件不覆盖。
 >
 > **对应六个问题**：④ 依据什么资料？ ⑤ 能用什么？ ⑥ 谁说了算？

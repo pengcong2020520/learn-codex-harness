@@ -211,3 +211,5 @@ bash -n app/deploy/remote.sh app/deploy/server-setup.sh app/deploy/check.sh
 ```
 
 新增测试也由现有 `npm test` 的 `tests/*.test.mjs` 自动收集。本次沙箱禁止监听端口：TCP 测试已保留在默认入口中，执行时返回 `listen EPERM`，需在沙箱外运行上述完整命令。可在沙箱内用 `node --test --test-skip-pattern='^TCP' app/tests/deploy.test.mjs app/tests/stages-deploy.test.mjs` 验证其余用例（从仓库根运行）。没有运行 Docker 或完整 `npm test`。Compose 挂载关系、固定端口及配置文本由单元测试检查；实际 Compose 展开、镜像拉取/构建、DNS、UID 权限、数据库迁移和真实模型调用须在服务器按上文验收。
+
+[s12 部署单元](../../stages/s12-deploy/README.md) 自带完整 Compose，通过 SSH 隧道连接，不加入本说明的共享 stages 容器。

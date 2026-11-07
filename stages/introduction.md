@@ -1,6 +1,6 @@
 # 导论：Codex harness 是什么，为什么用它来做 Agent
 
-`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s06](s06-tools/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [app](../app/)
+`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s06](s06-tools/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [s12](s12-deploy/) → [app](../app/)
 > *"Agent = 模型 + Harness"* — 模型负责想，harness 负责做。这套教程带你亲手做一个云端 Agent：不自己造 harness，而是把 OpenAI Codex 的 harness 接进来，把精力留给业务。
 
 ---
@@ -40,12 +40,12 @@
 | [s09](s09-knowledge-layer/) | 守得住：身份由服务端认定，所有访问过一道门禁；资料整理成知识库 |
 | [s10](s10-skill-workflow/) | 会干活：Skill 教方法，Workflow 管边界、验收和确认 |
 | [s11](s11-model-gateway/) | 管好模型：一个网关统一协议、协调多个模型、管住 token 和花费 |
-| s12（规划中） | 上云：全部服务放进 Docker 部署到服务器，开机自启，远程连上去用 |
+| [s12（已完成）](s12-deploy/README.md) | 上云：全部服务放进 Docker 部署到服务器，开机自启，远程连上去用 |
 | s13（规划中） | 多用户：认证、按用户隔离运行环境、配额 |
 | s14（规划中） | 多 Agent 协作：委派任务、传递结果、各自的权限与记忆 |
 | s15（规划中） | 多主机调度：节点注册、任务租约、故障接管 |
 
-完整项目 [app](../app/README.md) 在这些阶段之上持续开发，s12 的上云部署已经在里面实现了。
+完整项目 [app](../app/README.md) 在这些阶段之上持续开发，独立部署见已完成的 [s12 部署单元](s12-deploy/README.md)。
 
 开工之前，先弄清楚我们要用的这个引擎。
 
@@ -244,7 +244,7 @@ flowchart LR
   s08 --> s09["s09 守得住<br/>门禁与知识库"]
   s09 --> s10["s10 会干活<br/>Skill 与 Workflow"]
   s10 --> s11["s11 管好模型<br/>模型网关"]
-  s11 --> s12["s12 上云（规划中）<br/>部署到服务器"]
+  s11 --> s12["s12 上云（已完成）<br/>部署到服务器"]
   s12 --> s13["s13 多用户（规划中）"]
   s13 --> s14["s14 多 Agent（规划中）"]
   s14 --> s15["s15 多主机（规划中）"]

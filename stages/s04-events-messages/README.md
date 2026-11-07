@@ -1,6 +1,6 @@
 # s04: 事件与消息 — 排队搬进服务端，状态推给客户端
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → `s04` → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → `s04` → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [app](../../app/)
 > *"先记下来，再一条条做"* — 每条输入先写进任务记录，由服务端按顺序交给 Codex；状态变化主动推给客户端，客户端在不在线都不影响执行。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？ ③ 之前聊过什么？

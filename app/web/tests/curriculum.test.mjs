@@ -92,3 +92,30 @@ test('没有任何课时时报错',t=>{
  f.edit('experiment-manifest.json',value=>{value.lessons=[];});
  assert.throws(f.build,/Curriculum has no lessons/);
 });
+
+test('s12 三课、四组离线实验与真实 catalog 一致，所有补充摘录逐字命中',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s12-deploy');
+ assert.equal(output.lessons.length,33);
+ assert.deepEqual(lessons.map(l=>l.id),['s12-health','s12-protection','s12-backup']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s12-deploy');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s12-deploy/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...(e.relatedExperiments||[])]);
+ assert.deepEqual(experiments.map(e=>e.id).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.id);
+  for(const key of Object.keys(original))assert.deepEqual(exp[key],original[key],`${exp.id}.${key}`);
+  assert.equal(exp.mode,'offline');
+ }
+ for(const lesson of lessons)for(const excerpt of [lesson.source,...lesson.sources]){
+  assert.ok(excerpt.code.includes(excerpt.needle));
+  assert.match(excerpt.hash,/^[a-f0-9]{64}$/);
+ }
+ assert.ok(lessons.some(l=>l.source.file.endsWith('compose.yaml')));
+ assert.ok(lessons.some(l=>l.source.file.endsWith('deploy/backup.sh')));
+});
+
+test('s12 补充源码仍检查归属与唯一 needle',t=>{
+ const f=fixture(t);
+ f.edit('lessons/s12.json',rows=>{rows[0].sources[0].needle='missing-readiness-anchor';});
+ assert.throws(f.build,/Source needle missing or ambiguous/);
+});

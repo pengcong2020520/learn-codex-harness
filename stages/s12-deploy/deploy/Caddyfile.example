@@ -1,0 +1,31 @@
+# Optional production example. Caddy runs on the host, outside the teaching Compose.
+(agent_backend) {
+  reverse_proxy 127.0.0.1:4326 {
+    header_up Host {http.request.host}
+    # Basic authentication occupies Authorization; proxy supplies the agent bearer token.
+    header_up Authorization "Bearer {$AGENT_CONNECTION_TOKEN}"
+    flush_interval -1
+  }
+}
+example.com {
+  basic_auth {
+    {$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+  }
+  @read {
+    method GET
+    path /health /ready /models /sessions /state /events
+  }
+  handle @read {
+    import agent_backend
+  }
+  @write {
+    method POST
+    path /sessions /sessions/resume /messages /tasks/confirm /tasks/cancel /queue/continue
+  }
+  handle @write {
+    import agent_backend
+  }
+  handle {
+    respond "Not found" 404
+  }
+}

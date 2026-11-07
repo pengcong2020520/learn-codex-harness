@@ -1,0 +1,21 @@
+{
+  "stage": 12,
+  "name": "部署单元",
+  "source": "../s11-model-gateway",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    "node_modules",
+    ".data",
+    ".runs",
+    "workspace (runtime root only)",
+    ".env"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "保留版本化 examples/*/workspace。",
+    "仅增加部署单元；npm dependencies 与 optionalDependencies 不变。"
+  ]
+}

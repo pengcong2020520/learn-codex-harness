@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirs, stageNo, stages, stageModules } from "./build-architecture.mjs";
 
+// dirs 包含独立部署 s12；相邻快照生成 s11 → s12 增量，不代表容器清单。
 const root = path.dirname(fileURLToPath(import.meta.url));
 const read = (dir, f) => fs.readFileSync(path.join(root, dir, f), "utf8");
 
@@ -13,7 +14,14 @@ const read = (dir, f) => fs.readFileSync(path.join(root, dir, f), "utf8");
 const extract = {
   tools: dir => fs.existsSync(path.join(root, dir, "config/tools")) ? fs.readdirSync(path.join(root, dir, "config/tools")).filter(f => f.endsWith(".json"))
     .flatMap(f => JSON.parse(read(dir, `config/tools/${f}`)).tools?.map(t => t.name) || []) : [],
-  routes: dir => { const f = "server/modules/http/index.mjs"; return fs.existsSync(path.join(root, dir, f)) ? [...read(dir, f).matchAll(/route === ["']([A-Z]+ \/[^"']*)["']/g)].map(m => m[1]) : []; },
+  routes: dir => {
+    const f = "server/modules/http/index.mjs";
+    if (!fs.existsSync(path.join(root, dir, f))) return [];
+    const source = read(dir, f);
+    // s12 的公开健康接口在鉴权前按 method + pathname 分支处理。
+    return [...source.matchAll(/route === ["']([A-Z]+ \/[^"']*)["']/g)].map(m => m[1])
+      .concat([...source.matchAll(/request.method === ["']([A-Z]+)["'] && pathname === ["']([^"']+)["']/g)].map(m => `${m[1]} ${m[2]}`));
+  },
   env: dir => fs.existsSync(path.join(root, dir, ".env.example")) ? [...read(dir, ".env.example").matchAll(/^#?\s?([A-Z][A-Z0-9_]+)=/gm)].map(m => m[1]) : [],
   migrations: dir => { const d = path.join(root, dir, "server/modules/data/migrations"); return fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".sql")).sort() : []; },
 };

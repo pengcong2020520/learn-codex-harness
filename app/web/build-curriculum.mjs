@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {renderArchitecture} from '../../stages/build-architecture.mjs';
 import {renderChanges} from './build-changes-page.mjs';
 const project=fileURLToPath(new URL('../',import.meta.url)),repo=path.dirname(project),dir=path.join(project,'web/curriculum');
 // 新增有课时的阶段时，在此补充章节名称与重点。
@@ -16,7 +17,8 @@ const chapterMetadata={
  s08:{name:'数据层',focus:'持久任务与资源版本'},
  s09:{name:'知识层',focus:'可信门禁与 Wiki / RAG'},
  s10:{name:'Skill 与 Workflow',focus:'Skill 教方法，Workflow 管边界和终点'},
- s11:{name:'模型网关',focus:'模型清单、能力路由与用量预算'}
+ s11:{name:'模型网关',focus:'模型清单、能力路由与用量预算'},
+ s12:{name:'部署单元',focus:'健康与就绪、容量限制、备份与恢复'}
 };
 export function buildCurriculumData({repository=repo,curriculumDir=dir}={}){
  const stageDirs=new Set(fs.readdirSync(path.join(repository,'stages'),{withFileTypes:true}).filter(d=>d.isDirectory()&&/^s\d\d-[a-z0-9-]+$/.test(d.name)).map(d=>d.name));
@@ -42,17 +44,21 @@ export function buildCurriculumData({repository=repo,curriculumDir=dir}={}){
  if(!lessons.length)throw Error('Curriculum has no lessons');
  if(lessons.length!==manifest.length||manifest.some(exp=>!ids.has(exp.id)))throw Error('Lessons and experiments must have equal counts and matching IDs');
  for(const lesson of lessons){
- const s=lesson.source,base=`stages/${lesson.stage}`;
- if(!s||typeof s.file!=='string'||!s.file.startsWith(`${base}/`)||s.file.includes('..')||s.file.includes('\\')||! /\.(mjs|json)$/.test(s.file))throw Error('Invalid source path '+s?.file);
+ let primaryLineCount;
+ for(const s of [lesson.source,...(lesson.sources||[])]){
+ const base=`stages/${lesson.stage}`;
+ if(!s||typeof s.file!=='string'||!s.file.startsWith(`${base}/`)||s.file.includes('..')||s.file.includes('\\')||! /\.(mjs|json|yaml|sh)$/.test(s.file))throw Error('Invalid source path '+s?.file);
  const relative=path.relative(fs.realpathSync(path.join(repository,base)),fs.realpathSync(path.join(repository,s.file)));
  if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('Invalid source path '+s.file);
  const text=fs.readFileSync(path.join(repository,s.file),'utf8'),at=text.indexOf(s.needle);
  if(at<0||text.indexOf(s.needle,at+1)>=0)throw Error(`Source needle missing or ambiguous: ${lesson.id} ${s.needle}`);
  const lines=text.split('\n'),anchor=text.slice(0,at).split('\n').length-1,start=Math.max(0,anchor-(s.before||0)),end=Math.min(lines.length,anchor+s.needle.split('\n').length+(s.after||0));
  s.start=start+1;s.anchor=anchor+1;s.code=lines.slice(start,end).join('\n');s.hash=createHash('sha256').update(text).digest('hex');
- for(const scenario of lesson.scenarios){if(scenario.steps.length<2||scenario.steps.length>5)throw Error('Scenario must have2–5steps: '+lesson.id);for(const step of scenario.steps){if(!step.state||!step.explain||!step.actor)throw Error('Incomplete scenario: '+lesson.id);for(const line of step.lines||[])if(!Number.isInteger(line)||line<1||line>end-start)throw Error('Invalid highlight line: '+lesson.id);}}
+ if(s===lesson.source)primaryLineCount=end-start;
+ }
+ for(const scenario of lesson.scenarios){if(scenario.steps.length<2||scenario.steps.length>5)throw Error('Scenario must have2–5steps: '+lesson.id);for(const step of scenario.steps){if(!step.state||!step.explain||!step.actor)throw Error('Incomplete scenario: '+lesson.id);for(const line of step.lines||[])if(!Number.isInteger(line)||line<1||line>primaryLineCount)throw Error('Invalid highlight line: '+lesson.id);}}
  const exp=experiments.get(lesson.id);
- lesson.experiment={...lesson.experiment,command:exp.command,boundary:exp.boundary,observe:exp.observations,...(exp.integrationCommand?{integrationCommand:exp.integrationCommand}:{})};
+ lesson.experiment={...lesson.experiment,command:exp.command,boundary:exp.boundary,observe:exp.observations,...(exp.relatedExperiments?{relatedExperiments:exp.relatedExperiments}:{}),...(exp.integrationCommand?{integrationCommand:exp.integrationCommand}:{})};
  if(!lesson.quiz.options[lesson.quiz.answer])throw Error('Invalid quiz '+lesson.id);
 }
 const chapters=[...new Set(lessons.map(l=>l.stage))].sort().map(stage=>{
@@ -81,7 +87,7 @@ const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-t
 const coursePath=chapters.map(c=>`  <a href="#${c.id}">${c.stage} ${c.title}</a>`).join('\n');
 const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/learning.js'),'utf8'),'learning.css':fs.readFileSync(path.join(project,'web/public/app/learning.css'),'utf8'),'curriculum.json':serialized,'index.html':fs.readFileSync(path.join(course,'_reader.html'),'utf8'),'handbook.html':fs.readFileSync(path.join(course,'_handbook.html'),'utf8').replace('{{firstModule}}',()=>chapters[0]?.id||'main').replace('{{dots}}',()=>dots).replace('{{coursePath}}',()=>coursePath).replace('{{modules}}',()=>chapters.map(c=>c.html.trimEnd()).join('\n\n'))};
 // 课程里的总架构图直接取自各阶段 README 用的同一份生成结果（stages/build-architecture.mjs），不再单独绘制。
-for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
+for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=n==='12'?renderArchitecture(12):fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
 // 阶段演示页：模块与新增能力来自 stages/changes.json（node stages/build-changes.mjs 生成），机制演示来自 curriculum/mechanisms/sNN.json（每个阶段一个文件），源码按行号截取并核对。
 pages['changes.html']=renderChanges(JSON.parse(fs.readFileSync(path.join(repo,'stages/changes.json'),'utf8')),Object.fromEntries(fs.readdirSync(path.join(dir,'mechanisms')).filter(f=>/^s\d\d\.json$/.test(f)).sort().map(f=>[f.slice(0,3),JSON.parse(fs.readFileSync(path.join(dir,'mechanisms',f),'utf8'))])),f=>fs.readFileSync(path.join(repo,f),'utf8'));
 if(check){for(const [name,body] of Object.entries(pages))if(fs.readFileSync(path.join(course,name),'utf8')!==body)throw Error(`课程 ${name} 不是最新；请运行 npm run course:build`);console.log(`${lessons.length} lessons, ${chapters.length} handbook chapters, source excerpts and experiment links are current.`);}else{for(const [name,body] of Object.entries(pages))fs.writeFileSync(path.join(course,name),body);console.log(`Built ${lessons.length} source-grounded lessons and ${chapters.length} handbook chapters.`);}
