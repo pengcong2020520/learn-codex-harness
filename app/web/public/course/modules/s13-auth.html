@@ -1,0 +1,187 @@
+<section class="module" id="module-s13">
+<div class="module-content"><header class="module-header animate-in">
+<span class="module-number">s13</span><h2 class="module-title">账号与认证：请求有身份，资源有归属</h2>
+<p class="module-subtitle">密码校验建立身份，令牌维持登录状态，owner 检查贯穿数据、缓存、任务、文件与事件。</p>
+</header><div class="module-body">
+
+<section class="screen animate-in" id="s13-screen-1"><h2 class="screen-heading">服务已经部署，谁在使用它？</h2>
+
+<p>服务能够启动、恢复和限制容量之后，还要回答：谁在提交任务，谁能看到结果？如果只用同一个连接凭据，客户端可以进入服务，却无法表达“这个会话属于当前用户”。账号与认证把使用者变成明确的身份，但登录成功只是起点；会话、知识库、产物和用量都要沿用这个身份。</p>
+<figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1304" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
+<p><span class="term" data-definition="认证确定当前请求代表哪个用户；本章用用户名、密码和服务端存储的不透明令牌实现。">认证</span> 回答“你是谁”。<span class="term" data-definition="owner 是资源所属用户；读取、缓存、后台执行和事件推送都必须携带并核对这个归属。">归属</span> 回答“这份资源属于谁”。一个用户知道别人的会话 ID，不应因此获得访问权。即使是 admin，也不能越过资源的 owner 检查。</p>
+<table><thead><tr><th>执行位置</th><th>负责什么</th><th>可观察证据</th></tr></thead><tbody>
+<tr><td>Codex</td><td>管理原生 Thread、Turn、模型调用、上下文与工具循环。</td><td>现有协议与任务执行结果；不负责认定 HTTP 用户。</td></tr>
+<tr><td>accounts / HTTP</td><td>校验密码、签发与吊销令牌、建立请求身份。</td><td>登录响应、会话查询、401 和请求上下文。</td></tr>
+<tr><td>数据、工具与事件</td><td>按 owner 查询和定位文件，后台沿用持久记录的身份。</td><td>他人资源 404、他人事件不推送、用户目录不同。</td></tr>
+<tr><td>管理员与使用者</td><td>交互设置密码，维护账号，保管客户端凭据，验证真实部署。</td><td>账号命令、双客户端检查和交付记录。</td></tr>
+</tbody></table>
+<p>账号仅有 admin 和 user 两种技术角色，用户名规范化为小写。没有注册、邮箱、找回密码或 Web 登录页，账号通过管理命令创建。identity.json 继续标识实例；它在首次初始化时帮助确定已有数据的首个 admin，不能成为业务请求缺少身份时的默认值。</p>
+<p>本章沿用单实例的数据范围。用户名在实例内唯一，知识库 ID 也仍在实例内唯一。首个 admin 保留已有知识库，新账号看不到其他 owner 的库；创建一个账号不会复制别人的资料，也不会自动授予共享知识权限。</p>
+</section>
+
+<section class="screen animate-in" id="s13-screen-2"><h2 class="screen-heading">密码验证：随机盐、固定成本与统一错误</h2>
+
+<p>密码不能以明文保存。hashPassword 使用 Node 内置 scrypt，参数固定为 N=32768、r=8、p=1，每次生成 16 字节随机盐，派生 64 字节结果。数据库保存包含参数、盐与派生结果的字符串。随机盐让同一个密码的不同保存结果也不同，但校验时仍能从已保存的盐重新派生。</p>
+<p>verifyPassword 只接受这组固定参数与固定长度编码，不从数据库字符串读任意成本设置。格式不符合预期时，使用同参数的哑哈希格式完成派生；未知用户名在 Accounts.login 中也传入 DUMMY_HASH。昂贵的密码计算不会因为“没有这个账号”而被直接省略。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/password.mjs · 第 13–20 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/password.mjs" data-start="13" data-end="20">export const DUMMY_HASH = `scrypt$32768$8$1$${'00'.repeat(16)}$${'00'.repeat(64)}`;
+export async function verifyPassword(password, encoded, kdf = derive) {
+  const match = /^scrypt\$32768\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/.exec(encoded || '')
+    || /^scrypt\$32768\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/.exec(DUMMY_HASH);
+  const actual = await kdf(typeof password === 'string' ? password : '', Buffer.from(match[1], 'hex'), 64, SCRYPT_OPTIONS);
+  const equal = timingSafeEqual(actual, Buffer.from(match[2], 'hex'));
+  return typeof password === 'string' &amp;&amp; Boolean(password) &amp;&amp; encoded !== DUMMY_HASH &amp;&amp; equal;
+}</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>13–14 行</strong>：声明哑哈希，验证函数允许测试注入 kdf，默认使用真实 scrypt。</p><p class="tl"><strong>15–16 行</strong>：只解析本章参数和长度；无法解析时取哑哈希的盐与结果。</p><p class="tl"><strong>17 行</strong>：按同一参数派生；非字符串输入也不绕过派生步骤。</p><p class="tl"><strong>18 行</strong>：使用 timingSafeEqual 比较两个固定长度结果。</p><p class="tl"><strong>19–20 行</strong>：返回值还要求非空字符串、不是 DUMMY_HASH 并且比较相等。</p></div></div></div>
+
+<p>恒定时间比较约束的是派生结果比较这一步，不能推导出网络、数据库与整次登录请求的耗时完全相同。统一的失败响应也不是完整的网络侧信道证明。离线实验核对同一验证函数和昂贵路径是否执行，真实系统还受数据库状态、调度与网络延迟影响。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/index.mjs · 第 15–31 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/index.mjs" data-start="15" data-end="31">  async login({ username, password }, source) {
+    const finish = this.limits.begin(username, source);
+    let success = false;
+    try {
+      const user = await this.store.byUsername(normalizeUsername(username));
+      const valid = await this.verify(password, user?.password_hash || DUMMY_HASH);
+      if (!valid || !user || user.disabled_at) throw new AppError('用户名或密码错误。', 401, 'LOGIN_FAILED');
+      const token = randomBytes(32).toString('base64url');
+      const now = this.now(), expiresAt = new Date(now + ABSOLUTE_MS).toISOString();
+      // 再锁定用户并核对哈希，避免改密码/禁用与登录并发时签出旧凭证。
+      const saved = await this.store.createSession(user, { id: randomUUID(), userId: user.id, tokenHash: tokenHash(token),
+        createdAt: new Date(now), expiresAt, clientHint: 'CLI' });
+      if (!saved) throw new AppError('用户名或密码错误。', 401, 'LOGIN_FAILED');
+      success = true;
+      return { token, expiresAt, user: publicUser(user) };
+    } finally { finish(success); }
+  }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>15–17 行</strong>：登录限流先预占，成功标记初始为 false。</p><p class="tl"><strong>18–21 行</strong>：查规范化用户名，以真实哈希或 DUMMY_HASH 验证；密码错误、未知或禁用账号统一失败。</p><p class="tl"><strong>22–23 行</strong>：生成 32 字节随机令牌并计算绝对有效期。</p><p class="tl"><strong>24–27 行</strong>：创建会话前锁定账号并重新核对，保存摘要；状态变化时拒绝签发。</p><p class="tl"><strong>28–30 行</strong>：成功后返回令牌，finally 结束限流预占；失败保留计数。</p><p class="tl"><strong>31 行</strong>：结束登录函数，后续请求进入 authenticate。</p></div></div></div>
+
+<p>登录限流按“规范化用户名 + 实际来源”限制 15 分钟内 5 次失败，按来源限制 15 分钟内 20 次；超限返回 429 和 Retry-After。先预占再执行 scrypt，避免并发请求同时绕过计数。成功后释放本次预占，失败保留。计数在当前进程内，服务重启会清空窗口。</p>
+<p>密码验证通过之后，管理命令可能已经修改密码或禁用账号。因此创建令牌前还要锁定账号，重新核对哈希和禁用状态。验证与签发之间的竞争由数据库事务处理。改密码和禁用同样在事务内更新账号并吊销会话；离线测试能核对调用顺序，真实锁和约束要在 PostgreSQL 上验收。</p>
+</section>
+
+<section class="screen animate-in" id="s13-screen-3"><h2 class="screen-heading">令牌不是身份自述，每次请求都要查库</h2>
+
+<p>登录返回 randomBytes(32) 生成的 base64url 不透明令牌。客户端把它保存到权限 0600 的 .data/credentials.json；.data/connection.json 只保存服务地址。服务端只存令牌 SHA-256。这里没有 JWT，也没有 refresh；客户端获得 401 后重新运行 npm run login。</p>
+<p>令牌有两条期限：绝对 7 天，闲置 12 小时。last_seen_at 最多每分钟更新一次，降低持续请求的写入频率。认证依然每次查库，更新时间节流不等于缓存认证结果。数据库中的账号禁用、会话吊销和期限状态共同决定当前令牌是否可用。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/index.mjs · 第 32–42 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/index.mjs" data-start="32" data-end="42">  async authenticate(authorization) {
+    const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization || '');
+    if (!match) throw unauthorized();
+    const row = await this.store.session(tokenHash(match[1]));
+    const now = this.now();
+    if (!row || row.disabled_at || row.revoked_at || now &gt;= +new Date(row.expires_at)
+      || now - +new Date(row.created_at) &gt;= ABSOLUTE_MS || now - +new Date(row.last_seen_at) &gt;= IDLE_MS) throw unauthorized();
+    if (now - +new Date(row.last_seen_at) &gt;= TOUCH_MS) await this.store.touch(row.session_id, new Date(now));
+    return { userId: row.id, role: row.role, authSessionId: row.session_id, user: publicUser(row) };
+  }
+  async logout(identity) { await this.store.revokeAll(identity.userId); }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>32–34 行</strong>：检查 Authorization 是否符合 Bearer 与 43 位 base64url 令牌形状。</p><p class="tl"><strong>35–36 行</strong>：以 SHA-256 查询会话，获取当前时间。</p><p class="tl"><strong>37–38 行</strong>：会话不存在、账号禁用、吊销、绝对或闲置超时都拒绝。</p><p class="tl"><strong>39 行</strong>：距上次活动更新时间至少一分钟时才写入 last_seen_at。</p><p class="tl"><strong>40–41 行</strong>：返回 userId、role 和 authSessionId，供请求上下文使用。</p><p class="tl"><strong>42 行</strong>：logout 等待 revokeAll，吊销该用户全部令牌。</p></div></div></div>
+
+<p>登出先认证当前请求，再吊销该用户全部令牌，等待完成后返回 loggedOut。另一个客户端即使仍保存该账号的旧令牌，下一次请求也会因 revoked_at 被拒绝。只删除当前客户端文件无法完成这个保证；服务端必须更新持久化会话状态。</p>
+<table><thead><tr><th>触发条件</th><th>服务端行为</th><th>客户端观察</th></tr></thead><tbody>
+<tr><td>有效 Bearer</td><td>查库检查状态与期限，返回认证身份。</td><td>进入业务请求，仍受 owner 门禁约束。</td></tr>
+<tr><td>缺少或错误令牌</td><td>认证失败。</td><td>401，提示重新登录。</td></tr>
+<tr><td>登出、改密码或禁用</td><td>吊销该用户全部会话令牌。</td><td>旧令牌的下一次请求返回 401。</td></tr>
+<tr><td>有效身份访问他人资源</td><td>归属检查没有得到当前 owner 的资源。</td><td>404 NOT_FOUND，与资源不存在相同。</td></tr>
+</tbody></table>
+<p>HTTP 认证成功后用 AsyncLocalStorage 携带 { userId, role, authSessionId }，再进入门禁和实际处理。模型不能修改这个身份。业务请求按 userId 限制每分钟 120 次，未认证请求按实际 socket 来源限制，不信任 X-Forwarded-For。/health 和 /ready 免认证，带 Origin 的请求仍被拒绝，认证响应设置 Cache-Control: no-store。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">区分下一次请求和现有连接</p><p>已有 SSE 不逐帧重新验证令牌。吊销保证下一次请求失效，不承诺当前订阅立刻断开；当前订阅仍只能接收所属用户的事件。验收应分别观察这两条边界。</p></div></div>
+</section>
+
+<section class="screen animate-in" id="s13-screen-4"><h2 class="screen-heading">owner 贯穿缓存、任务与 SSE</h2>
+
+<p>数据库查询按 instance_id、owner_id 和资源 ID 限定范围，缓存命中也要重新核对归属。否则只要曾经加载过别人的会话，后续请求就可能绕过数据库过滤。资源不存在与不属于当前用户统一返回 404 NOT_FOUND，避免接口暴露“这个 ID 实际存在，只是不属于你”。</p>
+<p>后台执行没有当前 HTTP 用户。outbox 和调度维护可以扫描实例任务，但派发每个任务前必须从记录取得 owner，再绑定执行上下文。媒体任务和知识索引 worker 也从持久记录获取归属。延迟写入用量时，在入链时捕获 owner，不能等待异步执行时再猜当前请求是谁。</p>
+<p>SSE 有实时推送、连接建立期间的缓冲、断线补发和快照四条路径。listener 先检查 owner 和 Thread，再决定立即写入或放入缓冲。重连时 hub.since 也带 userId；历史不能因为已经在内存中就跳过归属过滤。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/http/index.mjs · 第 149–164 行</span><pre><code data-source="stages/s13-auth/server/modules/http/index.mjs" data-start="149" data-end="164">        const listener = event =&gt; { if (event.ownerId === identity.userId &amp;&amp; (!event.threadId || event.threadId === id)) {
+          if (ready) write(event, event.sequence);
+          else if (buffered.length &lt; 1000) buffered.push(event);
+          else response.destroy();
+        } };
+        hub.on("event", listener);
+        response.once('close', () =&gt; { clearInterval(heartbeat); hub.off('event', listener); streams.delete(response); });
+        // 断线重连且缓冲还覆盖得到：只补发错过的事件；否则从快照开始。
+        const missed = hub.since(request.headers["last-event-id"], id, identity.userId);
+        if (missed) for (const event of missed) write(event, event.sequence);
+        else {
+          const queue = await messages.snapshot(id);
+          write({ ownerId: identity.userId, type: "snapshot", threadId: id, protocol: 2, data: { session: sessions.snapshot(id), queue } }, hub.sequence);
+          // 等待队列快照期间缓冲的会话事件已包含在会话快照里；其余事件照常补发，但不带编号，避免断点倒退。
+          for (const event of buffered) if (!SESSION_EVENT_TYPES.has(event.type)) write(event, null);
+        }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>149–153 行</strong>：实时 listener 先比较 ownerId 与请求身份，再核对 Thread；未就绪时只缓冲已匹配事件。</p><p class="tl"><strong>154–155 行</strong>：注册监听，并在连接关闭时移除监听和心跳。</p><p class="tl"><strong>156–158 行</strong>：补发请求同时传入 Last-Event-ID、Thread 与 userId，只写回筛选后的历史。</p><p class="tl"><strong>159–161 行</strong>：没有可补发历史时读取队列快照，快照标记当前 owner。</p><p class="tl"><strong>162–164 行</strong>：处理快照等待期间的已过滤缓冲，避免重复会话快照与断点倒退。</p></div></div></div>
+
+<p>EventHub 在 publish 入口就拒绝没有 ownerId 的事件，发出警告并返回 null，不让无主事件进入历史或推送。不能把缺少 owner 当成“所有人可见”。一个真实属于用户 B 的事件也不会进入用户 A 的订阅，哪怕客户端构造了相同 Thread ID。</p>
+<p>文件 locator 继续是相对路径，可信 owner 决定实际工具根 workspace/users/&lt;ownerId&gt;/。目录按需创建，权限 0700；原有路径校验继续拒绝越界、符号链接和不允许的文件类型。不同用户可以拥有同名相对路径，数据唯一键包含 owner_id。请求参数不能直接选择另一个用户的物理根。</p>
+<p>这仍有明确边界：所有用户共用一个 Codex 进程、一个 CODEX_HOME 和一个 workspace，Codex cwd 没有按用户变化。原生文件能力保持关闭，文件经过工具层。工具目录和 API 门禁不是操作系统沙箱，不能抵御同机管理员或恶意插件，也不能自动清除 Thread 中已有上下文。</p>
+</section>
+
+<section class="screen animate-in" id="s13-screen-5"><h2 class="screen-heading">独立部署与首次账号初始化</h2>
+
+<p>s13 使用自己的 Compose 项目，默认端口 4327，不进入工作台实时目标或共享 stages 容器。工作台提供本章内容、机制演示与 README 链接。实际连接由 SSH 隧道与终端客户端完成；s13 需要登录：remote.sh tunnel 后 npm run login。</p>
+<p>首次 deploy 等待 postgres、redis、gateway 健康，用 agent 镜像的一次性容器准备数据库与目录并查询启用账号数。没有启用账号时，deploy 成功退出并提示 auth-init，agent 尚未启动，此时没有 /ready。不能把这次部署命令退出 0 当成已经可以接受用户请求。</p>
+<pre><code>cd stages/s13-auth
+# 按 README 准备依赖与 .env，显式设置 AGENT_MEMORY_ENABLED=false
+export DEPLOY_HOST=example.com
+bash deploy/remote.sh check
+bash deploy/remote.sh init-env
+bash deploy/remote.sh deploy
+bash deploy/remote.sh auth-init
+bash deploy/remote.sh user -- add bob
+bash deploy/remote.sh tunnel</code></pre>
+<p>auth-init 通过 SSH TTY 交互设置首个账号，密码隐藏输入，不放入命令参数。成功后启动 agent，注册开机启动并输出包含 status: ready 的 JSON。已经初始化时拒绝重新初始化，远程命令仍确保 agent 启动；其他错误不能被当成“已经做过”而忽略。</p>
+<p>初始化保留 identity.json 中原 owner 的标识，使已有会话和知识库继续归首个 admin。已有顶层资料进入该 admin 的用户目录。数据库与文件系统不能作为一个事务提交，处理已有数据前要停服、备份，遇到同名资料冲突时核对目录，不能覆盖目标资料后继续。文件移动中断后的重试同样不覆盖已经移动的内容。</p>
+<p>保持隧道终端打开，在另一个终端进入本阶段目录：</p>
+<pre><code>export AGENT_SERVER_URL=http://127.0.0.1:4327
+npm run login
+npm run chat
+# 结束当前账号的登录会话
+npm run logout</code></pre>
+<p>两个账号应使用两个独立客户端工作副本，避免共用 credentials.json。用户 A 创建会话后，用户 B 的列表里看不到它，尝试恢复其 ID 应为 404；知识库列表和按 kbId 读取也遵循同样规则。两个用户生成同名产物时，应落在不同的用户工具目录中。</p>
+<p>启用账号达到两个时必须显式设置 AGENT_MEMORY_ENABLED=false，否则启动与添加第二个账号都会拒绝。原生共享记忆可能把一个用户的内容提供给另一个用户。启动检查和添加账号使用数据库锁串行核对；仅给管理命令临时设置 false，不能绕过尚未重启且仍启用记忆的服务。关闭记忆后 API 不再返回旧共享摘要，但底层文件与已有 Thread 上下文仍保留。</p>
+</section>
+
+<section class="screen animate-in" id="s13-screen-6"><h2 class="screen-heading">用拒绝路径验收账号边界</h2>
+
+<p>“能够登录”只能证明成功路径。验证归属还要检查密码错误、未知账号、旧令牌、他人资源、缺少 owner 的事件和跨用户缓存。每项实验都运行实际模块并由断言决定退出码，不能把预期输出当作已通过记录。</p>
+<table><thead><tr><th>离线命令</th><th>核对的行为</th><th>证据边界</th></tr></thead><tbody>
+<tr><td>npm run lesson -- hash</td><td>真实 scrypt 验证与未知账号的相同派生路径。</td><td>不证明网络端到端耗时完全相同。</td></tr>
+<tr><td>npm run lesson -- logout</td><td>真实 HTTP handler 在吊销后拒绝旧令牌。</td><td>内存请求与响应，不监听端口。</td></tr>
+<tr><td>npm run lesson -- ownership</td><td>数据查询与会话缓存核对 owner，跨用户统一 404。</td><td>使用查询夹具，真实 SQL 另验。</td></tr>
+<tr><td>npm run lesson -- events</td><td>EventHub 拒绝无主事件，SSE 实时与补发过滤归属。</td><td>真实模块配内存 SSE 响应。</td></tr>
+</tbody></table>
+<p>npm run test:offline 汇总不监听端口、不连接数据库的测试；npm run test:ports 验证实际 HTTP、SSE、CLI 和 MCP。npm run test:auth:integration 读取专用 DATA_TEST_DATABASE_URL，验证真实事务、约束与记忆锁。真实服务器和两个客户端的操作步骤见本章 README；课程构建和离线夹具都不能替代这些检查。</p>
+<p>多个用户共享全局并发两轮，没有按用户配额。账号角色不会增加资源范围，没有共享知识权限，也没有 Web 登录页。本章完成的是经过认证的 owner 传递；理解了这个范围，才能准确解释哪些请求应为 401，哪些资源应为 404，以及为什么底层运行环境还需要更强隔离。</p>
+
+<div class="quiz" id="s13-quiz"><h3>检查理解</h3><div class="quiz-questions">
+
+<div class="quiz-question-block" data-correct="1" data-explanation-right="未知账号仍执行同成本派生，返回统一登录错误。" data-explanation-wrong="未知账号仍执行同成本派生，返回统一登录错误。"><h3 class="quiz-question">未知用户名应走哪条路径？</h3><div class="quiz-options">
+
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>立即跳过密码派生</span></button>
+
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>用 DUMMY_HASH 执行 scrypt 后统一拒绝</span></button>
+
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>自动创建账号</span></button>
+
+</div><div class="quiz-feedback"></div></div>
+
+<div class="quiz-question-block" data-correct="2" data-explanation-right="登出吊销该用户全部令牌，每次请求重新检查数据库状态。" data-explanation-wrong="登出吊销该用户全部令牌，每次请求重新检查数据库状态。"><h3 class="quiz-question">登出后，另一个客户端使用该账号旧令牌发起请求会怎样？</h3><div class="quiz-options">
+
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>继续使用至七天期满</span></button>
+
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>获得新令牌</span></button>
+
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>查库发现吊销，返回 401</span></button>
+
+</div><div class="quiz-feedback"></div></div>
+
+<div class="quiz-question-block" data-correct="0" data-explanation-right="技术角色不扩大资源归属，查询与缓存都核对 owner。" data-explanation-wrong="技术角色不扩大资源归属，查询与缓存都核对 owner。"><h3 class="quiz-question">admin 是否可以凭别人的 Thread ID 读取会话？</h3><div class="quiz-options">
+
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>不可以，仍按 owner 检查，返回 404</span></button>
+
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>可以，admin 可读取所有资源</span></button>
+
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只要命中缓存就可以</span></button>
+
+</div><div class="quiz-feedback"></div></div>
+
+</div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s13-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s13-quiz">重新作答</button></div></div>
+<p><a href="/course/changes.html#s13">→ 打开 s13 阶段演示</a> · <a href="/course/#s13">→ 打开 s13 机制课堂</a> · <a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md" target="_blank" rel="noopener noreferrer">本章 README</a></p>
+</section></div></div></section>

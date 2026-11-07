@@ -1655,5 +1655,92 @@
       "CONTAINER_APP_DIR"
     ],
     "source": "stages/s12-deploy/README.md#备份与下载"
+  },
+  {
+    "term": "不透明令牌",
+    "aka": [
+      "会话令牌",
+      "Bearer 令牌"
+    ],
+    "stage": "s13",
+    "short": "登录后发给客户端的 32 字节随机串；服务端库里只存它的 SHA-256。",
+    "detail": "每次请求带 Authorization: Bearer <令牌>，服务端按哈希查 auth_sessions，并检查账号未禁用、令牌未吊销、未超过绝对 7 天、闲置不满 12 小时。不用 JWT：单服务每次都查库，吊销在下一次请求立即生效。",
+    "related": [
+      "auth_sessions",
+      "scrypt",
+      "吊销"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "scrypt",
+    "aka": [
+      "密码哈希"
+    ],
+    "stage": "s13",
+    "short": "Node 内置的密码哈希算法；本章参数 N=2^15、r=8、p=1，16 字节随机盐。",
+    "detail": "比较用 timingSafeEqual。用户名不存在时也对一个固定的假哈希算一次 scrypt，让“账号不存在”和“密码错误”耗时相同、提示也相同。不加依赖。",
+    "related": [
+      "不透明令牌"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "auth_sessions",
+    "aka": [
+      "登录会话表"
+    ],
+    "stage": "s13",
+    "short": "记录每次登录签出的令牌：只存令牌哈希、创建与最后使用时间、到期与吊销时间。",
+    "detail": "last_seen_at 最多每分钟更新一次，用来判断闲置 12 小时失效。登出、改密码、禁用账号会把该用户全部记录标为吊销。",
+    "related": [
+      "不透明令牌",
+      "吊销"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "吊销",
+    "aka": [
+      "revoke",
+      "登出"
+    ],
+    "stage": "s13",
+    "short": "让令牌立即失效：登出、改密码、禁用账号都会吊销该用户的全部令牌。",
+    "detail": "因为每次请求都查库，吊销在下一次请求就生效，不需要等令牌自然过期。",
+    "related": [
+      "auth_sessions",
+      "不透明令牌"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "请求身份",
+    "aka": [
+      "AsyncLocalStorage",
+      "runOwner"
+    ],
+    "stage": "s13",
+    "short": "认证后把 userId 绑定到这次请求的异步上下文；服务端按它决定 owner，而不是用进程常量。",
+    "detail": "HTTP 请求在认证通过后进入 runIdentity；后台执行（派发、恢复、知识库 worker、工具回调）从任务记录读 owner 再 runOwner，不继承触发它的请求。缺 owner 时直接报错，不退回默认用户。",
+    "related": [
+      "auth_sessions",
+      "workspace/users"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "workspace/users",
+    "aka": [
+      "用户工作区"
+    ],
+    "stage": "s13",
+    "short": "每个用户的资料与产物放在 workspace/users/<userId>/，权限 0700。",
+    "detail": "资源记录里的 locator 仍是相对路径，物理根按当前 owner 解析，所以 A 的工具读不到 B 的文件。原生记忆和 Codex 进程仍是共享的，隔离留给 s14。",
+    "related": [
+      "请求身份",
+      "dataBindings"
+    ],
+    "source": "stages/s13-auth/README.md#核心概念"
   }
 ]

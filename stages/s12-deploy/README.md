@@ -1,6 +1,6 @@
 # s12: 部署单元——让 Agent 在服务器上持续工作
 
-[导论](../introduction.md) · [s11](../s11-model-gateway/README.md) → `s12` → `s13`
+[导论](../introduction.md) · [s11](../s11-model-gateway/README.md) → `s12` → [s13](../s13-auth/README.md)
 
 全仓入口：[机制课堂](../../app/web/public/course/index.html#s12) · [阶段演示](../../app/web/public/course/changes.html#s12) · [章节长文](../../app/web/public/course/handbook.html#module-s12) · [总架构图](../../app/web/public/course/assets/s12-architecture.svg)
 
@@ -160,4 +160,4 @@ postgres 容器需保持运行；agent 镜像须先构建。Compose 的 `.data`�
 
 ## 下一章
 
-s13 账号与认证：把当前单一连接令牌扩展为明确的用户身份与授权关系。本章的共享访问口令与来源限流不等于用户系统。
+[s13 账号与认证](../s13-auth/README.md)：把当前单一连接令牌扩展为明确的用户身份与授权关系。本章的共享访问口令与来源限流不等于用户系统。

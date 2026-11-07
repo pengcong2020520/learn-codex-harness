@@ -157,3 +157,15 @@
 **新增接口**：`GET /ready`
 
 **新增环境变量**：`CONTAINER_APP_DIR`、`AGENT_MAX_CONCURRENT_TURNS`、`AGENT_MAX_QUEUED`、`AGENT_RATE_LIMIT_PER_MINUTE`、`AGENT_MAX_SSE`、`POSTGRES_MEMORY_LIMIT`、`REDIS_MEMORY_LIMIT`、`GATEWAY_MEMORY_LIMIT`、`AGENT_MEMORY_LIMIT`、`NPM_REGISTRY`、`APT_MIRROR`
+
+<a id="s13"></a>
+
+## s13：账号与认证：请求有身份，资源有归属
+
+相比 [s12-deploy](s12-deploy/)：登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。
+
+**新增模块**：账号与认证（账号，登录、令牌与 owner 归属）
+
+**新增接口**：`GET /auth/me`、`POST /auth/logout`、`POST /auth/login`
+
+**新增数据迁移**：`010-accounts.sql`

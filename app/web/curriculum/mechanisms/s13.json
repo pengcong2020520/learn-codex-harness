@@ -1,0 +1,257 @@
+[
+  {
+    "id": "s13-login",
+    "title": "登录、令牌与带身份的资源请求",
+    "question": "登录后，owner 如何进入每次资源查询？",
+    "file": "stages/s13-auth/server/modules/accounts/index.mjs",
+    "start": 15,
+    "end": 42,
+    "expect": "  async login(",
+    "notes": {
+      "35": "每次请求都用令牌摘要查库。"
+    },
+    "actors": [
+      [
+        "cli",
+        "CLI"
+      ],
+      [
+        "accounts",
+        "HTTP / accounts"
+      ],
+      [
+        "db",
+        "PostgreSQL"
+      ],
+      [
+        "gate",
+        "owner 门禁"
+      ]
+    ],
+    "state0": {
+      "身份": "未认证",
+      "令牌": "未签发",
+      "资源": "未查询"
+    },
+    "steps": [
+      {
+        "flow": [
+          "cli",
+          "accounts",
+          "提交 POST /auth/login"
+        ],
+        "say": "教学模拟：提交用户名与密码。",
+        "state": {
+          "身份": "待验证"
+        },
+        "lines": [
+          15,
+          15
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "accounts",
+          "执行 verifyPassword"
+        ],
+        "say": "未知用户也执行同参数派生。",
+        "state": {
+          "身份": "已验证"
+        },
+        "lines": [
+          20,
+          20
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "db",
+          "保存 tokenHash"
+        ],
+        "say": "随机令牌只在数据库保存 SHA-256。",
+        "state": {
+          "令牌": "摘要入库"
+        },
+        "lines": [
+          25,
+          25
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "cli",
+          "返回 token"
+        ],
+        "say": "响应 no-store；客户端凭据文件权限 0600。",
+        "state": {
+          "令牌": "已签发"
+        },
+        "lines": [
+          29,
+          29
+        ]
+      },
+      {
+        "flow": [
+          "cli",
+          "accounts",
+          "携带 Bearer"
+        ],
+        "say": "后续每次请求重新检查会话状态。",
+        "state": {
+          "身份": "查库中"
+        },
+        "lines": [
+          35,
+          35
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "gate",
+          "绑定 ALS userId"
+        ],
+        "say": "HTTP 用 runIdentity 进入门禁，身份来自认证结果。",
+        "state": {
+          "身份": "owner 已绑定"
+        },
+        "lines": [
+          40,
+          40
+        ]
+      },
+      {
+        "flow": [
+          "gate",
+          "db",
+          "查询 owner_id"
+        ],
+        "say": "资源与缓存均核对归属；他人资源统一 404。",
+        "state": {
+          "资源": "当前 owner 或 404"
+        }
+      }
+    ],
+    "takeaway": "密码只用于登录；令牌决定请求身份，owner 决定资源范围。admin 也不能越过归属。"
+  },
+  {
+    "id": "s13-logout",
+    "title": "登出后，旧令牌下一次请求得到 401",
+    "question": "同账号另一个客户端保存的令牌会立即影响下一次请求吗？",
+    "file": "stages/s13-auth/server/modules/accounts/index.mjs",
+    "start": 32,
+    "end": 42,
+    "expect": "  async authenticate(",
+    "notes": {
+      "42": "吊销该用户全部令牌，不只是当前令牌。"
+    },
+    "actors": [
+      [
+        "cli",
+        "CLI"
+      ],
+      [
+        "accounts",
+        "HTTP / accounts"
+      ],
+      [
+        "db",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "令牌": "有效",
+      "响应": "未登出"
+    },
+    "steps": [
+      {
+        "flow": [
+          "cli",
+          "accounts",
+          "提交 POST /auth/logout"
+        ],
+        "say": "教学模拟：本次登出请求先经过 authenticate。",
+        "state": {
+          "响应": "身份已验证"
+        }
+      },
+      {
+        "flow": [
+          "accounts",
+          "db",
+          "执行 revokeAll"
+        ],
+        "say": "等待该用户全部令牌吊销完成。",
+        "state": {
+          "令牌": "revoked"
+        },
+        "lines": [
+          42,
+          42
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "cli",
+          "返回 loggedOut"
+        ],
+        "say": "HTTP 返回成功，客户端清理本地凭据。",
+        "state": {
+          "响应": "loggedOut"
+        }
+      },
+      {
+        "flow": [
+          "cli",
+          "accounts",
+          "重用 Bearer"
+        ],
+        "say": "另一个客户端仍持有旧令牌。",
+        "state": {
+          "响应": "重新认证"
+        },
+        "lines": [
+          32,
+          32
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "db",
+          "查询 tokenHash"
+        ],
+        "say": "再次读取持久化会话状态。",
+        "state": {
+          "令牌": "revoked_at 已设置"
+        },
+        "lines": [
+          35,
+          35
+        ]
+      },
+      {
+        "flow": [
+          "accounts",
+          "cli",
+          "返回 401"
+        ],
+        "say": "吊销分支拒绝请求，提示重新登录。",
+        "state": {
+          "响应": "401 UNAUTHENTICATED"
+        },
+        "lines": [
+          37,
+          37
+        ],
+        "warn": true
+      }
+    ],
+    "takeaway": "吊销保证下一次请求失效；已建立 SSE 不逐帧重新认证，仍只推送该用户事件。"
+  }
+]

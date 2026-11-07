@@ -462,6 +462,32 @@
         ],
         "migrations": []
       }
+    },
+    {
+      "id": "s13",
+      "dir": "s13-auth",
+      "title": "账号与认证：请求有身份，资源有归属",
+      "summary": "登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。",
+      "previous": "s12-deploy",
+      "modules": [
+        {
+          "layer": "账号",
+          "name": "账号与认证",
+          "desc": "登录、令牌与 owner 归属"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /auth/me",
+          "POST /auth/logout",
+          "POST /auth/login"
+        ],
+        "env": [],
+        "migrations": [
+          "010-accounts.sql"
+        ]
+      }
     }
   ]
 }

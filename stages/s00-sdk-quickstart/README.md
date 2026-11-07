@@ -1,6 +1,6 @@
 # s00: 先体验 — 让 Codex 替你干一件事
 
-[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [app](../../app/)
+[导论](../introduction.md) → `s00` → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [app](../../app/)
 > *"模型提出操作，harness 负责执行"* — 先不管协议，用官方 SDK 把一个真实任务交给 Codex，亲眼看看 harness 替你做了哪些事。
 >
 > **对应六个问题**：② 要做什么，做到什么算完？

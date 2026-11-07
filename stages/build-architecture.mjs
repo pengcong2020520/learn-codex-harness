@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy", "s13-auth"];
 // 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
 export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
@@ -19,7 +19,7 @@ function entry(n) {
     : n === 1 ? M("client", "单轮客户端", "发请求、核对终态", 1)
     : n === 2 ? M("client", "多轮客户端", "只发新输入", 1)
     : n === 3 ? M("api", "HTTP 接口", "常驻服务的入口", 3, ["http/"])
-    : M("api", "HTTP / SSE 接口", n < 7 ? "终端客户端接入" : "终端与浏览器接入", 3, ["http/"]);
+    : M("api", "HTTP / SSE 接口", n >= 13 ? "CLI 登录后接入" : n < 7 ? "终端客户端接入" : "终端与浏览器接入", 3, ["http/"]);
   // s03 服务端还不排队（上一轮没结束返回 409）；s04 起排队归「任务与消息」，会话只复用 Thread、整理快照。
   const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"])
     : M("sessions", "会话", "复用 Thread，整理快照", 2, ["sessions/"]);
@@ -39,6 +39,7 @@ const layers = n => [
   { name: "模型网关", mods: [M("media", "生图与生视频", "异步任务，结果存为产物", 11, ["media/", "tools/media.mjs"], 1), M("usage", "用量与预算", "超额停止派发", 11, ["usage/"], 2),
     M("router", "模型路由", "统一协议，转给上游", 11, ["gateway/"], 3)] },
   { name: "部署", mods: [M("deployment", "就绪与容量", "健康探测、限流与关闭", 12, ["deployment/"])] },
+  { name: "账号", mods: [M("accounts", "账号与认证", "登录、令牌与 owner 归属", 13, ["accounts/"])] },
 ];
 // 基础设施：每个阶段都需要、但不单独成章的代码，画在服务框底部的一条带里。until 表示只到哪个阶段为止算基础设施。
 const infra = [{ files: "config/", name: "配置" }, { files: "storage/", name: "存储" }, { files: "codex/", name: "Codex 连接" }, { files: "role/", name: "角色文件", until: 4 }, { files: "data/paths.mjs", name: "路径" }];
@@ -91,6 +92,8 @@ const stageList = [
     path: [["api", "发起任务"], ["usage", "检查预算"], ["def", "选定模型"], ["codex", "Codex 执行"], ["router", "转发到上游"], ["usage", "记录用量"]] },
   { title: "部署：健康、就绪与恢复", sub: "独立 Compose 交付；就绪探测、容量限制与备份保护持久状态。",
     path: [["api", "接收请求"], ["deployment", "检查就绪与限流"], ["messages", "限制轮次并发"], ["codex", "执行任务"], ["pg", "持久化状态"], ["deployment", "关闭与恢复"]] },
+  { title: "账号与认证：请求有身份，资源有归属", sub: "登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。",
+    path: [["api", "提交登录"], ["accounts", "验证密码与令牌"], ["gate", "绑定 owner 门禁"], ["pg", "按 owner 查询"], ["codex", "执行任务"], ["events", "过滤 owner 推送"]] },
 ];
 // 按阶段编号取：stages[11] 是 s11。
 export const stages = Object.fromEntries(stageList.map((st, i) => [stageNo[i], st]));
@@ -113,7 +116,7 @@ export function renderArchitecture(n) {
   [[c.card, c.line, "", "前面阶段已有", c.muted], [c.accentBg, c.accent, "", "本阶段新增", c.accent], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]]
     .forEach(([f, s, d, l, col], i) => { const x = 48 + i * 170; box(x, 138, 22, 16, f, s, d, 4); t(l, x + 30, 152, 15, col); });
 
-  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n < 7 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
+  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n >= 13 ? "终端 / SSH" : n < 7 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
   pos.user = { x: 48, y: 330, w: 120, h: 104 };
 
   // 我们的程序：每层一行，只画到本阶段为止；s03 起常驻为服务。
@@ -249,8 +252,8 @@ const check = process.argv.includes("--check");
 const problems = checkBindings();
 if (problems.length) throw new Error(`总图和代码对不上，请更新 stages/build-architecture.mjs 里的模块绑定：\n${problems.join("\n")}`);
 dirs.forEach((dir, i) => {
-  // s12 独立快照保持原样；全仓登记图由课程资产承载。
-  const file = stageNo[i] === 12 ? path.join(root, "../app/web/public/course/assets/s12-architecture.svg") : path.join(root, dir, "images/architecture.svg"), body = renderArchitecture(stageNo[i]);
+  // s12、s13 独立快照保持原样；全仓登记图由课程资产承载。
+  const file = stageNo[i] >= 12 ? path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`) : path.join(root, dir, "images/architecture.svg"), body = renderArchitecture(stageNo[i]);
   if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
   else fs.writeFileSync(file, body);
 });

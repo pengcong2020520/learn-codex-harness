@@ -1,6 +1,6 @@
 # s11: 模型网关 — Codex 只连网关，网关替它对接各家模型
 
-[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → `s11` → [s12](../s12-deploy/) → [app](../../app/)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → `s11` → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [app](../../app/)
 > *"Codex 只认一个地址，换模型、加模型、管花费都在网关这一层"* — 线上的 Agent 不可能只跑一个模型：协议要统一，模型要协调，token 和花费要管住。
 >
 > **对应六个问题**：⑤ 能用什么？ ⑥ 谁说了算？
@@ -242,7 +242,7 @@ npm run lesson -- s11-gateway --integration   # 真实网关（需要 Docker）�
 
 **[s12 上云部署](../s12-deploy/README.md)**（已完成） —— 一台没人看着的服务器，也能自己起来、自己恢复
 
-**s13 账号与认证（规划中）** —— 每个用户登录自己的账号，会话和任务都有归属
+**[s13 账号与认证](../s13-auth/README.md)**（已完成） —— 每个用户登录自己的账号，会话和任务都有归属
 
 **s14 用户隔离（规划中）** —— 每个用户一个独立的运行环境，互不可见
 
