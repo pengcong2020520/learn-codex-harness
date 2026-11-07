@@ -1,0 +1,23 @@
+{
+  "stage": 13,
+  "name": "账号与认证",
+  "source": "../s12-deploy",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    "node_modules",
+    ".data",
+    ".runs",
+    "workspace (runtime root only)",
+    ".env",
+    "backups"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "保留版本化 examples/*/workspace。",
+    "只增加 accounts 单元；依赖与 s12 一致。",
+    "请求按用户认证；后台由任务记录绑定 owner；Codex 进程仍共享。"
+  ]
+}

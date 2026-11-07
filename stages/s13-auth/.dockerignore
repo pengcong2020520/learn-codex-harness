@@ -1,0 +1,9 @@
+.env
+.env.*
+.data
+.runs
+workspace
+node_modules
+backups
+.git
+*.log
