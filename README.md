@@ -79,6 +79,8 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 
 服务器同时运行 s03–s11 的步骤见 [部署说明](app/deploy/README.md)。教学快照保持不变；部署入口在共享网络内通过 `127.0.0.1:4331` 转发到模型网关，端口与进程管理集中在 `app/deploy/`。
 
+三种模型接入路线、登录链接和自检命令见[接入模型](stages/setup-models.md)。
+
 ## 互动课程目录
 
 | 阶段 | 机制课 |

@@ -24,6 +24,7 @@ export const packages = [
 const plans = {
   install: packages.map(dir => [dir, "npm", ["ci"]]),
   test: [
+    [".", process.execPath, ["--test", "scripts/tests/*.test.mjs"]],
     ...packages.map(dir => [dir, "npm", ["test"]]),
     ["app", "npm", ["run", "test:web"]],
     ["app", "npm", ["run", "course:check"]],
