@@ -155,7 +155,7 @@ export class MessageService {
       }
       await this.sessions.atBoundary(async () => {
         if (this.closed || this.failure)
-          throw new Error("服务已关闭或连接失效。");
+          throw Object.assign(new Error("服务已关闭或连接失效。"), { uncertain: true });
         const prepared = await this.sessions.prepareInput(
           threadId,
           input,
