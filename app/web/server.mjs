@@ -25,6 +25,28 @@ function connection(target) {
   return c;
 }
 function fail(status,message){return Object.assign(new Error(message),{status});}
+// Diagnostics are never redacted into public text: only these exact values are public.
+const publicHealthReasons=new Map([
+  ['AGENT_DEGRADED','Agent 服务暂不可用，请检查服务端。'],
+  ['CODEX_CONNECTION_LOST','Codex 连接已失效，请重启服务并核对任务状态。']
+]);
+const legacyHealthReasons=new Map([
+  ['Codex 连接已失效，请重启服务并核对任务状态。','CODEX_CONNECTION_LOST'],
+  ['Codex 连接已失效，请重启服务并核对会话状态。','CODEX_CONNECTION_LOST']
+]);
+function publicHealthReason(body){
+  const code=body?.error?.code;
+  const allowed=code===undefined?legacyHealthReasons.get(body?.error?.message||body?.tools?.error||body?.message):code;
+  const publicCode=publicHealthReasons.has(allowed)?allowed:'AGENT_DEGRADED';
+  return {code:publicCode,message:publicHealthReasons.get(publicCode)};
+}
+// Healthy metadata is separate from diagnostics; degraded responses omit it entirely.
+function publicHealthMetadata(value,target,c){
+  if(typeof value!=='string')return undefined;
+  return value.split(c.token).join('[已隐藏]').split(target.root).join('[已隐藏]')
+    .replace(/Bearer\s+[^\s,;，；]+/gi,'Bearer [已隐藏]')
+    .replace(/(?:[A-Za-z]:[\\/]|(?<![\w<:])\/)[^\s<>"'，。；）)]+/g,'[已隐藏]');
+}
 export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=publicRoot}={}) {
   const sessions=new Map();const streams=new Set();
   let origin;
@@ -50,15 +72,22 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
         }
         const cookie=(req.headers.cookie||'').match(/(?:^|;\s*)workbench_session=([a-f0-9]{64})(?:;|$)/)?.[1];
         const session=sessions.get(cookie);
-        if(!session||session.expires<Date.now())throw fail(401,'工作台会话已过期，请刷新页面。');
+        if(!session||session.expires<Date.now())throw Object.assign(fail(401,'工作台会话已过期，请刷新页面。'),{code:'WORKBENCH_SESSION_EXPIRED'});
         if(req.headers['x-workbench']!=='1')throw fail(403,'缺少工作台请求标识。');
         if(req.method==='POST'&&req.headers.origin!==`http://${req.headers.host}`)throw fail(403,'写操作必须来自工作台页面。');
         if(url.pathname==='/api/status'&&req.method==='GET'){
           const result=await Promise.all(targets.map(async t=>{
             if(!t.live)return {id:t.id,status:'cli'};
-            try {const c=connection(t);const r=await fetch(c.url+'/health',{headers:{authorization:`Bearer ${c.token}`},redirect:'error',signal:AbortSignal.timeout(1500)});
-              const body=await r.json();return{id:t.id,status:r.ok?'ready':'degraded',model:body.model,queueBackend:body.queueBackend};
-            }catch{return{id:t.id,status:'offline'};}
+            let c;
+            try{c=connection(t);}catch(error){return{id:t.id,status:'offline',reason:error.code==='ENOENT'?'not-started':'unreachable',message:error.code==='ENOENT'?'没有检测到 Agent 服务。':'无法读取有效的 Agent 连接信息，请检查并重启服务。'};}
+            try {
+              const r=await fetch(c.url+'/health',{headers:{authorization:`Bearer ${c.token}`},redirect:'error',signal:AbortSignal.timeout(1500)});
+              const body=await r.json().catch(()=>null);
+              const degraded=!r.ok||body?.status==='degraded';
+              if(!degraded&&(!body||typeof body!=='object'||Array.isArray(body)))throw Error('Invalid health response');
+              if(degraded)return{id:t.id,status:'degraded',reason:'degraded',...publicHealthReason(body)};
+              return{id:t.id,status:'ready',model:publicHealthMetadata(body?.model,t,c),queueBackend:publicHealthMetadata(body?.queueBackend,t,c)};
+            }catch{return{id:t.id,status:'offline',reason:'unreachable',message:'暂时无法连接 Agent，请检查服务是否仍在运行后重试。'};}
           }));return send(200,{targets:result});
         }
         const match=url.pathname.match(/^\/api\/agent\/([a-z0-9]+)(\/.*)$/);
@@ -104,7 +133,7 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
       // 页面没有内联脚本（课程交互都在同源脚本里）；课程正文带少量行内样式，所以只给样式放开 'unsafe-inline'。
       res.setHeader('content-security-policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
       res.writeHead(200,{'content-type':mime[path.extname(requested)],'cache-control':'no-cache'});res.end(req.method==='HEAD'?undefined:readFileSync(file));
-    }catch(error){if(!res.headersSent)send(error.status||(error.code==='ENOENT'?404:500),{error:{message:error.status?error.message:'页面或服务暂不可用。'}});else res.end();}
+    }catch(error){if(!res.headersSent)send(error.status||(error.code==='ENOENT'?404:500),{error:{message:error.status?error.message:'页面或服务暂不可用。',...(error.code==='WORKBENCH_SESSION_EXPIRED'?{code:error.code}:{})}});else res.end();}
   });
   // 默认只监听本机；放进容器时 WORKBENCH_HOST=0.0.0.0，对外仍只发布到宿主的 127.0.0.1。Host 校验不变。
   const host=process.env.WORKBENCH_HOST||'127.0.0.1';if(!['127.0.0.1','0.0.0.0'].includes(host))throw Error('WORKBENCH_HOST 只能是 127.0.0.1 或 0.0.0.0。');
