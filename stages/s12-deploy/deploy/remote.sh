@@ -34,7 +34,7 @@ flock -n 9 || { echo '另一个部署正在进行。' >&2; exit 75; }
 if [ -f REVISION ]; then
  mkdir -p "$APP_DIR.previous"
  rsync -a --delete --exclude=/.env --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock ./ "$APP_DIR.previous/"
- docker image tag codex-harness-s12:current codex-harness-s12:previous
+ if docker image inspect codex-harness-s12:current >/dev/null 2>&1; then docker image tag codex-harness-s12:current codex-harness-s12:previous; fi
 fi
 touch .deploy-pending
 # Fixed path: do not move mounted state or Codex absolute history paths.
