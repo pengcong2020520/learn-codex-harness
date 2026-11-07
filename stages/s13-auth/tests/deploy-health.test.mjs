@@ -9,7 +9,7 @@ import { createHttpService } from '../server/modules/http/index.mjs';
 import { createReadiness, RequestLimits, deploymentConfig, gracefulShutdown } from '../server/modules/deployment/index.mjs';
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's12-health-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's13-health-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const config = { root, launch: { router: {}, catalog: { models: [{}] } }, registry: {}, media: { endpoint: { baseUrl: 'http://gateway:8080/v1' } }, deployment: deploymentConfig() };
   const data = { pool: { query: async () => {} }, queue: { healthy: true } };

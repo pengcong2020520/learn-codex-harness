@@ -67,7 +67,7 @@ test('configuration: 部署模型目录使用无密钥清单，agent 启动不�
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const { loadServerConfig } = await import('../server/modules/config/index.mjs');
-  const root = mkdtempSync(join(tmpdir(), 's12-config-'));
+  const root = mkdtempSync(join(tmpdir(), 's13-config-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const dir of ['config', 'agents']) cpSync(new URL(`../${dir}`, import.meta.url), join(root, dir), { recursive: true });
   mkdirSync(join(root, '.data/gateway'), { recursive: true });

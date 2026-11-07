@@ -7,7 +7,7 @@ import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 const hasFlock = spawnSync('sh', ['-c', 'command -v flock'], { encoding: 'utf8' }).status === 0;
 test('下载锁：真实 flock 在整个发送期间拒绝下载、备份与恢复', { skip: !hasFlock }, async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's12-download-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's13-download-'));
   fs.mkdirSync(path.join(root, 'deploy')); fs.mkdirSync(path.join(root, 'bin'));
   for (const file of ['download-rsync.sh', 'backup.sh', 'restore.sh']) fs.copyFileSync(new URL(`../deploy/${file}`, import.meta.url), path.join(root, 'deploy', file));
   fs.writeFileSync(path.join(root, 'bin/rsync'), '#!/bin/sh\ntouch backups/started\nwhile [ ! -f backups/release ]; do sleep 0.1; done\n', { mode: 0o755 });

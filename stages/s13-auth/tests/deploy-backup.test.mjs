@@ -11,7 +11,7 @@ import { archiveFiles, backupName, clearDirectory, postgresIdentity, dumpCommand
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
 const name = '2026-01-09T00-00-00-000Z';
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's12-backup-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's13-backup-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const file of ['scripts/backup.mjs', 'scripts/backup-lib.mjs', 'scripts/restore.mjs', 'shared/paths.mjs', 'shared/errors.mjs', 'server/modules/deployment/index.mjs', 'deploy/backup.sh', 'deploy/restore.sh', 'deploy/download-rsync.sh']) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });

@@ -15,11 +15,11 @@ services:
     environment:
       POSTGRES_USER: agent
       POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}
-      POSTGRES_DB: agent_s12
+      POSTGRES_DB: agent_s13
     # 教学只发布 agent；数据库、Redis、网关不需要任何宿主端口。
     volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agent -d agent_s12"]
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_s13"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -76,7 +76,7 @@ services:
       AGENT_PORT: "4327"
       AGENT_GATEWAY_URL: http://gateway:8080/v1
       AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
-      DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}@postgres:5432/agent_s12
+      DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}@postgres:5432/agent_s13
       REDIS_URL: redis://redis:6379/0
       CODEX_MODEL_CATALOG_ENABLED: "true"
       CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}

@@ -26,8 +26,8 @@ name=$(date -u +%Y-%m-%dT%H-%M-%S-000Z)
 [ ! -e "backups/$name" ] || { echo '备份名称已存在，请稍后重试。' >&2; exit 1; }
 mkdir "backups/.$name.partial"
 partial="backups/.$name.partial"
-# Keep these arguments in sync with backup-lib.mjs dumpCommand(agent, agent_s12).
-docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exists --no-owner --no-privileges agent_s12 |
+# Keep these arguments in sync with backup-lib.mjs dumpCommand(agent, agent_s13).
+docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exists --no-owner --no-privileges agent_s13 |
   gzip > "$partial/database.sql.gz"
 # The agent image runs as uid 1000; root-created private files must be writable there.
 if [ "$(id -u)" = 0 ]; then chown 1000:1000 backups "$partial" "$partial/database.sql.gz"; fi

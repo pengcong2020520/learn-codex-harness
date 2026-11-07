@@ -34,9 +34,9 @@ if [ "${2:-}" != --yes ]; then
   exec 8>&-
 fi
 docker compose run --rm --no-deps -T agent node scripts/restore.mjs --verify "$name"
-# Keep these arguments in sync with backup-lib.mjs psqlCommand(agent, agent_s12).
+# Keep these arguments in sync with backup-lib.mjs psqlCommand(agent, agent_s13).
 gunzip -c "backups/$name/database.sql.gz" |
-  docker compose exec -T postgres psql --no-password -U agent -d agent_s12 -X --set ON_ERROR_STOP=1 --single-transaction
+  docker compose exec -T postgres psql --no-password -U agent -d agent_s13 -X --set ON_ERROR_STOP=1 --single-transaction
 docker compose run --rm --no-deps -T agent node scripts/restore.mjs --files "$name"
 docker compose up -d --wait agent
 docker compose exec -T agent node deploy/ready.mjs
