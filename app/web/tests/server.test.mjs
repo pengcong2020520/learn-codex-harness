@@ -151,18 +151,18 @@ async function hosted(t,publicOrigin){
 test('WORKBENCH_PUBLIC_ORIGIN 非法值拒绝启动，空值和带端口的规范 Origin 可以启动',()=>{
  const restore=withPublicOrigin(undefined);
  try{
-  for(const value of ['http://codexharness.cleverless.cn','https://codexharness.cleverless.cn/','https://codexharness.cleverless.cn/workbench','https://codexharness.cleverless.cn?next=/','https://user@codexharness.cleverless.cn','https://user:secret@codexharness.cleverless.cn','HTTPS://codexharness.cleverless.cn','https://codexharness.cleverless.cn#session','https://codexharness.cleverless.cn:8443/path']){
+  for(const value of ['http://codexharness.example.com','https://codexharness.example.com/','https://codexharness.example.com/workbench','https://codexharness.example.com?next=/','https://user@codexharness.example.com','https://user:secret@codexharness.example.com','HTTPS://codexharness.example.com','https://codexharness.example.com#session','https://codexharness.example.com:8443/path']){
    process.env.WORKBENCH_PUBLIC_ORIGIN=value;
    assert.throws(()=>createWorkbench({port:0,targets:[]}),/WORKBENCH_PUBLIC_ORIGIN/,value);
   }
-  for(const value of ['','https://codexharness.cleverless.cn','https://codexharness.cleverless.cn:8443','https://codexharness.cleverless.cn:443']){
+  for(const value of ['','https://codexharness.example.com','https://codexharness.example.com:8443','https://codexharness.example.com:443']){
    process.env.WORKBENCH_PUBLIC_ORIGIN=value;
    try{createWorkbench({port:0,targets:[]});}catch(error){throw Error(`${JSON.stringify(value)} 应允许启动：${error.message}`);}
   }
  }finally{restore();}
 });
 
-for(const origin of ['https://codexharness.cleverless.cn','https://codexharness.cleverless.cn:8443'])test(`设置 ${origin} 后公开 Host 与正确 Origin 可用，错误 Origin 和未知 Host 被拒，Cookie 带 Secure`,async t=>{
+for(const origin of ['https://codexharness.example.com','https://codexharness.example.com:8443'])test(`设置 ${origin} 后公开 Host 与正确 Origin 可用，错误 Origin 和未知 Host 被拒，Cookie 带 Secure`,async t=>{
  const host=origin.slice('https://'.length);const f=await hosted(t,origin);
  const boot=await f.call('/api/bootstrap',{headers:{host,origin}});
  assert.equal(boot.status,200);assert.match(boot.setCookie,/^workbench_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/api; Max-Age=28800; Secure$/);
@@ -183,7 +183,7 @@ for(const origin of ['https://codexharness.cleverless.cn','https://codexharness.
 
 for(const value of [undefined,''])test(`WORKBENCH_PUBLIC_ORIGIN ${value===undefined?'未设置':'为空'} 时公开 Host 被拒`,async t=>{
  const f=await hosted(t,value);
- assert.equal((await f.call('/api/bootstrap',{headers:{host:'codexharness.cleverless.cn'}})).status,403);
+ assert.equal((await f.call('/api/bootstrap',{headers:{host:'codexharness.example.com'}})).status,403);
  const local=await fetch(f.url+'/api/bootstrap');
  assert.equal(local.status,200);assert.doesNotMatch(local.headers.get('set-cookie'),/Secure/);
 });

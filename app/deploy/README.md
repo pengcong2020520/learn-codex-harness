@@ -84,7 +84,7 @@ app/deploy/remote.sh gateway  # 改了服务器 .env 里的模型或密钥后：
 - 镜像里设置了 `NODE_ENV=production`，网页工具按严格的公网地址检查运行。
 - 需要从浏览器直接访问域名时，要另外配 HTTPS 与登录认证，不能直接把这些端口暴露到公网。
 
-经 HTTPS 反向代理公开工作台时，在服务器 `.env` 设置 `WORKBENCH_PUBLIC_ORIGIN`（例如 `https://codexharness.cleverless.cn`）。代理需保留 Host 头，并应在代理层加口令。
+经 HTTPS 反向代理公开工作台时，在服务器 `.env` 设置 `WORKBENCH_PUBLIC_ORIGIN`（例如 `https://codexharness.example.com`）。代理需保留 Host 头，并应在代理层加口令。
 
 
 ## 九阶段配置与连接路径

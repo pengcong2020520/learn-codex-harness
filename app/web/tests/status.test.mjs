@@ -32,7 +32,7 @@ function privateFree(response,f){
 }
 
 for(const httpStatus of [200,503])for(const diagnostic of [
- 'source=</Users/alice/private.log>',
+ 'source=</Users/alice/private.log>', // privacy-check: allow
  'relation "private_customer_ledger" does not exist',
  'connect ECONNREFUSED 10.24.8.19:5432'
 ])test(`公开原因白名单：HTTP ${httpStatus} 不返回 ${diagnostic}`,async t=>{
@@ -68,7 +68,7 @@ for(const httpStatus of [200,503])test(`status reason：HTTP ${httpStatus} 非�
  const f=await fixture(t);f.connect();
  t.mock.method(globalThis,'fetch',async(_url,init)=>{
   assert.equal(init.headers.authorization,`Bearer ${f.secret}`);
-  return Response.json({status:'degraded',error:{message:`Codex 连接已失效 <b>诊断</b> ${f.file} ${f.secret} /Users/example/private.log C:\\private\\log.txt`,stack:'private stack'},model:f.secret,queueBackend:f.root,internal:'private internal'},{status:httpStatus});
+  return Response.json({status:'degraded',error:{message:`Codex 连接已失效 <b>诊断</b> ${f.file} ${f.secret} /Users/example/private.log C:\\private\\log.txt`,stack:'private stack'},model:f.secret,queueBackend:f.root,internal:'private internal'},{status:httpStatus}); // privacy-check: allow
  });
  const response=await f.request('/api/status'),result=privateFree(response,f);
  assert.deepEqual(result,{id:'s09',status:'degraded',reason:'degraded',code:'AGENT_DEGRADED',message:'Agent 服务暂不可用，请检查服务端。'});
@@ -90,22 +90,22 @@ test('公开原因白名单：只认可精确提示或允许的错误码，不�
  const legacy='Codex 连接已失效，请重启服务并核对会话状态。';
  for(const body of [
   {error:{message}}, {error:{message:legacy}}, {tools:{error:message}}, {message},
-  {error:{code:'CODEX_CONNECTION_LOST',message:'source=</Users/alice/private.log>'}}
+  {error:{code:'CODEX_CONNECTION_LOST',message:'source=</Users/alice/private.log>'}} // privacy-check: allow
  ]){
   t.mock.method(globalThis,'fetch',async()=>Response.json({status:'degraded',...body}));
   assert.deepEqual(privateFree(await f.request('/api/status'),f),{id:'s09',status:'degraded',reason:'degraded',code:'CODEX_CONNECTION_LOST',message});
  }
  for(const body of [
-  {error:{message:message+' source=</Users/alice/private.log>'}},
+  {error:{message:message+' source=</Users/alice/private.log>'}}, // privacy-check: allow
   {error:{message:'prefix '+message}},
   {error:{message:message+'\n'}},
   {error:{message,code:'UNKNOWN_INTERNAL_CODE'}},
   {error:{code:'toString'}}, {error:{code:'__proto__'}},
   {error:{code:{name:'CODEX_CONNECTION_LOST'}}},
   {error:{code:'AGENT_DEGRADED',message:'relation "private_customer_ledger" does not exist'}},
-  {error:{message:['source=</Users/alice/private.log>']}},
+  {error:{message:['source=</Users/alice/private.log>']}}, // privacy-check: allow
   {error:{message:{detail:'connect ECONNREFUSED 10.24.8.19:5432'}}},
-  {model:'source=</Users/alice/private.log>',queueBackend:'private_customer_ledger',internal:'connect ECONNREFUSED 10.24.8.19:5432'},
+  {model:'source=</Users/alice/private.log>',queueBackend:'private_customer_ledger',internal:'connect ECONNREFUSED 10.24.8.19:5432'}, // privacy-check: allow
   {}
  ]){
   t.mock.method(globalThis,'fetch',async()=>Response.json({status:'degraded',...body}));
