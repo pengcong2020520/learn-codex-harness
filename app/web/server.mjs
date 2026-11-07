@@ -8,16 +8,15 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const publicRoot = fileURLToPath(new URL('./public/', import.meta.url));
 // CLI 与工作台共用的浏览器可用模块，从 shared/ 直接提供，不复制一份。
 const sharedModules = { '/app/session-events.js': fileURLToPath(new URL('../shared/session-events.mjs', import.meta.url)) };
-// 仅供工作台默认目标使用，保留旧版目标编号与连接行为；课程构建独立扫描 stages/。
-// 可配置 Agent 目标连接 s07-memory；其机制课程对应 s05/s06。port 是展示值，实际连接读取各目录的 .data/connection.json。
-export const stageDirs = ['s01-single-turn','s02-multi-turn','s07-memory','s08-data-layer','s09-knowledge-layer'].map(name => `stages/${name}`);
+// 真实阶段目录；port 仅用于展示，连接仍读取目标目录的 .data/connection.json。
+export const stageDirs = ['s00-sdk-quickstart','s01-single-turn','s02-multi-turn','s03-service','s04-events-messages','s05-agent-assembly','s06-tools','s07-memory','s08-data-layer','s09-knowledge-layer','s10-skill-workflow','s11-model-gateway'].map(name => `stages/${name}`);
+const stagePorts = [null,null,null,4313,4319,4323,4324,4325,4314,4315,4316,4318];
 export const defaultTargets = [
-  // 目标 id 与工作台前端一致（s01、s02、s03、s08、s09）；n 是工作台序号。
-  ...['s01','s02','s03','s08','s09'].map((id, i) => ({ id,name:id,root:path.resolve(root,'..',stageDirs[i]),live:i>=2,port:4311+i })),
+  ...stageDirs.map((dir,num) => ({id:`s${String(num).padStart(2,'0')}`,name:`s${String(num).padStart(2,'0')}`,root:path.resolve(root,'..',dir),live:num>=3,port:stagePorts[num]})),
   {id:'project',name:'当前项目',root,live:true,port:4317}
 ];
 const readRoutes = new Set(['/health','/workbench','/workflows','/sessions','/state','/events','/tools','/memory','/preferences','/workspace','/workspace/read','/resources/read','/knowledge','/knowledge/pages','/knowledge/read','/knowledge/job']);
-const writeRoutes = new Set(['/sessions','/sessions/resume','/messages','/queue/continue','/tasks/confirm','/tasks/cancel','/preferences','/knowledge/search','/knowledge/index','/knowledge/source']);
+const writeRoutes = new Set(['/sessions','/sessions/resume','/messages','/turns','/queue/continue','/tasks/confirm','/tasks/cancel','/preferences','/knowledge/search','/knowledge/index','/knowledge/source']);
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.json':'application/json; charset=utf-8'};
 function connection(target) {
   if (!target?.live) throw new Error('此版本使用 CLI，请查看教学操作。');
@@ -65,7 +64,11 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
         const match=url.pathname.match(/^\/api\/agent\/([a-z0-9]+)(\/.*)$/);
         const target=targets.find(t=>t.id===match?.[1]);const route=match?.[2];
         if(!target || !(req.method==='GET'?readRoutes.has(route):req.method==='POST'&&writeRoutes.has(route)))throw fail(404,'接口不存在。');
-        let c;try{c=connection(target);}catch{throw fail(503,'Agent 未启动；请按页面连接说明启动对应版本。');}
+        // Optional snapshots are data availability, not failed browser resources.
+        // Keep authentication/route checks above and all ordinary proxy statuses intact.
+        const optional=req.method==='GET'&&['/tools','/memory'].includes(route)&&req.headers['x-workbench-optional']==='1';
+        const unavailable=(status,message,code)=>send(200,{available:false,error:{status,message,...(code!==undefined?{code}:{})}});
+        let c;try{c=connection(target);}catch{if(optional)return unavailable(503,'Agent 未启动');throw fail(503,'Agent 未启动；请按页面连接说明启动对应版本。');}
         let body;
         if(req.method==='POST'){
           if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))throw fail(415,'需要 JSON 请求。');
@@ -76,13 +79,22 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
         res.once('close',()=>{controller.abort();clearTimeout(timer);});
         let upstream;
         try{upstream=await fetch(c.url+route+url.search,{method:req.method,headers:{authorization:`Bearer ${c.token}`,...(body?{'content-type':'application/json'}:{}),...(route==='/events'&&req.headers['last-event-id']?{'last-event-id':req.headers['last-event-id']}:{})},body,signal:controller.signal,redirect:'error'});}
-        catch{clearTimeout(timer);throw fail(502,req.method==='POST'?'请求结果未确认。请刷新任务状态核对，不要盲目重复提交。':'暂时无法连接 Agent，请检查服务端。');}
+        catch{clearTimeout(timer);if(optional)return unavailable(502,'暂时无法连接 Agent');throw fail(502,req.method==='POST'?'请求结果未确认。请刷新任务状态核对，不要盲目重复提交。':'暂时无法连接 Agent，请检查服务端。');}
         if(route==='/events'&&upstream.ok){
           res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache, no-transform',connection:'keep-alive'});res.flushHeaders();streams.add(res);
           try{for await(const chunk of upstream.body){if(res.destroyed)break;if(res.writableLength>1024*1024)throw Error('slow');res.write(chunk);}}
           catch{/* Client reconnects and reads a fresh snapshot. */}finally{streams.delete(res);res.end();}return;
         }
-        try{const value=await upstream.json();return send(upstream.status,value);}finally{clearTimeout(timer);}
+        try{
+          if(optional&&!upstream.ok){
+            // Preserve the upstream's public diagnostics, never its stack or other internals.
+            const value=await upstream.json().catch(()=>null),error=value?.error;
+            return unavailable(Number.isInteger(error?.status)&&error.status>=400&&error.status<=599?error.status:upstream.status,
+              typeof error?.message==='string'&&error.message?error.message:upstream.status===404?'当前目标未提供此接口':`上游请求失败（HTTP ${upstream.status}）`,
+              typeof error?.code==='string'||typeof error?.code==='number'?error.code:undefined);
+          }
+          const value=await upstream.json();return send(upstream.status,value);
+        }catch(error){if(optional)return unavailable(502,'接口返回了无效数据');throw error;}finally{clearTimeout(timer);}
       }
       if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'不支持此方法。');
       let requested=decodeURIComponent(url.pathname);if(requested==='/')requested='/app/index.html';if(requested==='/course'||requested==='/course/')requested='/course/index.html';

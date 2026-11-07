@@ -83,9 +83,15 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 |------|--------|
 | s01 单轮问答 | `s01-transport` 先建立通信，再派发任务 · `s01-lifecycle` 收到请求，不等于完成任务 |
 | s02 多轮会话 | `s02-fifo` 连续输入如何不丢、不抢跑 · `s02-resume` 恢复会话，为何不是重新拼历史 |
-| s03 可配置 Agent | `s05-agent-config` 配置是装配合同，不是临时提示词 · `s05-skills` Skill 给方法，权限仍要单独核验 · `s06-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s06-mcp` MCP 是调用边界，不是一工具一服务 · `s06-workspace` 在工作区里，也不等于有权读写 |
+| s03 服务化 | `s03-resident` 客户端断开，这一轮还在跑 · `s03-one-turn` 一次只跑一轮，服务端还不排队 · `s03-cleanup` 运行目录怎么清理才不误删 |
+| s04 事件与消息 | `s04-queue` 消息先记录，再由服务端排队 · `s04-reconnect` 断线重连，先同步快照再接事件 · `s04-restart` 重启以后，哪些任务还能继续 |
+| s05 Agent 装配 | `s05-agent-config` 配置是装配合同，不是临时提示词 · `s05-skills` Skill 给方法，权限仍要单独核验 |
+| s06 工具 | `s06-tool-registry` 工具名、参数合同和实现怎样接在一起 · `s06-mcp` MCP 是调用边界，不是一工具一服务 · `s06-workspace` 在工作区里，也不等于有权读写 |
+| s07 记忆 | `s07-memory` 记忆开关由服务端掌握 |
 | s08 数据层 | `s08-persistence` 消息收到了，为什么还需要一条 outbox？ · `s08-dispatch` Redis 丢了，哪条任务还能继续？ · `s08-versions` 原文改了一句，旧产物还能读吗？ |
 | s09 知识层 | `s09-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s09-mounts` 读得到 inputs，不等于读得到所有知识库 · `s09-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s09-rag` 新索引失败，为什么旧索引指针不能先切？ · `s09-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
+
+工作台支持 s00–s11 十二个阶段和当前开发项目（s11 内核）；机制课程已发布 s01–s09 共 24 节。s00、s10、s11 及当前项目的机制课程入口保留请求阶段并显示缺课空态，不回落到 s01。
 
 课程的源码摘录由 `npm run course:build` 直接从 `stages/` 取出并记录哈希，`npm run course:check` 会在源码变化后提示重建。
 

@@ -11,9 +11,21 @@ const upstream=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');let body={};if(req.method==='POST'){const chunks=[];for await(const c of req)chunks.push(c);body=JSON.parse(Buffer.concat(chunks));}
   const send=(value,status=200)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(value));};
   const session=()=>threads.find(t=>t.id===(body.threadId||url.searchParams.get('threadId')));
+  // Exercise real upstream HTTP errors through the bridge, not a browser fetch mock.
+  if(['/tools','/memory'].includes(url.pathname)&&process.env.UI_FIXTURE_OPTIONAL_STATUS){
+    const status=Number(process.env.UI_FIXTURE_OPTIONAL_STATUS);
+    const message=({404:'当前目标未提供此接口。',401:'Agent 认证失败。',403:'无权读取此接口。',503:'尚未核验 Codex 记忆配置。'})[status];
+    return send({error:{message:message+'<img data-diagnostic src=x onerror=alert(1)>',code:'FIXTURE_<DIAGNOSTIC>',status}},status);
+  }
   switch(url.pathname){
     case '/health':return send({model:'local-ui-fixture',queueBackend:'postgres'});
     case '/workbench':return send({agent:{id:'ui-fixture',version:'1.0',tools:{allow:['read_file','kb_read','kb_submit_revision']},memory:{use:false,contribute:false}},queueBackend:'postgres'});
+    // Match ToolManager.snapshot() and MemoryService.snapshot() in app/server/modules.
+    case '/tools':return send({status:'ready',version:'fixture-tools-v1',pending:false,error:null,tools:[{name:'read_file',label:'读取文件'},{name:'kb_read',label:'读取知识'},{name:'kb_submit_revision',label:'提交 Wiki 修订'}]});
+    case '/memory':{
+      const configured={enabled:false,use:false,generate:false,contribute:false,extractModel:null,consolidationModel:null,minIdleHours:1};
+      return send({configured,effective:{...configured},directory:'.data/codex/memories',artifacts:Object.fromEntries(['memory_summary.md','MEMORY.md','raw_memories.md'].map(name=>[name,{exists:false,bytes:0,updatedAt:null}])),hasSummary:false,generationCapability:'blocked',generationWarning:'当前禁用原生写工具，后台合并不能写出最终记忆摘要。',generationProgress:'unknown',modelCompatibility:'unverified',note:'已开启不等于已生成；原生后台按条件处理，不是每轮即时保存。配置修改需重启；现有 Thread 可能保留之前注入的内容。'});
+    }
     // 与 GET /workflows 同形状：write-article 多步无参数；brief 用来覆盖枚举与文本参数。
     case '/workflows':return send({workflows:[{id:'write-article',label:'写文章',description:'理解用户观点，确定立意与大纲；完成定稿',params:null,steps:[{id:'outline',goal:'确定大纲',confirm:true},{id:'final',goal:'完成定稿',confirm:false}]},{id:'knowledge-maintain',label:'知识库维护',description:'把原始资料整理进指定知识库的 Wiki，带来源版本。',params:{required:['kbId'],properties:{kbId:{type:'string',description:'要维护的知识库',pattern:'^[a-z][a-z0-9-]{0,47}$'}}},steps:null},{id:'brief',label:'写简报',description:'按语气写一份简报',params:{required:['tone','topic'],properties:{tone:{type:'string',description:'语气',enum:['正式','轻松']},topic:{type:'string',description:'主题',maxLength:40},code:{type:'string',description:'编号',pattern:'^[a-z][a-z0-9-]{0,7}$'}}},steps:null}]});
     case '/sessions':if(req.method==='GET')return send({sessions:threads});{const t={id:'fixture-thread-'+(++id),name:'浏览器测试会话',turns:[]};threads.push(t);queues.set(t.id,{threadId:t.id,paused:false,jobs:[]});return send(t);}

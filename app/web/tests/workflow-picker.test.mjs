@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {browser,helpers,chrome} from './browser.mjs';
 
-async function fixture(t){
- const proc=spawn(process.execPath,[fileURLToPath(new URL('./ui-fixture.mjs',import.meta.url))],{env:{...process.env,UI_FIXTURE_PORT:'0'},stdio:['ignore','pipe','inherit']});
+async function fixture(t,optionalStatus=''){
+ const proc=spawn(process.execPath,[fileURLToPath(new URL('./ui-fixture.mjs',import.meta.url))],{env:{...process.env,UI_FIXTURE_PORT:'0',UI_FIXTURE_OPTIONAL_STATUS:optionalStatus},stdio:['ignore','pipe','inherit']});
  const exited=new Promise(r=>proc.once('exit',r));t.after(async()=>{proc.kill('SIGTERM');await exited;});
  return new Promise((resolve,reject)=>{let text='';proc.stdout.on('data',d=>{text+=d;const m=text.match(/http:\/\/\S+/);if(m)resolve(m[0].replace(/\/$/,''));});proc.once('exit',code=>reject(Error(`fixture 退出：${code}`)));});
 }
@@ -85,4 +85,29 @@ test('教学演示模式：Workflow 选择器用内置样例，不调用 /messag
  assert.deepEqual(r.options,['write-article','knowledge-maintain']);
  assert.ok(r.preview);assert.deepEqual(r.calls.filter(c=>c.includes('/api/agent/')),[]);
  assert.deepEqual(r.tags,['completed']);
+});
+
+for(const status of ['404','401','403','503'])test(`第三轮 P2-1：可选快照 ${status} 保留诊断并转义展示，Workflow 仍可用`,{skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'},async t=>{
+ const url=await fixture(t,status),b=await browser(t);
+ await b.open(url+'/?stage=project&view=run');
+ const label=status==='404'?'未提供：':'读取失败：';
+ const reason=({'404':'当前目标未提供此接口。','401':'Agent 认证失败。','403':'无权读取此接口。','503':'尚未核验 Codex 记忆配置。'})[status];
+ const result=await b.run(`${helpers}
+  const ready=await until(()=>$('.compose-modes'));
+  $('[data-tab="capabilities"]').click();
+  const loaded=await until(()=>$('.runtime-tools')?.textContent.includes('FIXTURE_<DIAGNOSTIC>')&&$('.runtime-memory')?.textContent.includes('FIXTURE_<DIAGNOSTIC>'));
+  const out={ready,loaded,tools:$('.runtime-tools').textContent,memory:$('.runtime-memory').textContent,images:$$('.runtime-tools img,.runtime-memory img').length};
+  $('[data-tab="chat"]').click();await until(()=>$('.compose-modes'));
+  $('[data-action="compose-mode"][data-mode="workflow"]').click();
+  $('#message').value='可选能力失败后仍提交工作流';$('#composer').requestSubmit();
+  out.submitted=await until(()=>$('[data-action="confirm-task"]'),4000);
+  return out;`);
+ assert.ok(result.ready&&result.loaded&&result.submitted);
+ for(const text of [result.tools,result.memory]){
+  assert.ok(text.includes(label));assert.ok(text.includes(reason));assert.ok(text.includes(`HTTP ${status}`));
+  assert.ok(text.includes('FIXTURE_<DIAGNOSTIC>'));assert.ok(text.includes('<img data-diagnostic src=x onerror=alert(1)>'));
+  if(status!=='404')assert.equal(text.includes('未提供：'),false);
+ }
+ assert.equal(result.images,0,'诊断里的 HTML 只能显示为文本');
+ assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
