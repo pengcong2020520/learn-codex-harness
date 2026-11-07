@@ -12,6 +12,8 @@ WorkingDirectory=/opt/learn-codex-harness/app
 ExecStart=/usr/bin/docker compose up -d --wait
 ExecStop=/usr/bin/docker compose stop
 TimeoutStartSec=600
+# stages 依次关闭九个服务，compose 宽限 120 秒；给基础服务留出余量。
+TimeoutStopSec=180
 
 [Install]
 WantedBy=multi-user.target

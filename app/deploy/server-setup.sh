@@ -8,6 +8,8 @@ UNIT_DIR=${UNIT_DIR:-/etc/systemd/system}
 cd "$APP_DIR"
 test -f .env || { echo "缺少 $APP_DIR/.env，先在本机运行 remote.sh init-env。" >&2; exit 1; }
 chmod 600 .env
+# 兼容已有部署；阶段路径必须与工作台的 <app>/../stages 对齐。
+grep -q '^CONTAINER_APP_DIR=' .env || printf 'CONTAINER_APP_DIR=%s\n' "$APP_DIR" >> .env
 
 # 要启动哪些可选服务写在 .env 的 COMPOSE_PROFILES 里，开机单元也靠它；填了 OLLAMA_BASE_URL 就带上本地向量模型。
 ollama=no; grep -qE '^OLLAMA_BASE_URL=["'\'']?[^"'\''[:space:]]' .env && ollama=yes
@@ -19,10 +21,17 @@ in_app() { docker compose run --rm --no-deps -T agent "$@"; }
 # 容器里以 node（uid 1000）运行，挂载的数据目录交给它。
 mkdir -p .data .runs workspace && chown -R 1000:1000 .data .runs workspace
 
+for stage in s03-service s04-events-messages s05-agent-assembly s06-tools s07-memory s08-data-layer s09-knowledge-layer s10-skill-workflow s11-model-gateway; do
+  mkdir -p "../stages-data/$stage/.data" "../stages-data/$stage/.runs" "../stages-data/$stage/workspace"
+  chown -R 1000:1000 "../stages-data/$stage"
+done
+mkdir -p .data/stages && chown 1000:1000 .data/stages
+
 echo "== 构建镜像"
-compose build agent
+compose build agent stages
 echo "== 生成模型网关配置"
 in_app node scripts/gateway-config.mjs
+in_app node deploy/stages-config.mjs
 # 从旧版部署升级（数据库与网关一个单元、智能体与工作台在宿主上直接跑 Node）：停掉并移除旧单元，否则旧进程占着端口；
 # 宿主上的 node_modules 也不再需要。数据卷与 .data 不动。
 if [ -e "$UNIT_DIR/codex-harness-db.service" ] || [ -e "$UNIT_DIR/codex-harness-web.service" ]; then
@@ -37,8 +46,8 @@ compose up -d --wait postgres redis
 compose up -d --wait --force-recreate gateway
 if [ "$ollama" = yes ]; then compose up -d --wait ollama; fi
 # 迁移不能与运行中的服务同时写状态（.data/server.lock），重复部署时先停智能体与工作台。
-echo "== 停止智能体服务与工作台"
-compose stop agent web
+echo "== 停止智能体、阶段服务与工作台"
+compose stop web stages agent
 echo "== 迁移数据库并准备工作区（只建 Agent 定义里声明的目录，不覆盖已有文件）"
 in_app npm run -s data:migrate
 in_app npm run -s agent:init
@@ -46,8 +55,8 @@ if [ "$ollama" = yes ]; then
   echo "== 下载向量模型（已下载的会跳过）"
   for model in $(in_app node scripts/ollama-pull.mjs --list); do compose exec -T ollama ollama pull "$model"; done
 fi
-echo "== 启动智能体服务与工作台"
-compose up -d --wait --force-recreate agent web
+echo "== 启动智能体、阶段服务与工作台"
+compose up -d --wait --wait-timeout 300 --force-recreate agent stages web
 
 # 开机单元只负责开机时 docker compose up、关机时 stop；docker 路径换成这台服务器上的实际路径。
 for unit in deploy/systemd/*.service; do
@@ -67,7 +76,7 @@ health() {
       .catch(() => process.exit(1));' 2>/dev/null
 }
 for _ in $(seq 1 60); do
-  if health >/dev/null; then
+  if health >/dev/null && compose exec -T stages node /opt/stages-deploy/run-stages.mjs --health; then
     echo "== 就绪：$(cat REVISION 2>/dev/null || echo 未知版本)"
     compose ps --format '{{.Service}} {{.Status}}' | paste -sd' ' -
     exit 0
@@ -75,5 +84,5 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 echo "服务没有在 120 秒内就绪，最近日志：" >&2
-compose logs --tail 30 agent >&2
+compose logs --tail 30 agent stages >&2
 exit 1

@@ -43,7 +43,7 @@ const server = {
   node: `case "$1" in -p) echo "\${NODE_MAJOR:-24}" ;; -v) echo "v\${NODE_MAJOR:-24}.11.0" ;; esac`,
   rsync: "exit 0",
   df: `printf 'Avail\\n  %sG\\n' "\${DISK_GB:-28}"`,
-  free: `printf '              total used free shared buff/cache available\\nMem: 3800 600 1200 10 2000 %s\\n' "\${MEM_MB:-3200}"`,
+  free: `printf '              total used free shared buff/cache available\\nMem: 3800 600 1200 10 2000 %s\\nSwap: %s 0 %s\\n' "\${MEM_MB:-3200}" "\${SWAP_MB:-0}" "\${SWAP_MB:-0}"`,
   // PORTS="5432=postgres 4317=MainThread"：被占用的端口与进程名；PID 就用端口号。
   ss: `port=\${2##*:}
   for pair in $PORTS; do
@@ -86,25 +86,54 @@ test("部署前检查：端口被别的程序或别的项目的容器占着才�
 
 test("部署前检查：逐项说明缺什么、怎么处理，而不是部署到一半失败", t => {
   const { dir, bin } = sandbox(t, all.filter(name => !["systemctl", "docker", "rsync"].includes(name)));
-  // 服务器 .env 启用了本地向量模型：磁盘至少 12 GB、可用内存至少 1500 MB。
+  // 启用本地向量模型不再抬高磁盘和内存门槛。磁盘仍须 ≥ 8 GB；内存加 swap 不足 2048 MB 才失败。
   fs.writeFileSync(path.join(dir, ".env"), "OLLAMA_BASE_URL=http://ollama:11434\n");
-  const result = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "1200", PORTS: "5432=postgres" });
+  const result = run(check, [], bin, { APP_DIR: dir, DISK_GB: "7", MEM_MB: "1200", PORTS: "5432=postgres" });
   assert.equal(result.code, 1);
   for (const expected of [/没有 systemd/, /没有 Docker\n.*docs\.docker\.com\/engine\/install.*registry-mirrors/,
-    /没有 rsync/, /磁盘剩余 8 GB\n.*Ollama 镜像与向量模型约 7 GB/, /可用内存 1200 MB.*\n.*本地向量模型（Ollama）加载时还要约 1\.1 GB/, /端口 5432 被 postgres（PID 5432）占用/]) {
+    /没有 rsync/, /磁盘剩余 7 GB\n.*至少需要 8 GB/, /可用内存 1200 MB.*\n.*2048 MB/, /端口 5432 被 postgres（PID 5432）占用/]) {
     assert.match(result.out, expected);
   }
-  assert.doesNotMatch(result.out, /满足部署条件/);
+  assert.doesNotMatch(result.out, /满足部署条件|至少需要 20 GB|至少需要 3200 MB/);
 });
 
-test("部署前检查：没启用本地向量模型时，2 GiB 内存的小服务器也够用", t => {
+test("部署前检查：九阶段磁盘至少 8 GB；可用内存加空闲 swap 至少 2048 MB，低于 3000 MB 只警告", t => {
   const { dir, bin } = sandbox(t, all);
-  const small = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "1200" });
-  assert.equal(small.code, 0, small.out);
+  // 4 GB 机器：可用约 2.7 GB，另有 2 GB swap。合计超过 2048 MB，只警告，不阻止部署。
+  const tight = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "2700", SWAP_MB: "2048" });
+  assert.equal(tight.code, 0, tight.out);
+  assert.match(tight.out, /服务器满足部署条件/);
+  assert.match(tight.out, /可用内存 2700 MB.*\n.*Ollama 加载向量模型约需 1\.1 GB/);
+  assert.match(tight.out, /不用 RAG/);
+  assert.match(tight.out, /mem_limit/);
+  assert.doesNotMatch(tight.out, /✗/);
+
+  const swapCovers = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "1500", SWAP_MB: "548" });
+  assert.equal(swapCovers.code, 0, swapCovers.out);
+  assert.match(swapCovers.out, /空闲 swap 548 MB/);
+
+  const noSwapButEnough = run(check, [], bin, { APP_DIR: dir, DISK_GB: "16", MEM_MB: "2400" });
+  assert.equal(noSwapButEnough.code, 0, noSwapButEnough.out);
+  assert.match(noSwapButEnough.out, /1\.1 GB/);
+
+  const comfortable = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "3000" });
+  assert.equal(comfortable.code, 0, comfortable.out);
+  assert.doesNotMatch(comfortable.out, /Ollama|1\.1/);
+
   const tiny = run(check, [], bin, { APP_DIR: dir, DISK_GB: "4", MEM_MB: "600" });
-  assert.match(tiny.out, /磁盘剩余 4 GB\n.*至少需要 6 GB/);
-  assert.match(tiny.out, /可用内存 600 MB\n.*至少需要 800 MB/);
+  assert.notEqual(tiny.code, 0);
+  assert.match(tiny.out, /磁盘剩余 4 GB\n.*至少需要 8 GB/);
+  assert.match(tiny.out, /可用内存 600 MB.*\n.*2048 MB/);
   assert.doesNotMatch(tiny.out, /Ollama/);
+
+  const swapShort = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "1500", SWAP_MB: "547" });
+  assert.notEqual(swapShort.code, 0);
+  assert.match(swapShort.out, /空闲 swap 547 MB\n.*2048 MB/);
+
+  fs.writeFileSync(path.join(dir, ".env"), "OLLAMA_BASE_URL=http://ollama:11434\n");
+  const ollama = run(check, [], bin, { APP_DIR: dir, DISK_GB: "8", MEM_MB: "2700", SWAP_MB: "2048" });
+  assert.equal(ollama.code, 0, ollama.out);
+  assert.doesNotMatch(ollama.out, /至少需要 20 GB|至少需要 3200 MB/);
 });
 
 test("部署前检查：没有 free 命令时改读 /proc/meminfo，读不到就跳过内存一项，不报出“? MB”", t => {
@@ -224,15 +253,15 @@ test("server-setup：全部服务用 Docker 起；先生成网关配置，迁移
     return index;
   };
   assert.match(calls[at(/^chown/)], /^chown -R 1000:1000 \.data \.runs workspace$/, "容器里以 node（uid 1000）运行");
-  assert.ok(at(/^docker compose build agent$/) < at(/node scripts\/gateway-config\.mjs/));
+  assert.ok(at(/^docker compose build agent stages$/) < at(/node scripts\/gateway-config\.mjs/));
   assert.match(calls[at(/node scripts\/gateway-config\.mjs/)], /^docker compose run --rm --no-deps -T agent node/, "一次性任务在镜像里跑，宿主不需要 Node");
   assert.ok(at(/node scripts\/gateway-config\.mjs/) < at(/^docker compose up -d --wait --force-recreate gateway$/), "先生成配置，再重建网关");
   assert.ok(at(/^docker compose up -d --wait ollama$/) < at(/ollama pull qwen3-embedding:0\.6b/));
-  const stop = at(/^docker compose stop agent web$/);
+  const stop = at(/^docker compose stop web stages agent$/);
   assert.ok(stop < at(/npm run -s data:migrate/), "迁移不能与运行中的服务同时写状态");
   assert.ok(at(/npm run -s data:migrate/) < at(/npm run -s agent:init/));
-  assert.ok(at(/^docker compose exec -T ollama ollama pull qwen3-embedding:0\.6b$/) < at(/^docker compose up -d --wait --force-recreate agent web$/));
-  assert.ok(at(/^docker compose up -d --wait --force-recreate agent web$/) < at(/^systemctl enable -q codex-harness\.service$/));
+  assert.ok(at(/^docker compose exec -T ollama ollama pull qwen3-embedding:0\.6b$/) < at(/^docker compose up -d --wait --wait-timeout 300 --force-recreate agent stages web$/));
+  assert.ok(at(/^docker compose up -d --wait --wait-timeout 300 --force-recreate agent stages web$/) < at(/^systemctl enable -q codex-harness\.service$/));
   assert.ok(at(/^systemctl daemon-reload$/) < at(/^systemctl start codex-harness\.service$/));
   // 健康检查的脚本有多行，日志里跨行，所以从这一行往后找 /health。
   assert.match(calls.slice(at(/^docker compose exec -T agent node -e/)).join("\n"), /\/health/, "在智能体容器里做健康检查");

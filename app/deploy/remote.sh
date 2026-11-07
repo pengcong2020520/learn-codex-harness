@@ -6,7 +6,7 @@
 #   init-env  用本机 app/.env 里的模型配置生成服务器 .env（已存在则不覆盖）；数据库密码和网关访问密钥在服务器上新生成。
 #             国内服务器可以同时指定镜像源：NPM_REGISTRY=https://registry.npmmirror.com APT_MIRROR=http://mirrors.tencentyun.com remote.sh init-env
 #   gateway   改了服务器 .env 里的模型或密钥后，重新生成网关配置并重启网关
-#   deploy    部署当前提交的 app/：服务器上构建镜像、迁移，并用 Docker 启动全部服务（宿主只需要 Docker）
+#   deploy    部署 app/ 与 s03–s11（默认 HEAD，DEPLOY_SOURCE=worktree 可验收未提交改动）：服务器上构建镜像、迁移，并用 Docker 启动全部服务（宿主只需要 Docker）
 #   status    查看版本、各容器状态、健康检查与内存
 #   logs      跟随查看容器日志（Ctrl-C 退出）
 #   tunnel    前台建立隧道：本机 14317 → Agent，14320 → Web 工作台
@@ -26,7 +26,7 @@ reach() {
   need ssh
   remote true 2>/dev/null || die "无法用 SSH 密钥登录 ${DEPLOY_HOST}；先运行 ssh-copy-id ${DEPLOY_HOST}，确认 ssh $DEPLOY_HOST 不需要输入密码。"
 }
-# 带上部署路径：检查脚本据服务器 .env 判断是否启用了本地向量模型（要求更多磁盘和内存）。
+# 部署前在服务器上执行 check.sh：磁盘剩余 ≥ 8 GB；可用内存 + 空闲 swap ≥ 2048 MB。
 preflight() { echo "检查服务器 ${DEPLOY_HOST}："; remote "APP_DIR='$APP_DIR' bash -s" < "$APP/deploy/check.sh"; }
 
 case "${1:-}" in
@@ -42,8 +42,8 @@ case "${1:-}" in
     if remote "test -e '$APP_DIR/.env'"; then echo "服务器上已有 $APP_DIR/.env，未覆盖。"; exit 0; fi
     # 只带模型、各家密钥与 Agent 相关配置；密钥经 SSH 管道写入，不在终端显示。数据库密码与网关访问密钥在服务器上重新生成。
     # 容器里的项目路径与部署路径相同（CONTAINER_APP_DIR），迁移过来的 Codex 历史记录路径不变；本机启用了本地向量模型就一并带上。
-    { grep -E "^(CODEX_MODEL[A-Z_]*|${PROVIDER_KEYS}|OLLAMA_BASE_URL|AGENT_MEMORY_[A-Z_]+|AGENT_DEFINITION|AGENT_WEB_SEARCH|AGENT_TURN_TIMEOUT_MS|DEMO_TIMEOUT_MS)=" "$APP/.env"
-      printf 'CONTAINER_APP_DIR=%s\n' "$APP_DIR"
+    { grep -E "^(CODEX_MODEL[A-Z0-9_]*|${PROVIDER_KEYS}|OLLAMA_BASE_URL|AGENT_MEMORY_[A-Z_]+|AGENT_DEFINITION|AGENT_WEB_SEARCH|AGENT_TURN_TIMEOUT_MS|DEMO_TIMEOUT_MS)=" "$APP/.env"
+      printf 'CONTAINER_APP_DIR=%s\nCONTAINER_STAGES_DIR=%s/../stages\n' "$APP_DIR" "$APP_DIR"
       if [ -n "${NPM_REGISTRY:-}" ]; then printf 'NPM_REGISTRY=%s\n' "$NPM_REGISTRY"; fi
       if [ -n "${APT_MIRROR:-}" ]; then printf 'APT_MIRROR=%s\n' "$APT_MIRROR"; fi; } |
       remote "set -e; mkdir -p '$APP_DIR'; umask 077; pw=\$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n'); gw=\$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
@@ -51,24 +51,28 @@ case "${1:-}" in
     echo "已生成服务器 $APP_DIR/.env（权限 600）。"
     ;;
   deploy)
-    need git rsync
+    need git rsync node tar
     ROOT=$(git -C "$APP" rev-parse --show-toplevel)
     rev=$(git -C "$ROOT" rev-parse --short HEAD)
-    git -C "$ROOT" diff --quiet HEAD -- app || echo "提醒：app/ 有未提交的改动；只部署已提交的 ${rev}。"
+    if [ "${DEPLOY_SOURCE:-head}" = head ]; then
+      git -C "$ROOT" diff --quiet HEAD -- app stages || echo "提醒：有未提交改动；只部署已提交的 ${rev}，验收工作区请设置 DEPLOY_SOURCE=worktree。"
+    fi
     reach
     remote "test -f '$APP_DIR/.env'" || die "服务器上缺少 .env，先运行：$0 init-env"
     preflight || die "服务器不满足部署条件，按上面的提示处理后重试。"
     stage=$(mktemp -d); trap 'rm -rf "$stage"' EXIT
-    git -C "$ROOT" archive HEAD app | tar -x -C "$stage"
-    echo "$rev" > "$stage/app/REVISION"
+    node "$APP/deploy/package-deploy.mjs" "$ROOT" "$stage" "${DEPLOY_SOURCE:-head}"
     # 只同步代码：.env、数据、运行记录、工作区与依赖目录留在服务器上，不被 --delete 删除。
     rsync -az --delete --exclude=/.env --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/node_modules/ \
       -e "ssh -o BatchMode=yes" "$stage/app/" "$DEPLOY_HOST:$APP_DIR/"
+    # stages-data 与 stages 同级；--delete 的作用域只有阶段代码，不包含持久化数据。
+    remote "mkdir -p '$APP_DIR/../stages'"
+    rsync -az --delete -e "ssh -o BatchMode=yes" "$stage/stages/" "$DEPLOY_HOST:$APP_DIR/../stages/"
     remote "APP_DIR='$APP_DIR' bash '$APP_DIR/deploy/server-setup.sh'"
     ;;
   gateway)
     reach
-    remote "cd '$APP_DIR' && docker compose run --rm --no-deps -T agent node scripts/gateway-config.mjs && docker compose up -d --wait --force-recreate gateway && docker compose restart agent"
+    remote "cd '$APP_DIR' && docker compose run --rm --no-deps -T agent node scripts/gateway-config.mjs && docker compose run --rm --no-deps -T agent node deploy/stages-config.mjs && docker compose up -d --wait --force-recreate gateway && docker compose stop web stages agent && docker compose up -d --wait --wait-timeout 300 --force-recreate agent stages web"
     ;;
   status)
     remote "cd '$APP_DIR' && echo \"版本：\$(cat REVISION)；开机单元：\$(systemctl is-active codex-harness)\" &&
@@ -76,7 +80,8 @@ case "${1:-}" in
         const { url, token } = JSON.parse(require(\"fs\").readFileSync(\".data/connection.json\", \"utf8\"));
         fetch(url + \"/health\", { headers: { authorization: \"Bearer \" + token } }).then(r => r.json())
           .then(v => console.log(\"健康检查：\" + v.status + \"；模型：\" + v.model + \"；队列：\" + v.queueBackend));' &&
-      docker stats --no-stream --format '{{.Name}}  {{.MemUsage}}' && free -h | sed -n 2p"
+      docker compose exec -T stages node /opt/stages-deploy/run-stages.mjs --health; health_status=\$?;
+      docker stats --no-stream --format '{{.Name}}  {{.MemUsage}}' && free -h | sed -n 2p; exit \$health_status"
     ;;
   logs)
     ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && docker compose logs -f --tail 50"
