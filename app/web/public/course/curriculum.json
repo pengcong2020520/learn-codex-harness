@@ -58,6 +58,18 @@
       "dir": "stages/s09-knowledge-layer",
       "name": "知识层",
       "focus": "可信门禁与 Wiki / RAG"
+    },
+    {
+      "id": "s10",
+      "dir": "stages/s10-skill-workflow",
+      "name": "Skill 与 Workflow",
+      "focus": "Skill 教方法，Workflow 管边界和终点"
+    },
+    {
+      "id": "s11",
+      "dir": "stages/s11-model-gateway",
+      "name": "模型网关",
+      "focus": "模型清单、能力路由与用量预算"
     }
   ],
   "lessons": [
@@ -4630,6 +4642,1127 @@
         "session": "s09",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s09_memory",
         "adaptation": "参考从自动记忆的提取、召回、合并解释跨轮次持久信息。本项目明确选择另一个边界：KB 用受控来源与版本，挂载 KB 时关闭原生 memory；不把 Wiki/RAG、Thread 历史和长期记忆混成一层。"
+      }
+    },
+    {
+      "id": "s10-package",
+      "stage": "s10-skill-workflow",
+      "title": "方法跟着 Agent 包走，工作资料不能改权限",
+      "principle": "在 schemaVersion 1.2 下，Skill 必须位于 Agent 包内、工作区外；读取方法不会授予工具或资源权限。",
+      "problem": "用户把一份带脚本的 Skill 放进工作区，希望助手立即照做。服务怎样区分可读资料与受信的方法配置？",
+      "change": {
+        "before": "工作区承载用户和模型可写的数据，若从这里装配受信方法，资料就可能改变执行规则。",
+        "added": "AgentDefinition 校验角色与 Skill 的位置，建立文本白名单及内容指纹；启动时把包内 Skill 同步到 CODEX_HOME。",
+        "kept": "Codex 仍负责 Skill 发现、解析和注入；工具、资源和任务授权仍由服务端检查。"
+      },
+      "ownership": {
+        "codex": "发现与解析已启用的 Skill，根据显式输入或执行中的需要使用方法。",
+        "product": "校验包路径与文件类型、同步副本、核验启用集合，配置变更后撤销旧版本；skill_read 只读白名单。"
+      },
+      "concepts": [
+        {
+          "term": "Agent 包",
+          "meaning": "schemaVersion 1.2 的 agent.json、角色与 skills/ 是部署者提供的受信配置；Skill 路径相对 agent.json。"
+        },
+        {
+          "term": "文本白名单",
+          "meaning": "同步 SKILL.md 与 references/ 下的 .md/.txt；隐藏条目被跳过，其他脚本、非白名单文件与可见符号链接会拒绝。每文件最多 128 KiB，文件总数最多 50。"
+        },
+        {
+          "term": "内容指纹",
+          "meaning": "skillDigest 包括文件名与内容。sourceHash 重新扫描白名单，所以新增参考文件也会使 expected 失配。"
+        }
+      ],
+      "mechanism": "构造 AgentDefinition 时先拒绝位于工作区内的角色。schemaVersion 1.2 的 Skill 必须以 SKILL.md 为文件名，位于 Agent 配置目录内且在工作区外；trustedFile 拒绝路径中的符号链接，skillFiles 收集允许的文本。sourceHash 纳入定义、角色和 Skill 文件集合及内容，assertCurrent 发现变化或读取失败就撤销并抛出 AGENT_CHANGED。installSkills 把白名单复制到 CODEX_HOME/skills/<id>/，只管理本服务清单中的目录，不覆盖未托管的同名目录。随后 verifySkills 通过 skills/list、必要时 skills/config/write 收紧启用集合并再次检查；复制成功不等于发现核验成功。skill_read 只读取已核验启用 Skill 的白名单文件，不产生授权。1.1 及以前仍按工作区解析 Skill 路径；本课包隔离规则明确针对 1.2，不能套到兼容分支。",
+      "design": {
+        "decision": "把方法配置与可写资料分开放，用文件集合和内容共同判断版本。",
+        "reason": "工作区新增文件不能成为受信 Skill；参考资料改变也不能悄悄沿用旧版本。",
+        "alternative": "只校验 SKILL.md 正文会漏掉 references 新增或修改；读取工作区任意 Skill 会模糊配置与资料的边界。",
+        "cost": "本阶段只支持文本 Skill，不自动装配脚本与外部依赖；包内容改变需受控重启。发现成功不保证模型会主动读取或正确遵循。"
+      },
+      "source": {
+        "file": "stages/s10-skill-workflow/server/modules/agents/index.mjs",
+        "needle": "      const skillPath = path.resolve(packaged ? directory : this.workspacePath, binding.path);",
+        "before": 0,
+        "after": 18,
+        "explanation": "112–130 行展示 1.2 的位置约束、文件检查、兼容分支和白名单指纹登记。角色检查在 68–71 行，skillFiles 在 19–38 行，sourceHash 在 143–146 行，assertCurrent 在 147–153 行；同步与发现核验位于 codex/skills.mjs，不在这个窗口内。",
+        "start": 112,
+        "anchor": 112,
+        "code": "      const skillPath = path.resolve(packaged ? directory : this.workspacePath, binding.path);\n      if (packaged) {\n        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(skill.id)) throw new Error(`Skill id 只能使用小写字母、数字和连字符：${skill.id}`);\n        if (path.basename(skillPath) !== \"SKILL.md\" || !inside(directory, skillPath) || inside(this.workspacePath, skillPath))\n          throw new Error(`Skill 必须是 Agent 包内、工作区外的 SKILL.md：${skill.id}`);\n      }\n      if (!fs.existsSync(skillPath)) {\n        if (skill.required) throw new Error(`必需 Skill 文件不存在：${skill.id}`);\n        this.warnings.push(`可选 Skill 不存在：${skill.id}`); continue;\n      }\n      if (packaged) trustedFile(skillPath, directory);\n      const info = fs.lstatSync(skillPath);\n      if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);\n      if (!packaged) {\n        this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });\n        continue;\n      }\n      const source = path.dirname(fs.realpathSync(skillPath)), files = skillFiles(source);\n      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });",
+        "hash": "fbc77092e9b3d74fa27742a35756ccc398fa3d9bc693d16b8fc2e186fd3566d7"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "包内文本通过装配，副本仍需发现核验",
+          "steps": [
+            {
+              "title": "声明包内路径",
+              "actor": "部署者 → AgentDefinition",
+              "event": "教学模拟 · schemaVersion=1.2; skills/outline/SKILL.md",
+              "explain": "outline 是测试夹具的示意 Skill；工作区与 Agent 包分开。",
+              "state": {
+                "schema": "1.2",
+                "location": "包内、工作区外",
+                "files": "SKILL.md + references/a.md",
+                "fingerprint": "尚未登记",
+                "result": "待校验"
+              },
+              "lines": []
+            },
+            {
+              "title": "收集允许文件",
+              "actor": "AgentDefinition",
+              "event": "教学模拟 · trustedFile → skillFiles → skillDigest",
+              "explain": "跳过隐藏条目；合法文件名与内容一起进入版本。",
+              "state": {
+                "schema": "1.2",
+                "location": "包内、工作区外",
+                "files": "两份文本进入白名单",
+                "fingerprint": "已登记 expected",
+                "result": "装配通过"
+              },
+              "lines": []
+            },
+            {
+              "title": "同步并核验",
+              "actor": "启动流程 → Codex",
+              "event": "教学模拟 · installSkills → verifySkills",
+              "explain": "教学假设发现核验通过；本课筛选测试没有启动 Codex，也未执行安装测试。",
+              "state": {
+                "schema": "1.2",
+                "location": "副本在 CODEX_HOME/skills/outline",
+                "files": "只复制白名单文本",
+                "fingerprint": "包指纹未变",
+                "result": "可被选择；权限未扩大"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "新增参考文件后，旧版本不再有效",
+          "steps": [
+            {
+              "title": "已有版本正在使用",
+              "actor": "AgentDefinition",
+              "event": "教学模拟 · expected = sourceHash()",
+              "explain": "这是包已装配后的独立场景，新增内容尚未发生。",
+              "state": {
+                "schema": "1.2",
+                "location": "包内、工作区外",
+                "files": "SKILL.md + references/a.md",
+                "fingerprint": "与 expected 一致",
+                "result": "旧版本有效"
+              },
+              "lines": []
+            },
+            {
+              "title": "加入一份参考文本",
+              "actor": "部署者",
+              "event": "教学模拟 · 新增 references/b.md → sourceHash() 改变",
+              "explain": "既有实验直接比较新旧指纹，验证新增文件会被纳入。",
+              "state": {
+                "schema": "1.2",
+                "location": "包内、工作区外",
+                "files": "增加 references/b.md",
+                "fingerprint": "与 expected 不一致",
+                "result": "等待后续有效性检查"
+              },
+              "lines": []
+            },
+            {
+              "title": "后续调用发现变化",
+              "actor": "AgentDefinition",
+              "event": "教学模拟 · assertCurrent → abort → AGENT_CHANGED",
+              "explain": "此步依据源码推演：抛出 409 并撤销，不能热加方法后继续假称同一版本。",
+              "state": {
+                "schema": "1.2",
+                "location": "包内、工作区外",
+                "files": "新文件尚未核验启用",
+                "fingerprint": "旧版本已撤销",
+                "result": "受控重启后再使用"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s10-package",
+        "action": "在 stages/s10-skill-workflow 运行命令。筛选 Agent 包测试，核对脚本/符号链接、角色和 Skill 落入工作区时的拒绝，以及新增参考文件后的指纹差异。此筛选不运行独立的“Skill 安装”测试，也不调用 assertCurrent；撤销执行由 assertCurrent 源码解释，不把指纹断言说成完整运行期撤销测试。",
+        "observe": [
+          "Skill 目录只能有 SKILL.md 与 references/ 下的文本，脚本、链接被拒绝",
+          "角色和 Skill 落在工作区里时启动失败",
+          "新增参考文件后 sourceHash() 与装配时的指纹不同"
+        ],
+        "boundary": "离线真实 AgentDefinition 的路径、白名单和指纹；不运行 Skill 安装，不调用 assertCurrent，不启动 Codex，不证明 Codex 的发现行为。"
+      },
+      "quiz": {
+        "question": "包已装配后新增 references/b.md，后续调用仍能直接沿用旧版本吗？",
+        "options": [
+          "能，只有 SKILL.md 修改才影响版本。",
+          "不能，新文件也进入指纹；assertCurrent 发现变化后撤销旧版本。",
+          "能，读取 Skill 会自动批准新增权限。"
+        ],
+        "answer": 1,
+        "explanation": "B 符合文件集合参与指纹的实现。Skill 提供方法；授权仍取决于工具、资源与任务规则。"
+      },
+      "reference": {
+        "session": "s07",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
+        "adaptation": "借用“技能清单与完整方法分开，按需读取正文”的讲法。参考用 load_skill 返回启动时存入注册表的正文；本课使用 Codex 原生发现与注入，另提供受限 skill_read，并讲清 Agent 包边界，不移植其加载器。"
+      }
+    },
+    {
+      "id": "s10-steps",
+      "stage": "s10-skill-workflow",
+      "title": "确认点停任务，普通对话仍能继续",
+      "principle": "Workflow 只在权限变化或需要人拍板的位置分步；每步结束先验收，再决定 waiting、queued 或 completed。",
+      "problem": "大纲已经写好，但用户还没确认。服务怎样停住写作任务，同时允许用户继续讨论，而且不把一轮结束当成整篇文章交付？",
+      "change": {
+        "before": "只在提示词里要求“先给大纲”不能形成可检查的任务等待状态。",
+        "added": "Workflow 声明 steps、writes、checks 与 confirm；MessageService 记录当前步骤并执行状态转换。",
+        "kept": "Codex 仍决定每步怎么研究和写作，Thread 历史仍由原生保存。"
+      },
+      "ownership": {
+        "codex": "执行当前 Turn，报告终态和工具结果；下一步沿用同一 Thread 的上下文。",
+        "product": "校验步骤写入范围，向权限门传入本步 writes，运行结果验收，等待用户确认后排队下一步。"
+      },
+      "concepts": [
+        {
+          "term": "writes",
+          "meaning": "步骤可以新建文件的位置，只能收窄 Agent 基础写入范围；不扩大资源权限，也不限制已授权的读取。"
+        },
+        {
+          "term": "waiting",
+          "meaning": "本任务停在确认点，step 仍指向刚结束的那一步；没有把会话队列暂停，普通 chat 可以执行。"
+        },
+        {
+          "term": "needs-review",
+          "meaning": "Turn 已 completed，但本步 checks 未全部通过；任务需要核对，不自动重试，也不因此暂停队列。"
+        }
+      ],
+      "mechanism": "启动时 defineWorkflows 拒绝超出基础权限的 writes、重复步骤 ID、最后一步 confirm，以及 steps 与顶层 checks 并存。派发解析 workflow 和 step，gate.start 接收 grants 与本步 writes，再发 turn/start。第 0 步输入用户原文；第 1 步起用户文本只含确认提示和 note，不重复原文；同一轮仍由 AgentDefinition.input 在用户文本前加入本步任务说明，并附上 Workflow 按 Skill id 指定的已启用 Skill。outcome 只对 completed 的非 append 任务进行本步检查；失败先返回 needs-review，检查通过后才判断是否有下一步与 confirm。waiting 不在待派发 queued 集合内，普通对话仍按既有串行规则执行。confirm 用 expected=[waiting,proposed] 更新记录，waiting 任务的 step 加一并唤醒调度；cancel 可结束 queued、waiting、proposed，已取消任务再确认返回 409。",
+      "design": {
+        "decision": "只在必须停下决策或改变写入范围的地方设步骤，完成后检查实际结果。",
+        "reason": "保留模型在一步内的自主执行，同时让用户确认成为真实状态转换。",
+        "alternative": "把每次工具调用固定成流程会限制方法选择；只让模型回复“请确认”又无法阻止调度推进。",
+        "cost": "确认会增加等待；file-exists 与 format 只能验证产物存在及格式，不能证明文章事实正确或质量合格。"
+      },
+      "source": {
+        "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+        "needle": "  outcome(job, turn) {",
+        "before": 0,
+        "after": 9,
+        "explanation": "138–147 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。141 行解析失败时回退 completed/checks:null，不能说所有 completed 都证明验收通过。确认与取消见 167–199 行，输入和权限范围见 241–273 行。",
+        "start": 138,
+        "anchor": 138,
+        "code": "  outcome(job, turn) {\n    if (turn?.status !== \"completed\" || job.mode === \"append\") return { status: turn?.status, checks: null };\n    let workflow;\n    try { workflow = this.resolve({ id: job.workflow || \"chat\", params: job.params ?? null }); } catch { return { status: \"completed\", checks: null }; }\n    const step = stepOf(workflow, job.step || 0);\n    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;\n    if (checks && !checks.every(check => check.passed)) return { status: \"needs-review\", checks };\n    if (step.index < step.total - 1) return step.confirm ? { status: \"waiting\", checks } : { status: \"queued\", step: step.index + 1, checks };\n    return { status: \"completed\", checks };\n  }",
+        "hash": "3be03f5c1242e26397d5e96c1112ab9bcea0fbea4f818dd90223762268e1e26d"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "大纲等待时讨论，确认后进入成稿",
+          "steps": [
+            {
+              "title": "开始大纲步骤",
+              "actor": "MessageService → PermissionGate → Codex",
+              "event": "教学模拟 · step=0 → gate.start(..., [drafts]) → turn/start",
+              "explain": "article 为离线夹具名称；部署包中的对应任务名是 write-article。",
+              "state": {
+                "task": "A（示意）",
+                "step": "0 / outline",
+                "status": "running",
+                "writes": "drafts",
+                "next": "等待本轮终态"
+              },
+              "lines": []
+            },
+            {
+              "title": "停在确认点",
+              "actor": "Codex → MessageService",
+              "event": "教学模拟 · turn/completed → outcome → waiting",
+              "explain": "本例大纲步骤没有 checks；confirm=true 且有下一步，所以等待。",
+              "state": {
+                "task": "A（示意）",
+                "step": "0 / outline",
+                "status": "waiting",
+                "writes": "本轮上下文已结束",
+                "next": "等用户确认"
+              },
+              "lines": []
+            },
+            {
+              "title": "普通对话独立执行",
+              "actor": "用户 → chat",
+              "event": "教学模拟 · submit(chat) → turn/start → completed",
+              "explain": "普通 chat 完成不会替用户确认 A；它仍受 Agent 基础权限约束。",
+              "state": {
+                "task": "A（示意）",
+                "step": "0 / outline",
+                "status": "waiting",
+                "writes": "A 不占执行上下文",
+                "next": "讨论结束，A 仍等待"
+              },
+              "lines": []
+            },
+            {
+              "title": "确认后推进",
+              "actor": "用户 → MessageService",
+              "event": "教学模拟 · confirm(A, note) → step=1 → queued → turn/start",
+              "explain": "补充说明进入成稿输入，原文不重发；尚未宣称成稿通过检查。",
+              "state": {
+                "task": "A（示意）",
+                "step": "1 / final",
+                "status": "running",
+                "writes": "research、drafts、outputs",
+                "next": "等待产物验收"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "Turn 正常结束，但没有产物",
+          "steps": [
+            {
+              "title": "成稿步骤开始",
+              "actor": "调度器",
+              "event": "教学模拟 · gate.start(..., final.writes) → turn/start",
+              "explain": "接续确认后的第 2 步，checks 为 file-exists 与 format。",
+              "state": {
+                "task": "A（示意）",
+                "step": "1 / final",
+                "status": "running",
+                "writes": "research、drafts、outputs",
+                "next": "等待本轮结束"
+              },
+              "lines": []
+            },
+            {
+              "title": "只有回复，没有登记产物",
+              "actor": "Codex → MessageService",
+              "event": "教学模拟 · turn/completed; artifacts={} → runChecks",
+              "explain": "离线测试用假 RPC 结束轮次，没有成功写入产物记录，两项检查失败。",
+              "state": {
+                "task": "A（示意）",
+                "step": "1 / final",
+                "status": "running，正在收尾",
+                "writes": "本轮上下文结束",
+                "next": "checks 未通过"
+              },
+              "lines": []
+            },
+            {
+              "title": "记录需要核对",
+              "actor": "MessageService",
+              "event": "教学模拟 · outcome → needs-review",
+              "explain": "保存检查结果，不自动重试，也不因这次验收失败暂停队列。",
+              "state": {
+                "task": "A（示意）",
+                "step": "1 / final",
+                "status": "needs-review",
+                "writes": "无活动权限上下文",
+                "next": "用户核对结果；其他任务可继续"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s10-steps",
+        "action": "在 stages/s10-skill-workflow 运行命令。测试以 article 夹具提交大纲、穿插普通 chat、携补充说明确认、再结束假 RPC 轮次；断言各步传给权限门的 writes、第 2 步不重发原文、无产物时 needs-review，以及取消后再确认返回 409。这里的权限门只记录调用，不证明真实文件访问已被拦截。",
+        "observe": [
+          "第 1 步结束后进入 waiting，期间普通对话照常执行",
+          "确认的补充说明进入第 2 步输入，第 2 步不重发原文",
+          "每一步把自己的写入范围交给权限门；可以结束等待中的任务"
+        ],
+        "boundary": "离线真实 MessageService，权限门与 Codex 为夹具。"
+      },
+      "quiz": {
+        "question": "第 2 步的 Turn 已 completed，但没有登记任何产物。file-exists 和 format 如何影响任务？",
+        "options": [
+          "任务必定 completed，模型已经结束。",
+          "回到 waiting，请用户确认就能跳过验收。",
+          "任务记为 needs-review，不自动重试，队列不因此暂停。"
+        ],
+        "answer": 2,
+        "explanation": "C 区分 Turn 终态与 Workflow 结果；checks 在下一步/最终完成判断之前执行。"
+      },
+      "reference": {
+        "session": "s16",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+        "adaptation": "借用“执行步骤有明确输入与结果状态”的教学思路。参考是受信注册脚本、并发原语和 journal；本阶段是声明式边界、结果检查与人工确认，不实现脚本编排、并行 agent 或语义缓存。"
+      }
+    },
+    {
+      "id": "s10-propose",
+      "stage": "s10-skill-workflow",
+      "title": "模型可以提议，不能批准自己的任务",
+      "principle": "propose_task 只创建 proposed 记录；用户确认时才核对额外授权，派发时再建立本任务权限上下文。",
+      "problem": "普通对话里发现需要更新 Wiki，模型能否在工具参数里写 status=queued，或者声称用户已同意，就直接获得维护权限？",
+      "change": {
+        "before": "模型能判断需要哪类任务，但它的建议和自然语言回答都不是可信授权。",
+        "added": "propose_task 从权限门获取会话身份，只记录提议；用户经确认入口批准后才入队。",
+        "kept": "知识库 update 仍受 Agent 挂载范围与统一权限门限制，模型仍在 Codex 的执行循环内工作。"
+      },
+      "ownership": {
+        "codex": "根据当前需求提出 workflow、params、text 与 reason；没有批准提议的模型工具。",
+        "product": "验证已启用 Workflow、参数和身份，记录 proposed，限制待确认数量，并在用户身份下核对授权、排队及派发。"
+      },
+      "concepts": [
+        {
+          "term": "proposed",
+          "meaning": "待用户决定的任务记录，不等于 queued；提议本身不唤醒调度，也不授予权限。"
+        },
+        {
+          "term": "可信会话身份",
+          "meaning": "propose_task 的 context 来自权限门，模型参数只允许 workflow、params、text、reason；不能自填用户身份。"
+        },
+        {
+          "term": "确认 / 派发",
+          "meaning": "确认核对 grants 并使提议 queued；实际派发时 gate.start 才建立本轮任务权限，结束时撤销。"
+        }
+      ],
+      "mechanism": "createTools.propose_task 要求存在任务服务与 context.threadId；propose 拒绝多余字段，resolve 校验已启用 Workflow 和参数及 Agent 的 update 能力，不调用 gate.authorize。普通 chat 不能作为提议；text 与 reason 必填，reason 最多保留 500 字符。同一 Thread 的 serial 内最多允许 3 个 proposed，超限返回 429；保存后 publish，不 schedule。生产 HTTP dispatch 经 gate.run(gate.user(), dispatch)，所以 POST /tasks/confirm 在用户身份下执行。confirm 先检查会话、任务归属；proposed 分支重新 resolve 并 authorize，随后 expected 条件把 waiting 或 proposed 改为 queued。提议保持 step=0，补充说明作为 note 保存，再 wake。dispatch 用解析后的 grants 建立任务上下文，输入为任务说明、原提议正文与补充说明、已选 Skill。权限不是由 reason 或 Skill 正文决定的。",
+      "design": {
+        "decision": "让模型负责发现需要做的事，把批准入口留给用户与服务端。",
+        "reason": "模型可表达意图，又不能把这份意图变成自己的额外权限。",
+        "alternative": "把“我已获准”文字当凭据，或让模型直接设置 queued，都会绕过用户确认；完全禁止提议则失去主动建议入口。",
+        "cost": "需要用户处理待确认提议，每会话最多 3 个；真实服务需要 PostgreSQL 模式提供任务记录和门禁身份，离线夹具不证明完整生产链路。"
+      },
+      "source": {
+        "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+        "needle": "  async confirm({ threadId, taskId, text, ...rest }) {",
+        "before": 0,
+        "after": 18,
+        "explanation": "167–185 行先校验输入和归属，proposed 分支核对授权，再条件更新并唤醒调度。用户身份来自 http/index.mjs:149 的 gate.run，不是 confirm 自行生成；propose 的只记录分支在 149–164 行，工具缺身份拒绝在 tools/tasks.mjs:4–6。",
+        "start": 167,
+        "anchor": 167,
+        "code": "  async confirm({ threadId, taskId, text, ...rest }) {\n    if (Object.keys(rest).length) throw new AppError(\"确认只接受 threadId、taskId 与 text。\", 400);\n    requireId(threadId, \"会话 ID\"); requireId(taskId, \"任务 ID\");\n    const note = text == null || text === \"\" ? null : requireText(text);\n    await this.sessions.ensure(threadId);\n    return this.serial(threadId, async () => {\n      const job = await this.job(taskId);\n      if (!job || job.threadId !== threadId) throw new AppError(\"任务不属于该会话。\", 404);\n      if (job.status === \"proposed\") {\n        const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });\n        if (workflow.grants.length) this.gate?.authorize(workflow.grants);\n      }\n      const fields = job.status === \"proposed\" ? { status: \"queued\", note } : { status: \"queued\", step: (job.step || 0) + 1, note };\n      if (!(await this.store.patch(taskId, fields, [\"waiting\", \"proposed\"])))\n        throw new AppError(\"只有等待确认的任务可以继续。\", 409);\n      await this.publish(threadId);\n      await this.wake(threadId);\n      return this.publicJob(await this.job(taskId));\n    });",
+        "hash": "3be03f5c1242e26397d5e96c1112ab9bcea0fbea4f818dd90223762268e1e26d"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "提议经用户确认后进入知识维护",
+          "steps": [
+            {
+              "title": "记录建议",
+              "actor": "模型 → propose_task → MessageService",
+              "event": "教学模拟 · propose(knowledge-maintain, kbId=general)",
+              "explain": "假设 general 在 Agent 的可更新范围内，context 来自权限门。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "P-A: proposed",
+                "authorization": "没有新增授权",
+                "starts": "0 次（该提议）",
+                "result": "等待用户决定"
+              },
+              "lines": []
+            },
+            {
+              "title": "用户携补充说明确认",
+              "actor": "用户 → HTTP → MessageService",
+              "event": "教学模拟 · POST /tasks/confirm → gate.authorize",
+              "explain": "检查任务属于 T-A，以用户身份核对 knowledge.update；此刻尚未开始模型轮次。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "P-A: proposed，正在确认",
+                "authorization": "用户授权核对通过",
+                "starts": "0 次（该提议）",
+                "result": "准备条件更新"
+              },
+              "lines": []
+            },
+            {
+              "title": "确认写入队列",
+              "actor": "MessageService",
+              "event": "教学模拟 · patch(expected=[waiting,proposed]) → queued → wake",
+              "explain": "proposed 保持第 0 步，保存用户补充说明；普通模型提议不会走到这里。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "P-A: queued",
+                "authorization": "尚无执行上下文",
+                "starts": "0 次（该提议）",
+                "result": "等待调度"
+              },
+              "lines": []
+            },
+            {
+              "title": "带任务边界执行",
+              "actor": "MessageService → PermissionGate → Codex",
+              "event": "教学模拟 · gate.start(job, grants, writes) → turn/start",
+              "explain": "原提议正文加补充说明进入输入；维护权限只在本任务上下文中有效。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "P-A: running",
+                "authorization": "本任务可更新 general",
+                "starts": "1 次（示意）",
+                "result": "结束后仍需 wiki-effective 验收"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "提议参数夹带排队状态，服务拒绝",
+          "steps": [
+            {
+              "title": "普通任务没有维护授权",
+              "actor": "模型",
+              "event": "教学模拟 · 当前 chat 中准备提出知识维护",
+              "explain": "本场景讨论提议接口的字段拒绝，不模拟真实 Wiki 写入。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "尚未创建",
+                "authorization": "chat 无额外维护授权",
+                "starts": "0 次（新提议）",
+                "result": "可提出建议"
+              },
+              "lines": []
+            },
+            {
+              "title": "参数中夹带状态",
+              "actor": "测试夹具 → MessageService.propose",
+              "event": "教学模拟 · propose({ ..., status: queued })",
+              "explain": "用夹具模拟模型夹带 status 的意图，直接调用 propose 验证 rest 校验；真实工具入口的 inputSchema 还会先拒绝多余字段。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "尚未创建",
+                "authorization": "没有变化",
+                "starts": "0 次（新提议）",
+                "result": "多余字段待检查"
+              },
+              "lines": []
+            },
+            {
+              "title": "服务明确拒绝",
+              "actor": "MessageService",
+              "event": "教学模拟 · Object.keys(rest).length → AppError(400)",
+              "explain": "此处是直接调用 MessageService 的 400 断言：在 resolve 和 store.create 之前拒绝，没有生成提议、排队或授权；不把它说成完整工具链返回的 HTTP 状态。",
+              "state": {
+                "thread": "T-A（示意）",
+                "proposal": "没有记录",
+                "authorization": "没有变化",
+                "starts": "0 次（新提议）",
+                "result": "400；不能自批"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s10-propose",
+        "action": "在 stages/s10-skill-workflow 运行命令。测试断言 proposed 时无授权调用和 turn/start，确认后记录 grants、输入含补充说明，并覆盖多余字段、取消、3 个待确认上限及工具缺少会话身份。权限门是记录调用的夹具；用户身份的实际检查需结合 HTTP 与 PermissionGate 源码，完整链路不在本实验范围内。",
+        "observe": [
+          "提议只记录为 proposed，不排队、不授权、不执行",
+          "确认时才第一次调用 authorize，参数为 knowledge.update / general；补充说明进入下一轮输入。用户身份由 HTTP 的 gate.run(gate.user(), …) 建立，不在本夹具的断言里",
+          "没有权限门提供的会话身份时不能提议；每个会话最多 3 个待确认提议"
+        ],
+        "boundary": "离线真实 MessageService，权限门为记录调用的夹具；完整链路见 s10-e2e。"
+      },
+      "quiz": {
+        "question": "propose_task 返回 proposed 后，何时才会建立这次维护任务的执行权限？",
+        "options": [
+          "提议记录成功时，模型立即获得维护权限。",
+          "用户确认核对授权、任务入队后，调度派发时由 gate.start 建立。",
+          "读取 knowledge Skill 后，无需用户确认。"
+        ],
+        "answer": 1,
+        "explanation": "B 分清记录建议、用户批准与实际派发。proposed 不排队也不授权，Skill 不能替代权限门。"
+      },
+      "reference": {
+        "session": "s13",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s13_agent_teams",
+        "adaptation": "借用“批准必须来自可信协议，普通聊天不等于授权”的边界。参考用队友计划批准与任务版本绑定；本课使用用户确认入口、任务归属和 proposed 状态，不实现团队邮箱、计划批准协议或多 Agent。"
+      }
+    },
+    {
+      "id": "s11-registry",
+      "stage": "s11-model-gateway",
+      "title": "一份清单校验模型，两层密钥各有去处",
+      "principle": "清单先校验用途与参数，启用条件再筛选服务商；生成配置引用变量，Codex 环境只保留访问网关所需的密钥。",
+      "problem": "接入多个模型后，错误的用途、价格或备用模型会到调用时才暴露吗？启动 Codex 时能把整个服务环境原样传进去吗？",
+      "change": {
+        "before": "只有一个模型地址与密钥时，无法统一描述多种用途、能力与备用关系，也容易把新增服务商的凭据一起交给执行进程。",
+        "added": "config/models.json 集中声明 providers、models、routes、scenes 和价格；validateRegistry 校验，buildGatewayConfig 生成变量引用，启动器过滤 Codex 环境。",
+        "kept": "Codex 继续管理 Thread、Turn 与工具循环；网关模式下仍使用 Responses 接口，Bifrost 负责上游协议转换。"
+      },
+      "ownership": {
+        "codex": "只用启动器提供的模型目录、接口地址与 CODEX_API_KEY 发出请求，不负责挑选服务商凭据。",
+        "product": "校验清单、筛选已启用服务商、生成 Bifrost 配置与模型参数表，并在启动 Codex 前收紧子进程环境；Bifrost 运行时读取服务商密钥。"
+      },
+      "concepts": [
+        {
+          "term": "providers / models",
+          "meaning": "providers 声明接口类型、地址与环境变量名；models 用“服务商/模型名”登记用途、能力、推理档位、价格和 fallbacks。清单合法不等于账号已开通该模型。"
+        },
+        {
+          "term": "enabledProviders",
+          "meaning": "服务商声明的 keyEnv、baseUrlEnv 都有非空值才启用；如本地 Ollama 仅声明地址变量，就按地址启用，不需要供应商密钥。"
+        },
+        {
+          "term": "网关访问密钥 / 服务商密钥",
+          "meaning": "AGENT_GATEWAY_KEY 用于访问网关；启动器把它映射为 Codex 的 CODEX_API_KEY，再去掉 AGENT_GATEWAY_KEY 及其余 *_API_KEY。生成的网关配置仅写 env.变量名。"
+        },
+        {
+          "term": "pricing",
+          "meaning": "token 单价按每百万计算，媒体还可按张或秒定价。0 是明确零价，未填写是未定价；非法负数、非有限数字或缺少必填单价会被校验拒绝。"
+        }
+      ],
+      "mechanism": "loadModelRegistry 解析 JSON 后调用 validateRegistry。它检查服务商变量、模型用途、原生能力、推理档位、价格及路由引用；fallbacks 必须指向清单中能覆盖主模型全部用途的其他模型，但不要求所有能力相同。走 anthropic 格式的对话模型必须声明 maxOutputTokens。enabledProviders 仅检查声明变量是否有值，不验证真实密钥有效性或模型开通状态。buildGatewayConfig 只生成已启用服务商和备用关系，密钥字段保存 env.引用；Compose 把服务商密钥变量交给 gateway 服务。网关模式由 AGENT_GATEWAY_KEY 启用，不允许同时设置直连 CODEX_BASE_URL / CODEX_API_KEY。buildAppServerLaunch 先把地址与凭据替换成网关值，再复制和过滤环境，去掉其他 *_API_KEY 以及数据库等敏感变量；CODEX_API_KEY 留作网关访问凭据，不写进 args 或模型目录。离线断言验证配置与启动参数，不证明 Bifrost 已实际鉴权或切换备用。",
+      "design": {
+        "decision": "用一份声明清单生成各层配置，并在进程边界显式过滤凭据。",
+        "reason": "配置错误能在加载时定位到字段或模型；服务商密钥不随模型目录和启动参数扩散到 Codex。",
+        "alternative": "在各个工具和启动脚本里分别写模型参数会产生多份事实；直接传入整个环境会把与 Codex 无关的密钥也交出去。",
+        "cost": "能力和价格需要维护与实测。配置引用不是凭据验证；真实网关鉴权、协议转换及备用切换仍需单独的集成测试。"
+      },
+      "source": {
+        "file": "stages/s11-model-gateway/server/modules/codex/launch.mjs",
+        "needle": "  const env = { ...environment };",
+        "before": 9,
+        "after": 5,
+        "explanation": "片段先建立路由、确定搜索配置，再把网关地址与密钥写入待启动环境，随后过滤其他 *_API_KEY 和敏感变量。清单严格校验与网关 env.引用生成位于 gateway/index.mjs，Compose 传入范围由 compose.yaml 决定；这段启动代码本身没有运行 Bifrost。",
+        "start": 133,
+        "anchor": 142,
+        "code": "  // 网关模式下由模型路由决定默认的对话模型（CODEX_MODEL 可覆盖），工作流步骤再按需切换（见 messages）。\n  let router = gateway && registry ? createModelRouter(registry, environment) : null;\n  const searchMode = environment.AGENT_WEB_SEARCH?.trim() ?? \"auto\";\n  if (![\"auto\", \"off\"].includes(searchMode)) throw new Error(\"AGENT_WEB_SEARCH 必须为 auto 或 off。\");\n  const chosen = router?.resolve();\n  const webSearch = searchMode === \"auto\" && chosen?.spec.nativeTools?.includes(\"web_search\") ? \"live\" : \"disabled\";\n  if (router && webSearch === \"live\") router = createModelRouter(registry, environment, { webSearch: true });\n  const warnings = router ? fallbackWarnings(registry, environment) : [];\n  if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey, ...(router ? { CODEX_MODEL: chosen.id } : {}) };\n  const env = { ...environment };\n  // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。\n  for (const key of Object.keys(env)) {\n    if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|AGENT_GATEWAY_KEY|PG[A-Z_]+)$/.test(key) || (/_API_KEY$/.test(key) && key !== \"CODEX_API_KEY\")) delete env[key];\n  }\n  const model = environment.CODEX_MODEL?.trim() || undefined;",
+        "hash": "217b28a1c886b2d6e81c7a6d61aca27e73ac9c5eef14dc9d37fd53e6b2e3f3b6"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "合法清单形成两种不同的凭据视图",
+          "steps": [
+            {
+              "title": "先验证清单",
+              "actor": "loadModelRegistry → validateRegistry",
+              "event": "教学模拟 · 读取 config/models.json → validateRegistry",
+              "explain": "示例使用仓库清单，声明的模型、用途、路由和备用关系均合法。",
+              "state": {
+                "registry": "校验通过",
+                "providers": "尚未筛选",
+                "gatewayConfig": "尚未生成",
+                "codexEnvironment": "尚未构建",
+                "result": "只确认配置结构"
+              },
+              "lines": []
+            },
+            {
+              "title": "只启用已配置的服务商",
+              "actor": "enabledProviders",
+              "event": "教学模拟 · KIMI_API_KEY / DEEPSEEK_API_KEY 有测试占位值",
+              "explain": "本例测试只为两家提供非空变量，其余未启用。占位值不证明真实认证通过。",
+              "state": {
+                "registry": "校验通过",
+                "providers": "kimi、deepseek",
+                "gatewayConfig": "尚未生成",
+                "codexEnvironment": "尚未构建",
+                "result": "选择配置范围"
+              },
+              "lines": []
+            },
+            {
+              "title": "生成引用而非密钥正文",
+              "actor": "buildGatewayConfig",
+              "event": "教学模拟 · keys.value = env.KIMI_API_KEY；virtual_keys.value = env.AGENT_GATEWAY_KEY",
+              "explain": "生成对象不含测试凭据正文；只有已启用服务商的备用规则进入配置。",
+              "state": {
+                "registry": "校验通过",
+                "providers": "kimi、deepseek",
+                "gatewayConfig": "只有环境变量引用",
+                "codexEnvironment": "尚未构建",
+                "result": "等待网关运行时读取"
+              },
+              "lines": []
+            },
+            {
+              "title": "过滤子进程环境",
+              "actor": "buildAppServerLaunch",
+              "event": "教学模拟 · 网关值映射到 CODEX_API_KEY → 删除其他 *_API_KEY",
+              "explain": "启动参数指向网关地址；Codex 环境保留网关访问值，KIMI_API_KEY、DEEPSEEK_API_KEY 和 AGENT_GATEWAY_KEY 被移除。测试只检查启动对象。",
+              "state": {
+                "registry": "校验通过",
+                "providers": "kimi、deepseek",
+                "gatewayConfig": "只有环境变量引用",
+                "codexEnvironment": "仅 CODEX_API_KEY 保存模型接口凭据",
+                "result": "离线配置与启动对象通过"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "备用用途写错，在配置阶段拒绝",
+          "steps": [
+            {
+              "title": "把向量模型误填为对话备用",
+              "actor": "配置输入",
+              "event": "教学模拟 · kimi/kimi-k2.7-code.fallbacks = [ollama/qwen3-embedding:0.6b]",
+              "explain": "这是测试中的内存副本变更，不修改仓库清单。",
+              "state": {
+                "registry": "待校验",
+                "providers": "未筛选",
+                "gatewayConfig": "未生成",
+                "codexEnvironment": "未构建",
+                "result": "错误关系尚未采用"
+              },
+              "lines": []
+            },
+            {
+              "title": "检查备用覆盖的用途",
+              "actor": "validateRegistry",
+              "event": "教学模拟 · purposes.every(...) = false",
+              "explain": "主模型用途含 chat，向量模型不包含 chat，校验报出模型与备用模型名称。",
+              "state": {
+                "registry": "校验失败：用途不覆盖",
+                "providers": "未筛选",
+                "gatewayConfig": "未生成",
+                "codexEnvironment": "未构建",
+                "result": "抛出配置错误"
+              },
+              "lines": []
+            },
+            {
+              "title": "停止当前配置链",
+              "actor": "配置调用方",
+              "event": "教学模拟 · validateRegistry throws → 不继续生成与启动",
+              "explain": "不能把错误清单当成可用配置；应修正副本或配置来源后重新校验，没有向上游提交请求。",
+              "state": {
+                "registry": "仍需修正",
+                "providers": "未筛选",
+                "gatewayConfig": "未生成",
+                "codexEnvironment": "未构建",
+                "result": "没有模型调用"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s11-registry",
+        "action": "在 stages/s11-model-gateway 运行命令。查看 gateway.test.mjs 中清单错误、变量引用及启动环境断言，以及 native-search、usage、media 的字段校验。夹具提供假变量并检查对象，没有启动 Codex 或 Bifrost，也不会用真实密钥试请求。",
+        "observe": [
+          "用途、路由、能力和价格字段在加载清单时校验，非法值带模型名报错",
+          "生成的网关配置只含密钥变量引用；Compose 只给网关传入服务商密钥",
+          "Codex 只拿网关访问密钥，服务商密钥不进入子进程环境"
+        ],
+        "boundary": "离线真实清单校验、配置生成和 Codex 启动参数；不证明真实网关鉴权，见 s11-gateway。"
+      },
+      "quiz": {
+        "question": "清单校验通过，生成配置也只有 env.引用，能据此宣称服务商密钥有效且网关鉴权已通过吗？",
+        "options": [
+          "能，变量非空就说明上游账号可用。",
+          "不能；这里只验证声明、引用与环境过滤，真实鉴权需要运行网关验证。",
+          "能，只要把所有服务商密钥也传给 Codex 就有保障。"
+        ],
+        "answer": 1,
+        "explanation": "B 区分配置证据与运行证据。enabledProviders 不访问上游；传递更多密钥也不能替代真实鉴权，而且违反本阶段的进程边界。"
+      },
+      "reference": {
+        "session": "s03",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
+        "adaptation": "借用“先检查再进入执行”的讲法。参考在工具执行前依次应用硬拒绝、规则和交互询问；本课把检查放在清单加载与子进程环境构造，不引入交互审批，也不把配置通过当成真实鉴权通过。"
+      }
+    },
+    {
+      "id": "s11-routing",
+      "stage": "s11-model-gateway",
+      "title": "先保留能力约束，再决定这一轮用谁",
+      "principle": "步骤 > 任务 > 默认决定选择来源；场景按用途与能力逐候选筛选，预算降级不能取消能力要求。",
+      "problem": "同一个 Workflow 的大纲和成稿想用不同模型；搜索已经开启、预算又接近上限时，能否直接换成 fast 的第一个候选？",
+      "change": {
+        "before": "一个默认模型无法表达步骤差异；只换模型名也无法解释它是否满足当前会话的搜索与输入要求。",
+        "added": "服务端按优先级确定选择，按用途、needs 与原生能力筛选，并把 selectedModel 和 modelSource 写进任务。预算达到降级比例时改选配置的场景。",
+        "kept": "Codex 负责本轮推理与工具循环，Bifrost 负责选定模型的协议转换和请求失败后的备用链。"
+      },
+      "ownership": {
+        "codex": "接收 turn/start 中明确的 model 和 effort；联网搜索沿用启动时确定的会话配置，不按单轮切换。",
+        "product": "校验任务选择和步骤要求，派发时再次路由与校验 effort，记录来源；网关另行处理上游故障切换。"
+      },
+      "concepts": [
+        {
+          "term": "routes / scenes",
+          "meaning": "routes 按用途列默认候选；scenes 给候选组命名，可混合多种用途，解析时先过滤本次 purpose。两者都按顺序挑符合条件的模型。"
+        },
+        {
+          "term": "needs / effort",
+          "meaning": "步骤 needs 可要求 image 或 contextTokens；搜索开启时路由另补 web_search。effort 不是被跳过候选的筛选项，而是在选中模型后单独校验其 reasoningLevels，不支持就报错。"
+        },
+        {
+          "term": "预算降级",
+          "meaning": "日或月任一已配置 token/金额预算达到 AGENT_BUDGET_DOWNGRADE_AT 比例，场景或默认选择改用 downgradeScene（默认 fast）；写死“服务商/模型名”不改选，但仍受能力与预算停派约束。"
+        },
+        {
+          "term": "fallbacks",
+          "meaning": "由 Bifrost 在请求失败时使用的备用链，与任务语义路由不同。启动提醒缺搜索或看图的备用能力，不保证备用与主模型等价。"
+        }
+      ],
+      "mechanism": "任务 model 提交时校验，保存后参与幂等比较。新轮次派发先检查硬预算，再用 step.model || job.model || null 确定选择；达到降级比例且选择不含 / 时改用降级场景。resolve 按具体模型、场景或默认路由确定候选，对场景先过滤 purpose；每个候选再检查服务商启用、看图、上下文和原生工具要求。搜索由启动默认模型的 nativeTools 与 AGENT_WEB_SEARCH 决定，会话开启后每次对话路由自动要求 web_search。候选全部不满足时报出逐项原因，不取消约束来凑一个模型。选中后 validateEffort 再核对档位，随后保存 selectedModel / modelSource，并在 turn/start 中发出 model / effort。默认层仍允许 CODEX_MODEL 覆盖 routes.chat。指向活动 Turn 的 append 走 steer，沿用当前轮次模型；追加到已结束轮次会新开轮次并使用任务选择。GET /models 与终端 /model 展示可选模型和场景；/model 的会话选择影响后续提交，不改变已开始的轮次。其他用途也可路由经网关；RAG 单独设置了 EMBEDDING_BASE_URL 时，使用这条独立连接，不再按 routes.embedding 改写模型和维数。",
+      "design": {
+        "decision": "让任务语义选择与网关故障切换分层，保留能力条件和选择来源。",
+        "reason": "步骤知道需要看图还是长上下文，服务知道当前预算；网关无法仅从请求判断 Workflow 的业务意图。来源记录让选择可以追溯。",
+        "alternative": "把 fast 固定解释成某个品牌，或预算紧张就跳过搜索检查，会使名字相同的步骤失去原先能力。让网关猜场景也没有任务上下文。",
+        "cost": "场景名不承诺特定价格或效果，搜索要求可能使 fast 与 strong 选到同一模型。备用链可能损失能力，且 Codex 用量通知不能确认最终备用模型。"
+      },
+      "source": {
+        "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+        "needle": "        let selection = step.model || job.model || null;",
+        "before": 2,
+        "after": 20,
+        "explanation": "窗口完整呈现选择优先级、降级判断、能力路由、effort 校验、任务记录与 turn/start 参数。逐候选失败原因在 gateway/router.mjs 的 unmet/pick；硬预算检查在本文件更前面，不能把具体模型的降级豁免误当成预算豁免。",
+        "start": 284,
+        "anchor": 286,
+        "code": "        // 优先级：步骤 > 任务 > 默认；预算只替换场景或默认选择，能力要求继续生效。\n        const router = this.config.launch.router;\n        let selection = step.model || job.model || null;\n        let modelSource = step.model ? \"步骤指定\" : job.model ? \"任务指定\" : \"默认路由\";\n        if (router && budget?.downgraded && !selection?.includes(\"/\")) {\n          selection = budget.downgradeScene;\n          modelSource = \"预算降级\";\n        }\n        if (selection) modelSource += `：${selection.includes(\"/\") ? \"\" : \"场景 \"}${selection}`;\n        const chosen = router?.resolve({ model: selection, needs: step.needs });\n        if (chosen) validateEffort(chosen, step.effort);\n        const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || \"unknown\";\n        await this.store.patch(job.id, { selectedModel: model, modelSource });\n        await this.publish(threadId);\n        this.gate?.start(job, workflow.grants, step.writes);\n        sent = true;\n        this.sessions.prepareUsage(threadId, { model, taskId: job.id });\n        const result = await this.rpc.request(\"turn/start\", {\n          threadId,\n          clientUserMessageId: job.id,\n          input: prepared,\n          ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),\n        });",
+        "hash": "8ae6706ad364aa05f84a2d68202b62c939b0e88c8050d0c6711cad15c4a6d259"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "有搜索约束时，降级仍选支持搜索的候选",
+          "steps": [
+            {
+              "title": "步骤先于任务选择",
+              "actor": "MessageService",
+              "event": "教学模拟 · step.model=strong；job.model=fast → selection=strong",
+              "explain": "本例两家服务商已启用，默认 Kimi 使搜索为 live。步骤另需 image；日预算示意为 100 token，已用 80，降级比例 0.8。",
+              "state": {
+                "selection": "步骤场景 strong",
+                "needs": "image=true；web_search",
+                "budget": "80/100；已达降级比例",
+                "chosen": "未选",
+                "result": "未发 turn/start"
+              },
+              "lines": []
+            },
+            {
+              "title": "达到比例后替换场景",
+              "actor": "MessageService",
+              "event": "教学模拟 · budget.downgraded=true → selection=fast",
+              "explain": "本例未达到 100 的硬上限。strong 是场景而非具体模型，因此换成 fast，需求仍保留。",
+              "state": {
+                "selection": "预算降级：场景 fast",
+                "needs": "image=true；web_search",
+                "budget": "80/100；未停派",
+                "chosen": "未选",
+                "result": "等待能力筛选"
+              },
+              "lines": []
+            },
+            {
+              "title": "跳过不满足搜索的候选",
+              "actor": "ModelRouter",
+              "event": "教学模拟 · fast 候选 deepseek/deepseek-flash 缺 web_search → 继续",
+              "explain": "仓库清单中该模型未声明 web_search；后续 Kimi 候选满足本例需求。这里是路由筛选，没有向 DeepSeek 发出失败请求。",
+              "state": {
+                "selection": "预算降级：场景 fast",
+                "needs": "image=true；web_search",
+                "budget": "80/100；未停派",
+                "chosen": "kimi/kimi-k2.7-code",
+                "result": "候选筛选成功"
+              },
+              "lines": []
+            },
+            {
+              "title": "记录选择并开始本轮",
+              "actor": "MessageService → Codex",
+              "event": "教学模拟 · patch(selectedModel, modelSource) → prepareUsage → turn/start",
+              "explain": "本例未指定 effort，使用模型默认值或 null；账本上下文在发 RPC 前准备。显示的是路由选择，不代表获知网关最终备用模型。",
+              "state": {
+                "selection": "预算降级：场景 fast",
+                "needs": "image=true；web_search",
+                "budget": "80/100；未停派",
+                "chosen": "kimi/kimi-k2.7-code",
+                "result": "turn/start 已提交"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "降级场景全都不满足长上下文",
+          "steps": [
+            {
+              "title": "准备合法的步骤要求",
+              "actor": "任务夹具",
+              "event": "教学模拟 · needs.contextTokens=500000；CODEX_MODEL=deepseek/deepseek-v4-pro",
+              "explain": "对应既有测试的内存清单副本：将 fast 中 DeepSeek Flash 的 contextWindow 改为 100；搜索关闭。任务未写死具体模型，默认本可选 Pro。",
+              "state": {
+                "selection": "默认路由",
+                "needs": "contextTokens=500000；搜索关闭",
+                "budget": "80/100；降级比例0.8",
+                "chosen": "未选",
+                "result": "等待派发"
+              },
+              "lines": []
+            },
+            {
+              "title": "预算把默认替换成 fast",
+              "actor": "MessageService → ModelRouter",
+              "event": "教学模拟 · selection=fast → resolve(needs)",
+              "explain": "Flash 的 100 不够，Kimi 的 262144 也不够；其他未启用候选无法兜底，逐项收集拒绝原因。",
+              "state": {
+                "selection": "预算降级：场景 fast",
+                "needs": "contextTokens=500000；搜索关闭",
+                "budget": "80/100；未停派",
+                "chosen": "无合格候选",
+                "result": "抛出 MODEL_UNAVAILABLE"
+              },
+              "lines": []
+            },
+            {
+              "title": "失败留下记录，不发模型请求",
+              "actor": "MessageService",
+              "event": "教学模拟 · executionError → failed；pause(threadId)",
+              "explain": "该错误发生在 turn/start 之前；本例任务失败并暂停所属队列，不会静默改回默认模型或放宽上下文要求。",
+              "state": {
+                "selection": "预算降级：场景 fast（尚未写入任务）",
+                "needs": "contextTokens=500000；搜索关闭",
+                "budget": "80/100；未停派",
+                "chosen": "selectedModel 仍为空",
+                "result": "failed；0 次 turn/start"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s11-routing",
+        "action": "在 stages/s11-model-gateway 运行命令。重点查看 routing-policy.test.mjs 的步骤优先级、预算降级与能力保留断言：正常例即便降级仍选 Kimi，失败例候选上下文不足且 turn/start 次数为 0。实验还覆盖 HTTP handler、CLI、媒体 quality 和 RAG 连接配置；handler 直接接收内存 request，不监听端口，不证明真实网关或数据库行为。",
+        "observe": [
+          "场景按用途过滤；needs 约束看图和上下文，搜索开启时跳过不支持 web_search 的候选，全部不满足才报错",
+          "任务 model 提交时校验并保存，步骤 > 任务 > 默认；effort 校验清单支持后传给 turn/start",
+          "GET /models 按用途展示能力、场景和默认；终端 /model 为当前会话选择后续任务模型，/state 和任务启动显示来源",
+          "日/月任一预算达到降级比例时，场景和默认选择改用降级场景；具体模型豁免，能力要求不放宽",
+          "生图、生视频 quality 通过 fast/strong 场景选模型，省略时使用各自 routes",
+          "写作 Agent 的 fast/strong 在 Kimi 搜索开启和 DeepSeek 搜索关闭时都能配置",
+          "备用链只包含已启用服务商；缺原生能力或看图能力时启动提醒，自检展示备用链",
+          "RAG 向量按路由经网关访问本地 Ollama，模型与维数来自清单"
+        ],
+        "boundary": "离线真实路由、configure、任务派发、HTTP handler、客户端、预算和媒体服务；RPC、存储和 fetch 为夹具，不监听端口。真实 PostgreSQL 持久化需 test:data，网关备用切换见 s11-gateway。"
+      },
+      "quiz": {
+        "question": "搜索为 live，预算达到降级比例，fast 的第一个候选不支持 web_search。代码会怎么做？",
+        "options": [
+          "关闭这一轮的搜索，直接使用第一个候选。",
+          "让 Bifrost 先试第一个候选，失败后再把请求交回任务路由。",
+          "保留搜索约束继续筛选；有合格候选才选择，全部不满足就报错。"
+        ],
+        "answer": 2,
+        "explanation": "C 符合 resolve 补充 web_search 和 pick 逐候选检查。降级不改变会话搜索配置；任务筛选与网关备用切换是不同阶段。"
+      },
+      "reference": {
+        "session": "s16",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+        "adaptation": "借用“步骤参数和运行约束由宿主解释”的教学方法。参考用可信注册函数与执行状态组织 Workflow；本课只说明已有工作流每一步的模型选择、能力条件与来源，不引入并行 Agent、journal 恢复或结果缓存。"
+      }
+    },
+    {
+      "id": "s11-budget",
+      "stage": "s11-model-gateway",
+      "title": "只记本次用量，超限保留排队",
+      "principle": "累计 token 用来去重，本次 last 用来记账；预算在新轮次派发前检查，达到上限就保持 queued，额度恢复后再检查派发。",
+      "problem": "一个 Thread 的累计用量包含历史，重启后会不会把历史再收费一遍？当它达到日预算时，已经执行的轮次和排队消息分别怎样处理？",
+      "change": {
+        "before": "只有模型返回的累计值，难以区分本次消耗、历史用量与重复通知；只显示花费也不能约束后续派发。",
+        "added": "UsageService 保存每次消耗与估算价格，按时区计算自然日/月预算；MessageService 在 queued 转 starting 前检查，并安排定时复查。",
+        "kept": "Codex 仍执行已开始的 Turn 并报告用量；队列保留已有消息，预算等待不等于任务失败或人工暂停。"
+      },
+      "ownership": {
+        "codex": "通过 thread/tokenUsage/updated 报告 total 与 last，不替应用维护预算账本，也不报告 Bifrost 最终备用模型。",
+        "product": "把用量与路由模型、任务关联，串行写账、汇总预算并控制派发；Bifrost 使用虚拟密钥的每日 token 限流作为另一层兜底。"
+      },
+      "concepts": [
+        {
+          "term": "total / last",
+          "meaning": "total.totalTokens 是 Thread 累计水位，只决定通知是否新；本次记账取 last。重启后内存水位重建，第一条直接记 last，不补累计历史，也不是跨进程恰好一次去重。"
+        },
+        {
+          "term": "自然日 / 自然月",
+          "meaning": "由 AGENT_BUDGET_TIMEZONE 指定的 IANA 时区决定边界，默认服务进程时区；夏令时一天可能不是 24 小时。日/月任一 token 或金额达到上限都阻止新轮次。"
+        },
+        {
+          "term": "queued / budget.exceeded",
+          "meaning": "超限时保持 queued，报告原因和 resetsAt，定时复查；没有把任务转成 failed，也不需要用 /continue 解除预算等待。"
+        },
+        {
+          "term": "估算金额 / 网关兜底",
+          "meaning": "金额按记录时价格计算，未定价不计金额但计 token。网关每日 token 限流默认取配置的日 token 预算乘 1.5 后向上取整，可显式覆盖，不是费用精确封顶。"
+        }
+      ],
+      "mechanism": "recordChat 先比较 Thread 累计 total.totalTokens；已有水位且新值不增加就跳过，增加才更新水位并 record(last)。首次通知直接记 last；本例进程重启不会把历史 total 补账，但水位不是持久去重凭据。record 用串行 pending 链写入账本，预算查询等待 pending；写入失败仍留在链上，后续查询不能按空账本放行，真实通知路径还会触发 usageError 停止调度。缓存输入已含在 inputTokens，推理输出已含在 outputTokens，不重复累加。价格在入账时固定，补价格不追算，切币种不混加历史金额；备用切换仍按提交的路由模型估算。budgetStatus 同时计算当地自然日和自然月，任一已设上限达到即 exceeded，多个上限同时触发时 resetsAt 取最晚恢复边界。dispatch 先处理指向活动 Turn 的 append；新轮次在 queued 转 starting 前查预算，超限就 publish 并 retryBudget。定时器最多间隔 3 分钟复查，恢复且其他调度条件满足才继续；0 上限仍阻塞。预算不预留未来消耗，已运行轮次、在途 steer 可以继续，可能超额；网关兜底耗尽则可能拒绝在途后续请求。",
+      "design": {
+        "decision": "把单次记账与历史水位分开，并把硬预算检查放在新轮次派发前。",
+        "reason": "重复通知不会在当前进程再次入账，历史累计不会被当成本次用量；排队任务保留下来，额度恢复后仍有明确的调度对象。",
+        "alternative": "直接累加 total 会重复计算历史；达到预算就中断所有轮次会丢掉在途工作的完成机会；缺账时按零用量继续会掩盖费用。",
+        "cost": "额度是事后计量，不预留并发或长轮次费用。未定价、未报告消耗与备用模型归属都会影响估算；网关计数与服务时区不保证一致，容器重启也会清空网关计数。"
+      },
+      "source": {
+        "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+        "needle": "    const budget = await this.usage?.budgetStatus();",
+        "before": 3,
+        "after": 9,
+        "explanation": "窗口从空闲和待执行任务检查开始，预算超限分支在 queued → starting 的条件更新之前直接返回。前面的活动 append 分支不在窗口内；累计去重与 last 记账见 usage/index.mjs:76–81，复查定时器见本文件 retryBudget。",
+        "start": 245,
+        "anchor": 248,
+        "code": "    if (active || all.some((j) => executing.includes(j.status))) return;\n    const job = pending.find((j) => j.mode === \"append\") || pending[0];\n    if (!job) return;\n    const budget = await this.usage?.budgetStatus();\n    if (budget?.exceeded) {\n      this.retryBudget(threadId, budget);\n      await this.publish(threadId);\n      return;\n    }\n    clearTimeout(this.budgetTimers.get(threadId));\n    this.budgetTimers.delete(threadId);\n    if (!(await this.store.patch(job.id, { status: \"starting\", selectedModel: null, modelSource: null }, [\"queued\"])))\n      return;",
+        "hash": "8ae6706ad364aa05f84a2d68202b62c939b0e88c8050d0c6711cad15c4a6d259"
+      },
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "历史累计只作为水位，重复通知不加账",
+          "steps": [
+            {
+              "title": "第一次通知包含历史累计",
+              "actor": "Codex → UsageService",
+              "event": "教学模拟 · total=1000；last.totalTokens=120 → recordChat",
+              "explain": "示意沿用测试数据：last 输入100、输出20，缓存40、推理5分别已包含其中；只记120，不记1000。",
+              "state": {
+                "total": "1000",
+                "last": "120",
+                "ledger": "120 token；1条",
+                "job": "本轮执行中",
+                "budget": "未设上限",
+                "result": "首条已入账"
+              },
+              "lines": []
+            },
+            {
+              "title": "累计增长后再记本次",
+              "actor": "UsageService",
+              "event": "教学模拟 · total=1120 → record(last=120)",
+              "explain": "水位用于判断新增，实际入账仍来自 last，不是拿累计总量再加一次。",
+              "state": {
+                "total": "1120",
+                "last": "120",
+                "ledger": "240 token；2条",
+                "job": "本轮执行中",
+                "budget": "未设上限",
+                "result": "第二条已入账"
+              },
+              "lines": []
+            },
+            {
+              "title": "相同或更低的累计跳过",
+              "actor": "UsageService",
+              "event": "教学模拟 · 重复 total=1120；迟到 total=1000 → return pending",
+              "explain": "这两次通知均不提高水位，当前进程不再增加条目；last 正文也不会被重复累计。",
+              "state": {
+                "total": "水位保持1120",
+                "last": "重复的120未记",
+                "ledger": "240 token；2条",
+                "job": "本轮执行中",
+                "budget": "未设上限",
+                "result": "重复与迟到通知跳过"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "达到预算，新轮次等待但在途追加继续",
+          "steps": [
+            {
+              "title": "在途工作期间耗尽日预算",
+              "actor": "工具层 → UsageService",
+              "event": "教学模拟 · A 已运行；record(embedding, inputTokens=100)",
+              "explain": "测试使用固定 UTC 时钟，日上限100；这条是工具用量，不含 Codex 的 total/last。B 已排队，随后向 A 显式追加。",
+              "state": {
+                "total": "本例不使用",
+                "last": "本例不使用",
+                "ledger": "今日100 token",
+                "job": "A running；B queued",
+                "budget": "100/100；exceeded",
+                "result": "A 仍在执行"
+              },
+              "lines": []
+            },
+            {
+              "title": "追加不新开轮次",
+              "actor": "MessageService",
+              "event": "教学模拟 · append.targetTurnId=active → turn/steer",
+              "explain": "匹配活动轮次的 append 在硬预算检查前处理；它沿用 A，不能据此推断追加已结束轮次也能绕过预算。",
+              "state": {
+                "total": "本例不使用",
+                "last": "本例不使用",
+                "ledger": "今日100 token",
+                "job": "A/append running；B queued",
+                "budget": "100/100；exceeded",
+                "result": "turn/start 仍只有1次"
+              },
+              "lines": []
+            },
+            {
+              "title": "A 完成后 B 被预算挡住",
+              "actor": "MessageService",
+              "event": "教学模拟 · turn/completed(A) → budgetStatus.exceeded → retryBudget",
+              "explain": "B 保持 queued，发布预算原因；没有把 B 标成 starting，也没有人为 pause。",
+              "state": {
+                "total": "本例不使用",
+                "last": "本例不使用",
+                "ledger": "今日100 token",
+                "job": "A completed；B queued",
+                "budget": "等待下个自然日",
+                "result": "未发 B 的 turn/start"
+              },
+              "lines": []
+            },
+            {
+              "title": "跨日复查后才放行",
+              "actor": "预算定时器 → MessageService",
+              "event": "教学模拟 · 测试时钟到次日 → dispatch(B)",
+              "explain": "本例没有月上限、手动暂停或其他执行中任务，次日预算可用，B 才开始。若月上限也超限，需等更晚的恢复边界。",
+              "state": {
+                "total": "本例不使用",
+                "last": "本例不使用",
+                "ledger": "历史保留；今日0 token",
+                "job": "B running",
+                "budget": "未超限",
+                "result": "新开 B 的 Turn"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s11-budget",
+        "action": "在 stages/s11-model-gateway 运行命令。用 usage.test.mjs 的断言核对累计1000/1120/重复1120最后只记240 token、首次重建水位只记 last，以及跨日时钟推进后 queued 变 running。时区与数据库写失败用注入时钟/仓储夹具验证，不要求等待到真实次日，也不连接 PostgreSQL 或真实网关。",
+        "observe": [
+          "累计用量用于去重，每次记 last；重复通知与重启不补记历史",
+          "按配置时区划分自然日和月，覆盖夏令时及边界",
+          "超预算保留 queued，在途轮次与追加消息继续，次日或次月恢复派发",
+          "价格决定估算金额；网关每日 token 兜底默认取日预算的 1.5 倍"
+        ],
+        "boundary": "离线真实记账、时区与预算调度；仓储和 RPC 为夹具，不验证真实 PostgreSQL 或 Bifrost 限流。"
+      },
+      "quiz": {
+        "question": "日预算已满，A 还在执行，B 已 queued。以下哪种说法符合实现？",
+        "options": [
+          "B 保留排队，A 及指向它的 steer 可继续；额度恢复且其他条件允许后才新开 B 的 Turn。",
+          "自动中断 A，并把 B 标记 failed。",
+          "只要 B 写了具体模型，就同时豁免降级与预算上限。"
+        ],
+        "answer": 0,
+        "explanation": "A 对应 dispatch 的分支顺序。具体模型只豁免预算降级改选，不豁免硬预算。网关另有兜底限流，因此服务允许在途执行也不保证其后续请求永远成功。"
+      },
+      "reference": {
+        "session": "s16",
+        "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+        "adaptation": "借用“资源预算必须结合计量时机解释”的方法。参考在调用返回、知道 token 后累计判断，并非花费前绝不越限；本课通过 last 入账与下一轮派发前检查说明相同边界，不移植其并行执行、调用上限或 journal。"
       }
     }
   ]

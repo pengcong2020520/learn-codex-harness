@@ -1,0 +1,570 @@
+[
+  {
+    "id": "s11-registry",
+    "stage": "s11-model-gateway",
+    "title": "一份清单校验模型，两层密钥各有去处",
+    "principle": "清单先校验用途与参数，启用条件再筛选服务商；生成配置引用变量，Codex 环境只保留访问网关所需的密钥。",
+    "problem": "接入多个模型后，错误的用途、价格或备用模型会到调用时才暴露吗？启动 Codex 时能把整个服务环境原样传进去吗？",
+    "change": {
+      "before": "只有一个模型地址与密钥时，无法统一描述多种用途、能力与备用关系，也容易把新增服务商的凭据一起交给执行进程。",
+      "added": "config/models.json 集中声明 providers、models、routes、scenes 和价格；validateRegistry 校验，buildGatewayConfig 生成变量引用，启动器过滤 Codex 环境。",
+      "kept": "Codex 继续管理 Thread、Turn 与工具循环；网关模式下仍使用 Responses 接口，Bifrost 负责上游协议转换。"
+    },
+    "ownership": {
+      "codex": "只用启动器提供的模型目录、接口地址与 CODEX_API_KEY 发出请求，不负责挑选服务商凭据。",
+      "product": "校验清单、筛选已启用服务商、生成 Bifrost 配置与模型参数表，并在启动 Codex 前收紧子进程环境；Bifrost 运行时读取服务商密钥。"
+    },
+    "concepts": [
+      {
+        "term": "providers / models",
+        "meaning": "providers 声明接口类型、地址与环境变量名；models 用“服务商/模型名”登记用途、能力、推理档位、价格和 fallbacks。清单合法不等于账号已开通该模型。"
+      },
+      {
+        "term": "enabledProviders",
+        "meaning": "服务商声明的 keyEnv、baseUrlEnv 都有非空值才启用；如本地 Ollama 仅声明地址变量，就按地址启用，不需要供应商密钥。"
+      },
+      {
+        "term": "网关访问密钥 / 服务商密钥",
+        "meaning": "AGENT_GATEWAY_KEY 用于访问网关；启动器把它映射为 Codex 的 CODEX_API_KEY，再去掉 AGENT_GATEWAY_KEY 及其余 *_API_KEY。生成的网关配置仅写 env.变量名。"
+      },
+      {
+        "term": "pricing",
+        "meaning": "token 单价按每百万计算，媒体还可按张或秒定价。0 是明确零价，未填写是未定价；非法负数、非有限数字或缺少必填单价会被校验拒绝。"
+      }
+    ],
+    "mechanism": "loadModelRegistry 解析 JSON 后调用 validateRegistry。它检查服务商变量、模型用途、原生能力、推理档位、价格及路由引用；fallbacks 必须指向清单中能覆盖主模型全部用途的其他模型，但不要求所有能力相同。走 anthropic 格式的对话模型必须声明 maxOutputTokens。enabledProviders 仅检查声明变量是否有值，不验证真实密钥有效性或模型开通状态。buildGatewayConfig 只生成已启用服务商和备用关系，密钥字段保存 env.引用；Compose 把服务商密钥变量交给 gateway 服务。网关模式由 AGENT_GATEWAY_KEY 启用，不允许同时设置直连 CODEX_BASE_URL / CODEX_API_KEY。buildAppServerLaunch 先把地址与凭据替换成网关值，再复制和过滤环境，去掉其他 *_API_KEY 以及数据库等敏感变量；CODEX_API_KEY 留作网关访问凭据，不写进 args 或模型目录。离线断言验证配置与启动参数，不证明 Bifrost 已实际鉴权或切换备用。",
+    "design": {
+      "decision": "用一份声明清单生成各层配置，并在进程边界显式过滤凭据。",
+      "reason": "配置错误能在加载时定位到字段或模型；服务商密钥不随模型目录和启动参数扩散到 Codex。",
+      "alternative": "在各个工具和启动脚本里分别写模型参数会产生多份事实；直接传入整个环境会把与 Codex 无关的密钥也交出去。",
+      "cost": "能力和价格需要维护与实测。配置引用不是凭据验证；真实网关鉴权、协议转换及备用切换仍需单独的集成测试。"
+    },
+    "source": {
+      "file": "stages/s11-model-gateway/server/modules/codex/launch.mjs",
+      "needle": "  const env = { ...environment };",
+      "before": 9,
+      "after": 5,
+      "explanation": "片段先建立路由、确定搜索配置，再把网关地址与密钥写入待启动环境，随后过滤其他 *_API_KEY 和敏感变量。清单严格校验与网关 env.引用生成位于 gateway/index.mjs，Compose 传入范围由 compose.yaml 决定；这段启动代码本身没有运行 Bifrost。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "合法清单形成两种不同的凭据视图",
+        "steps": [
+          {
+            "title": "先验证清单",
+            "actor": "loadModelRegistry → validateRegistry",
+            "event": "教学模拟 · 读取 config/models.json → validateRegistry",
+            "explain": "示例使用仓库清单，声明的模型、用途、路由和备用关系均合法。",
+            "state": {
+              "registry": "校验通过",
+              "providers": "尚未筛选",
+              "gatewayConfig": "尚未生成",
+              "codexEnvironment": "尚未构建",
+              "result": "只确认配置结构"
+            },
+            "lines": []
+          },
+          {
+            "title": "只启用已配置的服务商",
+            "actor": "enabledProviders",
+            "event": "教学模拟 · KIMI_API_KEY / DEEPSEEK_API_KEY 有测试占位值",
+            "explain": "本例测试只为两家提供非空变量，其余未启用。占位值不证明真实认证通过。",
+            "state": {
+              "registry": "校验通过",
+              "providers": "kimi、deepseek",
+              "gatewayConfig": "尚未生成",
+              "codexEnvironment": "尚未构建",
+              "result": "选择配置范围"
+            },
+            "lines": []
+          },
+          {
+            "title": "生成引用而非密钥正文",
+            "actor": "buildGatewayConfig",
+            "event": "教学模拟 · keys.value = env.KIMI_API_KEY；virtual_keys.value = env.AGENT_GATEWAY_KEY",
+            "explain": "生成对象不含测试凭据正文；只有已启用服务商的备用规则进入配置。",
+            "state": {
+              "registry": "校验通过",
+              "providers": "kimi、deepseek",
+              "gatewayConfig": "只有环境变量引用",
+              "codexEnvironment": "尚未构建",
+              "result": "等待网关运行时读取"
+            },
+            "lines": []
+          },
+          {
+            "title": "过滤子进程环境",
+            "actor": "buildAppServerLaunch",
+            "event": "教学模拟 · 网关值映射到 CODEX_API_KEY → 删除其他 *_API_KEY",
+            "explain": "启动参数指向网关地址；Codex 环境保留网关访问值，KIMI_API_KEY、DEEPSEEK_API_KEY 和 AGENT_GATEWAY_KEY 被移除。测试只检查启动对象。",
+            "state": {
+              "registry": "校验通过",
+              "providers": "kimi、deepseek",
+              "gatewayConfig": "只有环境变量引用",
+              "codexEnvironment": "仅 CODEX_API_KEY 保存模型接口凭据",
+              "result": "离线配置与启动对象通过"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "备用用途写错，在配置阶段拒绝",
+        "steps": [
+          {
+            "title": "把向量模型误填为对话备用",
+            "actor": "配置输入",
+            "event": "教学模拟 · kimi/kimi-k2.7-code.fallbacks = [ollama/qwen3-embedding:0.6b]",
+            "explain": "这是测试中的内存副本变更，不修改仓库清单。",
+            "state": {
+              "registry": "待校验",
+              "providers": "未筛选",
+              "gatewayConfig": "未生成",
+              "codexEnvironment": "未构建",
+              "result": "错误关系尚未采用"
+            },
+            "lines": []
+          },
+          {
+            "title": "检查备用覆盖的用途",
+            "actor": "validateRegistry",
+            "event": "教学模拟 · purposes.every(...) = false",
+            "explain": "主模型用途含 chat，向量模型不包含 chat，校验报出模型与备用模型名称。",
+            "state": {
+              "registry": "校验失败：用途不覆盖",
+              "providers": "未筛选",
+              "gatewayConfig": "未生成",
+              "codexEnvironment": "未构建",
+              "result": "抛出配置错误"
+            },
+            "lines": []
+          },
+          {
+            "title": "停止当前配置链",
+            "actor": "配置调用方",
+            "event": "教学模拟 · validateRegistry throws → 不继续生成与启动",
+            "explain": "不能把错误清单当成可用配置；应修正副本或配置来源后重新校验，没有向上游提交请求。",
+            "state": {
+              "registry": "仍需修正",
+              "providers": "未筛选",
+              "gatewayConfig": "未生成",
+              "codexEnvironment": "未构建",
+              "result": "没有模型调用"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s11-registry",
+      "action": "在 stages/s11-model-gateway 运行命令。查看 gateway.test.mjs 中清单错误、变量引用及启动环境断言，以及 native-search、usage、media 的字段校验。夹具提供假变量并检查对象，没有启动 Codex 或 Bifrost，也不会用真实密钥试请求。",
+      "observe": [
+        "用途、路由、能力和价格字段在加载清单时校验，非法值带模型名报错",
+        "生成的网关配置只含密钥变量引用；Compose 只给网关传入服务商密钥",
+        "Codex 只拿网关访问密钥，服务商密钥不进入子进程环境"
+      ],
+      "boundary": "离线真实清单校验、配置生成和 Codex 启动参数；不证明真实网关鉴权，见 s11-gateway。"
+    },
+    "quiz": {
+      "question": "清单校验通过，生成配置也只有 env.引用，能据此宣称服务商密钥有效且网关鉴权已通过吗？",
+      "options": [
+        "能，变量非空就说明上游账号可用。",
+        "不能；这里只验证声明、引用与环境过滤，真实鉴权需要运行网关验证。",
+        "能，只要把所有服务商密钥也传给 Codex 就有保障。"
+      ],
+      "answer": 1,
+      "explanation": "B 区分配置证据与运行证据。enabledProviders 不访问上游；传递更多密钥也不能替代真实鉴权，而且违反本阶段的进程边界。"
+    },
+    "reference": {
+      "session": "s03",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s03_permission",
+      "adaptation": "借用“先检查再进入执行”的讲法。参考在工具执行前依次应用硬拒绝、规则和交互询问；本课把检查放在清单加载与子进程环境构造，不引入交互审批，也不把配置通过当成真实鉴权通过。"
+    }
+  },
+  {
+    "id": "s11-routing",
+    "stage": "s11-model-gateway",
+    "title": "先保留能力约束，再决定这一轮用谁",
+    "principle": "步骤 > 任务 > 默认决定选择来源；场景按用途与能力逐候选筛选，预算降级不能取消能力要求。",
+    "problem": "同一个 Workflow 的大纲和成稿想用不同模型；搜索已经开启、预算又接近上限时，能否直接换成 fast 的第一个候选？",
+    "change": {
+      "before": "一个默认模型无法表达步骤差异；只换模型名也无法解释它是否满足当前会话的搜索与输入要求。",
+      "added": "服务端按优先级确定选择，按用途、needs 与原生能力筛选，并把 selectedModel 和 modelSource 写进任务。预算达到降级比例时改选配置的场景。",
+      "kept": "Codex 负责本轮推理与工具循环，Bifrost 负责选定模型的协议转换和请求失败后的备用链。"
+    },
+    "ownership": {
+      "codex": "接收 turn/start 中明确的 model 和 effort；联网搜索沿用启动时确定的会话配置，不按单轮切换。",
+      "product": "校验任务选择和步骤要求，派发时再次路由与校验 effort，记录来源；网关另行处理上游故障切换。"
+    },
+    "concepts": [
+      {
+        "term": "routes / scenes",
+        "meaning": "routes 按用途列默认候选；scenes 给候选组命名，可混合多种用途，解析时先过滤本次 purpose。两者都按顺序挑符合条件的模型。"
+      },
+      {
+        "term": "needs / effort",
+        "meaning": "步骤 needs 可要求 image 或 contextTokens；搜索开启时路由另补 web_search。effort 不是被跳过候选的筛选项，而是在选中模型后单独校验其 reasoningLevels，不支持就报错。"
+      },
+      {
+        "term": "预算降级",
+        "meaning": "日或月任一已配置 token/金额预算达到 AGENT_BUDGET_DOWNGRADE_AT 比例，场景或默认选择改用 downgradeScene（默认 fast）；写死“服务商/模型名”不改选，但仍受能力与预算停派约束。"
+      },
+      {
+        "term": "fallbacks",
+        "meaning": "由 Bifrost 在请求失败时使用的备用链，与任务语义路由不同。启动提醒缺搜索或看图的备用能力，不保证备用与主模型等价。"
+      }
+    ],
+    "mechanism": "任务 model 提交时校验，保存后参与幂等比较。新轮次派发先检查硬预算，再用 step.model || job.model || null 确定选择；达到降级比例且选择不含 / 时改用降级场景。resolve 按具体模型、场景或默认路由确定候选，对场景先过滤 purpose；每个候选再检查服务商启用、看图、上下文和原生工具要求。搜索由启动默认模型的 nativeTools 与 AGENT_WEB_SEARCH 决定，会话开启后每次对话路由自动要求 web_search。候选全部不满足时报出逐项原因，不取消约束来凑一个模型。选中后 validateEffort 再核对档位，随后保存 selectedModel / modelSource，并在 turn/start 中发出 model / effort。默认层仍允许 CODEX_MODEL 覆盖 routes.chat。指向活动 Turn 的 append 走 steer，沿用当前轮次模型；追加到已结束轮次会新开轮次并使用任务选择。GET /models 与终端 /model 展示可选模型和场景；/model 的会话选择影响后续提交，不改变已开始的轮次。其他用途也可路由经网关；RAG 单独设置了 EMBEDDING_BASE_URL 时，使用这条独立连接，不再按 routes.embedding 改写模型和维数。",
+    "design": {
+      "decision": "让任务语义选择与网关故障切换分层，保留能力条件和选择来源。",
+      "reason": "步骤知道需要看图还是长上下文，服务知道当前预算；网关无法仅从请求判断 Workflow 的业务意图。来源记录让选择可以追溯。",
+      "alternative": "把 fast 固定解释成某个品牌，或预算紧张就跳过搜索检查，会使名字相同的步骤失去原先能力。让网关猜场景也没有任务上下文。",
+      "cost": "场景名不承诺特定价格或效果，搜索要求可能使 fast 与 strong 选到同一模型。备用链可能损失能力，且 Codex 用量通知不能确认最终备用模型。"
+    },
+    "source": {
+      "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+      "needle": "        let selection = step.model || job.model || null;",
+      "before": 2,
+      "after": 20,
+      "explanation": "窗口完整呈现选择优先级、降级判断、能力路由、effort 校验、任务记录与 turn/start 参数。逐候选失败原因在 gateway/router.mjs 的 unmet/pick；硬预算检查在本文件更前面，不能把具体模型的降级豁免误当成预算豁免。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "有搜索约束时，降级仍选支持搜索的候选",
+        "steps": [
+          {
+            "title": "步骤先于任务选择",
+            "actor": "MessageService",
+            "event": "教学模拟 · step.model=strong；job.model=fast → selection=strong",
+            "explain": "本例两家服务商已启用，默认 Kimi 使搜索为 live。步骤另需 image；日预算示意为 100 token，已用 80，降级比例 0.8。",
+            "state": {
+              "selection": "步骤场景 strong",
+              "needs": "image=true；web_search",
+              "budget": "80/100；已达降级比例",
+              "chosen": "未选",
+              "result": "未发 turn/start"
+            },
+            "lines": []
+          },
+          {
+            "title": "达到比例后替换场景",
+            "actor": "MessageService",
+            "event": "教学模拟 · budget.downgraded=true → selection=fast",
+            "explain": "本例未达到 100 的硬上限。strong 是场景而非具体模型，因此换成 fast，需求仍保留。",
+            "state": {
+              "selection": "预算降级：场景 fast",
+              "needs": "image=true；web_search",
+              "budget": "80/100；未停派",
+              "chosen": "未选",
+              "result": "等待能力筛选"
+            },
+            "lines": []
+          },
+          {
+            "title": "跳过不满足搜索的候选",
+            "actor": "ModelRouter",
+            "event": "教学模拟 · fast 候选 deepseek/deepseek-flash 缺 web_search → 继续",
+            "explain": "仓库清单中该模型未声明 web_search；后续 Kimi 候选满足本例需求。这里是路由筛选，没有向 DeepSeek 发出失败请求。",
+            "state": {
+              "selection": "预算降级：场景 fast",
+              "needs": "image=true；web_search",
+              "budget": "80/100；未停派",
+              "chosen": "kimi/kimi-k2.7-code",
+              "result": "候选筛选成功"
+            },
+            "lines": []
+          },
+          {
+            "title": "记录选择并开始本轮",
+            "actor": "MessageService → Codex",
+            "event": "教学模拟 · patch(selectedModel, modelSource) → prepareUsage → turn/start",
+            "explain": "本例未指定 effort，使用模型默认值或 null；账本上下文在发 RPC 前准备。显示的是路由选择，不代表获知网关最终备用模型。",
+            "state": {
+              "selection": "预算降级：场景 fast",
+              "needs": "image=true；web_search",
+              "budget": "80/100；未停派",
+              "chosen": "kimi/kimi-k2.7-code",
+              "result": "turn/start 已提交"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "降级场景全都不满足长上下文",
+        "steps": [
+          {
+            "title": "准备合法的步骤要求",
+            "actor": "任务夹具",
+            "event": "教学模拟 · needs.contextTokens=500000；CODEX_MODEL=deepseek/deepseek-v4-pro",
+            "explain": "对应既有测试的内存清单副本：将 fast 中 DeepSeek Flash 的 contextWindow 改为 100；搜索关闭。任务未写死具体模型，默认本可选 Pro。",
+            "state": {
+              "selection": "默认路由",
+              "needs": "contextTokens=500000；搜索关闭",
+              "budget": "80/100；降级比例0.8",
+              "chosen": "未选",
+              "result": "等待派发"
+            },
+            "lines": []
+          },
+          {
+            "title": "预算把默认替换成 fast",
+            "actor": "MessageService → ModelRouter",
+            "event": "教学模拟 · selection=fast → resolve(needs)",
+            "explain": "Flash 的 100 不够，Kimi 的 262144 也不够；其他未启用候选无法兜底，逐项收集拒绝原因。",
+            "state": {
+              "selection": "预算降级：场景 fast",
+              "needs": "contextTokens=500000；搜索关闭",
+              "budget": "80/100；未停派",
+              "chosen": "无合格候选",
+              "result": "抛出 MODEL_UNAVAILABLE"
+            },
+            "lines": []
+          },
+          {
+            "title": "失败留下记录，不发模型请求",
+            "actor": "MessageService",
+            "event": "教学模拟 · executionError → failed；pause(threadId)",
+            "explain": "该错误发生在 turn/start 之前；本例任务失败并暂停所属队列，不会静默改回默认模型或放宽上下文要求。",
+            "state": {
+              "selection": "预算降级：场景 fast（尚未写入任务）",
+              "needs": "contextTokens=500000；搜索关闭",
+              "budget": "80/100；未停派",
+              "chosen": "selectedModel 仍为空",
+              "result": "failed；0 次 turn/start"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s11-routing",
+      "action": "在 stages/s11-model-gateway 运行命令。重点查看 routing-policy.test.mjs 的步骤优先级、预算降级与能力保留断言：正常例即便降级仍选 Kimi，失败例候选上下文不足且 turn/start 次数为 0。实验还覆盖 HTTP handler、CLI、媒体 quality 和 RAG 连接配置；handler 直接接收内存 request，不监听端口，不证明真实网关或数据库行为。",
+      "observe": [
+        "场景按用途过滤；needs 约束看图和上下文，搜索开启时跳过不支持 web_search 的候选，全部不满足才报错",
+        "任务 model 提交时校验并保存，步骤 > 任务 > 默认；effort 校验清单支持后传给 turn/start",
+        "GET /models 按用途展示能力、场景和默认；终端 /model 为当前会话选择后续任务模型，/state 和任务启动显示来源",
+        "日/月任一预算达到降级比例时，场景和默认选择改用降级场景；具体模型豁免，能力要求不放宽",
+        "生图、生视频 quality 通过 fast/strong 场景选模型，省略时使用各自 routes",
+        "写作 Agent 的 fast/strong 在 Kimi 搜索开启和 DeepSeek 搜索关闭时都能配置",
+        "备用链只包含已启用服务商；缺原生能力或看图能力时启动提醒，自检展示备用链",
+        "RAG 向量按路由经网关访问本地 Ollama，模型与维数来自清单"
+      ],
+      "boundary": "离线真实路由、configure、任务派发、HTTP handler、客户端、预算和媒体服务；RPC、存储和 fetch 为夹具，不监听端口。真实 PostgreSQL 持久化需 test:data，网关备用切换见 s11-gateway。"
+    },
+    "quiz": {
+      "question": "搜索为 live，预算达到降级比例，fast 的第一个候选不支持 web_search。代码会怎么做？",
+      "options": [
+        "关闭这一轮的搜索，直接使用第一个候选。",
+        "让 Bifrost 先试第一个候选，失败后再把请求交回任务路由。",
+        "保留搜索约束继续筛选；有合格候选才选择，全部不满足就报错。"
+      ],
+      "answer": 2,
+      "explanation": "C 符合 resolve 补充 web_search 和 pick 逐候选检查。降级不改变会话搜索配置；任务筛选与网关备用切换是不同阶段。"
+    },
+    "reference": {
+      "session": "s16",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+      "adaptation": "借用“步骤参数和运行约束由宿主解释”的教学方法。参考用可信注册函数与执行状态组织 Workflow；本课只说明已有工作流每一步的模型选择、能力条件与来源，不引入并行 Agent、journal 恢复或结果缓存。"
+    }
+  },
+  {
+    "id": "s11-budget",
+    "stage": "s11-model-gateway",
+    "title": "只记本次用量，超限保留排队",
+    "principle": "累计 token 用来去重，本次 last 用来记账；预算在新轮次派发前检查，达到上限就保持 queued，额度恢复后再检查派发。",
+    "problem": "一个 Thread 的累计用量包含历史，重启后会不会把历史再收费一遍？当它达到日预算时，已经执行的轮次和排队消息分别怎样处理？",
+    "change": {
+      "before": "只有模型返回的累计值，难以区分本次消耗、历史用量与重复通知；只显示花费也不能约束后续派发。",
+      "added": "UsageService 保存每次消耗与估算价格，按时区计算自然日/月预算；MessageService 在 queued 转 starting 前检查，并安排定时复查。",
+      "kept": "Codex 仍执行已开始的 Turn 并报告用量；队列保留已有消息，预算等待不等于任务失败或人工暂停。"
+    },
+    "ownership": {
+      "codex": "通过 thread/tokenUsage/updated 报告 total 与 last，不替应用维护预算账本，也不报告 Bifrost 最终备用模型。",
+      "product": "把用量与路由模型、任务关联，串行写账、汇总预算并控制派发；Bifrost 使用虚拟密钥的每日 token 限流作为另一层兜底。"
+    },
+    "concepts": [
+      {
+        "term": "total / last",
+        "meaning": "total.totalTokens 是 Thread 累计水位，只决定通知是否新；本次记账取 last。重启后内存水位重建，第一条直接记 last，不补累计历史，也不是跨进程恰好一次去重。"
+      },
+      {
+        "term": "自然日 / 自然月",
+        "meaning": "由 AGENT_BUDGET_TIMEZONE 指定的 IANA 时区决定边界，默认服务进程时区；夏令时一天可能不是 24 小时。日/月任一 token 或金额达到上限都阻止新轮次。"
+      },
+      {
+        "term": "queued / budget.exceeded",
+        "meaning": "超限时保持 queued，报告原因和 resetsAt，定时复查；没有把任务转成 failed，也不需要用 /continue 解除预算等待。"
+      },
+      {
+        "term": "估算金额 / 网关兜底",
+        "meaning": "金额按记录时价格计算，未定价不计金额但计 token。网关每日 token 限流默认取配置的日 token 预算乘 1.5 后向上取整，可显式覆盖，不是费用精确封顶。"
+      }
+    ],
+    "mechanism": "recordChat 先比较 Thread 累计 total.totalTokens；已有水位且新值不增加就跳过，增加才更新水位并 record(last)。首次通知直接记 last；本例进程重启不会把历史 total 补账，但水位不是持久去重凭据。record 用串行 pending 链写入账本，预算查询等待 pending；写入失败仍留在链上，后续查询不能按空账本放行，真实通知路径还会触发 usageError 停止调度。缓存输入已含在 inputTokens，推理输出已含在 outputTokens，不重复累加。价格在入账时固定，补价格不追算，切币种不混加历史金额；备用切换仍按提交的路由模型估算。budgetStatus 同时计算当地自然日和自然月，任一已设上限达到即 exceeded，多个上限同时触发时 resetsAt 取最晚恢复边界。dispatch 先处理指向活动 Turn 的 append；新轮次在 queued 转 starting 前查预算，超限就 publish 并 retryBudget。定时器最多间隔 3 分钟复查，恢复且其他调度条件满足才继续；0 上限仍阻塞。预算不预留未来消耗，已运行轮次、在途 steer 可以继续，可能超额；网关兜底耗尽则可能拒绝在途后续请求。",
+    "design": {
+      "decision": "把单次记账与历史水位分开，并把硬预算检查放在新轮次派发前。",
+      "reason": "重复通知不会在当前进程再次入账，历史累计不会被当成本次用量；排队任务保留下来，额度恢复后仍有明确的调度对象。",
+      "alternative": "直接累加 total 会重复计算历史；达到预算就中断所有轮次会丢掉在途工作的完成机会；缺账时按零用量继续会掩盖费用。",
+      "cost": "额度是事后计量，不预留并发或长轮次费用。未定价、未报告消耗与备用模型归属都会影响估算；网关计数与服务时区不保证一致，容器重启也会清空网关计数。"
+    },
+    "source": {
+      "file": "stages/s11-model-gateway/server/modules/messages/index.mjs",
+      "needle": "    const budget = await this.usage?.budgetStatus();",
+      "before": 3,
+      "after": 9,
+      "explanation": "窗口从空闲和待执行任务检查开始，预算超限分支在 queued → starting 的条件更新之前直接返回。前面的活动 append 分支不在窗口内；累计去重与 last 记账见 usage/index.mjs:76–81，复查定时器见本文件 retryBudget。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "历史累计只作为水位，重复通知不加账",
+        "steps": [
+          {
+            "title": "第一次通知包含历史累计",
+            "actor": "Codex → UsageService",
+            "event": "教学模拟 · total=1000；last.totalTokens=120 → recordChat",
+            "explain": "示意沿用测试数据：last 输入100、输出20，缓存40、推理5分别已包含其中；只记120，不记1000。",
+            "state": {
+              "total": "1000",
+              "last": "120",
+              "ledger": "120 token；1条",
+              "job": "本轮执行中",
+              "budget": "未设上限",
+              "result": "首条已入账"
+            },
+            "lines": []
+          },
+          {
+            "title": "累计增长后再记本次",
+            "actor": "UsageService",
+            "event": "教学模拟 · total=1120 → record(last=120)",
+            "explain": "水位用于判断新增，实际入账仍来自 last，不是拿累计总量再加一次。",
+            "state": {
+              "total": "1120",
+              "last": "120",
+              "ledger": "240 token；2条",
+              "job": "本轮执行中",
+              "budget": "未设上限",
+              "result": "第二条已入账"
+            },
+            "lines": []
+          },
+          {
+            "title": "相同或更低的累计跳过",
+            "actor": "UsageService",
+            "event": "教学模拟 · 重复 total=1120；迟到 total=1000 → return pending",
+            "explain": "这两次通知均不提高水位，当前进程不再增加条目；last 正文也不会被重复累计。",
+            "state": {
+              "total": "水位保持1120",
+              "last": "重复的120未记",
+              "ledger": "240 token；2条",
+              "job": "本轮执行中",
+              "budget": "未设上限",
+              "result": "重复与迟到通知跳过"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "达到预算，新轮次等待但在途追加继续",
+        "steps": [
+          {
+            "title": "在途工作期间耗尽日预算",
+            "actor": "工具层 → UsageService",
+            "event": "教学模拟 · A 已运行；record(embedding, inputTokens=100)",
+            "explain": "测试使用固定 UTC 时钟，日上限100；这条是工具用量，不含 Codex 的 total/last。B 已排队，随后向 A 显式追加。",
+            "state": {
+              "total": "本例不使用",
+              "last": "本例不使用",
+              "ledger": "今日100 token",
+              "job": "A running；B queued",
+              "budget": "100/100；exceeded",
+              "result": "A 仍在执行"
+            },
+            "lines": []
+          },
+          {
+            "title": "追加不新开轮次",
+            "actor": "MessageService",
+            "event": "教学模拟 · append.targetTurnId=active → turn/steer",
+            "explain": "匹配活动轮次的 append 在硬预算检查前处理；它沿用 A，不能据此推断追加已结束轮次也能绕过预算。",
+            "state": {
+              "total": "本例不使用",
+              "last": "本例不使用",
+              "ledger": "今日100 token",
+              "job": "A/append running；B queued",
+              "budget": "100/100；exceeded",
+              "result": "turn/start 仍只有1次"
+            },
+            "lines": []
+          },
+          {
+            "title": "A 完成后 B 被预算挡住",
+            "actor": "MessageService",
+            "event": "教学模拟 · turn/completed(A) → budgetStatus.exceeded → retryBudget",
+            "explain": "B 保持 queued，发布预算原因；没有把 B 标成 starting，也没有人为 pause。",
+            "state": {
+              "total": "本例不使用",
+              "last": "本例不使用",
+              "ledger": "今日100 token",
+              "job": "A completed；B queued",
+              "budget": "等待下个自然日",
+              "result": "未发 B 的 turn/start"
+            },
+            "lines": []
+          },
+          {
+            "title": "跨日复查后才放行",
+            "actor": "预算定时器 → MessageService",
+            "event": "教学模拟 · 测试时钟到次日 → dispatch(B)",
+            "explain": "本例没有月上限、手动暂停或其他执行中任务，次日预算可用，B 才开始。若月上限也超限，需等更晚的恢复边界。",
+            "state": {
+              "total": "本例不使用",
+              "last": "本例不使用",
+              "ledger": "历史保留；今日0 token",
+              "job": "B running",
+              "budget": "未超限",
+              "result": "新开 B 的 Turn"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s11-budget",
+      "action": "在 stages/s11-model-gateway 运行命令。用 usage.test.mjs 的断言核对累计1000/1120/重复1120最后只记240 token、首次重建水位只记 last，以及跨日时钟推进后 queued 变 running。时区与数据库写失败用注入时钟/仓储夹具验证，不要求等待到真实次日，也不连接 PostgreSQL 或真实网关。",
+      "observe": [
+        "累计用量用于去重，每次记 last；重复通知与重启不补记历史",
+        "按配置时区划分自然日和月，覆盖夏令时及边界",
+        "超预算保留 queued，在途轮次与追加消息继续，次日或次月恢复派发",
+        "价格决定估算金额；网关每日 token 兜底默认取日预算的 1.5 倍"
+      ],
+      "boundary": "离线真实记账、时区与预算调度；仓储和 RPC 为夹具，不验证真实 PostgreSQL 或 Bifrost 限流。"
+    },
+    "quiz": {
+      "question": "日预算已满，A 还在执行，B 已 queued。以下哪种说法符合实现？",
+      "options": [
+        "B 保留排队，A 及指向它的 steer 可继续；额度恢复且其他条件允许后才新开 B 的 Turn。",
+        "自动中断 A，并把 B 标记 failed。",
+        "只要 B 写了具体模型，就同时豁免降级与预算上限。"
+      ],
+      "answer": 0,
+      "explanation": "A 对应 dispatch 的分支顺序。具体模型只豁免预算降级改选，不豁免硬预算。网关另有兜底限流，因此服务允许在途执行也不保证其后续请求永远成功。"
+    },
+    "reference": {
+      "session": "s16",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+      "adaptation": "借用“资源预算必须结合计量时机解释”的方法。参考在调用返回、知道 token 后累计判断，并非花费前绝不越限；本课通过 last 入账与下一轮派发前检查说明相同边界，不移植其并行执行、调用上限或 journal。"
+    }
+  }
+]

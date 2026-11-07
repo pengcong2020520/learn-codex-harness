@@ -1,0 +1,531 @@
+[
+  {
+    "id": "s10-package",
+    "stage": "s10-skill-workflow",
+    "title": "方法跟着 Agent 包走，工作资料不能改权限",
+    "principle": "在 schemaVersion 1.2 下，Skill 必须位于 Agent 包内、工作区外；读取方法不会授予工具或资源权限。",
+    "problem": "用户把一份带脚本的 Skill 放进工作区，希望助手立即照做。服务怎样区分可读资料与受信的方法配置？",
+    "change": {
+      "before": "工作区承载用户和模型可写的数据，若从这里装配受信方法，资料就可能改变执行规则。",
+      "added": "AgentDefinition 校验角色与 Skill 的位置，建立文本白名单及内容指纹；启动时把包内 Skill 同步到 CODEX_HOME。",
+      "kept": "Codex 仍负责 Skill 发现、解析和注入；工具、资源和任务授权仍由服务端检查。"
+    },
+    "ownership": {
+      "codex": "发现与解析已启用的 Skill，根据显式输入或执行中的需要使用方法。",
+      "product": "校验包路径与文件类型、同步副本、核验启用集合，配置变更后撤销旧版本；skill_read 只读白名单。"
+    },
+    "concepts": [
+      {
+        "term": "Agent 包",
+        "meaning": "schemaVersion 1.2 的 agent.json、角色与 skills/ 是部署者提供的受信配置；Skill 路径相对 agent.json。"
+      },
+      {
+        "term": "文本白名单",
+        "meaning": "同步 SKILL.md 与 references/ 下的 .md/.txt；隐藏条目被跳过，其他脚本、非白名单文件与可见符号链接会拒绝。每文件最多 128 KiB，文件总数最多 50。"
+      },
+      {
+        "term": "内容指纹",
+        "meaning": "skillDigest 包括文件名与内容。sourceHash 重新扫描白名单，所以新增参考文件也会使 expected 失配。"
+      }
+    ],
+    "mechanism": "构造 AgentDefinition 时先拒绝位于工作区内的角色。schemaVersion 1.2 的 Skill 必须以 SKILL.md 为文件名，位于 Agent 配置目录内且在工作区外；trustedFile 拒绝路径中的符号链接，skillFiles 收集允许的文本。sourceHash 纳入定义、角色和 Skill 文件集合及内容，assertCurrent 发现变化或读取失败就撤销并抛出 AGENT_CHANGED。installSkills 把白名单复制到 CODEX_HOME/skills/<id>/，只管理本服务清单中的目录，不覆盖未托管的同名目录。随后 verifySkills 通过 skills/list、必要时 skills/config/write 收紧启用集合并再次检查；复制成功不等于发现核验成功。skill_read 只读取已核验启用 Skill 的白名单文件，不产生授权。1.1 及以前仍按工作区解析 Skill 路径；本课包隔离规则明确针对 1.2，不能套到兼容分支。",
+    "design": {
+      "decision": "把方法配置与可写资料分开放，用文件集合和内容共同判断版本。",
+      "reason": "工作区新增文件不能成为受信 Skill；参考资料改变也不能悄悄沿用旧版本。",
+      "alternative": "只校验 SKILL.md 正文会漏掉 references 新增或修改；读取工作区任意 Skill 会模糊配置与资料的边界。",
+      "cost": "本阶段只支持文本 Skill，不自动装配脚本与外部依赖；包内容改变需受控重启。发现成功不保证模型会主动读取或正确遵循。"
+    },
+    "source": {
+      "file": "stages/s10-skill-workflow/server/modules/agents/index.mjs",
+      "needle": "      const skillPath = path.resolve(packaged ? directory : this.workspacePath, binding.path);",
+      "before": 0,
+      "after": 18,
+      "explanation": "112–130 行展示 1.2 的位置约束、文件检查、兼容分支和白名单指纹登记。角色检查在 68–71 行，skillFiles 在 19–38 行，sourceHash 在 143–146 行，assertCurrent 在 147–153 行；同步与发现核验位于 codex/skills.mjs，不在这个窗口内。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "包内文本通过装配，副本仍需发现核验",
+        "steps": [
+          {
+            "title": "声明包内路径",
+            "actor": "部署者 → AgentDefinition",
+            "event": "教学模拟 · schemaVersion=1.2; skills/outline/SKILL.md",
+            "explain": "outline 是测试夹具的示意 Skill；工作区与 Agent 包分开。",
+            "state": {
+              "schema": "1.2",
+              "location": "包内、工作区外",
+              "files": "SKILL.md + references/a.md",
+              "fingerprint": "尚未登记",
+              "result": "待校验"
+            },
+            "lines": []
+          },
+          {
+            "title": "收集允许文件",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · trustedFile → skillFiles → skillDigest",
+            "explain": "跳过隐藏条目；合法文件名与内容一起进入版本。",
+            "state": {
+              "schema": "1.2",
+              "location": "包内、工作区外",
+              "files": "两份文本进入白名单",
+              "fingerprint": "已登记 expected",
+              "result": "装配通过"
+            },
+            "lines": []
+          },
+          {
+            "title": "同步并核验",
+            "actor": "启动流程 → Codex",
+            "event": "教学模拟 · installSkills → verifySkills",
+            "explain": "教学假设发现核验通过；本课筛选测试没有启动 Codex，也未执行安装测试。",
+            "state": {
+              "schema": "1.2",
+              "location": "副本在 CODEX_HOME/skills/outline",
+              "files": "只复制白名单文本",
+              "fingerprint": "包指纹未变",
+              "result": "可被选择；权限未扩大"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "新增参考文件后，旧版本不再有效",
+        "steps": [
+          {
+            "title": "已有版本正在使用",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · expected = sourceHash()",
+            "explain": "这是包已装配后的独立场景，新增内容尚未发生。",
+            "state": {
+              "schema": "1.2",
+              "location": "包内、工作区外",
+              "files": "SKILL.md + references/a.md",
+              "fingerprint": "与 expected 一致",
+              "result": "旧版本有效"
+            },
+            "lines": []
+          },
+          {
+            "title": "加入一份参考文本",
+            "actor": "部署者",
+            "event": "教学模拟 · 新增 references/b.md → sourceHash() 改变",
+            "explain": "既有实验直接比较新旧指纹，验证新增文件会被纳入。",
+            "state": {
+              "schema": "1.2",
+              "location": "包内、工作区外",
+              "files": "增加 references/b.md",
+              "fingerprint": "与 expected 不一致",
+              "result": "等待后续有效性检查"
+            },
+            "lines": []
+          },
+          {
+            "title": "后续调用发现变化",
+            "actor": "AgentDefinition",
+            "event": "教学模拟 · assertCurrent → abort → AGENT_CHANGED",
+            "explain": "此步依据源码推演：抛出 409 并撤销，不能热加方法后继续假称同一版本。",
+            "state": {
+              "schema": "1.2",
+              "location": "包内、工作区外",
+              "files": "新文件尚未核验启用",
+              "fingerprint": "旧版本已撤销",
+              "result": "受控重启后再使用"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s10-package",
+      "action": "在 stages/s10-skill-workflow 运行命令。筛选 Agent 包测试，核对脚本/符号链接、角色和 Skill 落入工作区时的拒绝，以及新增参考文件后的指纹差异。此筛选不运行独立的“Skill 安装”测试，也不调用 assertCurrent；撤销执行由 assertCurrent 源码解释，不把指纹断言说成完整运行期撤销测试。",
+      "observe": [
+        "Skill 目录只能有 SKILL.md 与 references/ 下的文本，脚本、链接被拒绝",
+        "角色和 Skill 落在工作区里时启动失败",
+        "新增参考文件后 sourceHash() 与装配时的指纹不同"
+      ],
+      "boundary": "离线真实 AgentDefinition 的路径、白名单和指纹；不运行 Skill 安装，不调用 assertCurrent，不启动 Codex，不证明 Codex 的发现行为。"
+    },
+    "quiz": {
+      "question": "包已装配后新增 references/b.md，后续调用仍能直接沿用旧版本吗？",
+      "options": [
+        "能，只有 SKILL.md 修改才影响版本。",
+        "不能，新文件也进入指纹；assertCurrent 发现变化后撤销旧版本。",
+        "能，读取 Skill 会自动批准新增权限。"
+      ],
+      "answer": 1,
+      "explanation": "B 符合文件集合参与指纹的实现。Skill 提供方法；授权仍取决于工具、资源与任务规则。"
+    },
+    "reference": {
+      "session": "s07",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s07_skill_loading",
+      "adaptation": "借用“技能清单与完整方法分开，按需读取正文”的讲法。参考用 load_skill 返回启动时存入注册表的正文；本课使用 Codex 原生发现与注入，另提供受限 skill_read，并讲清 Agent 包边界，不移植其加载器。"
+    }
+  },
+  {
+    "id": "s10-steps",
+    "stage": "s10-skill-workflow",
+    "title": "确认点停任务，普通对话仍能继续",
+    "principle": "Workflow 只在权限变化或需要人拍板的位置分步；每步结束先验收，再决定 waiting、queued 或 completed。",
+    "problem": "大纲已经写好，但用户还没确认。服务怎样停住写作任务，同时允许用户继续讨论，而且不把一轮结束当成整篇文章交付？",
+    "change": {
+      "before": "只在提示词里要求“先给大纲”不能形成可检查的任务等待状态。",
+      "added": "Workflow 声明 steps、writes、checks 与 confirm；MessageService 记录当前步骤并执行状态转换。",
+      "kept": "Codex 仍决定每步怎么研究和写作，Thread 历史仍由原生保存。"
+    },
+    "ownership": {
+      "codex": "执行当前 Turn，报告终态和工具结果；下一步沿用同一 Thread 的上下文。",
+      "product": "校验步骤写入范围，向权限门传入本步 writes，运行结果验收，等待用户确认后排队下一步。"
+    },
+    "concepts": [
+      {
+        "term": "writes",
+        "meaning": "步骤可以新建文件的位置，只能收窄 Agent 基础写入范围；不扩大资源权限，也不限制已授权的读取。"
+      },
+      {
+        "term": "waiting",
+        "meaning": "本任务停在确认点，step 仍指向刚结束的那一步；没有把会话队列暂停，普通 chat 可以执行。"
+      },
+      {
+        "term": "needs-review",
+        "meaning": "Turn 已 completed，但本步 checks 未全部通过；任务需要核对，不自动重试，也不因此暂停队列。"
+      }
+    ],
+    "mechanism": "启动时 defineWorkflows 拒绝超出基础权限的 writes、重复步骤 ID、最后一步 confirm，以及 steps 与顶层 checks 并存。派发解析 workflow 和 step，gate.start 接收 grants 与本步 writes，再发 turn/start。第 0 步输入用户原文；第 1 步起用户文本只含确认提示和 note，不重复原文；同一轮仍由 AgentDefinition.input 在用户文本前加入本步任务说明，并附上 Workflow 按 Skill id 指定的已启用 Skill。outcome 只对 completed 的非 append 任务进行本步检查；失败先返回 needs-review，检查通过后才判断是否有下一步与 confirm。waiting 不在待派发 queued 集合内，普通对话仍按既有串行规则执行。confirm 用 expected=[waiting,proposed] 更新记录，waiting 任务的 step 加一并唤醒调度；cancel 可结束 queued、waiting、proposed，已取消任务再确认返回 409。",
+    "design": {
+      "decision": "只在必须停下决策或改变写入范围的地方设步骤，完成后检查实际结果。",
+      "reason": "保留模型在一步内的自主执行，同时让用户确认成为真实状态转换。",
+      "alternative": "把每次工具调用固定成流程会限制方法选择；只让模型回复“请确认”又无法阻止调度推进。",
+      "cost": "确认会增加等待；file-exists 与 format 只能验证产物存在及格式，不能证明文章事实正确或质量合格。"
+    },
+    "source": {
+      "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+      "needle": "  outcome(job, turn) {",
+      "before": 0,
+      "after": 9,
+      "explanation": "138–147 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。141 行解析失败时回退 completed/checks:null，不能说所有 completed 都证明验收通过。确认与取消见 167–199 行，输入和权限范围见 241–273 行。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "大纲等待时讨论，确认后进入成稿",
+        "steps": [
+          {
+            "title": "开始大纲步骤",
+            "actor": "MessageService → PermissionGate → Codex",
+            "event": "教学模拟 · step=0 → gate.start(..., [drafts]) → turn/start",
+            "explain": "article 为离线夹具名称；部署包中的对应任务名是 write-article。",
+            "state": {
+              "task": "A（示意）",
+              "step": "0 / outline",
+              "status": "running",
+              "writes": "drafts",
+              "next": "等待本轮终态"
+            },
+            "lines": []
+          },
+          {
+            "title": "停在确认点",
+            "actor": "Codex → MessageService",
+            "event": "教学模拟 · turn/completed → outcome → waiting",
+            "explain": "本例大纲步骤没有 checks；confirm=true 且有下一步，所以等待。",
+            "state": {
+              "task": "A（示意）",
+              "step": "0 / outline",
+              "status": "waiting",
+              "writes": "本轮上下文已结束",
+              "next": "等用户确认"
+            },
+            "lines": []
+          },
+          {
+            "title": "普通对话独立执行",
+            "actor": "用户 → chat",
+            "event": "教学模拟 · submit(chat) → turn/start → completed",
+            "explain": "普通 chat 完成不会替用户确认 A；它仍受 Agent 基础权限约束。",
+            "state": {
+              "task": "A（示意）",
+              "step": "0 / outline",
+              "status": "waiting",
+              "writes": "A 不占执行上下文",
+              "next": "讨论结束，A 仍等待"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认后推进",
+            "actor": "用户 → MessageService",
+            "event": "教学模拟 · confirm(A, note) → step=1 → queued → turn/start",
+            "explain": "补充说明进入成稿输入，原文不重发；尚未宣称成稿通过检查。",
+            "state": {
+              "task": "A（示意）",
+              "step": "1 / final",
+              "status": "running",
+              "writes": "research、drafts、outputs",
+              "next": "等待产物验收"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "Turn 正常结束，但没有产物",
+        "steps": [
+          {
+            "title": "成稿步骤开始",
+            "actor": "调度器",
+            "event": "教学模拟 · gate.start(..., final.writes) → turn/start",
+            "explain": "接续确认后的第 2 步，checks 为 file-exists 与 format。",
+            "state": {
+              "task": "A（示意）",
+              "step": "1 / final",
+              "status": "running",
+              "writes": "research、drafts、outputs",
+              "next": "等待本轮结束"
+            },
+            "lines": []
+          },
+          {
+            "title": "只有回复，没有登记产物",
+            "actor": "Codex → MessageService",
+            "event": "教学模拟 · turn/completed; artifacts={} → runChecks",
+            "explain": "离线测试用假 RPC 结束轮次，没有成功写入产物记录，两项检查失败。",
+            "state": {
+              "task": "A（示意）",
+              "step": "1 / final",
+              "status": "running，正在收尾",
+              "writes": "本轮上下文结束",
+              "next": "checks 未通过"
+            },
+            "lines": []
+          },
+          {
+            "title": "记录需要核对",
+            "actor": "MessageService",
+            "event": "教学模拟 · outcome → needs-review",
+            "explain": "保存检查结果，不自动重试，也不因这次验收失败暂停队列。",
+            "state": {
+              "task": "A（示意）",
+              "step": "1 / final",
+              "status": "needs-review",
+              "writes": "无活动权限上下文",
+              "next": "用户核对结果；其他任务可继续"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s10-steps",
+      "action": "在 stages/s10-skill-workflow 运行命令。测试以 article 夹具提交大纲、穿插普通 chat、携补充说明确认、再结束假 RPC 轮次；断言各步传给权限门的 writes、第 2 步不重发原文、无产物时 needs-review，以及取消后再确认返回 409。这里的权限门只记录调用，不证明真实文件访问已被拦截。",
+      "observe": [
+        "第 1 步结束后进入 waiting，期间普通对话照常执行",
+        "确认的补充说明进入第 2 步输入，第 2 步不重发原文",
+        "每一步把自己的写入范围交给权限门；可以结束等待中的任务"
+      ],
+      "boundary": "离线真实 MessageService，权限门与 Codex 为夹具。"
+    },
+    "quiz": {
+      "question": "第 2 步的 Turn 已 completed，但没有登记任何产物。file-exists 和 format 如何影响任务？",
+      "options": [
+        "任务必定 completed，模型已经结束。",
+        "回到 waiting，请用户确认就能跳过验收。",
+        "任务记为 needs-review，不自动重试，队列不因此暂停。"
+      ],
+      "answer": 2,
+      "explanation": "C 区分 Turn 终态与 Workflow 结果；checks 在下一步/最终完成判断之前执行。"
+    },
+    "reference": {
+      "session": "s16",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
+      "adaptation": "借用“执行步骤有明确输入与结果状态”的教学思路。参考是受信注册脚本、并发原语和 journal；本阶段是声明式边界、结果检查与人工确认，不实现脚本编排、并行 agent 或语义缓存。"
+    }
+  },
+  {
+    "id": "s10-propose",
+    "stage": "s10-skill-workflow",
+    "title": "模型可以提议，不能批准自己的任务",
+    "principle": "propose_task 只创建 proposed 记录；用户确认时才核对额外授权，派发时再建立本任务权限上下文。",
+    "problem": "普通对话里发现需要更新 Wiki，模型能否在工具参数里写 status=queued，或者声称用户已同意，就直接获得维护权限？",
+    "change": {
+      "before": "模型能判断需要哪类任务，但它的建议和自然语言回答都不是可信授权。",
+      "added": "propose_task 从权限门获取会话身份，只记录提议；用户经确认入口批准后才入队。",
+      "kept": "知识库 update 仍受 Agent 挂载范围与统一权限门限制，模型仍在 Codex 的执行循环内工作。"
+    },
+    "ownership": {
+      "codex": "根据当前需求提出 workflow、params、text 与 reason；没有批准提议的模型工具。",
+      "product": "验证已启用 Workflow、参数和身份，记录 proposed，限制待确认数量，并在用户身份下核对授权、排队及派发。"
+    },
+    "concepts": [
+      {
+        "term": "proposed",
+        "meaning": "待用户决定的任务记录，不等于 queued；提议本身不唤醒调度，也不授予权限。"
+      },
+      {
+        "term": "可信会话身份",
+        "meaning": "propose_task 的 context 来自权限门，模型参数只允许 workflow、params、text、reason；不能自填用户身份。"
+      },
+      {
+        "term": "确认 / 派发",
+        "meaning": "确认核对 grants 并使提议 queued；实际派发时 gate.start 才建立本轮任务权限，结束时撤销。"
+      }
+    ],
+    "mechanism": "createTools.propose_task 要求存在任务服务与 context.threadId；propose 拒绝多余字段，resolve 校验已启用 Workflow 和参数及 Agent 的 update 能力，不调用 gate.authorize。普通 chat 不能作为提议；text 与 reason 必填，reason 最多保留 500 字符。同一 Thread 的 serial 内最多允许 3 个 proposed，超限返回 429；保存后 publish，不 schedule。生产 HTTP dispatch 经 gate.run(gate.user(), dispatch)，所以 POST /tasks/confirm 在用户身份下执行。confirm 先检查会话、任务归属；proposed 分支重新 resolve 并 authorize，随后 expected 条件把 waiting 或 proposed 改为 queued。提议保持 step=0，补充说明作为 note 保存，再 wake。dispatch 用解析后的 grants 建立任务上下文，输入为任务说明、原提议正文与补充说明、已选 Skill。权限不是由 reason 或 Skill 正文决定的。",
+    "design": {
+      "decision": "让模型负责发现需要做的事，把批准入口留给用户与服务端。",
+      "reason": "模型可表达意图，又不能把这份意图变成自己的额外权限。",
+      "alternative": "把“我已获准”文字当凭据，或让模型直接设置 queued，都会绕过用户确认；完全禁止提议则失去主动建议入口。",
+      "cost": "需要用户处理待确认提议，每会话最多 3 个；真实服务需要 PostgreSQL 模式提供任务记录和门禁身份，离线夹具不证明完整生产链路。"
+    },
+    "source": {
+      "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
+      "needle": "  async confirm({ threadId, taskId, text, ...rest }) {",
+      "before": 0,
+      "after": 18,
+      "explanation": "167–185 行先校验输入和归属，proposed 分支核对授权，再条件更新并唤醒调度。用户身份来自 http/index.mjs:149 的 gate.run，不是 confirm 自行生成；propose 的只记录分支在 149–164 行，工具缺身份拒绝在 tools/tasks.mjs:4–6。"
+    },
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "提议经用户确认后进入知识维护",
+        "steps": [
+          {
+            "title": "记录建议",
+            "actor": "模型 → propose_task → MessageService",
+            "event": "教学模拟 · propose(knowledge-maintain, kbId=general)",
+            "explain": "假设 general 在 Agent 的可更新范围内，context 来自权限门。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "P-A: proposed",
+              "authorization": "没有新增授权",
+              "starts": "0 次（该提议）",
+              "result": "等待用户决定"
+            },
+            "lines": []
+          },
+          {
+            "title": "用户携补充说明确认",
+            "actor": "用户 → HTTP → MessageService",
+            "event": "教学模拟 · POST /tasks/confirm → gate.authorize",
+            "explain": "检查任务属于 T-A，以用户身份核对 knowledge.update；此刻尚未开始模型轮次。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "P-A: proposed，正在确认",
+              "authorization": "用户授权核对通过",
+              "starts": "0 次（该提议）",
+              "result": "准备条件更新"
+            },
+            "lines": []
+          },
+          {
+            "title": "确认写入队列",
+            "actor": "MessageService",
+            "event": "教学模拟 · patch(expected=[waiting,proposed]) → queued → wake",
+            "explain": "proposed 保持第 0 步，保存用户补充说明；普通模型提议不会走到这里。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "P-A: queued",
+              "authorization": "尚无执行上下文",
+              "starts": "0 次（该提议）",
+              "result": "等待调度"
+            },
+            "lines": []
+          },
+          {
+            "title": "带任务边界执行",
+            "actor": "MessageService → PermissionGate → Codex",
+            "event": "教学模拟 · gate.start(job, grants, writes) → turn/start",
+            "explain": "原提议正文加补充说明进入输入；维护权限只在本任务上下文中有效。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "P-A: running",
+              "authorization": "本任务可更新 general",
+              "starts": "1 次（示意）",
+              "result": "结束后仍需 wiki-effective 验收"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "提议参数夹带排队状态，服务拒绝",
+        "steps": [
+          {
+            "title": "普通任务没有维护授权",
+            "actor": "模型",
+            "event": "教学模拟 · 当前 chat 中准备提出知识维护",
+            "explain": "本场景讨论提议接口的字段拒绝，不模拟真实 Wiki 写入。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "尚未创建",
+              "authorization": "chat 无额外维护授权",
+              "starts": "0 次（新提议）",
+              "result": "可提出建议"
+            },
+            "lines": []
+          },
+          {
+            "title": "参数中夹带状态",
+            "actor": "测试夹具 → MessageService.propose",
+            "event": "教学模拟 · propose({ ..., status: queued })",
+            "explain": "用夹具模拟模型夹带 status 的意图，直接调用 propose 验证 rest 校验；真实工具入口的 inputSchema 还会先拒绝多余字段。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "尚未创建",
+              "authorization": "没有变化",
+              "starts": "0 次（新提议）",
+              "result": "多余字段待检查"
+            },
+            "lines": []
+          },
+          {
+            "title": "服务明确拒绝",
+            "actor": "MessageService",
+            "event": "教学模拟 · Object.keys(rest).length → AppError(400)",
+            "explain": "此处是直接调用 MessageService 的 400 断言：在 resolve 和 store.create 之前拒绝，没有生成提议、排队或授权；不把它说成完整工具链返回的 HTTP 状态。",
+            "state": {
+              "thread": "T-A（示意）",
+              "proposal": "没有记录",
+              "authorization": "没有变化",
+              "starts": "0 次（新提议）",
+              "result": "400；不能自批"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "experiment": {
+      "command": "npm run lesson -- s10-propose",
+      "action": "在 stages/s10-skill-workflow 运行命令。测试断言 proposed 时无授权调用和 turn/start，确认后记录 grants、输入含补充说明，并覆盖多余字段、取消、3 个待确认上限及工具缺少会话身份。权限门是记录调用的夹具；用户身份的实际检查需结合 HTTP 与 PermissionGate 源码，完整链路不在本实验范围内。",
+      "observe": [
+        "提议只记录为 proposed，不排队、不授权、不执行",
+        "确认时才第一次调用 authorize，参数为 knowledge.update / general；补充说明进入下一轮输入。用户身份由 HTTP 的 gate.run(gate.user(), …) 建立，不在本夹具的断言里",
+        "没有权限门提供的会话身份时不能提议；每个会话最多 3 个待确认提议"
+      ],
+      "boundary": "离线真实 MessageService，权限门为记录调用的夹具；完整链路见 s10-e2e。"
+    },
+    "quiz": {
+      "question": "propose_task 返回 proposed 后，何时才会建立这次维护任务的执行权限？",
+      "options": [
+        "提议记录成功时，模型立即获得维护权限。",
+        "用户确认核对授权、任务入队后，调度派发时由 gate.start 建立。",
+        "读取 knowledge Skill 后，无需用户确认。"
+      ],
+      "answer": 1,
+      "explanation": "B 分清记录建议、用户批准与实际派发。proposed 不排队也不授权，Skill 不能替代权限门。"
+    },
+    "reference": {
+      "session": "s13",
+      "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s13_agent_teams",
+      "adaptation": "借用“批准必须来自可信协议，普通聊天不等于授权”的边界。参考用队友计划批准与任务版本绑定；本课使用用户确认入口、任务归属和 proposed 状态，不实现团队邮箱、计划批准协议或多 Agent。"
+    }
+  }
+]

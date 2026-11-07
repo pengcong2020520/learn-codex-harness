@@ -7,13 +7,14 @@ import {browser,helpers,chrome} from './browser.mjs';
 
 const course=new URL('../public/course/',import.meta.url);
 const repository=new URL('../../../',import.meta.url);
-const stages=['s01','s02','s03','s04','s05','s06','s07','s08','s09'];
+const stages=fs.readdirSync(new URL('modules/',course)).filter(file=>/^s\d{2}-[a-z0-9-]+\.html$/.test(file)).sort().map(file=>file.slice(0,3));
 const chapterSources=[
  ['s03','s03-service.html','s03-service'],
  ['s04','s04-events.html','s04-events-messages'],
  ['s05','s05-agent.html','s05-agent-assembly'],
  ['s06','s06-tools.html','s06-tools'],
- ['s07','s07-memory.html','s07-memory']
+ ['s07','s07-memory.html','s07-memory'],
+ ['s10','s10-skill-workflow.html','s10-skill-workflow']
 ];
 const retainedAnchors={
  'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',
@@ -39,7 +40,7 @@ test('长文静态：阶段目录、锚点、资源与新增章节的逐行源�
  const architectureAlts=[...html.matchAll(/<img[^>]+src="\/course\/assets\/s\d{2}-architecture\.svg"[^>]+alt="([^"]+)"/g)];
  assert.equal(architectureAlts.length,stages.length);
  for(const [,alt] of architectureAlts){
-  assert.match(alt,/橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。/);
+  assert.match(alt,/橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生(?:。|$)/);
   assert.doesNotMatch(alt,/虚线/,'替代文本与实际图例一致');
  }
  for(const tag of html.matchAll(/<(?:script|link|img|iframe|source|video|audio)\b[^>]*>/gi)){
@@ -92,7 +93,7 @@ test('长文页面没有内联脚本和外部资源，CSP 只允许同源脚本'
  assert.equal(scripts.trim(),"'self'");assert.doesNotMatch(csp,/googleapis|gstatic|https:/);
  const html=await res.text();
  assert.doesNotMatch(html,/\son[a-z]+=/i,'不能有内联事件');assert.doesNotMatch(html,/<script(?![^>]*\ssrc=)/,'不能有内联 <script>');assert.doesNotMatch(html,/https?:\/\/(?!127\.0\.0\.1)[^"'\s]*\.(css|js|woff2?)/,'不能加载外部样式、脚本或字体');
- assert.equal((html.match(/<section class="module" id="module-s\d{2}"/g)||[]).length,9);
+ assert.equal((html.match(/<section class="module" id="module-s\d{2}"/g)||[]).length,stages.length);
  for(const removed of ['styles.css','main.js','_base.html','_footer.html','build.sh','course.css','course.js'])assert.ok(!fs.existsSync(new URL(removed,course)),`${removed} 应已移除`);
 });
 
@@ -133,8 +134,8 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
  const arch=await b.run(`${helpers}
   const diagrams=$$('.architecture-figure');
   const loaded=await until(()=>diagrams.every(el=>{const img=$('img',el);return img.complete&&img.naturalWidth===1600&&img.naturalHeight===Number(img.getAttribute("height"));}));
-  return {count:diagrams.length,loaded,links:diagrams.every(el=>{const a=$('a',el),img=$('img',el);return a.href===img.src&&a.target==='_blank'&&a.rel.includes('noopener')&&img.alt.includes('总架构');})};`);
- assert.deepEqual(arch,{count:9,loaded:true,links:true});
+  return {count:diagrams.length,loaded,links:diagrams.every(el=>{const a=$('a',el),img=$('img',el);return a.href===img.src&&a.target==='_blank'&&a.rel.includes('noopener')&&(img.alt.includes('总架构')||a.getAttribute('aria-label')?.includes('总架构'));})};`);
+ assert.deepEqual(arch,{count:stages.length,loaded:true,links:true});
 
  const term=await b.run(`${helpers}
   const term=$('.term');term.focus();const tip=$('#term-tip');
@@ -143,7 +144,7 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
  assert.deepEqual(term,{shown:true,text:true,described:'term-tip',focusable:true,closed:true});
 
  const additions=await b.run(`${helpers}
-  return ['s03','s04'].map(stage=>{
+  return ['s03','s04','s10'].map(stage=>{
    const module=$('#module-'+stage),quiz=$('#'+stage+'-quiz');
    for(const question of $$('.quiz-question-block',quiz))$('.quiz-option[data-value="'+question.dataset.correct+'"]',question).click();
    $('.quiz-check-btn',module).click();
@@ -158,7 +159,7 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
    const term=$('.term',module);term.focus();const tooltip=!$('#term-tip').hidden&&$('#term-tip').textContent===term.dataset.definition;
    return {stage,correct,reset,done,flowReset,tooltip};
   });`);
- assert.deepEqual(additions,['s03','s04'].map(stage=>({stage,correct:true,reset:true,done:true,flowReset:true,tooltip:true})));
+ assert.deepEqual(additions,['s03','s04','s10'].map(stage=>({stage,correct:true,reset:true,done:true,flowReset:true,tooltip:true})));
 
  const assemblyToolsMemory=await b.run(`${helpers}
   return [['s05','s05-quiz'],['s06','m3-quiz'],['s07','s07-quiz']].map(([stage,id])=>{
@@ -192,7 +193,7 @@ test('长文交互：测验、对话推演、流程推演、架构图、术语�
   $('.nav-dot[data-target="module-s05"]').click();const reached=await until(()=>$('.nav-dot[data-target="module-s05"]').classList.contains('is-active'));
   const top=$('#module-s05').getBoundingClientRect().top;scrollTo(0,document.documentElement.scrollHeight);await until(()=>$('.progress-bar').getAttribute('aria-valuenow')==='100');
   return {reached,current:$('.nav-dot[aria-current="true"]')?.dataset.target,top,hash:location.hash,progress:$('.progress-bar').getAttribute('aria-valuenow'),last:$('.nav-dot.is-active').dataset.target};`);
- assert.ok(nav.reached);assert.equal(nav.hash,'#module-s05');assert.ok(nav.top>=0&&nav.top<200,`章节标题应在顶栏下方：${nav.top}`);assert.equal(nav.progress,'100');assert.equal(nav.last,'module-s09');
+ assert.ok(nav.reached);assert.equal(nav.hash,'#module-s05');assert.ok(nav.top>=0&&nav.top<200,`章节标题应在顶栏下方：${nav.top}`);assert.equal(nav.progress,'100');assert.equal(nav.last,'module-'+stages.at(-1));
  assert.deepEqual(b.errors,[],'页面不应有脚本错误或 CSP 拦截');
 });
 
