@@ -124,11 +124,11 @@ export class AgentDefinition {
       const info = fs.lstatSync(skillPath);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);
       if (!packaged) {
-        this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+        this.skills.push({ id: skill.id, scope: skill.scope, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
         continue;
       }
       const source = path.dirname(fs.realpathSync(skillPath)), files = skillFiles(source);
-      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });
+      this.skills.push({ id: skill.id, scope: skill.scope, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });
     }
     if (agent.workflows && definition.schemaVersion !== "1.2") throw new Error("workflows 需要 schemaVersion 1.2。");
     this.workflows = defineWorkflows(agent, { writable: [this.outputs.directory, ...this.sources.filter(source => source.actions.includes("create")).map(source => source.locator)] });
@@ -183,7 +183,7 @@ export class AgentDefinition {
     const { version: _label, instructions: _path, ...effectiveAgent } = this.definition.agent;
     const descriptor = { schemaVersion: "2.0", contracts: CONTRACTS, agentId: this.definition.agent.id,
       definitionHash: digest(effectiveAgent), roleHash: digest(this.role), toolVersion, tools: this.definition.agent.tools.allow,
-      skills: skills.map(({ name, path: file, version }) => ({ name, path: file, version })), workspaceDir: this.runtime.workspaceDir,
+      skills: skills.map(({ name, path: file, version, scope = "system" }) => ({ name, path: file, version, scope })), workspaceDir: this.runtime.workspaceDir,
       knowledgeBindings: this.definition.bindings.knowledgeBases || {}, knowledgeModes: this.knowledgeModes || {}, sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
       dataVersion: CONTRACTS.resources, knowledgeVersion: CONTRACTS.knowledge };
     this.descriptor = freeze({ ...descriptor, hash: digest(descriptor) });

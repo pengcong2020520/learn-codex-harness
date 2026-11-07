@@ -55,7 +55,7 @@ export class AgentDefinition {
       }
       const info = fs.lstatSync(skillPath);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);
-      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+      this.skills.push({ id: skill.id, scope: skill.scope, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
     }
     this.expected = this.sourceHash();
     this.instructions = this.role;
@@ -80,7 +80,7 @@ export class AgentDefinition {
     this.assertCurrent(); this.availableSkills = skills;
     const descriptor = { schemaVersion: "1.0", agentId: this.definition.agent.id, agentVersion: this.definition.agent.version,
       definitionHash: digest(this.raw), roleHash: digest(this.role),
-      skills: skills.map(({ name, path: file, version }) => ({ name, path: file, version })), workspaceDir: this.runtime.workspaceDir,
+      skills: skills.map(({ name, path: file, version, scope = "system" }) => ({ name, path: file, version, scope })), workspaceDir: this.runtime.workspaceDir,
       execution: this.execution };
     this.descriptor = freeze({ ...descriptor, hash: digest(descriptor) });
     writeJson(path.join(this.root, ".data/agent-descriptors", `${this.descriptor.hash}.json`), this.descriptor);

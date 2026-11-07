@@ -172,3 +172,11 @@ test("正常关闭推送 shutdown，不推 fatal；排队中的消息保留在�
   assert.match(events.find(event => event.type === "shutdown").data.message, /正在关闭/);
   assert.ok(existsSync(path.join(root, ".data", "messages.json")));
 });
+
+
+test("GET /tools 返回工具组默认 scope，保持原工具清单", async t => {
+  const { api } = await appFixture(t), state = await api.request("/tools");
+  assert.ok(state.groups.length > 0);
+  assert.ok(state.groups.every(group => group.scope === "system" && group.id.endsWith(".json")));
+  assert.deepEqual(state.groups.flatMap(group => group.tools).sort(), state.tools.map(tool => tool.name).sort());
+});

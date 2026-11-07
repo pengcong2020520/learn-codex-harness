@@ -52,8 +52,8 @@ export async function createToolService(root, { source = readToolSources(root), 
     let config;
     try { config = JSON.parse(body); } catch { throw new Error(`工具配置 JSON 无效：${path.basename(file)}`); }
     if (!config || typeof config !== "object" || Array.isArray(config) ||
-      Object.keys(config).some(key => !["enabled", "module", "factory", "tools"].includes(key)) ||
-      (config.enabled !== undefined && typeof config.enabled !== "boolean")) throw new Error(`工具配置字段无效：${path.basename(file)}`);
+      Object.keys(config).some(key => !["scope", "enabled", "module", "factory", "tools"].includes(key)) ||
+      (config.enabled !== undefined && typeof config.enabled !== "boolean") || (config.scope !== undefined && config.scope !== "system")) throw new Error(`工具配置字段无效：${path.basename(file)}`);
     if (config.enabled === false) continue;
     if (typeof config.module !== "string" || !config.module.startsWith("server/modules/tools/") ||
       config.module.split("/").some(part => !part || part.startsWith(".")) || !source.files.has(config.module)) throw new Error(`工具模块必须位于 server/modules/tools：${path.basename(file)}`);
@@ -65,7 +65,7 @@ export async function createToolService(root, { source = readToolSources(root), 
       if (entries.has(spec.name)) throw new Error(`工具重名：${spec.name}`);
       entries.set(spec.name, { spec, validate: ajv.compile(spec.inputSchema) });
     }
-    groups.push(config);
+    groups.push({ ...config, scope: config.scope ?? "system", id: path.relative(path.join("config", "tools"), file) });
   }
   if (snapshotDir) {
     for (const [file, body] of source.files) {
@@ -93,6 +93,7 @@ export async function createToolService(root, { source = readToolSources(root), 
     annotations: { readOnlyHint: spec.readOnly }
   }));
   return {
+    groups: groups.map(({ id, scope, tools }) => ({ id, scope, tools: tools.map(tool => tool.name) })),
     version: source.version, get specs() { const names = currentNames(); return names ? specs.filter(spec => names.has(spec.name)) : specs; }, workspace: fileService.workspace, networkMode: nodeEnv === "production" ? "strict" : "proxy-debug",
     label: name => entries.get(name)?.spec.label || name,
     validate(name, args) {

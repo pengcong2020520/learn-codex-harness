@@ -1,5 +1,7 @@
 # 基于 Codex App Server 的 Agent 脚手架设计方案
 
+`agent.skills[].scope` 可选且仅允许 `system`，默认 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
 **文档日期：** 2026-09-29  
 **设计版本：** v1.0  
 **原生依赖锁定：** `@openai/codex` 0.154.0，Node ≥ 24  

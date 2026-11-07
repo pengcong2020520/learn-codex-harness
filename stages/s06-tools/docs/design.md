@@ -37,6 +37,10 @@ s05 的 Agent 有了角色和工作方法，但碰不到任何资料。本阶段
 
 ### 2. 定义里新增的字段
 
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
 ```text
 agent:
   tools.allow[]        能用的工具名

@@ -80,7 +80,7 @@ export class AgentDefinition {
       }
       const info = fs.lstatSync(skillPath);
       if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);
-      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+      this.skills.push({ id: skill.id, scope: skill.scope, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
     }
     this.expected = this.sourceHash();
     this.instructions = `${this.role}\n\n本服务的有效资源规则（角色不能扩大这些权限）：\n${JSON.stringify({ sources: this.sources, outputs: this.outputs })}`;
@@ -110,7 +110,7 @@ export class AgentDefinition {
     this.assertCurrent(); this.availableSkills = skills;
     const descriptor = { schemaVersion: "1.0", agentId: this.definition.agent.id, agentVersion: this.definition.agent.version,
       definitionHash: digest(this.raw), roleHash: digest(this.role), toolVersion, tools: this.definition.agent.tools.allow,
-      skills: skills.map(({ name, path: file, version }) => ({ name, path: file, version })), workspaceDir: this.runtime.workspaceDir,
+      skills: skills.map(({ name, path: file, version, scope = "system" }) => ({ name, path: file, version, scope })), workspaceDir: this.runtime.workspaceDir,
       sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
       dataVersion: digest(['files.mjs', 'resources.mjs', 'schema.sql'].map(name =>
         digest(fs.readFileSync(new URL(`../data/${name}`, import.meta.url))))) };

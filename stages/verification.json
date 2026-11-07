@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-05T15:48:14.279Z",
+  "verifiedAt": "2026-11-07T12:44:11.812Z",
   "modelProvider": "local simulated Responses",
   "embeddingProvider": null,
   "semanticQualityVerified": false,
@@ -10,6 +10,9 @@
     "s01-single-turn/README.md",
     "s02-multi-turn/README.md",
     "s03-service/README.md",
+    "s04-events-messages/README.md",
+    "s05-agent-assembly/README.md",
+    "s06-tools/README.md",
     "s07-memory/README.md",
     "s08-data-layer/README.md",
     "s09-knowledge-layer/README.md",
@@ -18,13 +21,16 @@
     "s01-single-turn/docs/design.md",
     "s02-multi-turn/docs/design.md",
     "s03-service/docs/design.md",
+    "s04-events-messages/docs/design.md",
+    "s05-agent-assembly/docs/design.md",
+    "s06-tools/docs/design.md",
     "s07-memory/docs/design.md",
     "s08-data-layer/docs/design.md",
     "s09-knowledge-layer/docs/design.md",
     "s10-skill-workflow/docs/design.md",
     "s11-model-gateway/docs/design.md",
     "s00-sdk-quickstart/docs/guide.md",
-    "s07-memory/docs/tools.md",
+    "s06-tools/docs/tools.md",
     "s08-data-layer/docs/data-layer.md",
     "s09-knowledge-layer/docs/knowledge-implementation.md",
     "s10-skill-workflow/docs/skill-workflow-design.md",
@@ -56,42 +62,63 @@
       "directory": "s03-service",
       "command": "npm test",
       "passed": true,
-      "tests": 84,
+      "tests": 39,
+      "skipped": 0
+    },
+    {
+      "directory": "s04-events-messages",
+      "command": "npm test",
+      "passed": true,
+      "tests": 52,
+      "skipped": 0
+    },
+    {
+      "directory": "s05-agent-assembly",
+      "command": "npm test",
+      "passed": true,
+      "tests": 61,
+      "skipped": 0
+    },
+    {
+      "directory": "s06-tools",
+      "command": "npm test",
+      "passed": true,
+      "tests": 105,
       "skipped": 0
     },
     {
       "directory": "s07-memory",
       "command": "npm test",
       "passed": true,
-      "tests": 148,
+      "tests": 120,
       "skipped": 0
     },
     {
       "directory": "s08-data-layer",
       "command": "npm test",
       "passed": true,
-      "tests": 151,
+      "tests": 155,
       "skipped": 0
     },
     {
       "directory": "s09-knowledge-layer",
       "command": "npm test",
       "passed": true,
-      "tests": 155,
+      "tests": 160,
       "skipped": 0
     },
     {
       "directory": "s10-skill-workflow",
       "command": "npm test",
       "passed": true,
-      "tests": 190,
+      "tests": 195,
       "skipped": 0
     },
     {
       "directory": "s11-model-gateway",
       "command": "npm test",
       "passed": true,
-      "tests": 257,
+      "tests": 262,
       "skipped": 0
     }
   ]

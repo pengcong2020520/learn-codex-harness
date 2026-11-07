@@ -182,3 +182,11 @@ test("重连先同步快照，不把客户端再次连接当成新消息", async
   assert.equal(events[0].data.session.turns[0].status, "completed");
   assert.equal(app.messages.store.state.jobs.length, 1);
 });
+
+
+test("GET /tools 返回工具组默认 scope，保持原工具清单", async t => {
+  const { api } = await appFixture(t), state = await api.request("/tools");
+  assert.ok(state.groups.length > 0);
+  assert.ok(state.groups.every(group => group.scope === "system" && group.id.endsWith(".json")));
+  assert.deepEqual(state.groups.flatMap(group => group.tools).sort(), state.tools.map(tool => tool.name).sort());
+});

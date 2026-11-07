@@ -56,7 +56,8 @@ export class ToolManager {
     let specs = [];
     try { specs = this.registry?.specs || []; } catch { /* 配置撤销后不展示旧能力；report 仍须可用。 */ }
     return { status: this.status, version: this.registry?.version, pending: Boolean(this.pending), error: this.error,
-      tools: specs.map(tool => ({ name: tool.name, label: tool.title })) };
+      tools: specs.map(tool => ({ name: tool.name, label: tool.title })),
+      groups: (this.registry?.groups || []).map(group => ({ ...group, tools: group.tools.filter(name => specs.some(tool => tool.name === name)) })).filter(group => group.tools.length) };
   }
   publish() {
     const value = this.snapshot(), serialized = JSON.stringify(value);

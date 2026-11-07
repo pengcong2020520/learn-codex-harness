@@ -1,5 +1,7 @@
 # 知识层实现详解（s09 / app 当前实现）
 
+`knowledge_bases.visibility` 由 `009-knowledge-visibility.sql` 新增，非空且默认 `private`，只允许 `private` / `system`；创建时采用数据库默认值，列表返回 visibility，门禁仍按 owner 判定。
+
 本文档是 s09 及 `app/` 当前知识层的权威说明，记录已实现状态与已知局限。
 
 > **注意**：[知识层设计基线](knowledge-layer-design.md)是早期目标设计文档，可能包含尚未实现的 rerank、缓存共享、自动 Wiki 更新等规划项。两份文档共存时，以本文件为准。

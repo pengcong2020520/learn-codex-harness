@@ -197,3 +197,11 @@ test("记忆 HTTP 管理复用认证和会话边界，不提供任意路径或�
   await assert.rejects(api.request("/memory/reset", {}), /不存在/);
   await assert.rejects(api.request("/memory/contribution", { threadId: "foreign", enabled: false }), /未找到/);
 });
+
+
+test("GET /tools 返回工具组默认 scope，保持原工具清单", async t => {
+  const { api } = await appFixture(t), state = await api.request("/tools");
+  assert.ok(state.groups.length > 0);
+  assert.ok(state.groups.every(group => group.scope === "system" && group.id.endsWith(".json")));
+  assert.deepEqual(state.groups.flatMap(group => group.tools).sort(), state.tools.map(tool => tool.name).sort());
+});

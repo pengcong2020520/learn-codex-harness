@@ -149,3 +149,37 @@ test('迁移 v1 → v2 保留原数据，重复执行幂等，拒绝被改写的
     await assert.rejects(verifySchema(db),/版本不匹配/);
   } finally {await db.query('ROLLBACK');db.release();}
 });
+
+
+test('真实 PG：visibility 迁移保留已有库、默认 private、拒绝非法值且可重复执行', async t => {
+  const root = tempRoot(t), pool = await openDatabase(databaseUrl); cleanup(root, () => pool.end());
+  const schema = `visibility_${randomUUID().replaceAll('-', '')}`, db = await pool.connect();
+  const sql = name => fs.readFileSync(new URL(`../server/modules/data/${name}`, import.meta.url), 'utf8').replaceAll('agent_data', schema);
+  try {
+    await db.query(sql('schema.sql')); await db.query(sql('migrations/002-knowledge.sql'));
+    const instance = randomUUID(), owner = randomUUID();
+    await db.query(`INSERT INTO ${schema}.users(instance_id,id,name) VALUES($1,$2,'fixture')`, [instance, owner]);
+    const insert = id => db.query(`INSERT INTO ${schema}.knowledge_bases(instance_id,id,owner_id,source_root,wiki_root) VALUES($1,$2,$3,'inputs/a','research/a/wiki') RETURNING visibility`, [instance, id, owner]);
+    await db.query(`INSERT INTO ${schema}.knowledge_bases(instance_id,id,owner_id,source_root,wiki_root) VALUES($1,'existing',$2,'inputs/a','research/a/wiki')`, [instance, owner]);
+    const migration = sql('migrations/003-knowledge-visibility.sql');
+    await db.query(migration); await db.query(migration);
+    assert.equal((await db.query(`SELECT visibility FROM ${schema}.knowledge_bases WHERE id='existing'`)).rows[0].visibility, 'private');
+    assert.equal((await insert('created')).rows[0].visibility, 'private');
+    for (const visibility of ['shared', '', 'SYSTEM'])
+      await assert.rejects(db.query(`UPDATE ${schema}.knowledge_bases SET visibility=$1`, [visibility]), { code: '23514' });
+    await assert.rejects(db.query(`UPDATE ${schema}.knowledge_bases SET visibility=NULL`), { code: '23502' });
+    await db.query(`UPDATE ${schema}.knowledge_bases SET visibility='system'`);
+    await db.query(migration);
+    assert.equal((await db.query(`SELECT visibility FROM ${schema}.knowledge_bases WHERE id='existing'`)).rows[0].visibility, 'system');
+  } finally { await db.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); db.release(); }
+  await migrate(pool); await migrate(pool);
+  const r = await setup(t);
+  assert.equal((await r.run(() => r.knowledge.list()))[0].visibility, 'private');
+  for (const visibility of ['private', 'system']) {
+    await r.pool.query('UPDATE agent_data.knowledge_bases SET visibility=$1 WHERE instance_id=$2', [visibility, r.scope.instanceId]);
+    assert.equal((await r.run(() => r.knowledge.list()))[0].visibility, visibility);
+    const otherScope = { ...r.scope, ownerId: randomUUID() }, otherGate = new PermissionGate({ scope: otherScope, agent: r.agent });
+    const other = new KnowledgeService(r.pool, otherScope, { agent: r.agent, gate: otherGate, resources: r.resources });
+    await assert.rejects(otherGate.run(otherGate.operator(), () => other.kb('a')), /不存在/);
+  }
+});
