@@ -23,8 +23,15 @@ export async function browser(t){
  await Promise.all([page('Runtime.enable'),page('Log.enable'),page('Page.enable')]);
  async function open(url,{reduceMotion=false}={}){await page('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:reduceMotion?'reduce':'no-preference'}]});const loaded=new Promise(r=>listeners.push(m=>{if(m.sessionId===sessionId&&m.method==='Page.loadEventFired')r();}));await page('Page.navigate',{url});await loaded;}
  async function run(source){const {result,exceptionDetails}=await page('Runtime.evaluate',{expression:`(async()=>{${source}})()`,awaitPromise:true,returnByValue:true});if(exceptionDetails)throw Error(exceptionDetails.exception?.description||exceptionDetails.text);return result.value;}
+ async function clickNavigate(selector){
+  const loaded=new Promise(resolve=>listeners.push(message=>{if(message.sessionId===sessionId&&message.method==='Page.loadEventFired')resolve();}));
+  await page('Runtime.evaluate',{expression:`document.querySelector(${JSON.stringify(selector)}).click()`});
+  await loaded;
+ }
  const shot=async()=>(await page('Page.captureScreenshot',{format:'png'})).data;
- return {open,run,errors,shot};
+ const viewport=(width,height)=>page('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+ const beforeLoad=source=>page('Page.addScriptToEvaluateOnNewDocument',{source});
+ return {open,run,errors,shot,viewport,beforeLoad,clickNavigate};
 }
 export const helpers=`const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const until=async(fn,ms=3000)=>{const end=Date.now()+ms;while(Date.now()<end){if(fn())return true;await sleep(30);}return false;};`;

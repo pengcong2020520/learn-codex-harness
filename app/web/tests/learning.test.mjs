@@ -44,19 +44,50 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
  assert.deepEqual(result.pair,['s05-agent-config','s05-skills',...result.short]);
  assert.equal(result.selected,'s06-mcp');assert.deepEqual(result.groups,['S05 · Agent 装配','S06 · 工具']);
  assert.equal(result.image,'/course/assets/s06-architecture.svg');
- assert.match(result.command,/^cd stages\/s06-tools\n/);assert.equal(result.live,'/app/index.html?stage=s03&view=run');
+ assert.match(result.command,/^cd stages\/s06-tools\n/);assert.equal(result.live,'/app/index.html?stage=s06&view=run');
  assert.equal(result.all.length,curriculum.lessons.length);assert.equal(result.allGroups.length,curriculum.chapters.length);assert.equal(result.empty,'该阶段暂无机制课程');
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 
-test('工作台按目标目录选课：s03 显示 s05/s06，其余目标及项目对应正确阶段',options,async t=>{
+test('工作台按真实阶段选课：s00–s11 与 project，课程缺失时显示空态',options,async t=>{
  const {url,b}=await setup(t);
- for(const [target,stages,hash] of [['s01',['s01'],'s01'],['s02',['s02'],'s02'],['s03',['s05','s06'],'s05'],['s08',['s08'],'s08'],['s09',['s09'],'s09'],['project',['s09'],'s09']]){
+ for(const target of [...Array.from({length:12},(_,num)=>`s${String(num).padStart(2,'0')}`),'project']){
+  const hash=target==='project'?'s11':target;
+  const stages=curriculum.lessons.some(l=>l.stage.startsWith(hash))?[hash]:[];
   await b.open(`${url}/app/index.html?stage=${target}`);
   const result=await b.run(`${helpers}
-   await until(()=>$('#learning-root .learn-title'));
+   await until(()=>$('#learning-root .learn-title')||$('#learning-root .learn-error'));
    return {stages:[...new Set($$('#learning-root [data-learn-action="lesson"]').map(el=>el.dataset.id.slice(0,3)))],links:$$('a[href^="/course/#"]').map(el=>el.getAttribute('href'))};`);
   assert.deepEqual(result.stages,stages,target);assert.deepEqual(result.links,[`/course/#${hash}`,`/course/#${hash}`],target);
  }
+ assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
+});
+
+test('2：s05/s06 实验链接点击后打开同阶段真实工作台',options,async t=>{
+ const {url,b}=await setup(t);
+ for(const id of ['s05','s06']){
+  await b.open(`${url}/course/#${id}`);
+  await b.run(`${helpers}await until(()=>$('.learn-title'));$('[data-view="experiment"]').click();`);
+  await b.clickNavigate('.learn-live-link');
+  const actual=await b.run(`${helpers}await until(()=>$('.stage.active')?.dataset.stage===${JSON.stringify(id)});return {stage:$('.stage.active')?.dataset.stage,tab:$('.tab.active')?.dataset.tab,title:document.title};`);
+  assert.equal(actual.stage,id);assert.equal(actual.tab,'chat');assert.match(actual.title,/十二个阶段/);
+ }
+ assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
+});
+
+test('3：从工作台点击本章教学，缺课阶段与 project 保留阶段并显示空态',options,async t=>{
+ const {url,b}=await setup(t);
+ for(const target of ['s00','s10','s11','project']){
+  await b.open(`${url}/?stage=${target}`);
+  await b.run(`${helpers}await until(()=>$('.top-links a'));`);
+  await b.clickNavigate('.top-links a');
+  const stage=target==='project'?'s11':target;
+  const actual=await b.run(`${helpers}await until(()=>$('#course-reader .learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,hash:location.hash,text:$('#course-reader')?.textContent,selected:$('[data-learn-action="lesson"][aria-current="page"]')?.dataset.id};`);
+  assert.equal(actual.stage,stage);assert.equal(actual.hash,'#'+stage);assert.match(actual.text,/该阶段暂无机制课程/);assert.equal(actual.selected,undefined);
+ }
+ // hashchange with an existing ?lesson must also clear the old lesson.
+ await b.open(url+'/course/?lesson=s01-transport');
+ const actual=await b.run(`${helpers}await until(()=>$('.learn-title'));location.hash='s10';await until(()=>$('.learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,selected:Boolean($('.learn-title'))};`);
+ assert.deepEqual(actual,{stage:'s10',selected:false});
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
