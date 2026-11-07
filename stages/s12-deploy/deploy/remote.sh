@@ -23,7 +23,7 @@ case "${1:-}" in
  deploy)
   remote 'bash -s' < "$APP/deploy/check.sh"
   remote "test -f '$APP_DIR/.env' && test ! -e '$APP_DIR/.deploy-pending' && mkdir -p '$APP_DIR.incoming'" || { echo '先 init-env；失败部署请先 rollback。' >&2; exit 1; }
-  rsync -az --delete "${excludes[@]}" -e 'ssh -o BatchMode=yes' "$APP/" "$DEPLOY_HOST:$APP_DIR.incoming/"
+  rsync -az --no-owner --no-group --delete "${excludes[@]}" -e 'ssh -o BatchMode=yes' "$APP/" "$DEPLOY_HOST:$APP_DIR.incoming/"
   rev="$(git -C "$APP" rev-parse --short HEAD)-worktree-$(date -u +%Y%m%dT%H%M%SZ)"
   printf '%s\n' "$rev" | remote "cat > '$APP_DIR.incoming/REVISION'"
   remote "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
@@ -39,7 +39,7 @@ fi
 touch .deploy-pending
 # Fixed path: do not move mounted state or Codex absolute history paths.
 rsync -a --delete --exclude=/.env --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.incoming/" ./
-bash deploy/server-setup.sh
+bash deploy/server-setup.sh </dev/null
 rm .deploy-pending
 REMOTE
   ;;
@@ -70,12 +70,12 @@ exec 9> .deploy.lock
 flock -n 9 || { echo '另一个部署正在进行。' >&2; exit 75; }
 test -f "$APP_DIR.previous/REVISION" || { echo '没有上一版可回滚。' >&2; exit 1; }
 docker image inspect codex-harness-s12:previous >/dev/null
-docker compose stop agent
+docker compose stop agent </dev/null
 rsync -a --delete --exclude=/.env --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.previous/" ./
 docker image tag codex-harness-s12:previous codex-harness-s12:current
-bash deploy/configure.sh
-docker compose up -d --wait --force-recreate gateway agent
-docker compose exec -T agent node deploy/ready.mjs
+bash deploy/configure.sh </dev/null
+docker compose up -d --wait --force-recreate gateway agent </dev/null
+docker compose exec -T agent node deploy/ready.mjs </dev/null
 rm -f .deploy-pending
 cat REVISION
 REMOTE

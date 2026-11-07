@@ -77,3 +77,13 @@ test('configuration: 部署模型目录使用无密钥清单，agent 启动不�
   assert.equal(config.launch.env.KIMI_API_KEY, undefined); assert.equal(config.launch.env.OPENAI_API_KEY, undefined);
   assert.equal(config.launch.router.resolve().id, 'kimi/kimi-k2.7-code');
 });
+
+test('remote heredoc commands cannot swallow the rest of the script from stdin', () => {
+  const remote = read('deploy/remote.sh');
+  const bodies = [...remote.matchAll(/<<'REMOTE'\n([\s\S]*?)\nREMOTE/g)].map(match => match[1]);
+  assert.equal(bodies.length, 2);
+  for (const line of bodies.join('\n').split('\n')) {
+    if (/^(docker compose|bash deploy\/)/.test(line)) assert.match(line, /<\/dev\/null$/, line);
+  }
+  assert.match(remote, /rsync -az --no-owner --no-group/);
+});
