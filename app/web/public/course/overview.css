@@ -24,3 +24,4 @@ button,input{font:inherit}button{cursor:pointer}.stage-controls{display:flex;ali
 button:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--plus);outline-offset:4px}
 @media(max-width:740px){.chg-top{position:static;padding:16px}.chg-top nav{gap:10px 14px}.chg-main{padding:24px 16px}.overview-section{margin:36px 0}.responsibilities,.six-questions,.glossary-cards{grid-template-columns:1fr}.overview-stage{padding:16px}.stage-heading{min-height:175px}.stage-heading h3{display:block;margin:12px 0}.stage-controls{gap:8px}.request-path{grid-template-columns:1fr 1fr}.term-card{scroll-margin-top:16px}.stage-ticks button{flex:none}.overview-hero h1{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+.roadmap{display:block;width:100%;height:auto;margin-top:24px;border:1px solid var(--line);border-radius:16px}
