@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DEPLOY_HOST=example.com bash deploy/remote.sh check|init-env|deploy|status|tunnel|backup|backup-download [name]|rollback
+# DEPLOY_HOST=example.com bash deploy/remote.sh check|init-env|deploy|auth-init|user -- add|passwd|disable|list [name]|status|tunnel|backup|backup-download [name]|rollback
 set -euo pipefail
 : "${DEPLOY_HOST:?请设置 DEPLOY_HOST，例如 example.com（SSH 配置别名也可）}"
 APP_DIR=${APP_DIR:-/opt/s13-auth}
@@ -26,7 +26,7 @@ case "${1:-}" in
   rsync -az --no-owner --no-group --delete "${excludes[@]}" -e 'ssh -o BatchMode=yes' "$APP/" "$DEPLOY_HOST:$APP_DIR.incoming/"
   rev="$(git -C "$APP" rev-parse --short HEAD)-worktree-$(date -u +%Y%m%dT%H%M%SZ)"
   printf '%s\n' "$rev" | remote "cat > '$APP_DIR.incoming/REVISION'"
-  remote "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
+  remote "APP_DIR='$APP_DIR' DEPLOY_HOST='$DEPLOY_HOST' bash -s" <<'REMOTE'
 set -euo pipefail
 cd "$APP_DIR"
 exec 9> .deploy.lock
@@ -42,6 +42,27 @@ rsync -a --delete --exclude=/.env --exclude=/.data/ --exclude=/.runs/ --exclude=
 bash deploy/server-setup.sh </dev/null
 rm .deploy-pending
 REMOTE
+  ;;
+ auth-init)
+  # Interactive SSH must not share stdin with a heredoc. Only exit 3 means already initialized.
+  ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && { docker compose run --rm --no-deps agent npm run auth:init; code=\$?; [ \"\$code\" -eq 0 ] || [ \"\$code\" -eq 3 ] || exit \"\$code\"; }"
+  remote "cd '$APP_DIR' && docker compose up -d --wait agent && bash deploy/enable-service.sh && docker compose exec -T agent node deploy/ready.mjs"
+  ;;
+ user)
+  [[ "${2:-}" == -- ]] || { echo '用法：remote.sh user -- add|passwd|disable <name> | list' >&2; exit 1; }
+  command=${3:-}
+  case "$command" in
+   add|passwd|disable)
+    name=${4:-}
+    [[ $# -eq 4 && "$name" =~ ^[a-z0-9_.-]{1,64}$ ]] || { echo '名称须为 1–64 位小写字母、数字、下划线、点或连字符。' >&2; exit 1; }
+    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && docker compose run --rm --no-deps agent npm run user:$command -- '$name'"
+    ;;
+   list)
+    [[ $# -eq 3 ]] || { echo 'user list 不接受名称参数。' >&2; exit 1; }
+    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && docker compose run --rm --no-deps agent npm run user:list"
+    ;;
+   *) echo 'user 子命令必须为 add、passwd、disable 或 list。' >&2; exit 1 ;;
+  esac
   ;;
  status) remote "cd '$APP_DIR' && cat REVISION && docker compose ps && docker compose exec -T agent node deploy/ready.mjs" ;;
  tunnel)
@@ -80,5 +101,5 @@ rm -f .deploy-pending
 cat REVISION
 REMOTE
   ;;
- *) echo '用法：remote.sh check|init-env|deploy|status|tunnel|backup|backup-download [名称]|rollback' >&2; exit 1 ;;
+ *) echo '用法：remote.sh check|init-env|deploy|auth-init|user -- add|passwd|disable <name>|user -- list|status|tunnel|backup|backup-download [名称]|rollback' >&2; exit 1 ;;
 esac

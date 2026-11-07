@@ -32,31 +32,37 @@ Codex 继续处理原生 Thread、Turn、模型调用和上下文。本章不改
 
 ## 跑起来看看
 
-先在本阶段目录安装相同依赖，并配置 `.env` 中的数据库、Redis 和模型服务。默认 `AGENT_PORT=4327`，Compose 项目名为 `codex-harness-s13`，远程脚本默认目录 `/opt/s13-auth`。
+先进入本阶段目录，在本机安装相同依赖并准备服务端配置。默认 `AGENT_PORT=4327`，Compose 项目名为 `codex-harness-s13`，远程目录为 `/opt/s13-auth`。
 
 ```bash
+cd stages/s13-auth  # 从仓库根进入
 npm ci
 cp .env.example .env
-# 编辑 .env，明确设置 AGENT_MEMORY_ENABLED=false，并填写所需服务配置
-npm run agent:init
-npm run data:migrate
-npm run auth:init
-npm run user:add -- bob
-npm run user:list
-npm run server
+# 编辑 .env，明确设置 AGENT_MEMORY_ENABLED=false，并填写模型服务密钥
+export DEPLOY_HOST=example.com  # 替换为服务器 SSH 地址或别名
+bash deploy/remote.sh check
+bash deploy/remote.sh init-env
+bash deploy/remote.sh deploy
+# 首次部署成功退出并提示：账号尚未初始化：运行 DEPLOY_HOST=example.com bash deploy/remote.sh auth-init
+bash deploy/remote.sh auth-init
+# 交互输入首个用户名（例如 alice）与密码；密码隐藏，随后启动 agent 并输出 /ready JSON
+bash deploy/remote.sh user -- add bob
+bash deploy/remote.sh user -- list
+bash deploy/remote.sh tunnel
 ```
 
-`auth:init` 交互输入首个用户名（例如 alice）与密码，把 identity.json 中原 owner 设为第一个 admin。旧会话与知识库归属不变，顶层 inputs/research/drafts/outputs 移入该 admin 的用户目录。已经初始化就拒绝重入。已有数据升级时，先停服、备份，然后执行迁移与 auth:init；不要先在目标用户目录填入同名资料。
+首次 `deploy` 只启动 PostgreSQL、Redis 和 gateway，用 agent 镜像的一次性容器迁移数据库、准备目录并查询账号状态。没有启用账号时不启动 agent，以 0 退出并清除 `.deploy-pending`，此时尚无 `/ready`。`auth-init` 成功后才启动 agent 并注册开机启动，输出包含 `"status":"ready"` 的 JSON。后续 `deploy` 检测到启用账号后会正常启动 agent 并检查 `/ready`。
 
-密码只从 stdin 输入：终端隐藏回显，非 TTY 读取一行。不要把密码写成参数。维护账号使用：
+`auth-init` 通过 SSH TTY 在一次性容器里运行 `npm run auth:init`，把 identity.json 中原 owner 设为第一个 admin。旧会话与知识库归属不变，顶层 inputs/research/drafts/outputs 移入该 admin 的用户目录。已初始化时拒绝重入，远程命令仍确保 agent 已启动并输出 `/ready`；其他错误不会忽略。已有数据升级时，先停服、备份，再执行迁移与初始化；不要先在目标用户目录填入同名资料。
+
+密码只在交互提示中输入，不写成参数。维护远程账号使用（名称只接受 1–64 位小写字母、数字、下划线、点、连字符）：
 
 ```bash
-npm run user:add -- reviewer --admin
-npm run user:passwd -- bob
-npm run user:disable -- bob
+bash deploy/remote.sh user -- passwd bob
+bash deploy/remote.sh user -- disable bob
 ```
 
-用两个独立客户端工作副本分别登录 alice 和 bob，避免共用同一个 credentials.json。每个客户端终端设置地址后执行：
+隧道终端保持打开，另开一个本机终端进入本阶段目录后登录：
 
 ```bash
 export AGENT_SERVER_URL=http://127.0.0.1:4327
@@ -64,7 +70,7 @@ npm run login
 npm run chat
 ```
 
-客户端 `.data/credentials.json` 权限为 0600；`.data/connection.json` 只保存服务地址。远程访问先运行 `DEPLOY_HOST=example.com bash deploy/remote.sh tunnel`，再登录。令牌失效时客户端提示运行 `npm run login`。
+客户端 `.data/credentials.json` 权限为 0600；`.data/connection.json` 只保存服务地址。用两个独立客户端工作副本分别登录 alice 和 bob，避免共用同一个 credentials.json。令牌失效时客户端提示运行 `npm run login`。
 
 在 alice 客户端创建会话并记下 ID。在 bob 客户端列出会话，应看不到它；尝试恢复 alice 的 ID，应得到 404 NOT_FOUND。alice 拥有的知识库不会出现在 bob 的列表中，按 kbId 读取也返回 404。本章沿用实例内唯一的知识库 ID，不为新账号复制别人的知识库。两个用户可以分别生成同名产物，它们落在不同用户目录。
 

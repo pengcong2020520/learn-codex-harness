@@ -19,9 +19,9 @@ export async function transaction(pool, operation) {
   }
 }
 
-export function identity(root) {
+export function identity(root, { create = true } = {}) {
   const file = path.join(root, ".data/identity.json");
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  if (create) fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (fs.lstatSync(path.dirname(file)).isSymbolicLink())
     throw new Error("数据身份目录不能是链接。");
   if (fs.existsSync(file)) {
@@ -31,6 +31,7 @@ export function identity(root) {
   }
   let value = readJson(file, null);
   if (!value) {
+    if (!create) throw new Error("数据实例身份尚未初始化，请先运行 npm run agent:init。");
     value = { instanceId: randomUUID(), ownerId: randomUUID() };
     writeJson(file, value);
   }

@@ -65,6 +65,24 @@ HTTP 完成认证后进入 AsyncLocalStorage。会话缓存命中之前仍查归
 
 工具根按需创建为 workspace/users/ownerId，权限 0700，原有路径校验继续拒绝越界、符号链接与不允许的文件类型。Codex 的 cwd 仍是共享 workspace，原生文件能力保持关闭。
 
+首次远程启动顺序为 **check → init-env → deploy（提示 auth-init）→ auth-init → user add → tunnel → login**。在本机阶段目录设置 `DEPLOY_HOST`，依次运行：
+
+```bash
+bash deploy/remote.sh check
+bash deploy/remote.sh init-env
+bash deploy/remote.sh deploy
+bash deploy/remote.sh auth-init
+bash deploy/remote.sh user -- add bob
+bash deploy/remote.sh tunnel
+# 保持隧道，另开本机终端：
+export AGENT_SERVER_URL=http://127.0.0.1:4327
+npm run login
+```
+
+`deploy` 先等待 postgres、redis、gateway 健康，再用 agent 镜像一次性容器执行迁移和 agent:init；`node scripts/accounts.mjs status` 只读查询当前实例的启用账号数，输出 initialized/uninitialized，两种状态都退出 0。未初始化时不启动 agent，也不注册会自动启动 agent 的 systemd 服务；打印 auth-init 命令并退出 0，remote.sh 删除 `.deploy-pending`。已初始化才等待 agent 健康并输出 `/ready`。`configure.sh` 只用临时容器生成配置，不启动 agent 服务。
+
+`remote.sh auth-init` 使用独立于 heredoc 的 `ssh -t`，容器命令不加 `-T`，保证密码隐藏。初始化成功后执行 `docker compose up -d --wait agent`、注册开机启动并输出 `/ready`。重复初始化在询问密码和获取运行锁之前拒绝，以专用退出码 3 表示，远程命令仍确保 agent 启动；其他失败原样阻止启动。`remote.sh user -- add|passwd|disable <name>` 与 `user -- list` 同样用 TTY；名称在跨 SSH shell 前以 `^[a-z0-9_.-]{1,64}$` 校验。部署与回滚 heredoc 内的 docker compose / bash 调用继续使用 `</dev/null`，避免吞掉剩余脚本。
+
 auth:init 停服执行：保留原 owner UUID，创建首个 admin，移动旧 inputs/research/drafts/outputs。已初始化拒绝再次执行；文件移动中断后的重试不覆盖已经移动的资料。数据库和文件系统不能原子提交，须保留备份并在冲突时核对目录。
 
 启动检查与 user:add 使用数据库锁串行核对启用账号数量。未显式关闭记忆的运行实例持有记忆锁；管理命令即使临时设置 false，也不能绕过尚未重启的服务。启用账号达到 2 个且 AGENT_MEMORY_ENABLED 不为 false 时，两处使用相同提示拒绝。

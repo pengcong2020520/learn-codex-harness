@@ -85,5 +85,38 @@ test('remote heredoc commands cannot swallow the rest of the script from stdin',
   for (const line of bodies.join('\n').split('\n')) {
     if (/^(docker compose|bash deploy\/)/.test(line)) assert.match(line, /<\/dev\/null$/, line);
   }
+  assert.doesNotMatch(bodies.join('\n'), /ssh -t|npm run (?:auth:init|user:)/);
   assert.match(remote, /rsync -az --no-owner --no-group/);
+});
+
+test('static: 首次部署等待基础服务、迁移并只读检查账号，未初始化成功返回且不启动 agent', () => {
+  const setup = read('deploy/server-setup.sh');
+  const steps = ['up -d --wait postgres redis gateway', 'npm run -s data:migrate', 'npm run -s agent:init', 'node scripts/accounts.mjs status', 'uninitialized)', 'up -d --wait --force-recreate agent', 'bash deploy/enable-service.sh', 'node deploy/ready.mjs'];
+  let previous = -1;
+  for (const step of steps) {
+    const index = setup.indexOf(step);
+    assert.ok(index > previous, step); previous = index;
+  }
+  const branch = setup.match(/ uninitialized\)([\s\S]*?);;/)[1];
+  assert.match(branch, /账号尚未初始化.*remote.sh auth-init/);
+  assert.match(branch, /exit 0/);
+  assert.doesNotMatch(branch, /docker compose up|systemctl|enable-service/);
+  assert.doesNotMatch(read('deploy/configure.sh'), /docker compose up/);
+  assert.match(read('deploy/remote.sh'), /bash deploy\/server-setup.sh <\/dev\/null\nrm .deploy-pending/);
+  const accounts = read('scripts/accounts.mjs');
+  assert.match(accounts, /create: command !== 'status'/);
+  assert.match(accounts, /command === 'status'[\s\S]*?output.log\(await accountStatus\(store\)\)/);
+  assert.match(accounts, /return 0;/);
+});
+
+test('static: 远程账号命令独立使用 SSH TTY、白名单名称并仅接受重复初始化退出码', () => {
+  const remote = read('deploy/remote.sh');
+  assert.match(remote, / auth-init\)/);
+  assert.match(remote, / user\)/);
+  assert.ok(remote.includes('^[a-z0-9_.-]{1,64}$'));
+  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps agent npm run auth:init/);
+  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps agent npm run user:/);
+  assert.match(remote, /code.*-eq 3/);
+  assert.match(remote, /docker compose up -d --wait agent.*node deploy\/ready.mjs/);
+  assert.doesNotMatch(remote, /docker compose run[^\n]*-T[^\n]*(?:auth:init|user:)/);
 });

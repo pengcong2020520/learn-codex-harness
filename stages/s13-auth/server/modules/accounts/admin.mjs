@@ -13,6 +13,11 @@ async function accountLock(client, id) { await client.query('SELECT pg_advisory_
 export async function enabledCount(store, client = store.pool) {
   return (await store.query('SELECT count(*)::int AS n FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL AND disabled_at IS NULL', [], client)).rows[0].n;
 }
+export async function assertUninitialized(store, client = store.pool) {
+  const initialized = await store.query('SELECT 1 FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL', [], client);
+  // 专用退出码只代表重复初始化；部署脚本不能吞掉其他错误。
+  if (initialized.rowCount) throw Object.assign(new Error('账号已初始化，拒绝重复执行 auth:init。'), { exitCode: 3 });
+}
 export async function guardStartup(store, memorySetting) {
   const client = await store.pool.connect();
   let held = false;
@@ -39,8 +44,7 @@ export async function initializeAccounts(store, { ownerId, username, password, w
   const hash = await hashPassword(password);
   return transaction(store.pool, async client => {
     await accountLock(client, store.instanceId);
-    const initialized = await store.query('SELECT 1 FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL', [], client);
-    if (initialized.rowCount) throw new Error('账号已初始化，拒绝重复执行 auth:init。');
+    await assertUninitialized(store, client);
     await store.query(`INSERT INTO agent_data.users(instance_id,id,name,username,password_hash,role)
       VALUES($1,$2,'local-owner',$3,$4,'admin') ON CONFLICT(instance_id,id)
       DO UPDATE SET username=$3,password_hash=$4,role='admin',disabled_at=NULL`, [ownerId, username, hash], client);
