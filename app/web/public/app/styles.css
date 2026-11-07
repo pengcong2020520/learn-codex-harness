@@ -12,3 +12,4 @@
 @media(max-width:740px){.rail{padding:17px}.stages{overflow-x:auto;overflow-y:hidden;align-items:stretch;scroll-behavior:auto}.stage-group{display:flex;flex:none;gap:3px;border-right:1px solid #506154;padding-right:8px;margin-right:5px}.stage-group:last-child{border-right:0;padding-right:0;margin-right:0}.stage-group-label{display:none}.stage-group .stage{flex:none;white-space:nowrap}.stage-no{width:30px;height:25px}.rail-bottom{display:block}.rail-bottom .stage{width:auto}.rail-bottom .rail-caption{display:none}}
 
 .upgrade-strip{display:flex}.upgrade-strip>div{flex:1;min-width:0}
+.connection-result{text-align:left;overflow-wrap:anywhere;margin-top:16px}.connection-result time{display:block;font-size:11px;color:var(--muted)}.connection-result p{margin:6px 0;color:inherit}

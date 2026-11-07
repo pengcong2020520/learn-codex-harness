@@ -290,3 +290,59 @@ test('第三轮 P2-2：s03 切阶段返回恢复待核对 Thread 后继续轮询
  assert.equal(f.run('state.session.turns[0].status'),'completed');assert.match(f.elements.get('#timeline').innerHTML,/自动完成结果/);assert.equal(posts,1);
  const stream=f.run('state.stream');await f.run("selectStage('s00')");assert.equal(stream.signal.aborted,true);assert.equal(f.timers.size,0);
 });
+
+test('重新连接：检查锁、结果时间、降级转义及恢复成功',async()=>{
+ const f=frontend('?stage=s03&view=run');let release,requests=0;
+ f.context.fetch=async()=>{requests++;return new Promise(resolve=>{release=result=>resolve({ok:true,json:async()=>({targets:[{id:'s03',...result}]})});});};
+ const pending=f.run("action('reconnect')");await f.run("action('reconnect')");
+ assert.equal(requests,1);assert.match(f.elements.get('#pane').innerHTML,/data-action="reconnect" disabled[^>]*>正在检查…/);
+ release({status:'offline',reason:'not-started'});await pending;
+ let html=f.elements.get('#pane').innerHTML;
+ assert.match(html,/没有检测到 s03 的 Agent 服务/);assert.match(html,/stages\/s03-service 运行 npm run server/);
+ assert.match(html,/<time datetime="[^"]+">检查时间：/);assert.equal(f.run('state.checking'),null);
+ const degraded=f.run("action('reconnect')");release({status:'degraded',reason:'degraded',message:'服务原因 <img src=x onerror=alert(1)>'});await degraded;
+ html=f.elements.get('#pane').innerHTML;assert.match(html,/服务原因 &lt;img/);assert.doesNotMatch(html,/<img/);assert.equal(f.run('live()'),false);
+ f.context.fetch=async route=>({ok:true,json:async()=>route==='/api/status'?{targets:[{id:'s03',status:'ready'}]}:{sessions:[]}});
+ await f.run("action('reconnect')");assert.match(f.elements.get('#pane').innerHTML,/id="composer"/);assert.doesNotMatch(f.elements.get('#pane').innerHTML,/connection-result/);
+});
+
+test('工作台会话过期：加载和重连都显示刷新入口，兼容旧服务错误',async()=>{
+ for(const initial of [true,false]){
+  const f=frontend(`?stage=s09${initial?'':'&view=run'}`);let reloaded=false;
+  f.context.location.reload=()=>{reloaded=true;};
+  f.context.fetch=async()=>({ok:false,status:401,json:async()=>({error:{message:'工作台会话已过期，请刷新页面。',...(initial?{code:'WORKBENCH_SESSION_EXPIRED'}:{})}})});
+  if(initial)await f.run("(async()=>{render();try{await raw('/api/bootstrap');await refresh();}catch(e){state.error=e.message;render();}})()");
+  else await f.run("action('reconnect')");
+  const html=f.elements.get('#pane').innerHTML;
+  assert.match(html,/本地工作台已重启，请刷新页面/);assert.match(html,/data-action="reload"/);assert.doesNotMatch(html,/data-action="reconnect"/);
+  await f.run("action('reload')");assert.equal(reloaded,true);
+ }
+});
+
+for(const legacy of [false,true])test(`工作台会话过期：s03 轮询立即显示刷新入口并停止（旧服务 ${legacy}）`,async()=>{
+ const f=frontend('?stage=s03&view=run');let expired=false;
+ f.run("state.statuses=[{id:'s03',status:'ready'}];state.thread='t';state.session={id:'t',turns:[]};render()");
+ assert.match(f.elements.get('#pane').innerHTML,/id="composer"/);
+ f.context.fetch=async(route,options)=>{
+  f.calls.push({route,options});
+  return {ok:!expired,status:expired?401:200,json:async()=>expired?{error:{message:'工作台会话已过期，请刷新页面。',...(legacy?{}:{code:'WORKBENCH_SESSION_EXPIRED'})}}:{session:{id:'t',turns:[]}}};
+ };
+ await f.run('subscribe()');await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(f.timers.size,1);expired=true;
+ const [timer,poll]=[...f.timers][0];f.timers.delete(timer);await poll();
+ assert.equal(f.calls.length,2);assert.ok(f.calls.every(c=>c.route==='/api/agent/s03/state?threadId=t'));
+ assert.equal(f.calls[1].options.signal.aborted,true);assert.equal(f.timers.size,0);
+ const html=f.elements.get('#pane').innerHTML;
+ assert.match(html,/本地工作台已重启，请刷新页面/);assert.match(html,/data-action="reload"/);
+ assert.doesNotMatch(html,/id="composer"|data-action="reconnect"/);
+});
+
+test('重新连接：阶段切换后迟到的检查不覆盖新阶段',async()=>{
+ const f=frontend('?stage=s03&view=run');let release;
+ f.context.fetch=async()=>new Promise(resolve=>{release=()=>resolve({ok:true,json:async()=>({targets:[{id:'s03',status:'offline',reason:'not-started'}]})});});
+ const pending=f.run("action('reconnect')");
+ f.context.fetch=async()=>({ok:true,json:async()=>({targets:[{id:'s04',status:'offline',reason:'unreachable'}]})});
+ await f.run("selectStage('s04')");release();await pending;
+ assert.equal(f.run('state.target'),'s04');assert.equal(f.run('state.connectionResult'),null);assert.equal(f.run('state.checking'),null);
+ assert.equal(f.run('state.statuses[0].id'),'s04');
+});
