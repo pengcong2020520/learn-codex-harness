@@ -9,6 +9,9 @@
   },
   "scripts": {
     "setup": "node scripts/run-all.mjs install",
+    "setup:model": "node scripts/setup-model.mjs",
+    "link-login": "node scripts/link-login.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "test": "node scripts/run-all.mjs test",
     "verify:docs": "node stages/verify.mjs --docs-only",
     "privacy": "node scripts/privacy-check.mjs",
