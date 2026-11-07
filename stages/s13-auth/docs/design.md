@@ -112,7 +112,7 @@ auth:init 停服执行：保留原 owner UUID，创建首个 admin，移动旧 i
 
 ## 验证
 
-`npm run test:offline` 不监听端口或连接数据库，覆盖认证、请求拒绝、会话缓存、工具路径、事件过滤、管理事务调用和迁移登记。`npm run test:ports` 检查实际 HTTP/SSE、CLI 与 MCP。`npm run test:auth:integration` 使用专用 DATA_TEST_DATABASE_URL，重复运行迁移 SQL，验证真实事务、约束、记忆锁与资源隔离。`npm run test:data` 启动外部 PostgreSQL/Redis 和模拟模型回归。当前环境只可执行离线部分；具体结果见 [交付验收](../delivery.md)。
+`npm run test:offline` 不监听端口或连接数据库，覆盖认证、请求拒绝、会话缓存、工具路径、事件过滤、管理事务调用和迁移登记。`npm run test:ports` 检查实际 HTTP/SSE、CLI 与 MCP。`npm run test:auth:integration` 使用专用 DATA_TEST_DATABASE_URL，重复运行迁移 SQL，验证真实事务、约束、记忆锁与资源隔离。`npm run test:data` 启动外部 PostgreSQL/Redis 和模拟模型回归。当前环境只可执行离线部分；具体结果见 [交付验收](../../verification.json)。
 
 ## 限制说明
 

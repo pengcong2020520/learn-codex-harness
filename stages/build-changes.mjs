@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirs, stageNo, stages, stageModules } from "./build-architecture.mjs";
 
-// dirs 包含独立部署 s12；相邻快照生成 s11 → s12 增量，不代表容器清单。
+// dirs 包含独立部署 s12、s13；相邻快照继续生成 s12 → s13 增量，不代表容器清单。
 const root = path.dirname(fileURLToPath(import.meta.url));
 const read = (dir, f) => fs.readFileSync(path.join(root, dir, f), "utf8");
 

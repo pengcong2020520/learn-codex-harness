@@ -2,6 +2,8 @@
 
 [导论](../introduction.md) · [s12](../s12-deploy/README.md) → `s13` → `s14`
 
+全仓入口：[机制课堂](../../app/web/public/course/index.html#s13) · [阶段演示](../../app/web/public/course/changes.html#s13) · [章节长文](../../app/web/public/course/handbook.html#module-s13) · [总架构图](../../app/web/public/course/assets/s13-architecture.svg)
+
 > **对应六个问题**：① 我是谁 ⑥ 谁说了算
 
 ## 要回答的问题
@@ -86,7 +88,7 @@ npm run lesson -- events
 npm run test:offline
 ```
 
-完整 `npm test` 包含端口测试，应在沙箱外运行；端口部分可单独运行 `npm run test:ports`。真实数据库与服务器步骤见 [交付验收](delivery.md)，部署配置见 [production.md](docs/production.md)。
+完整 `npm test` 包含端口测试，应在沙箱外运行；端口部分可单独运行 `npm run test:ports`。真实数据库与服务器步骤见 [交付验收](docs/design.md#验证)，部署配置见 [production.md](docs/production.md)。
 
 ## 关键代码
 

@@ -1,0 +1,451 @@
+[
+  {
+    "id": "s13-hash",
+    "title": "密码先派生，再用恒定时间比较",
+    "principle": "未知账号也执行同参数 scrypt；错误响应不透露账号是否存在。",
+    "problem": "查不到用户名时直接返回，是否会产生另一条可区分的验证路径？",
+    "change": {
+      "before": "服务只有连接凭据，不能识别使用者。",
+      "added": "accounts 校验规范化用户名与密码，使用随机盐和固定成本 scrypt。",
+      "kept": "继续使用 Node 内置能力与现有数据库，不增加密码库依赖。"
+    },
+    "concepts": [
+      {
+        "term": "scrypt",
+        "meaning": "N=32768、r=8、p=1，随机盐 16 字节，派生结果 64 字节。"
+      },
+      {
+        "term": "DUMMY_HASH",
+        "meaning": "未知用户名也传入同参数哈希，执行相同的昂贵派生。"
+      },
+      {
+        "term": "timingSafeEqual",
+        "meaning": "比较固定长度派生结果；不代表整个网络请求完全等时。"
+      }
+    ],
+    "mechanism": "hashPassword 生成随机盐并保存编码后的派生结果。verifyPassword 只接受本章固定参数格式，异常格式使用哑哈希格式执行派生。Accounts.login 将未知用户名映射到 DUMMY_HASH，统一验证后再拒绝无账号、密码错误或禁用账号。登录限流在派生前预占，成功释放，失败保留。生成令牌前还要在事务中锁定账号并重新核对，避免旧密码校验与管理操作竞争。",
+    "design": {
+      "decision": "使用固定成本派生与统一失败分支。",
+      "reason": "防止数据库字符串控制成本，并减少账号存在与否造成的昂贵路径差异。",
+      "alternative": "直接比较明文或未知用户立即返回，都缺少这里的保护。",
+      "cost": "派生消耗 CPU 与内存，仍需入口限流；离线实验不证明网络时间完全一致。"
+    },
+    "source": {
+      "file": "stages/s13-auth/server/modules/accounts/password.mjs",
+      "needle": "export async function verifyPassword(password, encoded, kdf = derive) {",
+      "before": 0,
+      "after": 6,
+      "explanation": "固定参数派生后进行恒定时间比较；返回值还要求非空字符串且不是哑哈希。"
+    },
+    "sources": [
+      {
+        "file": "stages/s13-auth/server/modules/accounts/index.mjs",
+        "needle": "      const valid = await this.verify(password, user?.password_hash || DUMMY_HASH);",
+        "before": 0,
+        "after": 1,
+        "explanation": "未知账号进入同一个校验函数，失败统一 LOGIN_FAILED。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "正确密码生成登录凭据",
+        "steps": [
+          {
+            "title": "读取账号",
+            "actor": "Accounts",
+            "event": "教学模拟 · byUsername",
+            "explain": "规范化用户名后读取账号。",
+            "state": {
+              "验证": "待派生",
+              "结果": "未签发"
+            },
+            "lines": []
+          },
+          {
+            "title": "验证派生",
+            "actor": "verifyPassword",
+            "event": "教学模拟 · scrypt → timingSafeEqual",
+            "explain": "使用保存的盐和固定参数。",
+            "state": {
+              "验证": "相等",
+              "结果": "待锁定核验"
+            },
+            "lines": []
+          },
+          {
+            "title": "签发令牌",
+            "actor": "Accounts",
+            "event": "教学模拟 · createSession",
+            "explain": "锁定账号再次核验后保存令牌摘要。",
+            "state": {
+              "验证": "成功",
+              "结果": "token"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "未知账号也执行密码派生",
+        "steps": [
+          {
+            "title": "查无账号",
+            "actor": "Accounts",
+            "event": "教学模拟 · DUMMY_HASH",
+            "explain": "没有账号时仍执行验证函数。",
+            "state": {
+              "验证": "哑哈希",
+              "结果": "未签发"
+            },
+            "lines": []
+          },
+          {
+            "title": "统一拒绝",
+            "actor": "verifyPassword / Accounts",
+            "event": "教学模拟 · LOGIN_FAILED",
+            "explain": "不透露用户名是否存在。",
+            "state": {
+              "验证": "失败",
+              "结果": "401"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "未知用户名应走哪条路径？",
+      "options": [
+        "立即跳过密码派生",
+        "用 DUMMY_HASH 执行 scrypt 后统一拒绝",
+        "自动创建账号"
+      ],
+      "answer": 1,
+      "explanation": "未知账号仍执行同成本派生，返回统一登录错误。"
+    },
+    "stage": "s13-auth",
+    "ownership": {
+      "codex": "处理原生 Thread、Turn、模型调用和上下文；不决定 HTTP 身份。",
+      "product": "accounts 与 HTTP 建立身份，数据、缓存、工具、后台任务与事件核对 owner。"
+    },
+    "experiment": {
+      "command": "npm run lesson -- hash",
+      "action": "在 stages/s13-auth 运行命令，核对真实测试断言。",
+      "observe": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "boundary": "只验证本地哈希与登录调用，不证明网络端到端时间完全相同。"
+    },
+    "reference": {
+      "session": "s13 README / design.md",
+      "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md",
+      "adaptation": "根据本章 README、设计与源码编写；离线断言不代替真实数据库、端口或服务器验收。",
+      "label": "本章设计依据"
+    }
+  },
+  {
+    "id": "s13-logout",
+    "title": "每次查令牌，让登出在下一次请求生效",
+    "principle": "令牌是随机凭据；数据库中的会话状态决定它现在是否有效。",
+    "problem": "本机删除凭据后，另一个客户端保存的同账号令牌是否仍然可用？",
+    "change": {
+      "before": "静态连接凭据无法表达每个用户的吊销状态。",
+      "added": "不透明令牌只存 SHA-256，每次请求检查禁用、吊销和两种有效期。",
+      "kept": "认证仍发生在 HTTP 入口，Codex 不决定调用者身份。"
+    },
+    "concepts": [
+      {
+        "term": "Bearer",
+        "meaning": "登录返回 32 字节随机生成的 base64url 令牌，请求放入 Authorization。"
+      },
+      {
+        "term": "绝对 / 闲置期限",
+        "meaning": "绝对 7 天，闲置 12 小时；last_seen_at 最多每分钟更新一次。"
+      },
+      {
+        "term": "revokeAll",
+        "meaning": "登出、改密码、禁用账号都会吊销该用户全部令牌。"
+      }
+    ],
+    "mechanism": "authenticate 先验证 Bearer 形状，再用摘要查询数据库会话。缺失、禁用、吊销、绝对过期或闲置超时都抛出 UNAUTHENTICATED。通过后返回 userId、role 和 authSessionId，HTTP 用 AsyncLocalStorage 绑定执行身份。logout 调用 revokeAll；下次请求再次查库，旧令牌因此得到 401。现有 SSE 连接不逐帧重新认证，不能把下一次请求失效说成现有连接立即断开。",
+    "design": {
+      "decision": "每次请求读取令牌状态，不使用 JWT 或 refresh。",
+      "reason": "服务端可以让吊销在下一次请求中直接生效。",
+      "alternative": "只删客户端文件无法使其他客户端保存的令牌失效。",
+      "cost": "每次认证需要数据库查询；现有 SSE 不逐帧重新验证。"
+    },
+    "source": {
+      "file": "stages/s13-auth/server/modules/accounts/index.mjs",
+      "needle": "  async authenticate(authorization) {",
+      "before": 0,
+      "after": 10,
+      "explanation": "查询会话与期限后返回身份；logout 吊销该用户全部会话。"
+    },
+    "sources": [
+      {
+        "file": "stages/s13-auth/server/modules/http/index.mjs",
+        "needle": "      if (route === 'POST /auth/logout')",
+        "before": 0,
+        "after": 0,
+        "explanation": "登出路由先经过认证，再等待吊销完成返回成功。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "有效令牌携带身份进入请求",
+        "steps": [
+          {
+            "title": "携带凭据",
+            "actor": "CLI",
+            "event": "教学模拟 · Authorization: Bearer",
+            "explain": "客户端读取自己的凭据文件。",
+            "state": {
+              "令牌": "待查库",
+              "身份": "未绑定"
+            },
+            "lines": []
+          },
+          {
+            "title": "核对状态",
+            "actor": "Accounts",
+            "event": "教学模拟 · authenticate",
+            "explain": "账号与会话均有效，必要时更新 last_seen_at。",
+            "state": {
+              "令牌": "有效",
+              "身份": "userId"
+            },
+            "lines": []
+          },
+          {
+            "title": "绑定上下文",
+            "actor": "HTTP handler",
+            "event": "教学模拟 · runIdentity",
+            "explain": "后续查询使用认证身份。",
+            "state": {
+              "令牌": "有效",
+              "身份": "已绑定"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "登出后的旧令牌请求被拒绝",
+        "steps": [
+          {
+            "title": "请求登出",
+            "actor": "CLI",
+            "event": "教学模拟 · POST /auth/logout",
+            "explain": "服务端认证当前请求。",
+            "state": {
+              "令牌": "有效",
+              "响应": "待吊销"
+            },
+            "lines": []
+          },
+          {
+            "title": "吊销全部",
+            "actor": "Accounts",
+            "event": "教学模拟 · revokeAll",
+            "explain": "包括同账号其他客户端的令牌。",
+            "state": {
+              "令牌": "revoked",
+              "响应": "loggedOut"
+            },
+            "lines": []
+          },
+          {
+            "title": "再次请求",
+            "actor": "Accounts",
+            "event": "教学模拟 · GET /auth/me → 401",
+            "explain": "旧 Bearer 再次查库命中 revoked_at。",
+            "state": {
+              "令牌": "revoked",
+              "响应": "401"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "登出后，另一个客户端使用该账号旧令牌发起请求会怎样？",
+      "options": [
+        "继续使用至七天期满",
+        "获得新令牌",
+        "查库发现吊销，返回 401"
+      ],
+      "answer": 2,
+      "explanation": "登出吊销该用户全部令牌，每次请求重新检查数据库状态。"
+    },
+    "stage": "s13-auth",
+    "ownership": {
+      "codex": "处理原生 Thread、Turn、模型调用和上下文；不决定 HTTP 身份。",
+      "product": "accounts 与 HTTP 建立身份，数据、缓存、工具、后台任务与事件核对 owner。"
+    },
+    "experiment": {
+      "command": "npm run lesson -- logout",
+      "action": "在 stages/s13-auth 运行命令，核对真实测试断言。",
+      "observe": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "boundary": "调用真实 HTTP handler 的内存请求响应，不监听端口。"
+    },
+    "reference": {
+      "session": "s13 README / design.md",
+      "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md",
+      "adaptation": "根据本章 README、设计与源码编写；离线断言不代替真实数据库、端口或服务器验收。",
+      "label": "本章设计依据"
+    }
+  },
+  {
+    "id": "s13-events",
+    "title": "从资源查询到 SSE，都要核对 owner",
+    "principle": "登录身份必须贯穿查询、缓存、后台任务和事件补发，缺少归属时默认拒绝。",
+    "problem": "订阅者知道别人的 Thread ID，或事件没有 ownerId，还能收到内容吗？",
+    "change": {
+      "before": "单 owner 实例的事件推送不能直接代表多账号隔离。",
+      "added": "实时订阅与断线补发过滤 ownerId，资源查询和缓存也检查归属。",
+      "kept": "保留 Thread、事件序号、Last-Event-ID 与快照恢复机制。"
+    },
+    "concepts": [
+      {
+        "term": "ownerId",
+        "meaning": "资源与事件的归属，必须来自可信身份或持久记录。"
+      },
+      {
+        "term": "404 NOT_FOUND",
+        "meaning": "跨用户访问与资源不存在使用相同响应；admin 不越过归属。"
+      },
+      {
+        "term": "SSE 默认拒绝",
+        "meaning": "没有 ownerId 的事件不入历史也不推送；订阅与补发过滤 owner。"
+      }
+    ],
+    "mechanism": "HTTP 完成认证后，订阅 listener 比较 event.ownerId 与 identity.userId，并过滤 Thread。重连调用 hub.since 时传入同一个 userId；快照也标记 ownerId。EventHub.publish 在进入缓冲之前丢弃无主事件。会话缓存命中仍核对归属，后台任务从持久记录取得 owner。文件工具按 workspace/users/<ownerId>/ 定位，但 Codex 进程和工作区仍共享，不能把 API 门禁当成操作系统隔离。",
+    "design": {
+      "decision": "所有读取和推送都按可信 owner 过滤。",
+      "reason": "单独保护登录入口不能阻止跨用户资源与事件泄露。",
+      "alternative": "只按 Thread ID 过滤，或把无主事件广播，会丢失身份边界。",
+      "cost": "后台任务必须显式携带 owner；两个启用账号时必须显式关闭共享原生记忆。"
+    },
+    "source": {
+      "file": "stages/s13-auth/server/modules/http/index.mjs",
+      "needle": "        const listener = event => { if (event.ownerId === identity.userId",
+      "before": 0,
+      "after": 9,
+      "explanation": "实时事件检查 owner；重连补发也传 identity.userId。"
+    },
+    "sources": [
+      {
+        "file": "stages/s13-auth/server/modules/events/index.mjs",
+        "needle": "  publish(type, data, threadId = null, ownerId) {",
+        "before": 0,
+        "after": 3,
+        "explanation": "无主事件在进入历史和推送前就被丢弃。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "只接收本用户事件与补发",
+        "steps": [
+          {
+            "title": "绑定订阅",
+            "actor": "HTTP handler",
+            "event": "教学模拟 · identity.userId",
+            "explain": "先认证，再建立用户订阅。",
+            "state": {
+              "owner": "当前用户",
+              "推送": "等待"
+            },
+            "lines": []
+          },
+          {
+            "title": "筛选实时",
+            "actor": "listener",
+            "event": "教学模拟 · event.ownerId",
+            "explain": "owner 与 Thread 同时匹配才写响应。",
+            "state": {
+              "owner": "匹配",
+              "推送": "写入 SSE"
+            },
+            "lines": []
+          },
+          {
+            "title": "断线补发",
+            "actor": "EventHub",
+            "event": "教学模拟 · since(lastEventId, threadId, userId)",
+            "explain": "历史查询也保留用户边界。",
+            "state": {
+              "owner": "匹配",
+              "推送": "本用户历史"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "无主与他人事件均不推送",
+        "steps": [
+          {
+            "title": "无主事件",
+            "actor": "EventHub",
+            "event": "教学模拟 · publish",
+            "explain": "缺少 ownerId 直接丢弃并警告。",
+            "state": {
+              "owner": "缺失",
+              "推送": "拒绝入历史"
+            },
+            "lines": []
+          },
+          {
+            "title": "他人事件",
+            "actor": "listener",
+            "event": "教学模拟 · event.ownerId ≠ userId",
+            "explain": "即使有 Thread ID，归属不匹配也不能写入订阅。",
+            "state": {
+              "owner": "不匹配",
+              "推送": "过滤"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "admin 是否可以凭别人的 Thread ID 读取会话？",
+      "options": [
+        "不可以，仍按 owner 检查，返回 404",
+        "可以，admin 可读取所有资源",
+        "只要命中缓存就可以"
+      ],
+      "answer": 0,
+      "explanation": "技术角色不扩大资源归属，查询与缓存都核对 owner。"
+    },
+    "stage": "s13-auth",
+    "ownership": {
+      "codex": "处理原生 Thread、Turn、模型调用和上下文；不决定 HTTP 身份。",
+      "product": "accounts 与 HTTP 建立身份，数据、缓存、工具、后台任务与事件核对 owner。"
+    },
+    "experiment": {
+      "command": "npm run lesson -- events",
+      "action": "在 stages/s13-auth 运行命令，核对真实测试断言。",
+      "observe": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "boundary": "真实 EventHub 与 HTTP handler，内存 SSE 响应，不监听端口。"
+    },
+    "reference": {
+      "session": "s13 README / design.md",
+      "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md",
+      "adaptation": "根据本章 README、设计与源码编写；离线断言不代替真实数据库、端口或服务器验收。",
+      "label": "本章设计依据"
+    }
+  }
+]

@@ -95,7 +95,7 @@ test('没有任何课时时报错',t=>{
 
 test('s12 三课、四组离线实验与真实 catalog 一致，所有补充摘录逐字命中',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s12-deploy');
- assert.equal(output.lessons.length,33);
+ assert.equal(output.lessons.length,36);
  assert.deepEqual(lessons.map(l=>l.id),['s12-health','s12-protection','s12-backup']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s12-deploy');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s12-deploy/lessons/catalog.json'),'utf8'));
@@ -118,4 +118,27 @@ test('s12 补充源码仍检查归属与唯一 needle',t=>{
  const f=fixture(t);
  f.edit('lessons/s12.json',rows=>{rows[0].sources[0].needle='missing-readiness-anchor';});
  assert.throws(f.build,/Source needle missing or ambiguous/);
+});
+
+test('s13 三课覆盖四个 catalog 实验，密码、令牌与 SSE 摘录逐字命中',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s13-auth');
+ assert.equal(output.lessons.length,36);
+ assert.deepEqual(lessons.map(l=>l.id),['s13-hash','s13-logout','s13-events']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s13-auth');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s13-auth/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...(e.relatedExperiments||[])]);
+ assert.deepEqual(experiments.map(e=>e.catalogId).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key],`${exp.catalogId}.${key}`);
+  assert.equal(exp.command,`npm run lesson -- ${original.id}`);
+  assert.equal(exp.mode,'offline');
+ }
+ for(const lesson of lessons)for(const excerpt of [lesson.source,...lesson.sources]){
+  assert.ok(excerpt.code.includes(excerpt.needle));
+  assert.match(excerpt.hash,/^[a-f0-9]{64}$/);
+ }
+ assert.match(lessons[0].source.code,/verifyPassword/);
+ assert.match(lessons[1].source.code,/authenticate/);
+ assert.match(lessons[2].source.code,/event.ownerId === identity.userId/);
 });

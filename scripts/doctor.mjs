@@ -43,7 +43,7 @@ export async function checkTable(selected, context = {}) {
 export async function main(argv = process.argv.slice(2), { root = ROOT, env = process.env, home, run = runProcess, handshakeRun = handshake, log = console.log } = {}) {
   try {
     const options = parseArgs(argv, ["--handshake", "--help"]);
-    if (options.help) { log("npm run doctor -- [--stage s05,s06] [--handshake]（默认 s00–s12 与 app；不调用模型）"); return 0; }
+    if (options.help) { log("npm run doctor -- [--stage s05,s06] [--handshake]（默认 s00–s13 与 app；不调用模型）"); return 0; }
     const selected = selectStages(stages(root), options.selectors);
     let ok = true;
     for (const stage of selected) {
@@ -69,9 +69,9 @@ export async function main(argv = process.argv.slice(2), { root = ROOT, env = pr
         if (item.kind !== "login" && stage.id !== "s00" && item.values.CODEX_MODEL_CATALOG_ENABLED === "true" && !item.values.CODEX_MODEL?.trim()) {
           report(false, "本地模型目录缺少模型名", "填写 CODEX_MODEL，或设 CODEX_MODEL_CATALOG_ENABLED=false");
         }
-        if (stage.id === "s12") {
-          report(Boolean(item.values.AGENT_DB_PASSWORD?.trim() && item.values.CONTAINER_APP_DIR?.trim()), "独立部署配置（不检查 Docker）", "填写 AGENT_DB_PASSWORD / CONTAINER_APP_DIR，按 s12 README 配置 Compose");
-          log("提示：数据库与 Redis URL 由 Compose 注入；部署与 SSH 隧道见 stages/s12-deploy/README.md。");
+        if (["s12", "s13"].includes(stage.id)) {
+          report(Boolean(item.values.AGENT_DB_PASSWORD?.trim() && item.values.CONTAINER_APP_DIR?.trim()), "独立部署配置（不检查 Docker）", `填写 AGENT_DB_PASSWORD / CONTAINER_APP_DIR，按 ${stage.id} README 配置 Compose`);
+          log(`提示：数据库与 Redis URL 由 Compose 注入；部署与 SSH 隧道见 ${stage.relative}/README.md。`);
         } else if (/^s(08|09|10|11)$/.test(stage.id) || stage.id === "app") {
           report(Boolean(item.values.DATABASE_URL && item.values.REDIS_URL), "数据库配置（不检查连通性）", "配置 DATABASE_URL / REDIS_URL，按阶段说明启动数据库并迁移");
           log("提示：启动前还需 PostgreSQL、Redis 与 data:migrate；本检查不连接数据库。");

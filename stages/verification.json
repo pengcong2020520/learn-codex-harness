@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-07T14:51:59.189Z",
+  "verifiedAt": "2026-11-07T17:00:02.087Z",
   "modelProvider": "local simulated Responses",
   "embeddingProvider": null,
   "semanticQualityVerified": false,
@@ -19,6 +19,7 @@
     "s10-skill-workflow/README.md",
     "s11-model-gateway/README.md",
     "s12-deploy/README.md",
+    "s13-auth/README.md",
     "s01-single-turn/docs/design.md",
     "s02-multi-turn/docs/design.md",
     "s03-service/docs/design.md",
@@ -31,6 +32,7 @@
     "s10-skill-workflow/docs/design.md",
     "s11-model-gateway/docs/design.md",
     "s12-deploy/docs/design.md",
+    "s13-auth/docs/design.md",
     "s00-sdk-quickstart/docs/guide.md",
     "s06-tools/docs/tools.md",
     "s08-data-layer/docs/data-layer.md",
@@ -128,6 +130,13 @@
       "command": "npm test",
       "passed": true,
       "tests": 283,
+      "skipped": 0
+    },
+    {
+      "directory": "s13-auth",
+      "command": "npm test",
+      "passed": true,
+      "tests": 316,
       "skipped": 0
     }
   ]

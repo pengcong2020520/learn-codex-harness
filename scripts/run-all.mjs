@@ -19,6 +19,7 @@ export const packages = [
   "stages/s10-skill-workflow",
   "stages/s11-model-gateway",
   "stages/s12-deploy",
+  "stages/s13-auth",
   "app",
 ];
 // 只包含不调用真实模型、不依赖 PostgreSQL / Redis 的检查；集成验证见 stages/README.md。

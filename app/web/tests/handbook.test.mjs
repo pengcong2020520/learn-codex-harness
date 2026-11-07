@@ -15,7 +15,8 @@ const chapterSources=[
  ['s06','s06-tools.html','s06-tools'],
  ['s07','s07-memory.html','s07-memory'],
  ['s10','s10-skill-workflow.html','s10-skill-workflow'],
- ['s12','s12-deploy.html','s12-deploy']
+ ['s12','s12-deploy.html','s12-deploy'],
+ ['s13','s13-auth.html','s13-auth']
 ];
 const retainedAnchors={
  'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',

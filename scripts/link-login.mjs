@@ -27,7 +27,7 @@ export async function main(argv = process.argv.slice(2), { root = ROOT, env = pr
     if (options.status && options.unlink) fail("--status 与 --unlink 不能同时使用。");
     const all = stages(root);
     const selected = selectStages(all, options.selectors, loginStages(all));
-    if (selected.some(stage => !loginStages(all).includes(stage))) fail("link-login 只支持 s01–s10；s00 使用本机登录，s11/s12/app 使用模型网关。");
+    if (selected.some(stage => !loginStages(all).includes(stage))) fail("link-login 只支持 s01–s10；s00 使用本机登录，s11/s12/s13/app 使用模型网关。");
     if (options.unlink) {
       for (const stage of selected) log(`${stage.id}: ${unlinkAuth(stage)}`);
       return 0;

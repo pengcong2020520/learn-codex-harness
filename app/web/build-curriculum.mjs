@@ -20,7 +20,8 @@ const chapterMetadata={
  s09:{name:'知识层',focus:'可信门禁与 Wiki / RAG'},
  s10:{name:'Skill 与 Workflow',focus:'Skill 教方法，Workflow 管边界和终点'},
  s11:{name:'模型网关',focus:'模型清单、能力路由与用量预算'},
- s12:{name:'部署单元',focus:'健康与就绪、容量限制、备份与恢复'}
+ s12:{name:'部署单元',focus:'健康与就绪、容量限制、备份与恢复'},
+ s13:{name:'账号与认证',focus:'密码校验、令牌吊销与 owner 归属'}
 };
 export function buildCurriculumData({repository=repo,curriculumDir=dir}={}){
  const stageDirs=new Set(fs.readdirSync(path.join(repository,'stages'),{withFileTypes:true}).filter(d=>d.isDirectory()&&/^s\d\d-[a-z0-9-]+$/.test(d.name)).map(d=>d.name));
@@ -91,7 +92,7 @@ const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-t
 const coursePath=chapters.map(c=>`  <a href="#${c.id}">${c.stage} ${c.title}</a>`).join('\n');
 const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/learning.js'),'utf8'),'learning.css':fs.readFileSync(path.join(project,'web/public/app/learning.css'),'utf8'),'curriculum.json':serialized,'index.html':fs.readFileSync(path.join(course,'_reader.html'),'utf8'),'handbook.html':fs.readFileSync(path.join(course,'_handbook.html'),'utf8').replace('{{firstModule}}',()=>chapters[0]?.id||'main').replace('{{dots}}',()=>dots).replace('{{coursePath}}',()=>coursePath).replace('{{modules}}',()=>chapters.map(c=>c.html.trimEnd()).join('\n\n'))};
 // 课程里的总架构图直接取自各阶段 README 用的同一份生成结果（stages/build-architecture.mjs），不再单独绘制。
-for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=n==='12'?renderArchitecture(12):fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
+for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=Number(n)>=12?renderArchitecture(Number(n)):fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
 // 阶段演示页：模块与新增能力来自 stages/changes.json（node stages/build-changes.mjs 生成），机制演示来自 curriculum/mechanisms/sNN.json（每个阶段一个文件），源码按行号截取并核对。
 pages['changes.html']=renderChanges(changes,Object.fromEntries(fs.readdirSync(path.join(dir,'mechanisms')).filter(f=>/^s\d\d\.json$/.test(f)).sort().map(f=>[f.slice(0,3),JSON.parse(fs.readFileSync(path.join(dir,'mechanisms',f),'utf8'))])),f=>fs.readFileSync(path.join(repo,f),'utf8'),glossary);
 pages['overview.html']=renderOverview({stages:changes.stages,introduction:fs.readFileSync(path.join(repo,'stages/introduction.md'),'utf8'),chapterStages});

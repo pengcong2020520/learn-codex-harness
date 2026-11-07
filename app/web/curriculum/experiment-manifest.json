@@ -788,6 +788,88 @@
       "mode": "offline",
       "offlineOrIntegration": "offline",
       "stage": "s12-deploy"
+    },
+    {
+      "id": "s13-hash",
+      "title": "scrypt 与恒定时间比较",
+      "mode": "offline",
+      "question": "未知用户名是否也执行 scrypt？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^hash:",
+        "tests/accounts.test.mjs"
+      ],
+      "observations": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "why": "同一成本派生后用 timingSafeEqual 比较，避免按账号是否存在走不同的昂贵路径。",
+      "boundary": "只验证本地哈希与登录调用，不证明网络端到端时间完全相同。",
+      "catalogId": "hash",
+      "stage": "s13-auth",
+      "command": "npm run lesson -- hash",
+      "offlineOrIntegration": "offline"
+    },
+    {
+      "id": "s13-logout",
+      "title": "吊销后的下一次请求",
+      "mode": "offline",
+      "question": "登出后旧令牌还能读取身份吗？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^logout:",
+        "tests/accounts.test.mjs"
+      ],
+      "observations": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "why": "每次请求查会话状态；登出吊销该用户全部令牌。",
+      "boundary": "调用真实 HTTP handler 的内存请求响应，不监听端口。",
+      "catalogId": "logout",
+      "stage": "s13-auth",
+      "command": "npm run lesson -- logout",
+      "offlineOrIntegration": "offline"
+    },
+    {
+      "id": "s13-events",
+      "title": "SSE 默认拒绝",
+      "mode": "offline",
+      "question": "事件不带 ownerId 时如何处理？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^events:",
+        "tests/accounts.test.mjs"
+      ],
+      "observations": [
+        "Node 测试实际通过；失败将非零退出。"
+      ],
+      "why": "事件进入历史与推送之前拒绝无主事件；订阅与补发都过滤 owner。",
+      "boundary": "真实 EventHub 与 HTTP handler，内存 SSE 响应，不监听端口。",
+      "catalogId": "events",
+      "stage": "s13-auth",
+      "command": "npm run lesson -- events",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "ownership",
+          "title": "A 读取 B 的资源",
+          "mode": "offline",
+          "question": "缓存中的会话是否还要核对 owner？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^ownership:",
+            "tests/accounts.test.mjs"
+          ],
+          "observations": [
+            "Node 测试实际通过；失败将非零退出。"
+          ],
+          "why": "查询和缓存访问都核对归属，资源不存在和不属于用户统一 404 NOT_FOUND。",
+          "boundary": "数据库使用查询夹具；真实 SQL 另跑 PostgreSQL 集成测试。",
+          "catalogId": "ownership",
+          "stage": "s13-auth",
+          "command": "npm run lesson -- ownership",
+          "offlineOrIntegration": "offline"
+        }
+      ]
     }
   ]
 }
