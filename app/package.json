@@ -27,6 +27,7 @@
     "knowledge:init": "node scripts/knowledge.mjs init",
     "test:rag": "node scripts/test-data.mjs --rag",
     "web": "node web/server.mjs",
+    "test:deploy": "node --test tests/deploy.test.mjs tests/stages-deploy.test.mjs",
     "test:web": "node --test web/tests/*.test.mjs",
     "course:build": "node web/build-curriculum.mjs",
     "course:check": "node web/build-curriculum.mjs --check",
