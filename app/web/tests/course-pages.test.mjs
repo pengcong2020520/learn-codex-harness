@@ -63,6 +63,7 @@ test('生成页面：阶段数据、最终请求路径、术语锚点与导航�
     for(const row of glossary.filter(row=>row.stage===stage.id))assert.ok(changes.split(`id="${stage.id}"`)[1].split('</section>')[0].includes(`/course/glossary.html#${termId(row.term)}`));
     assert.equal(panel.startsWith(' hidden'),stage.id!==stages.at(-1).id);
   }
+  assert.equal(fs.readFileSync(new URL('assets/learning-roadmap.svg',course),'utf8'),fs.readFileSync(path.join(repository,'docs/images/learning-roadmap.svg'),'utf8'));
   const request=overview.split('<ol class="request-path">')[1].split('</ol>')[0];
   const firstAppearance=new Map();
   for(const stage of stages)for(const module of stageModules(Number(stage.id.slice(1))))if(!firstAppearance.has(module.id))firstAppearance.set(module.id,stage.id);
