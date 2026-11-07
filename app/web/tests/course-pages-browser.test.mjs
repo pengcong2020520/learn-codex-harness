@@ -11,10 +11,10 @@ const options={skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'};
 async function setup(t){const app=createWorkbench({port:0,targets:[]});const url=await app.listen();t.after(()=>app.close());return {url,b:await browser(t)};}
 const noErrors=b=>assert.deepEqual(b.errors.filter(error=>!error.includes('favicon')),[],'没有脚本错误或 CSP 拦截');
 
-test('全景：默认 s11，滑块切到 s05；图高稳定、刻度和原生键盘可操作',options,async t=>{
+test('全景：默认最新阶段，滑块切到 s05；图高稳定、刻度和原生键盘可操作',options,async t=>{
   const {url,b}=await setup(t);await b.open(url+'/course/overview.html',{reduceMotion:true});
   const initial=await b.run(`${helpers}const panel=$('[data-stage-panel]:not([hidden])');return {id:panel.dataset.stagePanel,height:$('.architecture-frame',panel).getBoundingClientRect().height,next:$('#stage-next').disabled};`);
-  assert.equal(initial.id,'s11');assert.ok(initial.next);
+  assert.equal(initial.id,stages.at(-1).id);assert.ok(initial.next);
   const index=stages.findIndex(stage=>stage.id==='s05');
   const changed=await b.run(`${helpers}const slider=$('#stage-slider');slider.value=${index};slider.dispatchEvent(new Event('input',{bubbles:true}));slider.focus();const panel=$('[data-stage-panel]:not([hidden])');return {id:panel.dataset.stagePanel,src:$('img',panel).getAttribute('src'),loaded:$('img',panel).naturalWidth>0,modules:$$('.overview-modules b',panel).map(el=>el.textContent),height:$('.architecture-frame',panel).getBoundingClientRect().height,tick:$('[data-stage-index="${index}"]').getAttribute('aria-pressed')};`);
   assert.equal(changed.id,'s05');assert.equal(changed.src,'/course/assets/s05-architecture.svg');assert.ok(changed.loaded);assert.equal(changed.tick,'true');
@@ -45,7 +45,8 @@ test('术语表：Thread 只显示 term/aka/short 匹配项，s04 筛选、空�
   const linked=await b.run(`${helpers}const card=$('#${termId(origin.term)}');$('details',card).open=true;$('a[href="#${termId(destination)}"]',card).click();await until(()=>location.hash==='#${termId(destination)}'&&!$('#${termId(destination)}').hidden);const target=$('#${termId(destination)}');return {visible:!target.hidden&&!target.closest('[data-group]').hidden,open:$('details',target).open,focused:document.activeElement===target};`);
   assert.deepEqual(linked,{visible:true,open:true,focused:true});
   assert.equal(await b.run(`${helpers}$('#glossary-search').value='no-such-term-xyz';$('#glossary-search').dispatchEvent(new Event('input'));return !$('#glossary-empty').hidden&&$$('[data-group]:not([hidden])').length===0;`),true);
-  await b.open(url+'/course/glossary.html#term-thread');
+  // Same path + new hash is a same-document navigation without load; force a real load.
+  await b.open(url+'/course/glossary.html?direct=1#term-thread');
   assert.equal(await b.run(`${helpers}return $('#term-thread details').open;`),true);
   await b.viewport(390,844);
   assert.equal(await b.run('return document.documentElement.scrollWidth<=innerWidth;'),true);

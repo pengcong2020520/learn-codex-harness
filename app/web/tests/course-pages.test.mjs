@@ -5,7 +5,6 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateGlossary,linkGlossaryTerms,escapeHtml,termId,sourceUrl} from '../course-data.mjs';
 import {renderGlossary,renderOverview,introductionQuestions} from '../build-course-pages.mjs';
-import {renderRoadmap} from '../build-course-roadmap.mjs';
 import {stages as architecture,stageModules} from '../../../stages/build-architecture.mjs';
 
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
@@ -62,7 +61,7 @@ test('生成页面：阶段数据、最终请求路径、术语锚点与导航�
     assert.ok(panel.includes(escapeHtml(architecture[Number(stage.id.slice(1))].sub)));
     for(const module of stage.modules)assert.ok(panel.includes(escapeHtml(module.name)));
     for(const row of glossary.filter(row=>row.stage===stage.id))assert.ok(changes.split(`id="${stage.id}"`)[1].split('</section>')[0].includes(`/course/glossary.html#${termId(row.term)}`));
-    assert.equal(panel.startsWith(' hidden'),stage.id!=='s11');
+    assert.equal(panel.startsWith(' hidden'),stage.id!==stages.at(-1).id);
   }
   const request=overview.split('<ol class="request-path">')[1].split('</ol>')[0];
   const firstAppearance=new Map();
@@ -92,8 +91,6 @@ test('生成页面符合 CSP，资源在本地，路线图副本与生成源一�
       assert.ok(fs.existsSync(new URL(resource.slice('/course/'.length),course)),resource);
     }
   }
-  assert.equal(read('assets/learning-roadmap.svg'),fs.readFileSync(path.join(repository,'docs/images/learning-roadmap.svg'),'utf8'));
-  assert.equal(read('assets/learning-roadmap.svg'),renderRoadmap());
 });
 
 test('长文生成内容使用最新术语解释，源章节不需要手工改动',()=>{

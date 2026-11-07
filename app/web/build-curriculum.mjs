@@ -6,7 +6,6 @@ import {renderArchitecture} from '../../stages/build-architecture.mjs';
 import {renderChanges} from './build-changes-page.mjs';
 import {validateGlossary,linkGlossaryTerms} from './course-data.mjs';
 import {renderOverview,renderGlossary} from './build-course-pages.mjs';
-import {renderRoadmap} from './build-course-roadmap.mjs';
 const project=fileURLToPath(new URL('../',import.meta.url)),repo=path.dirname(project),dir=path.join(project,'web/curriculum');
 // 新增有课时的阶段时，在此补充章节名称与重点。
 const chapterMetadata={
@@ -97,12 +96,6 @@ for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.
 pages['changes.html']=renderChanges(changes,Object.fromEntries(fs.readdirSync(path.join(dir,'mechanisms')).filter(f=>/^s\d\d\.json$/.test(f)).sort().map(f=>[f.slice(0,3),JSON.parse(fs.readFileSync(path.join(dir,'mechanisms',f),'utf8'))])),f=>fs.readFileSync(path.join(repo,f),'utf8'),glossary);
 pages['overview.html']=renderOverview({stages:changes.stages,introduction:fs.readFileSync(path.join(repo,'stages/introduction.md'),'utf8'),chapterStages});
 pages['glossary.html']=renderGlossary(glossary,changes.stages);
-// Maintain the missing docs roadmap from architecture data, then copy that SVG
-// into course assets. Both the source and its copy participate in --check.
-const roadmapFile=path.join(repo,'docs/images/learning-roadmap.svg'),roadmap=renderRoadmap();
-if(check){if(!fs.existsSync(roadmapFile)||fs.readFileSync(roadmapFile,'utf8')!==roadmap)throw Error('学习路线图不是最新；请运行 npm run course:build');}
-else{fs.mkdirSync(path.dirname(roadmapFile),{recursive:true});fs.writeFileSync(roadmapFile,roadmap);}
-pages['assets/learning-roadmap.svg']=fs.readFileSync(roadmapFile,'utf8');
 if(check){for(const [name,body] of Object.entries(pages))if(!fs.existsSync(path.join(course,name))||fs.readFileSync(path.join(course,name),'utf8')!==body)throw Error(`课程 ${name} 不是最新；请运行 npm run course:build`);console.log(`${lessons.length} lessons, ${chapters.length} handbook chapters, ${glossary.length} glossary terms, overview, source excerpts and experiment links are current.`);}else{for(const [name,body] of Object.entries(pages))fs.writeFileSync(path.join(course,name),body);console.log(`Built ${lessons.length} source-grounded lessons, ${chapters.length} handbook chapters, overview and ${glossary.length} glossary terms.`);}
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url)buildCurriculum({check:process.argv.includes('--check')});

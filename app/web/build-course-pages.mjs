@@ -17,7 +17,7 @@ export function introductionQuestions(markdown) {
 }
 
 export function renderOverview({stages, introduction, chapterStages}) {
-  const defaultIndex = Math.max(0, stages.findIndex(stage => stage.id === 's11'));
+  const defaultIndex = Math.max(0, stages.length - 1);
   const added = new Map();
   for (const stage of stages) for (const module of stageModules(Number(stage.id.slice(1)))) if (!added.has(module.id)) added.set(module.id, {...module, stage:stage.id});
   // Codex and the human are outside our module boxes; their first appearance is
@@ -42,12 +42,12 @@ export function renderOverview({stages, introduction, chapterStages}) {
 </section>`;
   }).join('\n');
   return page('课程全景', 'overview', `
-<section class="overview-hero"><p class="course-eyebrow">从这里开始</p><h1>这套教程带你用 Codex 的 harness 亲手做一个云端 Agent</h1><a href="/course/assets/learning-roadmap.svg" aria-label="打开学习路线原图"><img class="roadmap" src="/course/assets/learning-roadmap.svg" alt="学习路线：${esc(stages.map(stage => stage.id+' '+architecture[Number(stage.id.slice(1))].title).join(' → '))}"></a></section>
-<section class="overview-section"><h2>谁负责什么</h2><div class="responsibilities"><article><h3>Codex harness 负责</h3><ul>${['agent loop','原生历史','Skills','工具调用','沙箱'].map(text=>`<li>${esc(text)}</li>`).join('')}</ul></article><article><h3>我们的程序负责</h3><ul>${['服务与客户端','排队与推送','Agent 定义','工具与资料边界','记忆开关','数据','知识与门禁','Workflow','模型网关'].map(text=>`<li>${esc(text)}</li>`).join('')}</ul></article></div><h3>一个 Agent 要回答的六个问题</h3><ul class="six-questions">${introductionQuestions(introduction).map(question=>`<li>${esc(question)}</li>`).join('')}</ul><a href="${esc(sourceUrl('stages/introduction.md#一个 Agent 完成任务，要回答六个问题'))}">阅读导论中的分工说明 ↗</a></section>
+<section class="overview-hero"><p class="course-eyebrow">从这里开始</p><h1>这套教程带你用 Codex 的 harness 亲手做一个云端 Agent</h1></section>
+<section class="overview-section"><h2>谁负责什么</h2><div class="responsibilities"><article><h3>Codex harness 负责</h3><ul>${['agent loop','原生历史','Skills','工具调用','沙箱'].map(text=>`<li>${esc(text)}</li>`).join('')}</ul></article><article><h3>我们的程序负责</h3><ul>${['服务与客户端','排队与推送','Agent 定义','工具与资料边界','记忆开关','数据','知识与门禁','Workflow','模型网关','部署与恢复'].map(text=>`<li>${esc(text)}</li>`).join('')}</ul></article></div><h3>一个 Agent 要回答的六个问题</h3><ul class="six-questions">${introductionQuestions(introduction).map(question=>`<li>${esc(question)}</li>`).join('')}</ul><a href="${esc(sourceUrl('stages/introduction.md#一个 Agent 完成任务，要回答六个问题'))}">阅读导论中的分工说明 ↗</a></section>
 <section class="overview-section"><h2>架构怎么一步步长出来</h2><p class="muted">拖动滑块或用方向键切换阶段；点击刻度可以直接跳转。</p><div class="stage-controls"><button type="button" id="stage-prev" aria-label="上一个阶段">←</button><label for="stage-slider">阶段 <output id="stage-output" for="stage-slider">${esc(stages[defaultIndex].id)}</output></label><input id="stage-slider" type="range" min="0" max="${stages.length-1}" value="${defaultIndex}" step="1" aria-valuetext="${esc(stages[defaultIndex].id+' '+architecture[Number(stages[defaultIndex].id.slice(1))].title)}"><button type="button" id="stage-next" aria-label="下一个阶段">→</button></div>
 <nav class="stage-ticks" aria-label="阶段刻度">${stages.map((stage,i)=>`<button type="button" data-stage-index="${i}" aria-controls="overview-${esc(stage.id)}" aria-pressed="${i===defaultIndex}">${esc(stage.id)}</button>`).join('')}</nav>
 <p id="stage-announcement" class="sr-only" aria-live="polite"></p>${panels}</section>
-<section class="overview-section"><h2>一次请求怎么走（s11 最终形态）</h2><p class="muted">沿 s11 总架构图的黑色编号走一遍；阶段标签表示这个模块最早从哪里出现。</p><ol class="request-path">${path}</ol></section>
+<section class="overview-section"><h2>一次请求怎么走（s11 完整内核）</h2><p class="muted">沿 s11 总架构图的黑色编号走一遍；阶段标签表示这个模块最早从哪里出现；s12 起这套内核整体装进容器部署，请求路径不变。</p><ol class="request-path">${path}</ol></section>
 <section class="overview-section"><h2>怎么学</h2><div class="learning-entries">${[
   ['/course/','机制课程','拆解一个机制，用源码、推演和实验验证它的行为。'],
   ['/course/handbook.html','章节长文','沿章节读清背景、概念与实现思路。'],

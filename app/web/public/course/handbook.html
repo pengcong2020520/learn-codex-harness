@@ -1924,7 +1924,7 @@ npm run test:codex-memory</code></pre>
     ═══════════════════════════════════════════════ -->
     <div class="screen" id="m4-screen-blob">
       <h2 class="screen-heading">不可变 Blob：内容寻址与来源追踪</h2>
-<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
+<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <a class="term" tabindex="0" data-definition="用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。" href="/course/glossary.html#term-docker-compose">Compose</a> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
 
       <p>
         sha256 是内容指纹，正文按指纹命名保存。内容改动会生成新 blob，已登记版本不被覆盖；这不等于承诺永久保留。
@@ -2397,7 +2397,7 @@ npm run test:codex-memory</code></pre>
       <p>以下练习在 <code>stages/s09-knowledge-layer</code> 目录进行。准备知识库时先设置 <code>AGENT_MEMORY_ENABLED=false</code>，执行 <code>npm run knowledge:init</code>，把原文放到 <code>workspace/inputs/general/</code>；维护结束后再读取实际页面。实际运行还需先完成 <code>npm ci</code>、本地环境配置、<code>docker compose up -d postgres redis</code>、<code>npm run data:migrate</code>、<code>npm run server</code>。完整步骤见 <a href="../../?stage=s09">s09 实践环境</a>。</p>
 
       <div class="callout"><div class="callout-text">本轮新增 Web 外部客户端，s09 与当前项目接入受控上传，s01–s08 保留各自的能力边界。受控原文导入采用 <span class="term" tabindex="0" data-definition="由服务端签发给本地操作者请求的上下文，不来自模型参数。">operator</span> 身份，仅支持 md/txt、单文件 ≤256 KiB，且只创建、不覆盖。Wiki 页面列表通过 GET /knowledge/pages 获取，读取时仍校验来源；教学页默认不连接服务，也不运行模型。</div></div>
-<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（schema v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
+<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（schema v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <a class="term" tabindex="0" data-definition="用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。" href="/course/glossary.html#term-docker-compose">Compose</a> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
 <table id="m5-limit-table" style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
         <thead>
           <tr><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">限制项</th><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">说明</th></tr>
@@ -2511,7 +2511,7 @@ npm run test:codex-memory</code></pre>
 <h2 class="screen-heading">这个云端 Agent 还缺什么：把一类任务做完的约定</h2>
 <p>上一章，云端 Agent 已能通过 Wiki / RAG 查依据，文件和知识操作也经过同一道门禁。这个云端 Agent 还缺什么？用户说“写一篇文章”，可能希望先看大纲再决定；用户说“整理这些新资料”，可能还需要一次受限的知识库更新。能调用工具，还不足以表达哪里等人确认、这一次能写到哪里、做到什么才算交付。</p>
 <figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="968" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
-<p>本章把三件事分开。<span class="term" data-definition="方法说明，包含规范、模板与参考资料；教模型怎么做，但不能给工具或资源授权。">Skill</span> 教怎么做；<span class="term" data-definition="部署者声明的一类任务：目标、额外授权、Skill、步骤写入范围、验收与确认点；只组合代码允许的能力。">Workflow</span> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
+<p>本章把三件事分开。<a class="term" data-definition="以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。" href="/course/glossary.html#term-skill">Skill</a> 教怎么做；<a class="term" data-definition="声明一类任务所需临时授权、输入输出边界、终点验收及人工确认点的配置。" href="/course/glossary.html#term-workflow">Workflow</a> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
 <table><thead><tr><th>层</th><th>存放内容</th><th>谁负责</th><th>与权限的关系</th></tr></thead><tbody>
 <tr><td>Agent 包</td><td>agent.json、role.md、skills/</td><td>部署者配置，服务端校验</td><td>Skill 不授权；Workflow 只能组合 Agent 已有能力</td></tr>
 <tr><td>Workspace</td><td>inputs、research、drafts、outputs 与知识资料</td><td>用户与模型在资源规则内读写</td><td>资料不能成为更高权限的配置</td></tr>
@@ -2606,7 +2606,7 @@ npm run test:codex-memory</code></pre>
 
 <section class="screen animate-in" id="s10-screen-4">
 <h2 class="screen-heading">可以提议，不能自批：授权发生在模型之外</h2>
-<p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <span class="term" data-definition="模型提出另一类任务的受限工具，只接受 workflow、params、text 与 reason；只产生 proposed，不提供确认操作。">propose_task</span>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
+<p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <a class="term" data-definition="供模型在发现任务超出当前权限时发起工作流提议、等待人工审核的原语工具。" href="/course/glossary.html#term-propose-task">propose_task</a>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 149–164 行</span>
 <pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="149" data-end="164">  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
@@ -2730,7 +2730,7 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
 <h2 class="screen-heading">这个云端 Agent 还缺什么：协调模型与用量</h2>
 <p>上一章 s10 用 Skill 教方法，用 Workflow 管步骤、权限与确认。写作任务可以先产出大纲，等用户确认后再继续成稿。这个云端 Agent 还缺什么？大纲和成稿未必适合用同一个模型；知识检索需要向量模型，生成图片又是另一种用途。模型越来越多之后，谁负责挑选，谁持有密钥，花费达到上限时谁来停止派发，都需要明确的执行位置。</p>
 <figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1080" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
-<p><span class="term" data-definition="本阶段使用 Bifrost 承接模型请求：对 Codex 提供 Responses 接口，向上游转换协议，并按配置处理备用链和 token 限流。">模型网关</span> 是请求经过的服务。<span class="term" data-definition="服务端根据用途、场景、步骤需求与预算策略选择本轮提交的模型；它不负责网关内部的失败重试。">模型路由</span> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
+<p><a class="term" data-definition="介于 Codex 与各模型厂商之间负责协议翻译、备用切换与额度管控的中介代理。" href="/course/glossary.html#term-模型网关">模型网关</a> 是请求经过的服务。<a class="term" data-definition="在任务每轮发出前综合用途、业务场景、能力特征与档位动态决策中选模型的逻辑。" href="/course/glossary.html#term-模型路由">模型路由</a> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
 <table><thead><tr><th>角色</th><th>负责什么</th><th>本章中的证据</th></tr></thead><tbody>
 <tr><td>Codex</td><td>管理 Thread 与 Turn，执行推理和工具循环，报告模型用量。</td><td>turn/start 参数、thread/tokenUsage/updated 通知。</td></tr>
 <tr><td>服务端</td><td>校验清单、挑选模型、关联任务、记账与控制派发。</td><td>selectedModel、modelSource、用量账本与队列预算状态。</td></tr>

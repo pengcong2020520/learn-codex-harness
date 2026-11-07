@@ -1566,5 +1566,94 @@
       "KnowledgeBase"
     ],
     "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "/ready",
+    "aka": [
+      "就绪探测",
+      "/health"
+    ],
+    "stage": "s12",
+    "short": "判断服务能不能接任务的接口；和只表示进程存活的 /health 分开。",
+    "detail": "/ready 检查数据库、网关健康、模型目录与调度状态，不能接任务时返回 503；/health 只说明 HTTP 进程活着。两者都返回 REVISION 里的版本号，不需要连接令牌，也不计入请求限流。Compose 用 /ready 做 agent 的健康检查。",
+    "related": [
+      "depends_on",
+      "Docker Compose"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "Docker Compose",
+    "aka": [
+      "compose.yaml",
+      "Compose"
+    ],
+    "stage": "s12",
+    "short": "用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。",
+    "detail": "中间件和 agent 一起以容器交付：版本固定、数据卷外置、随服务启停。每个服务有 healthcheck、restart: unless-stopped、stop_grace_period: 30s、日志轮转和内存上限；只有 agent 发布到宿主 127.0.0.1:4326。",
+    "related": [
+      "depends_on",
+      "/ready",
+      "CONTAINER_APP_DIR"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "depends_on",
+    "aka": [
+      "service_healthy",
+      "启动顺序"
+    ],
+    "stage": "s12",
+    "short": "Compose 里按依赖健康串起启动顺序：postgres 健康后才起 gateway，gateway 健康后才起 agent。",
+    "detail": "条件写成 condition: service_healthy，所以“容器已启动”不够，必须健康检查通过。系统重启后由 systemd 执行 Compose，同样按这个顺序拉起。",
+    "related": [
+      "Docker Compose",
+      "/ready"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "CONTAINER_APP_DIR",
+    "aka": [
+      "固定部署路径"
+    ],
+    "stage": "s12",
+    "short": "容器内项目路径，必须等于宿主部署路径；这是持久化契约。",
+    "detail": "Codex 原生历史里保存的是绝对路径，路径一变旧会话就无法直接恢复。所以回滚是在固定路径上替换代码，不改用带时间戳的新目录。",
+    "related": [
+      "rollout-*.jsonl",
+      "Docker Compose"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "Retry-After",
+    "aka": [
+      "429",
+      "请求限流"
+    ],
+    "stage": "s12",
+    "short": "超出容量时 429 响应里告诉客户端过多少秒再试的响应头。",
+    "detail": "按“连接令牌 + 实际来源地址”每分钟最多 120 次请求，超出返回 429 和 Retry-After；SSE 全局最多 20 个，超出也返回 429。无效令牌合并到同一来源桶，换令牌绕不过去。全局排队超过 200 条返回 429 QUEUE_FULL。",
+    "related": [
+      "SSE",
+      "/ready"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "flock",
+    "aka": [
+      "下载锁",
+      "备份锁"
+    ],
+    "stage": "s12",
+    "short": "备份、恢复和下载共用的文件锁；已有一个在进行时，第二个立即被拒绝。",
+    "detail": "备份在宿主机用 bash + docker compose 编排：短暂停止 agent，在 postgres 容器里执行 pg_dump，再用一次性 agent 容器打包并写 manifest，只保留 7 份。下载走 SSH + rsync、限速 200 KB/s，同一时间只允许一个。备份不经 HTTP 提供。",
+    "related": [
+      "CONTAINER_APP_DIR"
+    ],
+    "source": "stages/s12-deploy/README.md#备份与下载"
   }
 ]
