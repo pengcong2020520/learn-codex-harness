@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="618" viewBox="0 0 1440 618" role="img" aria-labelledby="title desc">
+<title id="title">学习路线图</title><desc id="desc">按从左到右、从上到下的顺序，从 SDK 体验逐步搭建云端 Agent。</desc>
+<rect width="1440" height="618" rx="20" fill="#FBFBF9"/>
+<g font-family="PingFang SC,Microsoft YaHei,system-ui,sans-serif"><text x="30" y="42" fill="#1F2933" font-size="23" font-weight="700">从第一次调用，到云端 Agent</text>
+<g><rect x="30" y="66" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="48" y="95" fill="#D9622B" font-size="17" font-weight="700">s00</text><text x="48" y="125" fill="#1F2933" font-size="18">先体验：把一件事交给 Codex</text></g>
+<g><rect x="500" y="66" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="518" y="95" fill="#D9622B" font-size="17" font-weight="700">s01</text><text x="518" y="125" fill="#1F2933" font-size="18">先打通一次问答</text></g>
+<g><rect x="970" y="66" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="988" y="95" fill="#D9622B" font-size="17" font-weight="700">s02</text><text x="988" y="125" fill="#1F2933" font-size="18">让同一段对话继续下去</text></g>
+<g><rect x="30" y="198" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="48" y="227" fill="#D9622B" font-size="17" font-weight="700">s03</text><text x="48" y="257" fill="#1F2933" font-size="18">变成常驻服务：客户端走了，服务还在</text></g>
+<g><rect x="500" y="198" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="518" y="227" fill="#D9622B" font-size="17" font-weight="700">s04</text><text x="518" y="257" fill="#1F2933" font-size="18">排队搬进服务端，状态推给客户端</text></g>
+<g><rect x="970" y="198" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="988" y="227" fill="#D9622B" font-size="17" font-weight="700">s05</text><text x="988" y="257" fill="#1F2933" font-size="18">一份 JSON 装配 Agent：角色与 </text><text x="988" y="283" fill="#1F2933" font-size="18">Skills</text></g>
+<g><rect x="30" y="330" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="48" y="359" fill="#D9622B" font-size="17" font-weight="700">s06</text><text x="48" y="389" fill="#1F2933" font-size="18">工具：读得到资料、存得下文章</text></g>
+<g><rect x="500" y="330" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="518" y="359" fill="#D9622B" font-size="17" font-weight="700">s07</text><text x="518" y="389" fill="#1F2933" font-size="18">记忆：Codex 提炼，服务端管控</text></g>
+<g><rect x="970" y="330" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="988" y="359" fill="#D9622B" font-size="17" font-weight="700">s08</text><text x="988" y="389" fill="#1F2933" font-size="18">让任务与产物有据可查</text></g>
+<g><rect x="30" y="462" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="48" y="491" fill="#D9622B" font-size="17" font-weight="700">s09</text><text x="48" y="521" fill="#1F2933" font-size="18">知识层与门禁：依据什么，能碰什么</text></g>
+<g><rect x="500" y="462" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="518" y="491" fill="#D9622B" font-size="17" font-weight="700">s10</text><text x="518" y="521" fill="#1F2933" font-size="18">Skill 教方法，Workflow 管边</text><text x="518" y="547" fill="#1F2933" font-size="18">界和终点</text></g>
+<g><rect x="970" y="462" width="440" height="110" rx="12" fill="#fff" stroke="#E3E7EA"/><text x="988" y="491" fill="#D9622B" font-size="17" font-weight="700">s11</text><text x="988" y="521" fill="#1F2933" font-size="18">模型网关：Codex 只连网关</text></g>
+</g></svg>

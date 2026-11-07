@@ -212,3 +212,6 @@ main { max-width: 860px; margin: auto; padding: calc(var(--nav-height) + var(--s
 
 /* Shared stage overview SVG: keep vector proportions, open full-size on click. */
 .architecture-figure{margin:28px 0;border:1px solid #d9e1e3;border-radius:16px;overflow:hidden;background:#fafaf7}.architecture-figure a{display:block}.architecture-figure img{display:block;width:100%;height:auto}.architecture-figure figcaption{padding:12px 18px;font-size:13px;line-height:1.7;color:#617079;border-top:1px solid #d9e1e3}
+.term[href]{color:inherit;text-decoration:none;cursor:pointer}
+@media(max-width:1000px){.nav-inner{gap:12px}.nav-title{font-size:13px}.workbench-link{font-size:12px}}
+@media(max-width:700px){.nav-inner{overflow-x:auto}.nav-title{flex:none}.workbench-link{flex:none}}

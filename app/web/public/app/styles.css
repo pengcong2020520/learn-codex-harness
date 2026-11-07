@@ -46,3 +46,5 @@
 
 .upgrade-strip{display:flex}.upgrade-strip>div{flex:1;min-width:0}
 .connection-result{text-align:left;overflow-wrap:anywhere;margin-top:16px}.connection-result time{display:block;font-size:11px;color:var(--muted)}.connection-result p{margin:6px 0;color:inherit}
+.rail-course-links{display:flex;gap:18px;padding:0 4px;font-size:11px;line-height:18px}.rail-course-links a{color:#cbd7c8;text-decoration:none}.rail-course-links a:hover{text-decoration:underline}
+@media(min-width:741px){.rail-bottom{height:84px;min-height:84px;max-height:84px}}

@@ -98,3 +98,5 @@ em{font-style:normal}.plus{color:var(--plus)}.minus{color:var(--minus)}
 @keyframes rise{from{opacity:0;translate:0 6px}}
 @keyframes fade{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){.msg.draw .arrow,.msg.draw .label{animation:none}}
+.chg-terms{font-size:14px;line-height:2;overflow-wrap:anywhere}.chg-terms a{color:var(--accent)}
+@media(max-width:850px){.chg-top{flex-wrap:wrap;gap:12px}.chg-top nav{flex-wrap:wrap;gap:10px 16px}}

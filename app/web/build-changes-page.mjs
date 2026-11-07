@@ -2,7 +2,7 @@
 // 数据：stages/changes.json（模块与新增能力）+ curriculum/mechanisms/sNN.json（机制演示，代码按行号从真实源码截取）。
 // 页面本身不含脚本，动画由 /course/demos.js 驱动。
 const esc = s => String(s).replace(/[&<>"']/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[v]));
-const repo = "https://github.com/pengcong2020520/learn-codex-harness/blob/main";
+import {repositoryUrl as repo, termId} from './course-data.mjs';
 const surfaceName = { tools: "新增工具", routes: "新增接口", env: "新增环境变量", migrations: "新增数据迁移" };
 
 // 截取源码并核对：起始行必须包含 expect，源码改动后行号对不上就构建失败。
@@ -52,7 +52,7 @@ function mechanism(m, read) {
 </article>`;
 }
 
-function stage(s, mechs, read) {
+function stage(s, mechs, read, glossary) {
   const layers = new Map();
   for (const m of s.modules) layers.set(m.layer, [...(layers.get(m.layer) || []), m]);
   const surface = Object.entries(surfaceName).filter(([key]) => s.surface[key].length).map(([key, name]) => {
@@ -68,22 +68,23 @@ function stage(s, mechs, read) {
     <a class="chg-figure" href="/course/assets/${s.id}-architecture.svg" target="_blank" rel="noopener noreferrer"><img src="/course/assets/${s.id}-architecture.svg" alt="${s.id.toUpperCase()} 总架构：橙色为本阶段新增的模块"></a>
     <div class="chg-modules"><h3>这一阶段加了哪些模块</h3>${modules || "<p class=\"muted\">没有新增模块框，在已有模块上加深。</p>"}${surface}</div>
   </div>
+  <p class="chg-terms"><b>本阶段新术语：</b>${glossary.filter(term => term.stage === s.id).map(term => `<a href="/course/glossary.html#${esc(termId(term.term))}">${esc(term.term)}</a>`).join('、') || '暂无'}</p>
   <h3>机制演示</h3>
   ${mechs.length ? mechs.map(m => mechanism(m, read)).join("\n") : "<p class=\"muted mech-todo\">这一阶段的机制演示还在制作中。</p>"}
 </section>`;
 }
 
-export function renderChanges({ stages }, mechanisms, read) {
+export function renderChanges({ stages }, mechanisms, read, glossary = []) {
   const known = new Set(stages.map(s => s.id));
   for (const id of Object.keys(mechanisms)) if (!known.has(id)) throw new Error(`mechanisms/ 里的 ${id} 不是已有阶段`);
   const nav = stages.map(s => `<a href="#${s.id}"><b>${s.id}</b><span>${esc(s.title)}</span><small>${(mechanisms[s.id] || []).length ? `${mechanisms[s.id].length} 个机制演示` : "演示制作中"}</small></a>`).join("");
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>阶段演示 · Codex Harness</title><link rel="stylesheet" href="/course/changes.css"><script src="/course/demos.js" defer></script></head><body>
-<header class="chg-top"><a class="chg-brand" href="/course/">Agent Atelier <small>阶段演示</small></a><nav><a href="/course/">机制课程</a><a href="/course/handbook.html">章节长文</a><a href="/app/index.html?stage=project">进入工作台 ↗</a></nav></header>
+<header class="chg-top"><a class="chg-brand" href="/course/">Agent Atelier <small>阶段演示</small></a><nav><a href="/course/overview.html">全景</a><a href="/course/">机制课程</a><a href="/course/handbook.html">章节长文</a><a href="/course/glossary.html">术语表</a><a href="/app/index.html?stage=project">进入工作台 ↗</a></nav></header>
 <main class="chg-main">
 <section class="chg-intro"><h1>每个阶段，多了什么机制？</h1><p>总图告诉你这一阶段在哪一层加了哪些模块；下面的演示一步一步走一遍核心机制：做了一个动作之后，谁在动、状态怎么变、为什么要这样设计。右边是对应的真实源码，逐行加了注释，当前步骤执行到的行会高亮。演示用的是固定样例，不调用模型。</p></section>
 <nav class="chg-nav" aria-label="选择阶段">${nav}</nav>
-${stages.map(s => stage(s, mechanisms[s.id] || [], read)).join("\n")}
+${stages.map(s => stage(s, mechanisms[s.id] || [], read, glossary)).join("\n")}
 </main></body></html>
 `;
 }
