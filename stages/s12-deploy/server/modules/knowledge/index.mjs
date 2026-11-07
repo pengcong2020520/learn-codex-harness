@@ -58,7 +58,7 @@ export class KnowledgeService extends Repository {
     this.gate.current();
     const mounts = this.agent.definition.agent.knowledge || [];
     return Promise.all(mounts.map(async m => { const kb = await this.kb(m.kbId); return {
-      kbId: kb.id, desiredMode: m.mode, effectiveMode: this.modes[kb.id], indexRevision: kb.index_revision,
+      kbId: kb.id, visibility: kb.visibility, desiredMode: m.mode, effectiveMode: this.modes[kb.id], indexRevision: kb.index_revision,
       pending: m.mode !== this.modes[kb.id], actions: m.actions
     }; }));
   }
