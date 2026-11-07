@@ -25,6 +25,17 @@ function connection(target) {
   return c;
 }
 function fail(status,message){return Object.assign(new Error(message),{status});}
+// 空值视为未设置。设置时只能是 https://主机（可带端口），不能有用户名、路径或查询；否则拒绝启动。
+function publicOriginFromEnv(){
+  const raw=process.env.WORKBENCH_PUBLIC_ORIGIN;
+  if(raw===undefined||raw==='')return null;
+  let url;
+  try{url=new URL(raw);}catch{throw Error('WORKBENCH_PUBLIC_ORIGIN 无效。');}
+  const canonical=new Set([`https://${url.host}`]);
+  if(!url.port)canonical.add(`https://${url.host}:443`);
+  if(url.protocol!=='https:'||url.username||url.password||url.pathname!=='/'||url.search||url.hash||!url.host||!canonical.has(raw))throw Error('WORKBENCH_PUBLIC_ORIGIN 无效。');
+  return {origin:raw,host:raw.slice('https://'.length)};
+}
 // Diagnostics are never redacted into public text: only these exact values are public.
 const publicHealthReasons=new Map([
   ['AGENT_DEGRADED','Agent 服务暂不可用，请检查服务端。'],
@@ -48,6 +59,7 @@ function publicHealthMetadata(value,target,c){
     .replace(/(?:[A-Za-z]:[\\/]|(?<![\w<:])\/)[^\s<>"'，。；）)]+/g,'[已隐藏]');
 }
 export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=publicRoot}={}) {
+  const publicOrigin=publicOriginFromEnv();
   const sessions=new Map();const streams=new Set();
   let origin;
   const server=createServer(async(req,res)=>{
@@ -56,25 +68,28 @@ export function createWorkbench({targets=defaultTargets,port=4320,staticRoot=pub
     res.setHeader('cross-origin-resource-policy','same-origin');res.setHeader('x-frame-options','DENY');
     try{
       const allowedHosts=[new URL(origin).host,`localhost:${server.address().port}`];
+      if(publicOrigin)allowedHosts.push(publicOrigin.host);
       if(!allowedHosts.includes(req.headers.host))throw fail(403,'拒绝未知 Host。');
+      // 公开 Host 的 Origin 必须严格等于 WORKBENCH_PUBLIC_ORIGIN；本机仍只接受 http://<Host>。
+      const pageOrigin=publicOrigin&&req.headers.host===publicOrigin.host?publicOrigin.origin:`http://${req.headers.host}`;
       const url=new URL(req.url,origin);
       if(url.pathname.startsWith('/api/')){
         if(req.headers['sec-fetch-site']==='cross-site')throw fail(403,'仅允许工作台同源访问。');
-        if(req.headers.origin && req.headers.origin!==`http://${req.headers.host}`)throw fail(403,'拒绝跨源请求。');
+        if(req.headers.origin && req.headers.origin!==pageOrigin)throw fail(403,'拒绝跨源请求。');
         if(req.method==='OPTIONS')throw fail(403,'不提供跨源访问。');
         if(url.pathname==='/api/bootstrap'&&req.method==='GET'){
           for(const [id,s] of sessions)if(s.expires<Date.now())sessions.delete(id);
           let id=(req.headers.cookie||'').match(/(?:^|;\s*)workbench_session=([a-f0-9]{64})(?:;|$)/)?.[1];
           if(!sessions.has(id)){if(sessions.size>=256)throw fail(429,'本地浏览器连接过多。');id=randomBytes(32).toString('hex');}
           sessions.set(id,{expires:Date.now()+8*60*60*1000});
-          res.setHeader('set-cookie',`workbench_session=${id}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=28800`);
+          res.setHeader('set-cookie',`workbench_session=${id}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=28800${req.headers.host===publicOrigin?.host?'; Secure':''}`);
           return send(200,{targets:targets.map(({id,name,live,port})=>({id,name,live,port}))});
         }
         const cookie=(req.headers.cookie||'').match(/(?:^|;\s*)workbench_session=([a-f0-9]{64})(?:;|$)/)?.[1];
         const session=sessions.get(cookie);
         if(!session||session.expires<Date.now())throw Object.assign(fail(401,'工作台会话已过期，请刷新页面。'),{code:'WORKBENCH_SESSION_EXPIRED'});
         if(req.headers['x-workbench']!=='1')throw fail(403,'缺少工作台请求标识。');
-        if(req.method==='POST'&&req.headers.origin!==`http://${req.headers.host}`)throw fail(403,'写操作必须来自工作台页面。');
+        if(req.method==='POST'&&req.headers.origin!==pageOrigin)throw fail(403,'写操作必须来自工作台页面。');
         if(url.pathname==='/api/status'&&req.method==='GET'){
           const result=await Promise.all(targets.map(async t=>{
             if(!t.live)return {id:t.id,status:'cli'};

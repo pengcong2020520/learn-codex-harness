@@ -126,3 +126,64 @@ for(const [label,status,body,expected] of [
  const response=await f.request('/api/agent/s09/memory',undefined,{'x-workbench-optional':'1'});
  assert.equal(response.status,200);assert.deepEqual(await response.json(),{available:false,error:expected});
 });
+
+function withPublicOrigin(value){
+ const previous=process.env.WORKBENCH_PUBLIC_ORIGIN;
+ if(value===undefined)delete process.env.WORKBENCH_PUBLIC_ORIGIN;
+ else process.env.WORKBENCH_PUBLIC_ORIGIN=value;
+ return ()=>{if(previous===undefined)delete process.env.WORKBENCH_PUBLIC_ORIGIN;else process.env.WORKBENCH_PUBLIC_ORIGIN=previous;};
+}
+async function hosted(t,publicOrigin){
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'workbench-public-'));fs.mkdirSync(path.join(root,'.data'));const received=[];
+ const upstream=createServer(async(req,res)=>{const parts=[];for await(const c of req)parts.push(c);received.push({url:req.url,authorization:req.headers.authorization,origin:req.headers.origin,body:Buffer.concat(parts).toString()});
+  res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/health'?{status:'ready'}:{ok:true,route:req.url}));});
+ await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
+ const secret='server-only-test-token-1234567890';fs.writeFileSync(path.join(root,'.data/connection.json'),JSON.stringify({url:`http://127.0.0.1:${upstream.address().port}`,token:secret}));
+ let app;t.after(async()=>{if(app)await app.close();await new Promise(r=>{upstream.close(r);upstream.closeAllConnections();});fs.rmSync(root,{recursive:true,force:true});});
+ const restore=withPublicOrigin(publicOrigin);
+ try{app=createWorkbench({port:0,targets:[{id:'s09',root,live:true,name:'s09'}]});}
+ finally{restore();}
+ const url=await app.listen();
+ const call=(route,{method='GET',headers={},body}={})=>new Promise((resolve,reject)=>{const req=httpRequest(url+route,{method,headers},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>{const setCookie=res.headers['set-cookie'];const text=Buffer.concat(chunks).toString();resolve({status:res.statusCode,setCookie:Array.isArray(setCookie)?setCookie[0]:setCookie,text,json:()=>JSON.parse(text)});});});req.on('error',reject);req.end(body);});
+ return{url,secret,received,call};
+}
+
+test('WORKBENCH_PUBLIC_ORIGIN 非法值拒绝启动，空值和带端口的规范 Origin 可以启动',()=>{
+ const restore=withPublicOrigin(undefined);
+ try{
+  for(const value of ['http://codexharness.cleverless.cn','https://codexharness.cleverless.cn/','https://codexharness.cleverless.cn/workbench','https://codexharness.cleverless.cn?next=/','https://user@codexharness.cleverless.cn','https://user:secret@codexharness.cleverless.cn','HTTPS://codexharness.cleverless.cn','https://codexharness.cleverless.cn#session','https://codexharness.cleverless.cn:8443/path']){
+   process.env.WORKBENCH_PUBLIC_ORIGIN=value;
+   assert.throws(()=>createWorkbench({port:0,targets:[]}),/WORKBENCH_PUBLIC_ORIGIN/,value);
+  }
+  for(const value of ['','https://codexharness.cleverless.cn','https://codexharness.cleverless.cn:8443','https://codexharness.cleverless.cn:443']){
+   process.env.WORKBENCH_PUBLIC_ORIGIN=value;
+   try{createWorkbench({port:0,targets:[]});}catch(error){throw Error(`${JSON.stringify(value)} 应允许启动：${error.message}`);}
+  }
+ }finally{restore();}
+});
+
+for(const origin of ['https://codexharness.cleverless.cn','https://codexharness.cleverless.cn:8443'])test(`设置 ${origin} 后公开 Host 与正确 Origin 可用，错误 Origin 和未知 Host 被拒，Cookie 带 Secure`,async t=>{
+ const host=origin.slice('https://'.length);const f=await hosted(t,origin);
+ const boot=await f.call('/api/bootstrap',{headers:{host,origin}});
+ assert.equal(boot.status,200);assert.match(boot.setCookie,/^workbench_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/api; Max-Age=28800; Secure$/);
+ const cookie=boot.setCookie.split(';')[0];
+ const read=await f.call('/api/agent/s09/sessions',{headers:{host,origin,cookie,'x-workbench':'1'}});
+ assert.equal(read.status,200);
+ const write=await f.call('/api/agent/s09/messages',{method:'POST',headers:{host,origin,cookie,'x-workbench':'1','content-type':'application/json'},body:JSON.stringify({text:'hello'})});
+ assert.equal(write.status,200);assert.equal(f.received.at(-1).origin,undefined);assert.equal(f.received.at(-1).authorization,`Bearer ${f.secret}`);
+ assert.equal((await f.call('/api/agent/s09/sessions',{headers:{host,origin:'https://evil.example',cookie,'x-workbench':'1'}})).status,403);
+ assert.equal((await f.call('/api/agent/s09/messages',{method:'POST',headers:{host,origin:`http://${host}`,cookie,'x-workbench':'1','content-type':'application/json'},body:'{}'})).status,403);
+ assert.equal((await f.call('/api/bootstrap',{headers:{host:'evil.example'}})).status,403);
+ const local=await fetch(f.url+'/api/bootstrap');assert.equal(local.status,200);
+ assert.match(local.headers.get('set-cookie'),/^workbench_session=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/api; Max-Age=28800$/);
+ const localCookie=local.headers.get('set-cookie').split(';')[0];const localHost=new URL(f.url).host;
+ assert.equal((await f.call('/api/agent/s09/messages',{method:'POST',headers:{host:localHost,origin:f.url,cookie:localCookie,'x-workbench':'1','content-type':'application/json'},body:'{"text":"ok"}'})).status,200);
+ assert.equal((await f.call('/api/agent/s09/messages',{method:'POST',headers:{host:localHost,origin,cookie:localCookie,'x-workbench':'1','content-type':'application/json'},body:'{}'})).status,403);
+});
+
+for(const value of [undefined,''])test(`WORKBENCH_PUBLIC_ORIGIN ${value===undefined?'未设置':'为空'} 时公开 Host 被拒`,async t=>{
+ const f=await hosted(t,value);
+ assert.equal((await f.call('/api/bootstrap',{headers:{host:'codexharness.cleverless.cn'}})).status,403);
+ const local=await fetch(f.url+'/api/bootstrap');
+ assert.equal(local.status,200);assert.doesNotMatch(local.headers.get('set-cookie'),/Secure/);
+});

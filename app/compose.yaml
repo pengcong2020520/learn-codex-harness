@@ -159,6 +159,7 @@ services:
     environment:
       WORKBENCH_HOST: 0.0.0.0
       WORKBENCH_PORT: "14320"
+      WORKBENCH_PUBLIC_ORIGIN: ${WORKBENCH_PUBLIC_ORIGIN:-}
     volumes:
       - "./.data:${CONTAINER_APP_DIR:-/app}/.data:ro"
       - "../stages-data/s03-service/.data:${CONTAINER_APP_DIR:-/app}/../stages/s03-service/.data:ro"
