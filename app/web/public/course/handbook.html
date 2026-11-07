@@ -1339,8 +1339,8 @@ npm test</code></pre>
 <h2 class="screen-heading">先核对工具名与参数，再调用实现</h2>
 <p>模型能看见一个工具，不代表任意调用都有效。<code>tools.allow</code> 是 Agent 的允许名单，<span class="term" data-definition="工具参数的结构约束；加载器用 Ajv 编译后，在调用实现前检查必填字段、类型等条件。">inputSchema</span> 约束一次调用的参数。注册表生成 <code>specs</code> 时按名单过滤，处理调用时还要再检查一次。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s06-tools/server/modules/tools/loader.mjs · 第 98–111 行</span>
-<pre><code data-source="stages/s06-tools/server/modules/tools/loader.mjs" data-start="98" data-end="111">    validate(name, args) {
+<div class="translation-code"><span class="translation-label">源码 · stages/s06-tools/server/modules/tools/loader.mjs · 第 99–112 行</span>
+<pre><code data-source="stages/s06-tools/server/modules/tools/loader.mjs" data-start="99" data-end="112">    validate(name, args) {
       const entry = entries.get(name);
       if (!entry || (agent &amp;&amp; (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error("未授权的工具。");
       if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || "请检查参数"}`);
@@ -1355,14 +1355,14 @@ npm test</code></pre>
         const data = await entry.execute(args, { signal });
         return { success: true, contentItems: [{ type: "inputText", text: JSON.stringify(data ?? null) }] };</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
-<p class="tl"><strong>98–99 行</strong>：validate 接收工具名称与参数，先从注册表查找对应条目。</p>
-<p class="tl"><strong>100 行</strong>：条目不存在、Agent 未允许，或当前工具配置已经删除/禁用此名称，都会拒绝。</p>
-<p class="tl"><strong>101 行</strong>：用编译后的参数规则校验 args；不合法时抛错，执行函数尚未被调用。</p>
-<p class="tl"><strong>102–103 行</strong>：只有校验通过才返回条目，随后结束 validate。</p>
-<p class="tl"><strong>104–105 行</strong>：call 是实际调用入口；把 Agent 作废信号和已有取消信号组合起来。</p>
-<p class="tl"><strong>106–108 行</strong>：开始受保护执行，先检查取消状态，再拒绝未授权的 namespace。</p>
-<p class="tl"><strong>109–110 行</strong>：先调用 validate，通过后才调用 entry.execute；顺序不能颠倒。</p>
-<p class="tl"><strong>111 行</strong>：执行成功的数据转成 JSON 文本，放入成功结果；后续 catch 分支会把失败转成错误结果。</p>
+<p class="tl"><strong>99–100 行</strong>：validate 接收工具名称与参数，先从注册表查找对应条目。</p>
+<p class="tl"><strong>101 行</strong>：条目不存在、Agent 未允许，或当前工具配置已经删除/禁用此名称，都会拒绝。</p>
+<p class="tl"><strong>102 行</strong>：用编译后的参数规则校验 args；不合法时抛错，执行函数尚未被调用。</p>
+<p class="tl"><strong>103–104 行</strong>：只有校验通过才返回条目，随后结束 validate。</p>
+<p class="tl"><strong>105–106 行</strong>：call 是实际调用入口；把 Agent 作废信号和已有取消信号组合起来。</p>
+<p class="tl"><strong>107–109 行</strong>：开始受保护执行，先检查取消状态，再拒绝未授权的 namespace。</p>
+<p class="tl"><strong>110–111 行</strong>：先调用 validate，通过后才调用 entry.execute；顺序不能颠倒。</p>
+<p class="tl"><strong>112 行</strong>：执行成功的数据转成 JSON 文本，放入成功结果；后续 catch 分支会把失败转成错误结果。</p>
 </div></div></div>
 <p><code>currentNames()</code> 读取当前配置，所以已删除或禁用的工具会立即限制后续列表与调用。名单和参数校验失败时，实现根本不会执行；路径、格式等检查则由实现内部的文件服务继续完成。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">工具已注册，不等于 Agent 已获准使用</p><p>新增一个工具需要提供规格和实现，并让 Agent 定义允许该名称。仅在 Skill 里写“调用 write_file”，或只把执行函数放入目录，都不能替代 tools.allow。修改 Agent 定义仍会触发上一章的作废与受控重启规则。</p></div></div>

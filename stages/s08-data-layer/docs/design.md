@@ -75,6 +75,10 @@ owner 来自服务端 `.data/identity.json`；本阶段尚未引入 s09 的统�
 
 ### 04 数据与文件
 
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
 **为何存在**：将业务状态从本地 JSON 升级为关系型持久化，以 Redis 提供低延迟调度唤醒，以 immutable blob 管理文件内容。
 
 | 子系统 | 作用 | 关键约束 |

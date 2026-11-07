@@ -34,6 +34,14 @@ s09 证明了"维护知识库"可以作为一种受限的任务来运行，但�
 
 任务表经过三次迁移：`003` 新增 `workflow`、`params`、`checks` 与 `needs-review`；`004` 新增 `step`、`note` 与 `waiting`、`cancelled`；`005` 新增 `reason` 与 `proposed`。
 
+### 定义字段与状态位置
+
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
+`knowledge_bases.visibility` 由新增迁移保存为非空 text，缺省 `private`，仅允许 `private` / `system`；列表返回 visibility，查询与门禁仍按 owner 判定。
+
 ## 技术实现流程
 
 1. **启动**：校验 Agent 定义 → 解析 Workflow（越权即报错）→ 同步 Skill 到 `CODEX_HOME` → 启动 Codex，核对 `goals` 关闭、`project_doc_max_bytes` 为 0 → `verifySkills` 只启用声明的 Skill。

@@ -28,12 +28,14 @@ s04 的服务能可靠排队、推送状态，但"这个 Agent 是谁"仍写死�
 
 ### 2. 定义字段
 
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
 ```text
 schemaVersion: "1.0"
 agent:
   id, version          标识
   instructions         角色文件路径（相对定义目录，不能越出）
-  skills[]             { id, required }
+  skills[]             { id, required, scope? }
   executionRef         执行策略名
 bindings:
   workspaceDir         工作区（相对定义目录）

@@ -1998,7 +1998,7 @@
         "start": 64,
         "anchor": 68,
         "code": "  sourceHash() {\n    return digest([fs.readFileSync(this.file, \"utf8\"), fs.readFileSync(this.roleFile, \"utf8\"),\n      ...this.skills.map(skill => digest(fs.readFileSync(skill.path)))]);\n  }\n  assertCurrent() {\n    try { if (this.sourceHash() !== this.expected) this.revoked = true; } catch { this.revoked = true; }\n    if (this.revoked) {\n      throw new AppError(\"Agent 定义、角色或 Skill 已变更；后续调用已停止，请受控重启服务后新建会话。\", 409, \"AGENT_CHANGED\");\n    }\n  }\n  configure(config, runtime) {\n    this.runtime = runtime;\n    config.agent = this;\n    if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };\n  }",
-        "hash": "300e51aee93f2316cee5a9e02c3b3d477192dd8469da961f2a5c575bea5483b1"
+        "hash": "0a57a1505ccdfa65c5d5532e6f96880b12fc3a4a8a32a45915a9bb157dc8a4dc"
       },
       "scenarios": [
         {
@@ -2365,10 +2365,10 @@
         "before": 0,
         "after": 18,
         "explanation": "validate 先找 entry 并检查授权，再运行 entry.validate(args)。call 在 execute 前调用 validate，catch 则返回 success:false；这解释了“参数失败但没有文件副作用”。Schema 编译与工厂加载位于此函数上方。",
-        "start": 98,
-        "anchor": 98,
+        "start": 99,
+        "anchor": 99,
         "code": "    validate(name, args) {\n      const entry = entries.get(name);\n      if (!entry || (agent && (!agent.allowsTool(name) || !currentNames().has(name)))) throw new Error(\"未授权的工具。\");\n      if (!entry.validate(args)) throw new Error(`工具参数不合法：${entry.validate.errors?.[0]?.message || \"请检查参数\"}`);\n      return entry;\n    },\n    async call({ tool, namespace, arguments: args }, { signal } = {}) {\n      if (agent) signal = AbortSignal.any([agent.revocation.signal, ...(signal ? [signal] : [])]);\n      try {\n        signal?.throwIfAborted();\n        if (namespace != null) throw new Error(\"未授权的工具命名空间。\");\n        const entry = this.validate(tool, args);\n        const data = await entry.execute(args, { signal });\n        return { success: true, contentItems: [{ type: \"inputText\", text: JSON.stringify(data ?? null) }] };\n      } catch (error) {\n        const message = error.code === \"ENOENT\" ? \"文件或目录不存在。\" : error.code === \"ENOTDIR\" ? \"指定路径不是目录。\"\n          : error.code === \"EACCES\" ? \"没有访问该文件的权限。\" : signal?.aborted ? \"工具调用已取消。\"\n          : /^E[A-Z]+$/.test(error.code || \"\") ? `工具操作失败（${error.code}）。` : error.message;\n        return { success: false, contentItems: [{ type: \"inputText\", text: JSON.stringify({ error: message }) }] };",
-        "hash": "556439fe7add16e16dfff4a96f7f588647a799ce78918d4a2a7204ae20933333"
+        "hash": "b468313f43877bfe7b332287f4e6870dd51162f8c36c88d498bc4de0585fff9d"
       },
       "scenarios": [
         {
@@ -4114,7 +4114,7 @@
         "start": 153,
         "anchor": 156,
         "code": "      await this.sourceVersions(kb, source_versions, client);\n      await this.query(`INSERT INTO agent_data.wiki_pages(instance_id,kb_id,slug) SELECT $1,$3,$4 WHERE $2::uuid IS NOT NULL ON CONFLICT DO NOTHING`, [kbId, slug], client);\n      const page = (await this.query('SELECT * FROM agent_data.wiki_pages WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL FOR UPDATE', [kbId, slug], client)).rows[0];\n      if (page.current_version !== expectedVersion) fail('Wiki 已被其他更新修改，请读取最新版本。', 'VERSION_CONFLICT');\n      await this.query(`INSERT INTO agent_data.wiki_versions(instance_id,id,kb_id,slug,revision,blob,sources)\n        SELECT $1,$3,$4,$5,$6,$7,$8 WHERE $2::uuid IS NOT NULL`, [id, kbId, slug, body.revision, body.blob, JSON.stringify(source_versions)], client);\n      this.gate.check('update', { kbId });\n      await this.query('UPDATE agent_data.wiki_pages SET current_version=$5 WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL', [kbId, slug, id], client);\n      return { kbId, slug, versionId: id, effective: true, source_versions };\n    });\n  }\n  async search({ kbId, query, limit = 5 }) {\n    const kb = await this.kb(kbId);",
-        "hash": "a2b7efb564edadea0dfa8648fa7f0820620d8cdfc0cb1caab60861dbd63f3d37"
+        "hash": "6ee370889fc0be941d289b86b9acf353531414c9fc1494ce73e6ec8a5c00847a"
       },
       "scenarios": [
         {
@@ -4498,7 +4498,7 @@
         "start": 35,
         "anchor": 36,
         "code": "      // Effective mode changes only at service startup; queued tasks/Threads bind the resulting descriptor.\n      const prepared = mount.mode === 'rag' && kb.index_revision && this.rag && await this.rag.ready(this, kb);\n      const previous = (await this.query('SELECT effective_mode FROM agent_data.knowledge_mounts WHERE instance_id=$1 AND agent_id=$3 AND kb_id=$4 AND $2::uuid IS NOT NULL', [this.agent.definition.agent.id, mount.kbId])).rows[0];\n      if (mount.mode === 'rag' && previous?.effective_mode === 'rag' && !prepared) fail('已启用的 RAG 当前不可用；恢复配置或显式切回 Wiki 后重建索引。', 'RAG_NOT_READY');\n      const effective = prepared ? 'rag' : 'wiki';\n      this.modes[mount.kbId] = effective;\n      await this.query(`INSERT INTO agent_data.knowledge_mounts(instance_id,agent_id,kb_id,desired_mode,effective_mode)\n        SELECT $1,$3,$4,$5,$6 WHERE $2::uuid IS NOT NULL ON CONFLICT(instance_id,agent_id,kb_id)\n        DO UPDATE SET desired_mode=EXCLUDED.desired_mode,effective_mode=EXCLUDED.effective_mode`,\n      [this.agent.definition.agent.id, mount.kbId, mount.mode, effective]);\n    }\n    return this;\n  }",
-        "hash": "a2b7efb564edadea0dfa8648fa7f0820620d8cdfc0cb1caab60861dbd63f3d37"
+        "hash": "6ee370889fc0be941d289b86b9acf353531414c9fc1494ce73e6ec8a5c00847a"
       },
       "scenarios": [
         {

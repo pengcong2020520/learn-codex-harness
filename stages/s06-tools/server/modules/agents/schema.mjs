@@ -9,7 +9,7 @@ const schema = object({
   schemaVersion: { const: "1.0" },
   agent: object({
     id: { type: "string", pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$" }, version: text, instructions: text,
-    skills: array(object({ id: text, required: { type: "boolean" } })),
+    skills: array(object({ id: text, required: { type: "boolean" }, scope: { ...choices(["system"]), default: "system" } }, ["id", "required"])),
     tools: object({ allow: array({ type: "string", pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,47}$" }) }),
     dataBindings: array(object({ sourceRef: text, actions: array(choices(["read", "create"])), methods: array(choices(["files"])), required: { type: "boolean" } })),
     executionRef: text,
@@ -22,7 +22,7 @@ const schema = object({
     executions: dictionary(object({ sandbox: { const: "read-only" }, approvalPolicy: { const: "never" }, nativeShell: { const: false }, nativeFileWrite: { const: false } }))
   }, ["workspaceDir", "sources", "executions"])
 });
-const validate = new Ajv({ strict: true, allErrors: true }).compile(schema);
+const validate = new Ajv({ strict: true, allErrors: true, useDefaults: true }).compile(schema);
 export function validateDefinition(value) {
   if (!validate(value)) throw new Error(`Agent 定义无效：${validate.errors.map(error => `${error.instancePath || "/"} ${error.message}`).join("；")}`);
   return value;

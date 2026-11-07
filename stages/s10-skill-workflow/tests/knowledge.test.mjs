@@ -40,3 +40,25 @@ test('中文 BM25 与 RRF：精确词命中、跨召回重合加权、分块 ID 
   assert.notEqual(chunks([{resourceId:'one',versionId:'v2',content:'门店经营和现金流管理'}])[0].id, docs[0].id);
   assert.throws(() => new Embeddings({url:'http://untrusted.example',model:'m',dimensions:3}),/HTTPS/);
 });
+
+import { KnowledgeService } from '../server/modules/knowledge/index.mjs';
+
+test('知识库列表返回 visibility；private/system 均不改变 owner 与任务门禁', async () => {
+  const gate = new PermissionGate({ scope: { instanceId: 'instance', ownerId: 'owner' }, agent });
+  for (const visibility of ['private', 'system']) {
+    const pool = { async query(sql, values) {
+      assert.match(sql, /owner_id=\$2/); assert.equal(values[1], 'owner');
+      return { rows: [{ id: 'private', owner_id: 'owner', visibility, index_revision: null }] };
+    } };
+    const knowledge = new KnowledgeService(pool, gate.scope, { agent, gate }); knowledge.modes = { private: 'wiki' };
+    gate.start({ id: 'visibility', threadId: 'visibility' }); gate.started('visibility', 'turn');
+    await gate.run(gate.forTurn('visibility', 'turn'), async () => {
+      assert.equal((await knowledge.list())[0].visibility, visibility);
+      assert.doesNotThrow(() => gate.check('read', { kbId: 'private', ownerId: 'owner', visibility }));
+      assert.throws(() => gate.check('read', { kbId: 'private', ownerId: 'other', visibility }), /未授权/);
+      assert.throws(() => gate.check('update', { kbId: 'private', visibility }), /未授权/);
+      assert.throws(() => gate.check('read', { kbId: 'foreign', visibility }), /未授权/);
+    });
+    gate.end('visibility', 'turn');
+  }
+});

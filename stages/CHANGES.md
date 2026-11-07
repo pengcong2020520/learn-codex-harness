@@ -114,7 +114,7 @@
 
 **新增环境变量**：`CHROMA_URL`、`EMBEDDING_BASE_URL`、`EMBEDDING_API_KEY`、`EMBEDDING_MODEL`、`EMBEDDING_DIMENSIONS`
 
-**新增数据迁移**：`002-knowledge.sql`
+**新增数据迁移**：`002-knowledge.sql`、`003-knowledge-visibility.sql`
 
 <a id="s10"></a>
 
@@ -128,7 +128,7 @@
 
 **新增接口**：`POST /tasks/confirm`、`POST /tasks/cancel`
 
-**新增数据迁移**：`003-workflows.sql`、`004-workflow-steps.sql`、`005-task-proposals.sql`
+**新增数据迁移**：`003-workflows.sql`、`004-workflow-steps.sql`、`005-task-proposals.sql`、`006-knowledge-visibility.sql`
 
 <a id="s11"></a>
 
@@ -144,4 +144,4 @@
 
 **新增环境变量**：`AGENT_DB_PASSWORD`、`AGENT_PG_PORT`、`AGENT_REDIS_PORT`、`AGENT_GATEWAY_KEY`、`AGENT_GATEWAY_PORT`、`AGENT_BUDGET_DAILY_TOKENS`、`AGENT_BUDGET_MONTHLY_TOKENS`、`AGENT_BUDGET_DAILY_COST`、`AGENT_BUDGET_MONTHLY_COST`、`AGENT_BUDGET_TIMEZONE`、`AGENT_BUDGET_DOWNGRADE_AT`、`AGENT_BUDGET_DOWNGRADE_SCENE`、`AGENT_GATEWAY_DAILY_TOKENS`、`ARK_API_KEY`、`KIMI_API_KEY`、`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GEMINI_API_KEY`、`XAI_API_KEY`、`ZHIPU_API_KEY`、`HUGGINGFACE_API_KEY`、`OLLAMA_BASE_URL`、`AGENT_WEB_SEARCH`
 
-**新增数据迁移**：`006-usage.sql`、`007-media.sql`、`008-task-model-routing.sql`
+**新增数据迁移**：`006-usage.sql`、`007-media.sql`、`008-task-model-routing.sql`、`009-knowledge-visibility.sql`

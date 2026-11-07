@@ -321,7 +321,8 @@
           "EMBEDDING_DIMENSIONS"
         ],
         "migrations": [
-          "002-knowledge.sql"
+          "002-knowledge.sql",
+          "003-knowledge-visibility.sql"
         ]
       }
     },
@@ -356,7 +357,8 @@
         "migrations": [
           "003-workflows.sql",
           "004-workflow-steps.sql",
-          "005-task-proposals.sql"
+          "005-task-proposals.sql",
+          "006-knowledge-visibility.sql"
         ]
       }
     },
@@ -422,7 +424,8 @@
         "migrations": [
           "006-usage.sql",
           "007-media.sql",
-          "008-task-model-routing.sql"
+          "008-task-model-routing.sql",
+          "009-knowledge-visibility.sql"
         ]
       }
     }

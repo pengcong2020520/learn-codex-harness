@@ -40,6 +40,14 @@
 | 用量 | `server/modules/usage/` | 新增：账本、价格估算、预算、`/usage` |
 | 数据库 | 迁移 `006-usage.sql`、`007-media.sql`、`008-task-model-routing.sql` | 新增用量表、生视频任务表；任务记录用户指定的模型、实际选中的模型和选择来源 |
 
+### 定义字段与状态位置
+
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
+`knowledge_bases.visibility` 由新增迁移保存为非空 text，缺省 `private`，仅允许 `private` / `system`；列表返回 visibility，查询与门禁仍按 owner 判定。
+
 ## 技术实现流程
 
 1. **启动**：校验模型清单 → 按 `.env` 里填了哪些密钥决定启用哪些服务商 → 路由选出默认对话模型 → 决定联网搜索开关 → 校验工作流步骤的模型（存在、可用、搜索能力一致）→ 启动 Codex，地址指向网关。

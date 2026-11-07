@@ -128,6 +128,12 @@ Codex 每次工具调用触发 `item/tool/call` → 02 层回调 → 03 层门�
 
 ### 05 数据与索引
 
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
+`knowledge_bases.visibility` 由新增迁移保存为非空 text，缺省 `private`，仅允许 `private` / `system`；列表返回 visibility，查询与门禁仍按 owner 判定。
+
 **为何存在**：在 s08 schema v1 基础上，以顺序迁移（`002-knowledge.sql`）扩展知识层所需表。
 
 | 子系统 | 用途 | 关键约束 |

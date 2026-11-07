@@ -44,6 +44,10 @@ README 里的"三道开关"（总开关、Agent 策略、会话参与）落到�
 
 ### 3. 状态放在哪
 
+`agent.skills[].scope` 可选且仅允许 `system`，缺省补为 `system`；装配后的 Skill 与描述符记录有效 scope，不参与授权。
+
+`config/tools/*.json` 的工具组 `scope` 可选且仅允许 `system`，缺省为 `system`；`GET /tools` 保留 `tools` 并新增 `groups`（配置相对路径 `id`、`scope`、已获准工具名 `tools`），授权仍由原白名单与门禁决定。
+
 | 位置 | 内容 |
 |------|------|
 | `.data/codex/memories/` | Codex 生成的记忆产物；服务端只读 `memory_summary.md`、`MEMORY.md`、`raw_memories.md` |
