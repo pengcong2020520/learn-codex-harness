@@ -70,6 +70,12 @@
       "dir": "stages/s11-model-gateway",
       "name": "模型网关",
       "focus": "模型清单、能力路由与用量预算"
+    },
+    {
+      "id": "s12",
+      "dir": "stages/s12-deploy",
+      "name": "部署单元",
+      "focus": "健康与就绪、容量限制、备份与恢复"
     }
   ],
   "lessons": [
@@ -5763,6 +5769,550 @@
         "session": "s16",
         "url": "https://github.com/shareAI-lab/learn-claude-code/tree/ce8f9f186058939da54c9d6fead78dfb5d0fd6c3/s16_workflow_runtime",
         "adaptation": "借用“资源预算必须结合计量时机解释”的方法。参考在调用返回、知道 token 后累计判断，并非花费前绝不越限；本课通过 last 入账与下一轮派发前检查说明相同边界，不移植其并行执行、调用上限或 journal。"
+      }
+    },
+    {
+      "id": "s12-health",
+      "stage": "s12-deploy",
+      "title": "先等依赖健康，再判断 Agent 就绪",
+      "principle": "启动依赖约束决定启动顺序，运行时 /ready 决定当前能否接任务。",
+      "problem": "容器已经启动，网关失效时还能把 /health=200 当成可用吗？",
+      "change": {
+        "before": "进程存活不能说明数据库、网关与执行器可用。",
+        "added": "Compose 使用 service_healthy；/ready 限时检查数据库与网关，并核对模型目录、队列和执行器状态。",
+        "kept": "沿用 Codex Thread、Turn 与工具执行闭环，以及持久任务和模型网关。"
+      },
+      "ownership": {
+        "codex": "管理原生会话历史、上下文与工具循环；不负责宿主部署、入口限流或备份。",
+        "product": "Compose 和宿主脚本负责运行环境，服务端负责就绪、容量、关闭与恢复。"
+      },
+      "concepts": [
+        {
+          "term": "depends_on / healthcheck",
+          "meaning": "依赖健康后启动后续服务；只约束启动顺序，不持续重排容器。"
+        },
+        {
+          "term": "/health / /ready",
+          "meaning": "存活返回 200；就绪失败返回 503，响应包含版本与检查结果。"
+        },
+        {
+          "term": "固定路径",
+          "meaning": "CONTAINER_APP_DIR 与宿主部署路径一致；原生历史保存绝对路径，回滚保持路径。"
+        }
+      ],
+      "mechanism": "postgres、redis、gateway 与 agent 构成独立 Compose。gateway 等待 postgres 健康；agent 等待三个依赖健康，自己的 healthcheck 执行 deploy/ready.mjs。createReadiness 对数据库 SELECT 1 和 gateway /health 使用有限超时，检查模型目录、消息服务、工具和队列状态。/health 不依赖这些检查；网关不可用时 /health=200、/ready=503。systemd 负责开机执行 Compose，restart policy 负责退出后重启，unhealthy 本身不会自动重启容器。网关健康与模型目录存在也不能证明真实供应商可用。",
+      "design": {
+        "decision": "把存活与业务就绪分开。",
+        "reason": "让调用方看到依赖故障，同时保留进程存活的诊断入口。",
+        "alternative": "只检查进程或只保留代码，无法核对依赖、持久状态和操作结果。",
+        "cost": "需要真实 Docker 环境验证启动顺序和依赖故障；模型质量需独立验证。"
+      },
+      "source": {
+        "file": "stages/s12-deploy/compose.yaml",
+        "needle": "      gateway: { condition: service_healthy }",
+        "before": 3,
+        "after": 5,
+        "explanation": "agent 的依赖全部要求健康，随后执行自己的 ready 探针。",
+        "start": 110,
+        "anchor": 113,
+        "code": "    depends_on:\n      postgres: { condition: service_healthy }\n      redis: { condition: service_healthy }\n      gateway: { condition: service_healthy }\n    healthcheck:\n      test: [\"CMD\", \"node\", \"deploy/ready.mjs\"]\n      interval: 5s\n      timeout: 10s\n      retries: 20",
+        "hash": "f31433560e59af5397d3b1f4dbff0ce511af56350e6ed94c08ae8a8ebca30eeb"
+      },
+      "sources": [
+        {
+          "file": "stages/s12-deploy/server/modules/deployment/index.mjs",
+          "needle": "export function createReadiness(",
+          "before": 0,
+          "after": 14,
+          "explanation": "数据库和网关探测、模型目录与执行器状态共同决定 ready。",
+          "start": 24,
+          "anchor": 24,
+          "code": "export function createReadiness({ config, data, messages, tools, fetcher = fetch, stopping = () => false }) {\n  const version = revision(config.root);\n  return async () => {\n    const checks = { database: false, gateway: false, models: Boolean(config.registry && config.launch.router && config.launch.catalog?.models?.length) };\n    try { await data.pool.query({ text: 'SELECT 1', query_timeout: 3000 }); checks.database = true; } catch { /* No credentials in responses. */ }\n    try {\n      const url = new URL('/health', config.media.endpoint.baseUrl);\n      checks.gateway = (await fetcher(url, { signal: AbortSignal.timeout(3000) })).ok;\n    } catch { /* Gateway health does not call a model. */ }\n    const ready = Object.values(checks).every(Boolean) && !stopping() && !messages.failure && !messages.closed && !messages.stopping && !tools?.broken && data.queue?.healthy !== false;\n    return { status: ready ? 'ready' : 'not-ready', version, checks };\n  };\n}\n\n// Sliding 60-second window, keyed by the actual socket peer; never trust X-Forwarded-For.",
+          "hash": "48acc9f7af3326f30c2d9e3d199cd51a9ca79a9d71c3ec96a94e5c5ea9fb6ca1"
+        },
+        {
+          "file": "stages/s12-deploy/server/modules/http/index.mjs",
+          "needle": "      if (request.method === 'GET' && pathname === '/ready') {",
+          "before": 0,
+          "after": 4,
+          "explanation": "HTTP handler 将 ready 映射为 200，其余返回 503。",
+          "start": 52,
+          "anchor": 52,
+          "code": "      if (request.method === 'GET' && pathname === '/ready') {\n        const result = await ready();\n        return json(result.status === 'ready' ? 200 : 503, result);\n      }\n      // 健康接口不计数；无效令牌归到同一来源桶，避免随机令牌绕过限流。",
+          "hash": "64b19eb64fe2146f3086e5002b8ef5b8f6d536836ad2843257076b20bb9a8838"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "依赖健康后通过就绪检查",
+          "steps": [
+            {
+              "title": "等待依赖",
+              "actor": "Docker Compose",
+              "event": "教学模拟 · service_healthy",
+              "explain": "依赖探针通过后才启动 agent。",
+              "state": {
+                "agent": "待启动",
+                "ready": "未检查"
+              },
+              "lines": []
+            },
+            {
+              "title": "核对运行状态",
+              "actor": "createReadiness",
+              "event": "教学模拟 · SELECT 1 + gateway /health",
+              "explain": "同时检查模型目录、队列和执行器。",
+              "state": {
+                "agent": "已启动",
+                "ready": "checks 全部通过"
+              },
+              "lines": []
+            },
+            {
+              "title": "返回就绪",
+              "actor": "HTTP handler",
+              "event": "教学模拟 · GET /ready → 200",
+              "explain": "这些检查没有发起真实模型调用。",
+              "state": {
+                "agent": "存活",
+                "ready": "ready"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "网关故障时保留存活信号",
+          "steps": [
+            {
+              "title": "网关探测失败",
+              "actor": "createReadiness",
+              "event": "教学模拟 · gateway /health 失败",
+              "explain": "失败被转换成检查结果，不暴露凭据。",
+              "state": {
+                "health": "200",
+                "ready": "待判定"
+              },
+              "lines": []
+            },
+            {
+              "title": "拒绝就绪",
+              "actor": "HTTP handler",
+              "event": "教学模拟 · GET /ready → 503",
+              "explain": "不会因为依赖最初健康，就永久认为可用。",
+              "state": {
+                "health": "200",
+                "ready": "not-ready"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s12-health",
+        "action": "在 stages/s12-deploy 运行本节命令，核对 TAP 断言。",
+        "observe": [
+          "网关不健康时 /ready=503；/health=200",
+          "数据库或模型目录不可用时不就绪；都带版本号"
+        ],
+        "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。"
+      },
+      "quiz": {
+        "question": "网关中断而 Agent 进程仍正常时，哪个结果符合实现？",
+        "options": [
+          "/health=200，/ready=503",
+          "两个接口都必定 200",
+          "Docker 自动根据 unhealthy 重启 Agent"
+        ],
+        "answer": 0,
+        "explanation": "存活与依赖检查分开；restart policy 处理退出，unhealthy 本身不触发重启。"
+      },
+      "reference": {
+        "session": "s12 README / design.md",
+        "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md",
+        "adaptation": "本节依据 s12 README、部署设计与真实源码编写；教学推演和离线测试不代替真实 Compose 验收。",
+        "label": "本章设计依据"
+      }
+    },
+    {
+      "id": "s12-protection",
+      "stage": "s12-deploy",
+      "title": "分清接多少、做多少与连多少",
+      "principle": "排队容量、轮次并发、HTTP 频率和 SSE 名额分别约束不同资源。",
+      "problem": "第 121 次请求与第三个待执行会话，应该得到相同结果吗？",
+      "change": {
+        "before": "单会话顺序执行不能阻止多个会话耗尽执行资源，HTTP 连接也可能超量。",
+        "added": "部署配置统一给出并发 2、排队 200、每分钟请求 120、SSE 20 的默认值。",
+        "kept": "沿用 Codex Thread、Turn 与工具执行闭环，以及持久任务和模型网关。"
+      },
+      "ownership": {
+        "codex": "管理原生会话历史、上下文与工具循环；不负责宿主部署、入口限流或备份。",
+        "product": "Compose 和宿主脚本负责运行环境，服务端负责就绪、容量、关闭与恢复。"
+      },
+      "concepts": [
+        {
+          "term": "轮次并发 / queued",
+          "meaning": "跨会话最多两个轮次运行；其余保持 queued。全局 queued 上限 200，单会话上限 100。"
+        },
+        {
+          "term": "60 秒滑动窗口",
+          "meaning": "以令牌和 socket peer 为键计数；健康接口绕过，重启会清空窗口。"
+        },
+        {
+          "term": "429 / Retry-After",
+          "meaning": "HTTP 超频返回 RATE_LIMITED，等待秒数来自最早请求；SSE 满额返回 SSE_FULL，等待 5 秒。"
+        }
+      ],
+      "mechanism": "数据仓储在事务中先取实例 advisory lock，再核对全局和会话 queued 数量；所有进入 queued 的路径共用门禁。调度器按 sequence 全局串行扫描，保留会话内追加优先语义；活动 Turn 的 steer 不另占新轮次名额。RequestLimits 使用实际 socket peer，不信任 X-Forwarded-For。窗口满后抛出 429 并计算 retryAfter，HTTP handler 写入 Retry-After。SSE 在异步读取前占位，close 时释放，重复释放无效。频率门禁、队列门禁和并发门禁没有同一个计数器。",
+      "design": {
+        "decision": "在资源进入点施加对应限制。",
+        "reason": "事务门禁防止排队竞争，调度器限制执行，HTTP 层保护请求与连接。",
+        "alternative": "只检查进程或只保留代码，无法核对依赖、持久状态和操作结果。",
+        "cost": "单进程限流不跨实例共享；代理后按实际代理地址计数，不代表用户身份。"
+      },
+      "source": {
+        "file": "stages/s12-deploy/server/modules/deployment/index.mjs",
+        "needle": "    if (values.length >= this.rateLimit) {",
+        "before": 3,
+        "after": 8,
+        "explanation": "滑动窗口已移除过期项；超频抛出 429，并附等待秒数。",
+        "start": 50,
+        "anchor": 53,
+        "code": "    }\n    const key = createHash('sha256').update(`${token}\\0${address}`).digest('hex');\n    const values = this.windows.get(key) || [];\n    if (values.length >= this.rateLimit) {\n      const error = new AppError('请求过于频繁。', 429, 'RATE_LIMITED');\n      error.retryAfter = Math.max(1, Math.ceil((values[0] + 60000 - now) / 1000));\n      throw error;\n    }\n    values.push(now);\n    this.windows.set(key, values);\n  }\n  acquireSse() {",
+        "hash": "48acc9f7af3326f30c2d9e3d199cd51a9ca79a9d71c3ec96a94e5c5ea9fb6ca1"
+      },
+      "sources": [
+        {
+          "file": "stages/s12-deploy/server/modules/deployment/index.mjs",
+          "needle": "    maxConcurrentTurns: integer('AGENT_MAX_CONCURRENT_TURNS', 2),",
+          "before": 0,
+          "after": 3,
+          "explanation": "四个默认值分别约束并发、队列、频率和 SSE。",
+          "start": 13,
+          "anchor": 13,
+          "code": "    maxConcurrentTurns: integer('AGENT_MAX_CONCURRENT_TURNS', 2),\n    maxQueued: integer('AGENT_MAX_QUEUED', 200),\n    rateLimit: integer('AGENT_RATE_LIMIT_PER_MINUTE', 120),\n    maxSse: integer('AGENT_MAX_SSE', 20),",
+          "hash": "48acc9f7af3326f30c2d9e3d199cd51a9ca79a9d71c3ec96a94e5c5ea9fb6ca1"
+        },
+        {
+          "file": "stages/s12-deploy/server/modules/http/index.mjs",
+          "needle": "      if (error.retryAfter) response.setHeader(\"Retry-After\", String(error.retryAfter));",
+          "before": 0,
+          "after": 2,
+          "explanation": "HTTP 层将限流错误的等待秒数写为响应头。",
+          "start": 167,
+          "anchor": 167,
+          "code": "      if (error.retryAfter) response.setHeader(\"Retry-After\", String(error.retryAfter));\n      if (!response.headersSent) json(error.status || 500, { error: { message: error.message, code: error.code || \"SERVER_ERROR\" } });\n      else response.end();",
+          "hash": "64b19eb64fe2146f3086e5002b8ef5b8f6d536836ad2843257076b20bb9a8838"
+        },
+        {
+          "file": "stages/s12-deploy/server/modules/messages/index.mjs",
+          "needle": "    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;",
+          "before": 0,
+          "after": 1,
+          "explanation": "新轮次派发在活动会话数达到上限时停止，任务保留 queued。",
+          "start": 254,
+          "anchor": 254,
+          "code": "    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;\n    if (running.size >= maxConcurrentTurns) return;",
+          "hash": "11852638d4c1ef3459119a588d29286ea7e739232faab4d9e390806c76c92f96"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "并发满后继续保留任务",
+          "steps": [
+            {
+              "title": "两个轮次已运行",
+              "actor": "MessageService",
+              "event": "教学模拟 · activeTurns = 2",
+              "explain": "默认并发已经用完。",
+              "state": {
+                "running": "2",
+                "task": "queued"
+              },
+              "lines": []
+            },
+            {
+              "title": "等待执行名额",
+              "actor": "MessageService",
+              "event": "教学模拟 · 保留 queued",
+              "explain": "没有把第三个轮次发给 Codex。",
+              "state": {
+                "running": "2",
+                "task": "queued"
+              },
+              "lines": []
+            },
+            {
+              "title": "名额释放",
+              "actor": "MessageService",
+              "event": "教学模拟 · turn/start",
+              "explain": "后续扫描按可执行队列派发。",
+              "state": {
+                "running": "2",
+                "task": "starting"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "第 121 次 HTTP 请求被拒绝",
+          "steps": [
+            {
+              "title": "窗口已有 120 次",
+              "actor": "RequestLimits",
+              "event": "教学模拟 · 检查 token + socket peer",
+              "explain": "示例时钟中最早请求在一秒前。",
+              "state": {
+                "requests": "120",
+                "result": "待检查"
+              },
+              "lines": []
+            },
+            {
+              "title": "计算等待时间",
+              "actor": "RequestLimits",
+              "event": "教学模拟 · 抛出 RATE_LIMITED",
+              "explain": "60 秒窗口还剩 59 秒。",
+              "state": {
+                "requests": "120",
+                "result": "429"
+              },
+              "lines": []
+            },
+            {
+              "title": "写回响应头",
+              "actor": "HTTP handler",
+              "event": "教学模拟 · Retry-After: 59",
+              "explain": "客户端等待后重试；此拒绝不进入任务执行。",
+              "state": {
+                "requests": "120",
+                "result": "429 + Retry-After"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s12-protection",
+        "action": "在 stages/s12-deploy 运行本节命令，核对 TAP 断言。另运行 npm run lesson -- s12-queue，验证真实调度器和数据层容量门禁。",
+        "observe": [
+          "HTTP 429 带 Retry-After 秒数；60 秒窗口结束后恢复",
+          "健康接口不扣额度，SSE 断开后释放名额"
+        ],
+        "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+        "relatedExperiments": [
+          {
+            "id": "s12-queue",
+            "title": "两个轮次之外如何排队",
+            "question": "全局并发、全局排队和单会话容量分别限制什么？",
+            "observations": [
+              "最多两个跨会话轮次同时运行，其余保持 queued",
+              "全局 200 和单会话 100 的事务门禁返回 QUEUE_FULL",
+              "关闭保留 queued，执行中状态转为 unconfirmed"
+            ],
+            "why": "将部署约束变成可重复验证的行为，失败时保留可核对状态。",
+            "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+            "args": [
+              "--test",
+              "--test-reporter=tap",
+              "--test-name-pattern=^queue:",
+              "tests/deploy-queue.test.mjs"
+            ],
+            "command": "npm run lesson -- s12-queue",
+            "mode": "offline",
+            "offlineOrIntegration": "offline",
+            "stage": "s12-deploy"
+          }
+        ]
+      },
+      "quiz": {
+        "question": "并发已达 2，但排队与 HTTP 额度尚未用完，后续任务会怎样？",
+        "options": [
+          "必定 HTTP 429",
+          "保持 queued，等待轮次名额",
+          "取消正在执行的 Turn"
+        ],
+        "answer": 1,
+        "explanation": "并发限制控制派发；排队容量和入口限流分别控制接收。"
+      },
+      "reference": {
+        "session": "s12 README / design.md",
+        "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md",
+        "adaptation": "本节依据 s12 README、部署设计与真实源码编写；教学推演和离线测试不代替真实 Compose 验收。",
+        "label": "本章设计依据"
+      }
+    },
+    {
+      "id": "s12-backup",
+      "stage": "s12-deploy",
+      "title": "停止写入后备份，失败也尝试重启",
+      "principle": "共享锁保护整段操作；停 agent 后生成 SQL 与目录包，发布成功才计入保留策略。",
+      "problem": "数据库备份和原生历史目录分两次复制，如何避免它们来自不同运行状态？",
+      "change": {
+        "before": "只复制代码不含数据；运行中分别复制数据库和目录可能得到混合状态。",
+        "added": "宿主 Bash 编排停服、容器 pg_dump、一次性 agent 打包和退出重启。",
+        "kept": "沿用 Codex Thread、Turn 与工具执行闭环，以及持久任务和模型网关。"
+      },
+      "ownership": {
+        "codex": "管理原生会话历史、上下文与工具循环；不负责宿主部署、入口限流或备份。",
+        "product": "Compose 和宿主脚本负责运行环境，服务端负责就绪、容量、关闭与恢复。"
+      },
+      "concepts": [
+        {
+          "term": "flock",
+          "meaning": "备份、恢复和下载共享同一锁文件；争用立即退出 75，进程退出自动释放，锁文件不删除。"
+        },
+        {
+          "term": "partial / manifest",
+          "meaning": "SQL 先写入隐藏 partial，目录归档和 SHA-256 校验完成后原子重命名，保留最近 7 份成功备份。"
+        },
+        {
+          "term": "EXIT trap",
+          "meaning": "备份成功、失败或中断均尝试启动 agent；恢复失败则保持停服，避免提供混合状态。"
+        }
+      ],
+      "mechanism": "backup.sh 先取共享 flock，安装 EXIT/INT/TERM trap，再 docker compose stop agent。宿主通过 postgres 容器运行 pg_dump，gzip 输出 database.sql.gz。root 创建的文件交给 uid 1000，然后通过一次性 agent 容器运行 backup.mjs --apply --partial，打包正文和历史、计算 manifest 并发布。失败的 partial 不成为成功备份，退出时清理并尝试 docker compose up -d --wait agent；启动失败返回非零。恢复先停止再确认，校验 manifest 后重放 SQL，再恢复目录并检查 /ready；失败继续停服。备份不含 .env、镜像、Redis 缓存和 .runs 日志；摘要检测损坏，不认证来源。",
+      "design": {
+        "decision": "使用同一个停服窗口和共享锁组织备份。",
+        "reason": "使数据库和目录对应同一静止状态，并避免恢复或下载同时读写包。",
+        "alternative": "只检查进程或只保留代码，无法核对依赖、持久状态和操作结果。",
+        "cost": "备份需要停机；恢复要求兼容 schema、相同部署路径和可信备份，代码回滚不自动回滚数据库。"
+      },
+      "source": {
+        "file": "stages/s12-deploy/deploy/backup.sh",
+        "needle": "docker compose stop agent",
+        "before": 3,
+        "after": 12,
+        "explanation": "trap 在 stop 前安装；SQL 来自 postgres 容器，打包由一次性 agent 容器完成。",
+        "start": 21,
+        "anchor": 24,
+        "code": "trap cleanup EXIT\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\ndocker compose stop agent\nname=$(date -u +%Y-%m-%dT%H-%M-%S-000Z)\n[ ! -e \"backups/$name\" ] || { echo '备份名称已存在，请稍后重试。' >&2; exit 1; }\nmkdir \"backups/.$name.partial\"\npartial=\"backups/.$name.partial\"\n# Keep these arguments in sync with backup-lib.mjs dumpCommand(agent, agent_s12).\ndocker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exists --no-owner --no-privileges agent_s12 |\n  gzip > \"$partial/database.sql.gz\"\n# The agent image runs as uid 1000; root-created private files must be writable there.\nif [ \"$(id -u)\" = 0 ]; then chown 1000:1000 backups \"$partial\" \"$partial/database.sql.gz\"; fi\ndocker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --partial \"$name\"\n",
+        "hash": "6f7a69a0bf917c6caa5862a5f9d685e08fed2f2714d760c7b51d8ded752ba98a"
+      },
+      "sources": [
+        {
+          "file": "stages/s12-deploy/deploy/backup.sh",
+          "needle": "cleanup() {",
+          "before": 0,
+          "after": 14,
+          "explanation": "保存原始退出码，清理 partial；重启失败也返回非零。",
+          "start": 10,
+          "anchor": 10,
+          "code": "cleanup() {\n  local status=$?\n  trap - EXIT\n  if [ -n \"$partial\" ]; then rm -rf -- \"$partial\" || status=1; fi\n  if ! docker compose up -d --wait agent; then\n    echo 'agent 重启失败，请检查 docker compose ps。' >&2\n    status=1\n  fi\n  exit \"$status\"\n}\n# Install before stop so even an interrupted/failed stop attempts to bring agent back.\ntrap cleanup EXIT\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\ndocker compose stop agent",
+          "hash": "6f7a69a0bf917c6caa5862a5f9d685e08fed2f2714d760c7b51d8ded752ba98a"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "SQL 与目录包在停服窗口内发布",
+          "steps": [
+            {
+              "title": "取锁并停服",
+              "actor": "backup.sh",
+              "event": "教学模拟 · flock → stop agent",
+              "explain": "锁从操作开始一直持有到退出。",
+              "state": {
+                "agent": "停止",
+                "backup": "未发布"
+              },
+              "lines": []
+            },
+            {
+              "title": "转储数据库",
+              "actor": "postgres 容器",
+              "event": "教学模拟 · pg_dump → gzip",
+              "explain": "SQL 先放进隐藏 partial。",
+              "state": {
+                "agent": "停止",
+                "backup": "SQL 已写入"
+              },
+              "lines": []
+            },
+            {
+              "title": "打包并发布",
+              "actor": "一次性 agent",
+              "event": "教学模拟 · backup.mjs --apply",
+              "explain": "校验 manifest，原子发布，只保留 7 份成功备份。",
+              "state": {
+                "agent": "停止",
+                "backup": "已发布"
+              },
+              "lines": []
+            },
+            {
+              "title": "退出重启",
+              "actor": "EXIT trap",
+              "event": "教学模拟 · up -d --wait agent",
+              "explain": "检查启动结果，失败返回非零。",
+              "state": {
+                "agent": "尝试恢复运行",
+                "backup": "已发布"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "pg_dump 失败不会发布半份备份",
+          "steps": [
+            {
+              "title": "转储失败",
+              "actor": "backup.sh",
+              "event": "教学模拟 · pipefail → EXIT",
+              "explain": "现有成功备份仍保留。",
+              "state": {
+                "agent": "停止",
+                "backup": "partial"
+              },
+              "lines": []
+            },
+            {
+              "title": "清理并重启",
+              "actor": "cleanup",
+              "event": "教学模拟 · 删除 partial → up agent",
+              "explain": "备份失败仍尝试重启；重启失败报告错误。",
+              "state": {
+                "agent": "尝试重启",
+                "backup": "未发布"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "experiment": {
+        "command": "npm run lesson -- s12-backup",
+        "action": "在 stages/s12-deploy 运行本节命令，核对 TAP 断言。",
+        "observe": [
+          "manifest 可发现文件篡改，只保留最近 7 份成功备份",
+          "恢复先停止再确认；失败保持停服；第二个操作锁立即拒绝"
+        ],
+        "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。"
+      },
+      "quiz": {
+        "question": "备份时 pg_dump 失败，脚本会怎样？",
+        "options": [
+          "发布 partial 作为成功备份",
+          "清理 partial 并尝试重启 agent，退出非零",
+          "自动把数据库回滚到上一版"
+        ],
+        "answer": 1,
+        "explanation": "set -euo pipefail 与 EXIT trap 保留失败结果并执行恢复运行尝试。"
+      },
+      "reference": {
+        "session": "s12 README / design.md",
+        "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md",
+        "adaptation": "本节依据 s12 README、部署设计与真实源码编写；教学推演和离线测试不代替真实 Compose 验收。",
+        "label": "本章设计依据"
       }
     }
   ]

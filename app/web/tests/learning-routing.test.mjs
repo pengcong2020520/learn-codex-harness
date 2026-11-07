@@ -43,3 +43,16 @@ test('3：完整阅读器缺课保持阶段，已有 lesson 参数不会导致�
   f.location.hash='#'+id;await f.run('openLesson()');assert.doesNotMatch(f.root.innerHTML,/data-learn-action="lesson"/);
  }
 });
+
+test('s12 阅读器展示 Compose 与就绪源码，实验链接指向独立部署说明',async()=>{
+ const f=fixture('#s12');await f.run('openLesson()');
+ await f.click({learnAction:'view',view:'source'});
+ assert.match(f.root.innerHTML,/compose.yaml/);
+ assert.match(f.root.innerHTML,/createReadiness/);
+ assert.match(f.root.innerHTML,/service_healthy/);
+ await f.click({learnAction:'lesson',id:'s12-protection'});
+ await f.click({learnAction:'view',view:'experiment'});
+ assert.match(f.root.innerHTML,/npm run lesson -- s12-queue/);
+ assert.match(f.root.innerHTML,/打开独立部署说明/);
+ assert.match(f.root.innerHTML,/stage=s12&amp;view=run|stage=s12&view=run/);
+});

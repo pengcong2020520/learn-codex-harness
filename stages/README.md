@@ -21,6 +21,7 @@
 | [s09-knowledge-layer](s09-knowledge-layer/README.md) | 知识层 + 通用门禁 | 可信权限上下文、版本化 Wiki、可选 Chroma + BM25 RAG、dynamicTools | 4315 |
 | [s10-skill-workflow](s10-skill-workflow/README.md) | Skill 与 Workflow | Agent 包、Skill 同步与隐式读取、Workflow（授权 / 步骤 / 验收）、任务提议 | 4316 |
 | [s11-model-gateway](s11-model-gateway/README.md) | 模型网关 | Bifrost 网关、模型清单（用途 / 能力 / 价格）、按用途与场景路由、备用链、模型自带的联网搜索、生图与生视频、用量账本与预算 | 4318 |
+| [s12-deploy](s12-deploy/README.md) | 部署单元（已完成） | 独立 Compose、健康与就绪、容量限制、优雅关闭、备份恢复与 SSH 隧道 | 4326 |
 | [../app](../app/README.md) | 持续开发的完整项目 | 在 s11 之上继续演进：Docker 部署、Web 工作台与互动课程 | 4317 |
 
 课程、Web 工作台、服务 API 与实验命令统一使用这套编号，例如 `/api/agent/s09`、`npm run lesson -- s01-transport`。旧书签里的 `?stage=demoN` 会自动对应到 `s0N`。
@@ -45,8 +46,9 @@
 - **s09** 让 Agent 守得住：统一门禁按 Thread / Turn 绑定的可信上下文判定权限；工具改走 Codex 原生的 `dynamicTools`（保留 MCP 供兼容测试）；加上知识库（Wiki，可选 RAG）。
 - **s10** 让 Agent 会干活：Agent 包、Skill 同步到 `CODEX_HOME`；Workflow 规定本任务的授权、Skill、写入位置、验收和确认点；模型可以用 `propose_task` 提议任务、用 `skill_read` 读取 Skill，但不能批准自己的提议；受限启动关闭原生线程目标和工作区 `AGENTS.md` 的加载。
 - **s11** 让 Agent 管好模型：Codex 只连模型网关（Bifrost），各家密钥只在网关；一份模型清单登记用途、能力和价格，按用途、场景、能力挑模型，出错时走备用链；按模型实测开关自带的联网搜索；向量、生图、生视频也经网关；每一轮的用量记账，超预算就停派新任务，网关再按 token 限流兜底。
-- **之后（规划中）**：s12 上云部署（Docker、服务器、开机自启）→ s13 多用户（认证、按用户隔离运行环境、配额）→ s14 多 Agent 协作 → s15 多主机调度。
-- **app** 在 s11 之上持续开发，s12 的上云部署已经在里面实现，另有 Web 工作台与互动课程。
+- **s12（已完成）**：独立部署、健康与就绪、并发与入口限流、备份恢复，见 [部署单元](s12-deploy/README.md)。
+- **之后（规划中）**： s13 多用户（认证、按用户隔离运行环境、配额）→ s14 多 Agent 协作 → s15 多主机调度。
+- **app** 在 s11 之上持续开发，s12 提供独立部署快照，另有 Web 工作台与互动课程。
 
 ## 修改阶段快照的规则
 

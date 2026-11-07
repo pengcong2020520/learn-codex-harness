@@ -1,6 +1,8 @@
 # s12: 部署单元——让 Agent 在服务器上持续工作
 
-[导论](../introduction.md) · `s11` → `s12` → `s13`
+[导论](../introduction.md) · [s11](../s11-model-gateway/README.md) → `s12` → `s13`
+
+全仓入口：[机制课堂](../../app/web/public/course/index.html#s12) · [阶段演示](../../app/web/public/course/changes.html#s12) · [章节长文](../../app/web/public/course/handbook.html#module-s12) · [总架构图](../../app/web/public/course/assets/s12-architecture.svg)
 
 > **对应六个问题**：③ 之前聊过什么？持久化原生历史与备份；⑤ 能用什么？交付明确的容器运行环境；⑥ 谁说了算？入口、并发、关闭与恢复由部署边界约束。
 

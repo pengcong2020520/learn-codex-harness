@@ -22,7 +22,8 @@ flowchart LR
   s08 --> s09["s09 知识层<br/>可信门禁 / Wiki / RAG"]
   s09 --> s10["s10 Skill 与 Workflow<br/>Agent 包 / 确认点 / 提议"]
   s10 --> s11["s11 模型网关<br/>统一协议 / 多模型协调 / 用量与预算"]
-  s11 --> app["app 完整项目<br/>Docker 部署 / Web 工作台"]
+  s11 --> s12["s12 部署单元<br/>健康与就绪 / 容量 / 备份恢复"]
+  s12 --> app["app 完整项目<br/>Docker 部署 / Web 工作台"]
 ```
 
 | 阶段 | 主题 | 解决的问题 | 机制课 |
@@ -38,9 +39,10 @@ flowchart LR
 | [s07-memory](stages/s07-memory/README.md) | 记忆 | 记忆交给 Codex 提炼，开关和参与范围由服务端掌握 | 离线实验 1 节（`s07-memory`）；工作台的 Demo 3 连接本快照 |
 | [s08-data-layer](stages/s08-data-layer/README.md) | 数据层 | 消息不丢、任务可恢复、产物可追溯到资料版本 | 3 |
 | [s09-knowledge-layer](stages/s09-knowledge-layer/README.md) | 知识层 | 每次资源访问都经过可信门禁；Wiki 版本化，RAG 可选 | 5 |
-| [s10-skill-workflow](stages/s10-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 离线实验 6 节（暂未接入互动课程） |
-| [s11-model-gateway](stages/s11-model-gateway/README.md) | 模型网关 | 线上不止一个模型：Codex 只连网关，统一协议、按用途和场景协调多个模型、记账并按预算停派 | 实验 6 节（5 节离线、1 节真实网关；暂未接入互动课程） |
-| [app](app/README.md) | 完整项目 | 在 s11 之上持续开发：全部服务放进 Docker 部署到服务器（即规划中的 s12）、Web 工作台、互动课程 | — |
+| [s10-skill-workflow](stages/s10-skill-workflow/README.md) | Skill 与 Workflow | 新增一类任务只改配置；Workflow 管边界和终点，怎么做仍由模型决定；模型可以提议、不能自批 | 机制课程 3 节；离线实验 6 节 |
+| [s11-model-gateway](stages/s11-model-gateway/README.md) | 模型网关 | 线上不止一个模型：Codex 只连网关，统一协议、按用途和场景协调多个模型、记账并按预算停派 | 机制课程 3 节；实验 6 节（5 节离线、1 节真实网关） |
+| [s12-deploy](stages/s12-deploy/README.md) | 部署单元（已完成） | 独立 Compose、健康与就绪、容量限制、优雅关闭与备份恢复 | 机制课程 3 节；离线实验 4 组 |
+| [app](app/README.md) | 完整项目 | 在 s11 之上持续开发：Docker 部署与服务管理、Web 工作台、互动课程 | — |
 
 每章 README 先讲概念再动手，按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织，配一张机制图，并标出对应导论里六个问题中的哪几个；关键代码逐行摘自该阶段源码（`npm test` 会校验）。更完整的设计取舍在各阶段的 `docs/design.md`，演进原因与约束见 [stages/README.md](stages/README.md)。
 
@@ -95,7 +97,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 | s08 数据层 | `s08-persistence` 消息收到了，为什么还需要一条 outbox？ · `s08-dispatch` Redis 丢了，哪条任务还能继续？ · `s08-versions` 原文改了一句，旧产物还能读吗？ |
 | s09 知识层 | `s09-gate` 工具参数里的“我是管理员”为什么不算身份？ · `s09-mounts` 读得到 inputs，不等于读得到所有知识库 · `s09-wiki` 两次更新同时提交，谁能成为当前 Wiki？ · `s09-rag` 新索引失败，为什么旧索引指针不能先切？ · `s09-modes` 配置改成 RAG，为什么旧会话不能马上接着聊？ |
 
-工作台支持 s00–s11 十二个阶段和当前开发项目（s11 内核）；机制课程已发布 s01–s09 共 24 节。s00、s10、s11 及当前项目的机制课程入口保留请求阶段并显示缺课空态，不回落到 s01。
+工作台支持 s00–s12 十三个阶段和当前开发项目（s11 内核）；机制课程已发布 s01–s12 共 33 节。s00 保持缺课空态；s12 仅提供课程与独立部署说明，通过 SSH 隧道连接，不登记为工作台实时目标。
 
 课程的源码摘录由 `npm run course:build` 直接从 `stages/` 取出并记录哈希，`npm run course:check` 会在源码变化后提示重建。
 
@@ -118,6 +120,7 @@ learn-codex-harness/
 │   ├── s09-knowledge-layer/    #   s09：知识层 + 通用门禁
 │   ├── s10-skill-workflow/     #   s10：Agent 包、Skill 与 Workflow
 │   ├── s11-model-gateway/      #   s11：模型网关（Bifrost、模型路由、用量与预算）
+│   ├── s12-deploy/             #   s12：独立部署、就绪与备份恢复
 │   ├── tests/                  #   跨阶段集成测试
 │   └── verify.mjs              #   阶段文档、结构与测试验证
 ├── app/                        # 完整项目（持续开发）

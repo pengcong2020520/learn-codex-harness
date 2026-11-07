@@ -701,6 +701,93 @@
       "command": "npm run lesson -- s11-budget",
       "mode": "offline",
       "offlineOrIntegration": "offline"
+    },
+    {
+      "id": "s12-health",
+      "title": "为什么进程活着仍不能接任务",
+      "question": "网关不可用时 /health 与 /ready 各返回什么？",
+      "observations": [
+        "网关不健康时 /ready=503；/health=200",
+        "数据库或模型目录不可用时不就绪；都带版本号"
+      ],
+      "why": "将部署约束变成可重复验证的行为，失败时保留可核对状态。",
+      "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=^(ready:|shutdown:|defaults:)",
+        "tests/deploy-health.test.mjs"
+      ],
+      "command": "npm run lesson -- s12-health",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "stage": "s12-deploy"
+    },
+    {
+      "id": "s12-protection",
+      "title": "入口如何拒绝过量请求",
+      "question": "第 121 次请求和第 21 个 SSE 连接会怎样？",
+      "observations": [
+        "HTTP 429 带 Retry-After 秒数；60 秒窗口结束后恢复",
+        "健康接口不扣额度，SSE 断开后释放名额"
+      ],
+      "why": "将部署约束变成可重复验证的行为，失败时保留可核对状态。",
+      "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=^limits:",
+        "tests/deploy-health.test.mjs"
+      ],
+      "command": "npm run lesson -- s12-protection",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "stage": "s12-deploy",
+      "relatedExperiments": [
+        {
+          "id": "s12-queue",
+          "title": "两个轮次之外如何排队",
+          "question": "全局并发、全局排队和单会话容量分别限制什么？",
+          "observations": [
+            "最多两个跨会话轮次同时运行，其余保持 queued",
+            "全局 200 和单会话 100 的事务门禁返回 QUEUE_FULL",
+            "关闭保留 queued，执行中状态转为 unconfirmed"
+          ],
+          "why": "将部署约束变成可重复验证的行为，失败时保留可核对状态。",
+          "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+          "args": [
+            "--test",
+            "--test-reporter=tap",
+            "--test-name-pattern=^queue:",
+            "tests/deploy-queue.test.mjs"
+          ],
+          "command": "npm run lesson -- s12-queue",
+          "mode": "offline",
+          "offlineOrIntegration": "offline",
+          "stage": "s12-deploy"
+        }
+      ]
+    },
+    {
+      "id": "s12-backup",
+      "title": "备份如何发现损坏与保留七份",
+      "question": "如何核对版本、大小、sha256 和恢复顺序？",
+      "observations": [
+        "manifest 可发现文件篡改，只保留最近 7 份成功备份",
+        "恢复先停止再确认；失败保持停服；第二个操作锁立即拒绝"
+      ],
+      "why": "将部署约束变成可重复验证的行为，失败时保留可核对状态。",
+      "boundary": "离线运行真实模块与测试夹具，不启动 Docker、不监听端口，不证明真实服务器与模型可用。",
+      "args": [
+        "--test",
+        "--test-reporter=tap",
+        "--test-name-pattern=^(backup:|restore:)",
+        "tests/deploy-backup.test.mjs"
+      ],
+      "command": "npm run lesson -- s12-backup",
+      "mode": "offline",
+      "offlineOrIntegration": "offline",
+      "stage": "s12-deploy"
     }
   ]
 }

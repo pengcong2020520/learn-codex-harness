@@ -33,6 +33,7 @@ jobs:
           - stages/s09-knowledge-layer
           - stages/s10-skill-workflow
           - stages/s11-model-gateway
+          - stages/s12-deploy
           - app
     defaults:
       run:

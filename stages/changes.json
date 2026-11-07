@@ -428,6 +428,40 @@
           "009-knowledge-visibility.sql"
         ]
       }
+    },
+    {
+      "id": "s12",
+      "dir": "s12-deploy",
+      "title": "部署：健康、就绪与恢复",
+      "summary": "独立 Compose 交付；就绪探测、容量限制与备份保护持久状态。",
+      "previous": "s11-model-gateway",
+      "modules": [
+        {
+          "layer": "部署",
+          "name": "就绪与容量",
+          "desc": "健康探测、限流与关闭"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /ready"
+        ],
+        "env": [
+          "CONTAINER_APP_DIR",
+          "AGENT_MAX_CONCURRENT_TURNS",
+          "AGENT_MAX_QUEUED",
+          "AGENT_RATE_LIMIT_PER_MINUTE",
+          "AGENT_MAX_SSE",
+          "POSTGRES_MEMORY_LIMIT",
+          "REDIS_MEMORY_LIMIT",
+          "GATEWAY_MEMORY_LIMIT",
+          "AGENT_MEMORY_LIMIT",
+          "NPM_REGISTRY",
+          "APT_MIRROR"
+        ],
+        "migrations": []
+      }
     }
   ]
 }

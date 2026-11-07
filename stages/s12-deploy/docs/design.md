@@ -51,7 +51,7 @@ PostgreSQL/Redis 使用命名卷，正文、原生历史与运行记录挂载宿
 
 `npm run test:deploy` 是无 Docker、无监听端口的测试，覆盖真实 HTTP handler、仓储容量门禁、真实消息调度、关闭顺序、容器 CLI 的真实 tar 打包、manifest 摘要/保留策略、篡改拒绝、Bash 编排成功与失败路径，以及部署静态约束。测试夹具不替代运行时库。Linux 可额外运行 `node --test tests/deploy-lock.integration.mjs` 检查真实 flock，rsync 仅用阻塞夹具代替传输。
 
-外部 `npm run test:deploy:integration` 检查真实 Compose 资源配置以及网关停止时 /ready=503、/health=200。此测试要求已配置模型环境并初始化数据库；不等于验证真实模型质量。数据库排队事务竞争、真实备份恢复、SIGTERM 与回滚验收见 [交付验收](../delivery.md)。根 stages/verify.mjs 当前阶段列表截至 s11；本任务禁止修改它，因此本阶段自行验证同一标题与源码摘录约束。
+外部 `npm run test:deploy:integration` 检查真实 Compose 资源配置以及网关停止时 /ready=503、/health=200。此测试要求已配置模型环境并初始化数据库；不等于验证真实模型质量。数据库排队事务竞争、真实备份恢复、SIGTERM 与回滚验收见 [交付验收](../delivery.md)。本阶段已登记到 [全仓验证](../../verify.mjs)，统一检查章节标题、链接与源码摘录。
 
 ## 限制说明
 

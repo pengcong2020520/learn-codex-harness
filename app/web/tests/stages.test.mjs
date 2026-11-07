@@ -8,6 +8,7 @@ import {defaultTargets} from '../server.mjs';
 // Execute the actual rendering/request functions without a listener or a model.
 const source=fs.readFileSync(new URL('../public/app/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 const ids=Array.from({length:12},(_,num)=>`s${String(num).padStart(2,'0')}`);
+const allIds=[...ids,'s12'];
 function frontend(search=''){
  const elements=new Map(['#app','#pane','#timeline','#tasks','#toast'].map(id=>[id,{innerHTML:'',classList:{add(){},remove(){}}}]));
  const calls=[],courses=[],timers=new Map();let timerId=0;
@@ -33,7 +34,7 @@ test('全部阶段及 project 的能力边界、目录、课程、启动命令�
   for(const [key,start] of Object.entries(boundaries))assert.equal(flags[key],actualNum>=start,`${id}.${key}`);
   assert.equal(flags.localJson,actualNum>=3&&actualNum<8);
   const shell=f.elements.get('#app').innerHTML;
-  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),ids);
+  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
   assert.match(shell,new RegExp(`CHAPTER ${String(actualNum).padStart(2,'0')} /`));
   assert.equal(shell.includes('data-tab="files"'),actualNum>=6);
   assert.equal(shell.includes('data-tab="knowledge"'),actualNum>=9);
@@ -122,7 +123,7 @@ test('s04 起订阅 SSE 并应用快照，s03 轮询返回的迟到快照不污�
 test('A：阶段行只保留编号与名称，项目入口独立保留',()=>{
  const f=frontend();f.run('render()');const html=f.elements.get('#app').innerHTML;
  assert.doesNotMatch(html,/STAGE S\d{2}/);assert.match(html,/data-stage="project"/);
- assert.equal([...html.matchAll(/data-stage="s\d{2}"/g)].length,12);
+ assert.equal([...html.matchAll(/data-stage="s\d{2}"/g)].length,13);
 });
 
 test('1：s03 接收成功后刷新失败，保留 turnId、清空草稿，重试只读状态',async()=>{
@@ -218,12 +219,12 @@ test('6：Wiki 文案与实际提交体按 s09 / s10–s11 / project 的授权�
  }
 });
 
-test('7：当前入口与工作台文档统一十二阶段、实际课程覆盖与网关体验边界',()=>{
+test('7：当前入口与工作台文档统一十三阶段、实际课程覆盖与网关体验边界',()=>{
  const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
- assert.match(read('../public/app/index.html'),/<title>Agent Atelier · 十二个阶段<\/title>/);
+ assert.match(read('../public/app/index.html'),/<title>Agent Atelier · 十三个阶段<\/title>/);
  const app=read('../../README.md'),web=read('../README.md'),root=read('../../../README.md');
- for(const doc of [app,web,root]){assert.match(doc,/十二个阶段/);assert.match(doc,/s01–s09 共 24 节/);assert.doesNotMatch(doc,/五次进化|五个阶段|s03 可配置 Agent|s09 \/ app/);}
- for(const id of [...ids,'project'])assert.match(web,new RegExp(`\\| ${id}`));
+ for(const doc of [app,web,root]){assert.match(doc,/十三个阶段/);assert.match(doc,/s01–s12 共 33 节/);assert.doesNotMatch(doc,/五次进化|五个阶段|s03 可配置 Agent|s09 \/ app/);}
+ for(const id of [...allIds,'project'])assert.match(web,new RegExp(`\\| ${id}`));
  assert.match(web,/尚无 \/models、\/usage/);assert.match(web,/缺课空态|显示空态/);
 });
 
@@ -345,4 +346,25 @@ test('重新连接：阶段切换后迟到的检查不覆盖新阶段',async()=>
  await f.run("selectStage('s04')");release();await pending;
  assert.equal(f.run('state.target'),'s04');assert.equal(f.run('state.connectionResult'),null);assert.equal(f.run('state.checking'),null);
  assert.equal(f.run('state.statuses[0].id'),'s04');
+});
+
+// s12 有教材和独立部署说明，不能因为继承阶段能力而请求本地代理。
+test('s12 卡片、课程和运行说明完整，刷新不请求任何实时服务', async()=>{
+ const f=frontend('?stage=s12&view=run');
+ f.run('render()');
+ assert.equal(f.run('state.target'),'s12');
+ const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
+ assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
+ assert.match(shell,/十三个阶段/);
+ assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
+ assert.match(pane,/s12 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机 http:\/\/127\.0\.0\.1:4326/);
+ assert.match(pane,/href="[^" ]*stages\/s12-deploy\/README\.md"/);
+ f.run("state.statuses=[{id:'s12',status:'ready'}]");
+ assert.equal(f.run('live()'),false);
+ await f.run('refresh()');
+ await assert.rejects(f.run("api('/sessions')"),/SSH 隧道/);
+ assert.deepEqual(f.calls,[]);
+ f.run("state.tab='learn';renderPane()");
+ assert.equal(f.courses.at(-1),'s12');
+ assert.ok(!defaultTargets.some(t=>t.id==='s12'));
 });

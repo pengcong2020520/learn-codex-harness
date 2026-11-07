@@ -1,0 +1,241 @@
+[
+  {
+    "id": "s12-limits",
+    "title": "请求超限后如何返回等待秒数",
+    "question": "同一窗口的第 121 次请求是否会进入业务处理？",
+    "file": "stages/s12-deploy/server/modules/deployment/index.mjs",
+    "start": 45,
+    "end": 59,
+    "expect": "  request(token, address) {",
+    "notes": {
+      "45": "从真实源码进入本次推演。",
+      "55": "取最早请求到期的剩余秒数，向上取整，最少 1 秒。"
+    },
+    "actors": [
+      [
+        "client",
+        "客户端"
+      ],
+      [
+        "http",
+        "HTTP handler"
+      ],
+      [
+        "limits",
+        "RequestLimits"
+      ]
+    ],
+    "state0": {
+      "窗口请求": "120",
+      "响应": "待检查"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "http",
+          "提交 HTTP 请求"
+        ],
+        "say": "教学模拟：此前 120 次请求仍在 60 秒窗口内。",
+        "state": {
+          "窗口请求": "120"
+        },
+        "lines": [
+          45,
+          45
+        ]
+      },
+      {
+        "flow": [
+          "http",
+          "limits",
+          "检查 RequestLimits"
+        ],
+        "say": "入口使用令牌和实际 socket peer，不信任转发头。",
+        "state": {
+          "响应": "检查中"
+        },
+        "lines": [
+          51,
+          51
+        ]
+      },
+      {
+        "flow": [
+          "limits",
+          "limits",
+          "计算 retryAfter"
+        ],
+        "say": "最早请求距现在一秒，因此还需等待 59 秒。",
+        "state": {
+          "响应": "RATE_LIMITED"
+        },
+        "lines": [
+          55,
+          55
+        ],
+        "warn": true
+      },
+      {
+        "flow": [
+          "limits",
+          "http",
+          "抛出 429"
+        ],
+        "say": "容量已满，不再写入本次请求时间。",
+        "state": {
+          "窗口请求": "120",
+          "响应": "429"
+        },
+        "lines": [
+          56,
+          56
+        ],
+        "warn": true
+      },
+      {
+        "flow": [
+          "http",
+          "client",
+          "返回 Retry-After"
+        ],
+        "say": "handler 将 error.retryAfter 写入响应头。",
+        "state": {
+          "响应": "429 / Retry-After: 59"
+        }
+      }
+    ],
+    "takeaway": "频率限制发生在业务处理前；轮次并发与队列容量使用各自门禁。"
+  },
+  {
+    "id": "s12-backup",
+    "title": "停 agent 后完成备份并尝试恢复运行",
+    "question": "如何让数据库与目录属于同一个停服窗口？",
+    "file": "stages/s12-deploy/deploy/backup.sh",
+    "start": 7,
+    "end": 34,
+    "expect": "exec 9>backups/.download.lock",
+    "notes": {
+      "10": "从真实源码进入本次推演。"
+    },
+    "actors": [
+      [
+        "host",
+        "宿主 Bash",
+        "proc"
+      ],
+      [
+        "agent",
+        "agent"
+      ],
+      [
+        "pg",
+        "postgres"
+      ],
+      [
+        "pack",
+        "打包容器",
+        "proc"
+      ]
+    ],
+    "state0": {
+      "agent": "运行",
+      "备份": "未发布"
+    },
+    "steps": [
+      {
+        "flow": [
+          "host",
+          "host",
+          "获取 flock"
+        ],
+        "say": "备份、恢复和下载互斥，争用立即失败。",
+        "state": {
+          "备份": "锁已持有"
+        },
+        "lines": [
+          8,
+          8
+        ],
+        "actors": {
+          "host": "运行中",
+          "agent": "运行中",
+          "pack": "未启动"
+        }
+      },
+      {
+        "flow": [
+          "host",
+          "agent",
+          "停止 agent"
+        ],
+        "say": "先安装 EXIT trap，再停止写入。",
+        "state": {
+          "agent": "停止"
+        },
+        "lines": [
+          24,
+          24
+        ],
+        "actors": {
+          "agent": "已停止"
+        }
+      },
+      {
+        "flow": [
+          "host",
+          "pg",
+          "执行 pg_dump"
+        ],
+        "say": "在 postgres 容器导出 SQL，宿主 gzip 写 partial。",
+        "state": {
+          "备份": "SQL 已保存"
+        },
+        "lines": [
+          30,
+          30
+        ]
+      },
+      {
+        "flow": [
+          "host",
+          "pack",
+          "运行 backup.mjs"
+        ],
+        "say": "一次性 agent 容器打包正文和原生历史，计算 manifest 后发布。",
+        "state": {
+          "备份": "已发布"
+        },
+        "lines": [
+          34,
+          34
+        ],
+        "actors": {
+          "pack": "运行中"
+        }
+      },
+      {
+        "flow": [
+          "host",
+          "agent",
+          "重启 agent"
+        ],
+        "say": "退出 trap 尝试 up -d --wait；失败返回非零。",
+        "state": {
+          "agent": "尝试恢复运行",
+          "备份": "最近 7 份成功备份"
+        },
+        "lines": [
+          14,
+          14
+        ],
+        "actors": {
+          "host": "已退出",
+          "pack": "已退出",
+          "agent": "等待就绪"
+        }
+      }
+    ],
+    "takeaway": "备份失败也尝试重启；恢复失败保持停服。两种失败策略不能混用。"
+  }
+]
