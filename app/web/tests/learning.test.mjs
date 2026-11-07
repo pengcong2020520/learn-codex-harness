@@ -4,6 +4,12 @@ import {createWorkbench} from '../server.mjs';
 import {browser,helpers,chrome} from './browser.mjs';
 import fs from 'node:fs';
 const curriculum=JSON.parse(fs.readFileSync(new URL('../public/course/curriculum.json',import.meta.url),'utf8'));
+const main=fs.readFileSync(new URL('../public/app/main.js',import.meta.url),'utf8');
+const workbench=[...main.slice(main.indexOf('const stages={'),main.indexOf('};',main.indexOf('const stages={'))).matchAll(/^ (s\d\d):\{/gm)].map(match=>match[1]);
+const published=curriculum.chapters.map(chapter=>chapter.id);
+const missing=workbench.filter(id=>!published.includes(id));
+const lessonOf=id=>curriculum.lessons.find(lesson=>lesson.stage.slice(0,3)===id);
+const projectStage=main.match(/stages\[id==='project'\?'(s\d\d)':id\]/)[1];
 
 const options={skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'};
 async function setup(t){
@@ -25,6 +31,7 @@ test('阅读器按阶段哈希定位，兼容五个旧 Demo 链接与课时链�
 });
 
 test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验目录和架构图跟随阶段',options,async t=>{
+ assert.ok(missing.length);
  const {url,b}=await setup(t);await b.open(url+'/course/');
  const result=await b.run(`${helpers}
   await until(()=>$('.learn-title'));
@@ -38,7 +45,7 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
   await mountLearning(root,{stage:['s05','s06-tools'],lessonId:'s06-mcp'});out.pair=ids();
   out.selected=$('[aria-current="page"]',root).dataset.id;out.groups=$$('.learn-group',root).map(el=>el.textContent);
   await mountLearning(root,{all:true});out.all=ids();out.allGroups=$$('.learn-group',root).map(el=>el.textContent);
-  await mountLearning(root,{stage:'s11'});out.empty=$('.learn-error',root).textContent;return out;`);
+  await mountLearning(root,{stage:${JSON.stringify(missing[0])}});out.empty=$('.learn-error',root).textContent;return out;`);
  assert.deepEqual(result.short,['s06-tool-registry','s06-mcp','s06-workspace']);
  assert.deepEqual(result.directory,result.short);
  assert.deepEqual(result.pair,['s05-agent-config','s05-skills',...result.short]);
@@ -77,17 +84,25 @@ test('2：s05/s06 实验链接点击后打开同阶段真实工作台',options,a
 
 test('3：从工作台点击本章教学，缺课阶段与 project 保留阶段并显示空态',options,async t=>{
  const {url,b}=await setup(t);
- for(const target of ['s00','s10','s11','project']){
+ assert.ok(missing.length&&projectStage);
+ for(const target of [...missing,'project']){
+  const stage=target==='project'?projectStage:target;
   await b.open(`${url}/?stage=${target}`);
   await b.run(`${helpers}await until(()=>$('.top-links a'));`);
   await b.clickNavigate('.top-links a');
-  const stage=target==='project'?'s11':target;
-  const actual=await b.run(`${helpers}await until(()=>$('#course-reader .learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,hash:location.hash,text:$('#course-reader')?.textContent,selected:$('[data-learn-action="lesson"][aria-current="page"]')?.dataset.id};`);
-  assert.equal(actual.stage,stage);assert.equal(actual.hash,'#'+stage);assert.match(actual.text,/该阶段暂无机制课程/);assert.equal(actual.selected,undefined);
+  if(published.includes(stage)){
+   const lesson=lessonOf(stage);
+   const actual=await b.run(`${helpers}await until(()=>$('[data-learn-action="lesson"][aria-current="page"]'));return {selected:$('[data-learn-action="lesson"][aria-current="page"]').dataset.id,search:location.search,text:$('#course-reader').textContent};`);
+   assert.equal(actual.selected,lesson.id,target);assert.equal(actual.search,'?lesson='+lesson.id,target);assert.doesNotMatch(actual.text,/该阶段暂无机制课程/,target);
+  }else{
+   const actual=await b.run(`${helpers}await until(()=>$('#course-reader .learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,hash:location.hash,text:$('#course-reader')?.textContent,selected:$('[data-learn-action="lesson"][aria-current="page"]')?.dataset.id};`);
+   assert.equal(actual.stage,stage,target);assert.equal(actual.hash,'#'+stage,target);assert.match(actual.text,/该阶段暂无机制课程/,target);assert.equal(actual.selected,undefined,target);
+  }
  }
  // hashchange with an existing ?lesson must also clear the old lesson.
- await b.open(url+'/course/?lesson=s01-transport');
- const actual=await b.run(`${helpers}await until(()=>$('.learn-title'));location.hash='s10';await until(()=>$('.learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,selected:Boolean($('.learn-title'))};`);
- assert.deepEqual(actual,{stage:'s10',selected:false});
+ const lessonId=lessonOf(published.find(lessonOf)).id,gap=missing[0];
+ await b.open(url+'/course/?lesson='+encodeURIComponent(lessonId));
+ const actual=await b.run(`${helpers}await until(()=>$('.learn-title'));location.hash=${JSON.stringify(gap)};await until(()=>$('.learn-empty'));return {stage:$('.learn-empty')?.dataset.stage,selected:Boolean($('.learn-title'))};`);
+ assert.deepEqual(actual,{stage:gap,selected:false});
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });

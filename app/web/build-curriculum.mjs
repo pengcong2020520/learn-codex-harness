@@ -14,7 +14,9 @@ const chapterMetadata={
  s06:{name:'工具',focus:'工具白名单、资料边界与 MCP'},
  s07:{name:'记忆',focus:'原生记忆与服务端开关'},
  s08:{name:'数据层',focus:'持久任务与资源版本'},
- s09:{name:'知识层',focus:'可信门禁与 Wiki / RAG'}
+ s09:{name:'知识层',focus:'可信门禁与 Wiki / RAG'},
+ s10:{name:'Skill 与 Workflow',focus:'Skill 教方法，Workflow 管边界和终点'},
+ s11:{name:'模型网关',focus:'模型清单、能力路由与用量预算'}
 };
 export function buildCurriculumData({repository=repo,curriculumDir=dir}={}){
  const stageDirs=new Set(fs.readdirSync(path.join(repository,'stages'),{withFileTypes:true}).filter(d=>d.isDirectory()&&/^s\d\d-[a-z0-9-]+$/.test(d.name)).map(d=>d.name));

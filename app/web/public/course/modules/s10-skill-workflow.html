@@ -1,0 +1,218 @@
+<section class="module" id="module-s10">
+<div class="module-content">
+<header class="module-header animate-in">
+<span class="module-number">s10</span>
+<h2 class="module-title">Skill 教方法，Workflow 管边界和终点</h2>
+<p class="module-subtitle">方法放进 Agent 包，任务边界交给服务端；需要人拍板时停下来，模型可以提议，不能自批。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s10-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么：把一类任务做完的约定</h2>
+<p>上一章，云端 Agent 已能通过 Wiki / RAG 查依据，文件和知识操作也经过同一道门禁。这个云端 Agent 还缺什么？用户说“写一篇文章”，可能希望先看大纲再决定；用户说“整理这些新资料”，可能还需要一次受限的知识库更新。能调用工具，还不足以表达哪里等人确认、这一次能写到哪里、做到什么才算交付。</p>
+<figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="968" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
+<p>本章把三件事分开。<span class="term" data-definition="方法说明，包含规范、模板与参考资料；教模型怎么做，但不能给工具或资源授权。">Skill</span> 教怎么做；<span class="term" data-definition="部署者声明的一类任务：目标、额外授权、Skill、步骤写入范围、验收与确认点；只组合代码允许的能力。">Workflow</span> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
+<table><thead><tr><th>层</th><th>存放内容</th><th>谁负责</th><th>与权限的关系</th></tr></thead><tbody>
+<tr><td>Agent 包</td><td>agent.json、role.md、skills/</td><td>部署者配置，服务端校验</td><td>Skill 不授权；Workflow 只能组合 Agent 已有能力</td></tr>
+<tr><td>Workspace</td><td>inputs、research、drafts、outputs 与知识资料</td><td>用户与模型在资源规则内读写</td><td>资料不能成为更高权限的配置</td></tr>
+<tr><td>任务与运行状态</td><td>步骤、状态、checks；CODEX_HOME 中的 Skill 副本</td><td>服务端</td><td>每轮权限上下文随派发建立、随结束撤销</td></tr>
+</tbody></table>
+<p>怎么研究、先读哪份资料、调用工具几次，仍由 Codex 的执行循环决定。服务端负责可执行的约束：步骤的写入范围、用户确认入口和完成后的结果检查。普通 <code>chat</code> 没有额外的 Workflow 步骤与检查，但仍受 Agent 基础权限和门禁约束。</p>
+</section>
+
+<section class="screen animate-in" id="s10-screen-2">
+<h2 class="screen-heading">Skill 跟着 Agent 包走，读到方法不等于获准执行</h2>
+<p>本阶段的定义使用 <code>schemaVersion: "1.2"</code>。角色与 Skill 都不能落入工作区；Skill 的路径相对 <code>agent.json</code>，例如 <code>agents/writing/skills/write-article/SKILL.md</code>。路径相对哪里、允许包含什么文件，先在装配时检查。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/agents/index.mjs · 第 112–130 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/agents/index.mjs" data-start="112" data-end="130">      const skillPath = path.resolve(packaged ? directory : this.workspacePath, binding.path);
+      if (packaged) {
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(skill.id)) throw new Error(`Skill id 只能使用小写字母、数字和连字符：${skill.id}`);
+        if (path.basename(skillPath) !== "SKILL.md" || !inside(directory, skillPath) || inside(this.workspacePath, skillPath))
+          throw new Error(`Skill 必须是 Agent 包内、工作区外的 SKILL.md：${skill.id}`);
+      }
+      if (!fs.existsSync(skillPath)) {
+        if (skill.required) throw new Error(`必需 Skill 文件不存在：${skill.id}`);
+        this.warnings.push(`可选 Skill 不存在：${skill.id}`); continue;
+      }
+      if (packaged) trustedFile(skillPath, directory);
+      const info = fs.lstatSync(skillPath);
+      if (!info.isFile() || info.isSymbolicLink() || info.size &gt; 128 * 1024) throw new Error(`Skill 文件无效：${skill.id}`);
+      if (!packaged) {
+        this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), required: skill.required, version: digest(fs.readFileSync(skillPath)) });
+        continue;
+      }
+      const source = path.dirname(fs.realpathSync(skillPath)), files = skillFiles(source);
+      this.skills.push({ id: skill.id, path: fs.realpathSync(skillPath), source, files, required: skill.required, version: skillDigest(source, files) });</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>112 行</strong>：按定义版本选择路径基准；本章使用的 1.2 相对 Agent 配置目录。</p>
+<p class="tl"><strong>113–114 行</strong>：包模式下先限制 Skill id，只允许小写字母、数字与连字符。</p>
+<p class="tl"><strong>115–116 行</strong>：文件名必须是 SKILL.md，同时位于 Agent 包内、工作区外，否则拒绝。</p>
+<p class="tl"><strong>117 行</strong>：结束包路径校验分支。</p>
+<p class="tl"><strong>118–120 行</strong>：文件缺失时，必需 Skill 报错；可选 Skill 记录警告并跳过。</p>
+<p class="tl"><strong>121–122 行</strong>：结束缺失判断；包内文件还要经过 trustedFile 检查，路径不能经过符号链接。</p>
+<p class="tl"><strong>123–124 行</strong>：检查目标是普通文件、不是符号链接，大小不超过 128 KiB。</p>
+<p class="tl"><strong>125–127 行</strong>：非包模式的兼容分支只登记单个文件内容的版本，然后继续下一项。</p>
+<p class="tl"><strong>128 行</strong>：结束兼容分支；下面处理包内 Skill。</p>
+<p class="tl"><strong>129 行</strong>：取得真实目录，调用 skillFiles 收集允许同步的文件。</p>
+<p class="tl"><strong>130 行</strong>：登记源目录、白名单和整组文件的内容指纹，供同步与后续有效性检查。</p>
+</div></div></div>
+<p><code>skillFiles</code> 只收集 SKILL.md 和 references/ 下的 .md/.txt，隐藏条目跳过，可见符号链接及脚本被拒绝；每个文件最多 128 KiB，总数最多 50。<span class="term" data-definition="文件名集合和每份内容共同参与的摘要；新增 references 文件也会改变版本，而不只是修改 SKILL.md 才改变。">内容指纹</span> 会被 <code>assertCurrent</code> 重新核对，失配或读取失败都撤销旧 Agent。修改方法后需要受控重启，不能假装仍是同一版本继续执行。</p>
+<p>启动时 <code>installSkills</code> 将白名单文件同步到本服务的 <code>.data/codex/skills/&lt;id&gt;/</code>。它只清理自己清单里管理过的目录，遇到非本服务安装的同名目录会拒绝覆盖。随后 <code>verifySkills</code> 调用 <code>skills/list</code>，必要时用 <code>skills/config/write</code> 收紧启用集合，再核验结果。复制完成与 Codex 发现成功是两件事。</p>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">显式任务带入方法</div><div class="pattern-desc">AgentDefinition.input 先放任务说明，再放用户文本，并按 Workflow 的 Skill id 选取已启用 Skill，构造 type:skill 输入。方法正文由 Codex 原生解析与注入。</div></div>
+<div class="pattern-card"><div class="pattern-title">执行中按需读取方法</div><div class="pattern-desc">原生 shell 关闭时，skill_read 提供受限的文本读取入口。只能读取已核验启用 Skill 的白名单文件；不能拿它读取工作区外任意文件，也不能借读取获得新权限。</div></div>
+</div>
+<p>受限启动还关闭原生线程目标，并把 <code>project_doc_max_bytes</code> 设为 0，避免自动目标轮次绕过队列、工作区 AGENTS.md 进入受信指令来源。这里描述的是本阶段配置，不是 Codex 的通用限制；Skill 的隐式触发效果仍需要真实模型评估。</p>
+</section>
+
+<section class="screen animate-in" id="s10-screen-3">
+<h2 class="screen-heading">Workflow：只在权限变化和人工决策处设步骤</h2>
+<p>部署包的 <code>write-article</code> 有两步：outline 先确定立意与大纲，只能在 drafts 新建文件，完成后等待确认；final 按确认结果完成研究与成稿，可写 research、drafts、outputs，结束后检查 <code>file-exists</code> 与 <code>format</code>。这是目标与边界约定，研究和写作的具体顺序仍留给模型。</p>
+<p><span class="term" data-definition="步骤可新建文件的范围，只能在 Agent 基础权限内收窄；它不额外授予读取或覆盖权限。">writes</span> 在启动时校验，不能超出 Agent 可新建文件的位置；派发时作为 <code>gate.start(job, grants, writes)</code> 的参数交给权限门。自定义 Workflow 不能引用未声明 Skill；授权只能使用代码支持的 <code>knowledge.update</code>，并落在 Agent 可更新的知识库内。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 138–147 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="138" data-end="147">  outcome(job, turn) {
+    if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
+    let workflow;
+    try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
+    const step = stepOf(workflow, job.step || 0);
+    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+    if (checks &amp;&amp; !checks.every(check =&gt; check.passed)) return { status: "needs-review", checks };
+    if (step.index &lt; step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+    return { status: "completed", checks };
+  }</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>138 行</strong>：outcome 根据任务记录与这一轮的结果计算业务状态。</p>
+<p class="tl"><strong>139 行</strong>：Turn 未 completed 或任务是 append 时，直接返回轮次状态，不进入这里的 Workflow 验收。</p>
+<p class="tl"><strong>140 行</strong>：准备保存解析后的 Workflow。</p>
+<p class="tl"><strong>141 行</strong>：解析任务引用；若解析抛错，当前实现回退 completed 且 checks=null，不能说任何 completed 都有验收证据。</p>
+<p class="tl"><strong>142 行</strong>：选择当前步骤；job.step 未设置时按第 0 步处理。</p>
+<p class="tl"><strong>143 行</strong>：只运行本步声明的 checks；使用实际产物记录、工作区与允许格式，没有 checks 则为 null。</p>
+<p class="tl"><strong>144 行</strong>：任何一项检查未通过，优先返回 needs-review。</p>
+<p class="tl"><strong>145 行</strong>：有下一步时，confirm 为真则 waiting；否则直接 queued 并把 step 加一。</p>
+<p class="tl"><strong>146 行</strong>：已是最后一步且没有失败检查，才返回 completed。</p>
+<p class="tl"><strong>147 行</strong>：结束结果计算；状态保存和下一次唤醒在调用方完成。</p>
+</div></div></div>
+<table><thead><tr><th>结果</th><th>含义</th><th>下一件事</th></tr></thead><tbody>
+<tr><td>needs-review</td><td>本轮正常结束，但本步检查未通过</td><td>保存检查结果供核对；不自动重试、不因此暂停队列</td></tr>
+<tr><td>waiting</td><td>本步允许结束，有下一步且要求确认</td><td>保持当前 step；等待用户确认或结束任务</td></tr>
+<tr><td>queued</td><td>可以继续下一步</td><td>在同一会话空闲且满足调度条件时派发</td></tr>
+<tr><td>completed</td><td>最后一步结束，未出现失败检查</td><td>查看 checks 与产物；状态本身不保证内容质量</td></tr>
+</tbody></table>
+<p>大纲步骤没有声明 checks，进入 waiting 不能单独证明大纲文件已落盘。成稿的两项检查也只检查登记产物存在及格式合规，不检查观点质量和事实准确性。<code>sources-cited</code> 看产物是否带来源版本，<code>wiki-effective</code> 看是否有生效修订，都是结果检查，不检查工具调用顺序。</p>
+<p><span class="term" data-definition="某个任务等用户决定的状态，不是队列暂停；普通 chat 可以继续，但不会自动推进等待任务。">waiting</span> 不占住下一轮执行。用户可以先讨论大纲，再确认并补充“第二部分增加案例”；服务把任务 step 加一，下一轮的用户文本只含确认提示和补充说明，不重复原文；同一轮仍会前置本步任务说明，并附上 Workflow 指定的已启用 Skill。原始要求仍在同一 Thread 历史里。取消等待任务会记为 cancelled，再确认返回 409。</p>
+</section>
+
+<section class="screen animate-in" id="s10-screen-4">
+<h2 class="screen-heading">可以提议，不能自批：授权发生在模型之外</h2>
+<p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <span class="term" data-definition="模型提出另一类任务的受限工具，只接受 workflow、params、text 与 reason；只产生 proposed，不提供确认操作。">propose_task</span>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 149–164 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="149" data-end="164">  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("提议只接受 workflow、params、text 与 reason。", 400);
+    const threadId = requireId(context.threadId, "会话 ID");
+    const workflow = this.resolve({ id, params });
+    if (workflow.id === "chat") throw new AppError("普通对话不需要提议，直接回答即可。", 400);
+    const body = requireText(text), why = requireText(reason).slice(0, 500);
+    return this.serial(threadId, async () =&gt; {
+      if ((await this.store.list(threadId)).filter(job =&gt; job.status === "proposed").length &gt;= 3)
+        throw new AppError("本会话已有 3 个待确认的提议，请先等用户处理。", 429);
+      const job = { id: randomUUID(), threadId, userId: context.userId, text: body, mode: "enqueue", targetTurnId: null,
+        workflow: workflow.id, params: workflow.params, step: 0, status: "proposed", reason: why,
+        agentHash: this.config.agent?.descriptor?.hash, createdAt: Date.now() };
+      await this.store.create(job);
+      await this.publish(threadId);
+      return { taskId: job.id, status: "proposed", workflow: workflow.id, note: "已提议，等待用户确认；确认前不会执行，也不授予任何权限。" };
+    });</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>149 行</strong>：提议只接收 Workflow、参数、正文与理由，其余字段进入 rest；context 来自工具调用的可信上下文。</p>
+<p class="tl"><strong>150 行</strong>：多余字段立即返回 400；模型不能携带 status=queued 改写状态。</p>
+<p class="tl"><strong>151–152 行</strong>：校验会话标识并解析 Workflow；解析检查 Agent 能力，但没有授予任务权限。</p>
+<p class="tl"><strong>153 行</strong>：普通 chat 无需提议，指定 chat 会返回 400。</p>
+<p class="tl"><strong>154 行</strong>：校验正文和理由，理由最多保留 500 字符。</p>
+<p class="tl"><strong>155 行</strong>：进入该 Thread 的串行操作，避免同会话并发越过数量检查。</p>
+<p class="tl"><strong>156–157 行</strong>：已有 3 个 proposed 就返回 429，要求先等用户处理。</p>
+<p class="tl"><strong>158–160 行</strong>：创建新任务标识，绑定会话、用户与 Agent 版本；status 固定为 proposed，step 从 0 开始。</p>
+<p class="tl"><strong>161–162 行</strong>：保存记录并发布状态；这里没有调用 authorize 或唤醒调度。</p>
+<p class="tl"><strong>163 行</strong>：把提议标识和等待确认的说明返回模型，不报告已执行。</p>
+<p class="tl"><strong>164 行</strong>：结束串行操作；方法的闭合括号位于紧接的下一行。</p>
+</div></div></div>
+<p>有了 proposed 记录，知识库也还没有因此变化。每个会话最多保留 3 个待确认提议，更多请求返回 429；没有数据层提供的会话身份时工具直接拒绝。真实服务使用 PostgreSQL 模式，离线测试用任务仓储和门禁夹具验证状态行为。</p>
+<p>用户确认走 <code>POST /tasks/confirm</code>。HTTP 入口在 <code>gate.run(gate.user(), dispatch)</code> 中调用确认方法，下面的 authorize 才是在用户身份下核对授权。读取 Skill、模型写“已批准”、再次提交带 queued 的参数，都不能替代这个入口。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 167–185 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="167" data-end="185">  async confirm({ threadId, taskId, text, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("确认只接受 threadId、taskId 与 text。", 400);
+    requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    const note = text == null || text === "" ? null : requireText(text);
+    await this.sessions.ensure(threadId);
+    return this.serial(threadId, async () =&gt; {
+      const job = await this.job(taskId);
+      if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
+      if (job.status === "proposed") {
+        const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });
+        if (workflow.grants.length) this.gate?.authorize(workflow.grants);
+      }
+      const fields = job.status === "proposed" ? { status: "queued", note } : { status: "queued", step: (job.step || 0) + 1, note };
+      if (!(await this.store.patch(taskId, fields, ["waiting", "proposed"])))
+        throw new AppError("只有等待确认的任务可以继续。", 409);
+      await this.publish(threadId);
+      await this.wake(threadId);
+      return this.publicJob(await this.job(taskId));
+    });</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>167–168 行</strong>：确认只接受 threadId、taskId 和可选 text；其他字段返回 400。</p>
+<p class="tl"><strong>169–170 行</strong>：校验两个标识，将合法的补充说明保存为 note。</p>
+<p class="tl"><strong>171–172 行</strong>：确认会话可用，再进入该 Thread 的串行操作。</p>
+<p class="tl"><strong>173–174 行</strong>：读取任务并检查它属于当前会话，否则返回 404。</p>
+<p class="tl"><strong>175–177 行</strong>：任务为 proposed 时重新解析 Workflow，并核对它申请的 grants；HTTP 调用方已进入用户身份上下文。</p>
+<p class="tl"><strong>178 行</strong>：结束提议授权分支；waiting 任务不走这次提议授权。</p>
+<p class="tl"><strong>179 行</strong>：提议进入 queued，保留第 0 步；waiting 任务进入 queued 并推进一步，两者都保存 note。</p>
+<p class="tl"><strong>180–181 行</strong>：条件更新只接受 waiting 或 proposed；已取消、已完成等状态返回 409。</p>
+<p class="tl"><strong>182–183 行</strong>：发布状态并唤醒调度；不是在确认函数里直接调用模型。</p>
+<p class="tl"><strong>184–185 行</strong>：返回更新后的公开任务视图，结束串行操作。</p>
+</div></div></div>
+<p>确认让任务进入队列；调度器真正取出任务后，才建立本次执行的权限上下文并调用 turn/start。额外授权不会留给后面的普通 chat；任务结束由权限门撤销上下文。用户也可以结束提议，服务只接受 queued、waiting、proposed 的取消，不把它当作正在运行 Turn 的中断操作。</p>
+<p>点击下一步追踪边界。以下是<strong>教学模拟，非真实执行结果</strong>；图中的“模型”仍是 Codex 内的工作模型，并非另一个 Agent。</p>
+<div class="flow-animation" id="s10-flow" data-steps='[{&quot;highlight&quot;: &quot;flow-s10-service&quot;, &quot;label&quot;: &quot;1. 教学模拟 · 模型调用 propose_task；服务校验 Workflow，只保存 proposed。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s10-model&quot;, &quot;to&quot;: &quot;s10-service&quot;}, {&quot;highlight&quot;: &quot;flow-s10-user&quot;, &quot;label&quot;: &quot;2. 教学模拟 · 发布提议供用户查看；没有排队、没有新增权限。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s10-service&quot;, &quot;to&quot;: &quot;s10-user&quot;}, {&quot;highlight&quot;: &quot;flow-s10-service&quot;, &quot;label&quot;: &quot;3. 教学模拟 · 用户确认并补充说明；HTTP 在用户身份下核对 grants，条件更新为 queued。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s10-user&quot;, &quot;to&quot;: &quot;s10-service&quot;}, {&quot;highlight&quot;: &quot;flow-s10-gate&quot;, &quot;label&quot;: &quot;4. 教学模拟 · 调度取得任务，gate.start 建立本轮 grants 与 writes 上下文。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s10-service&quot;, &quot;to&quot;: &quot;s10-gate&quot;}, {&quot;highlight&quot;: &quot;flow-s10-model&quot;, &quot;label&quot;: &quot;5. 教学模拟 · 发出 turn/start；方法由 Skill 提供，结束后按实际结果验收。&quot;, &quot;packet&quot;: true, &quot;from&quot;: &quot;s10-gate&quot;, &quot;to&quot;: &quot;s10-model&quot;}]'>
+<div class="flow-actors"><div class="flow-actor" id="flow-s10-model"><div class="flow-actor-icon">⚙️</div><strong>Codex / 模型</strong></div><div class="flow-actor" id="flow-s10-service"><div class="flow-actor-icon">📋</div><strong>任务服务</strong></div><div class="flow-actor" id="flow-s10-user"><div class="flow-actor-icon">⌨️</div><strong>用户确认</strong></div><div class="flow-actor" id="flow-s10-gate"><div class="flow-actor-icon">🔑</div><strong>权限门</strong></div></div>
+<div class="flow-packet" hidden></div><div class="flow-step-label">点击“下一步”追踪提议到执行</div>
+<div class="flow-controls"><button class="btn flow-next-btn">下一步</button><button class="btn flow-reset-btn">重置</button><span class="flow-progress">0 / 5</span></div></div>
+</section>
+
+<section class="screen animate-in" id="s10-screen-5">
+<h2 class="screen-heading">亲手验证：把预期观察与测试结果分开读</h2>
+<p>使用 Node.js 24 或更高版本，先从仓库根目录进入本阶段。项目依赖已安装时直接运行下面命令；尚未安装时先执行 <code>npm ci</code> 安装锁定依赖。以下实验使用临时目录与夹具，不需配置 .env、启动数据库或调用外部模型。</p>
+<pre><code>cd stages/s10-skill-workflow
+node --version
+npm run lesson -- list
+npm run lesson -- s10-package
+npm run lesson -- s10-steps
+npm run lesson -- s10-propose</code></pre>
+<ol>
+<li><strong>核对配置边界：</strong>s10-package 会创建合法包，再分别尝试脚本、符号链接、工作区内角色与 Skill，断言被拒绝；新增 references 文件后比较指纹。查看末尾 TAP 报告中的 pass 与 fail，而不是把开头“预期观察”当成已通过结果。</li>
+<li><strong>核对等待与下一步：</strong>s10-steps 的夹具任务名为 article，概念对应部署包的 write-article。测试完成大纲后检查 waiting，插入一条 chat 并确认它完成，随后带补充说明确认任务。断言第二步输入不含重复原文、writes 随步骤变化；假轮次没有产物，最后应为 needs-review，而非 completed。</li>
+<li><strong>核对提议与授权的时间：</strong>s10-propose 先断言 proposed 时授权调用数和新 turn/start 数为 0，再确认并检查 grants 与补充输入。它还覆盖夹带 status 的拒绝、取消提议、3 个待确认上限和缺会话身份的拒绝。</li>
+</ol>
+<p>三个入口各筛选一个测试。要在终端逐行核对断言，可继续运行以下只读命令；范围对应本阶段源码与测试，结果不会写入工作区。</p>
+<pre><code>sed -n '174,213p' tests/agent-core.test.mjs
+sed -n '195,262p' tests/workflows.test.mjs
+sed -n '138,185p' server/modules/messages/index.mjs</code></pre>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">这些实验究竟证明了什么</p><p>package 入口直接检查包路径、文件限制与指纹变化，没有执行独立的 Skill 安装测试，也没有启动 Codex；撤销由 assertCurrent 源码解释。steps 的权限门只记录 writes，不验证真实文件拦截。propose 的权限门记录授权调用，真实用户身份检查要结合 HTTP 与 PermissionGate 源码。三者均不能证明真实模型会主动读 Skill、正确遵循方法或写出高质量文章。</p></div></div>
+<p>如需进一步验证实际文件门禁和 Skill 同步，仍在本阶段目录执行现有的补充断言：</p>
+<pre><code>node --test --test-name-pattern='^Skill 安装' tests/agent-core.test.mjs
+node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.test.mjs</code></pre>
+<p>这两条也不调用模型。完整的真实 Codex、PostgreSQL 与权限门链路属于 catalog 中的 s10-e2e 集成实验，有额外环境要求，不计入本章三个离线实验的通过范围。若本机沙箱拒绝运行，应保留错误并报告受阻，不能将未运行写成通过。</p>
+<div class="quiz-container" id="s10-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="1.2 的 Skill 必须在 Agent 包内、工作区外，脚本不在文本白名单中。" data-explanation-wrong="A 把可写资料当配置。C 把模型陈述当成装配核验，均不能成立。"><h3 class="quiz-question">用户把带 run.sh 的 Skill 放到工作区，能成为 1.2 Agent 的受信方法吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>可以，工作区里任何方法都自动启用</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>不能，包路径和文本白名单都会限制装配</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>只要模型说已经读过就可以</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="waiting 只停该任务；普通对话可以执行，但不替用户确认。" data-explanation-wrong="B 把普通输入当成状态操作。C 混淆任务等待和队列暂停。"><h3 class="quiz-question">大纲步骤进入 waiting 后，一条普通 chat 完成，会推进写作任务吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>不会；写作任务继续 waiting，直到用户确认</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>会，普通对话结束等价于确认</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>不会，因为整个会话都已暂停</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="本步验收优先于最终完成判断；无产物时两项检查不能通过。" data-explanation-wrong="A 把轮次结束当成业务验收。B 假设了不存在的确认跳过机制。"><h3 class="quiz-question">成稿 Turn 已 completed，file-exists 与 format 却没有找到产物，应报告什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>只要有回答，就显示交付成功</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>退回 waiting，让用户确认跳过</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>needs-review，保留检查结果且不自动重试</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="b" data-explanation-right="proposed 仅记录建议；用户确认与实际派发是两个后续动作。" data-explanation-wrong="A 把 Skill 当授权。C 会被提议入口以多余字段拒绝。"><h3 class="quiz-question">模型提议更新 general，收到 proposed 回执。下一步权限如何生效？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>读取 knowledge Skill 后自动得到权限</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>用户确认时核对授权，入队后派发时建立本任务权限</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>模型再发一个 status=queued 参数即可</span></button></div><div class="quiz-feedback"></div></div>
+</div>
+<div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s10-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s10-quiz">重新作答</button></div>
+<p><a href="/course/changes.html#s10">→ 打开 s10 阶段演示与实践命令</a></p>
+<p>任务现在有了方法、确认点和结果检查。继续扩展云端 Agent 时，还要面对模型选择、供应商故障和每轮用量：s11 模型网关将接手这些问题。Workflow 的任务边界仍然有效，不会因为更换模型而消失。</p>
+</section>
+</div>
+</div>
+</section>

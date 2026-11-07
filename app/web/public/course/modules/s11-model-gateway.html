@@ -1,0 +1,244 @@
+<section class="module" id="module-s11">
+<div class="module-content">
+<header class="module-header animate-in">
+<span class="module-number">s11</span>
+<h2 class="module-title">模型网关：选谁来做，何时停派</h2>
+<p class="module-subtitle">用模型清单统一声明，用路由表达任务需求，用账本控制后续派发；协议转换与故障备用交给 Bifrost。</p>
+</header>
+<div class="module-body">
+<section class="screen animate-in" id="s11-screen-1">
+<h2 class="screen-heading">这个云端 Agent 还缺什么：协调模型与用量</h2>
+<p>上一章 s10 用 Skill 教方法，用 Workflow 管步骤、权限与确认。写作任务可以先产出大纲，等用户确认后再继续成稿。这个云端 Agent 还缺什么？大纲和成稿未必适合用同一个模型；知识检索需要向量模型，生成图片又是另一种用途。模型越来越多之后，谁负责挑选，谁持有密钥，花费达到上限时谁来停止派发，都需要明确的执行位置。</p>
+<figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1080" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
+<p><span class="term" data-definition="本阶段使用 Bifrost 承接模型请求：对 Codex 提供 Responses 接口，向上游转换协议，并按配置处理备用链和 token 限流。">模型网关</span> 是请求经过的服务。<span class="term" data-definition="服务端根据用途、场景、步骤需求与预算策略选择本轮提交的模型；它不负责网关内部的失败重试。">模型路由</span> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
+<table><thead><tr><th>角色</th><th>负责什么</th><th>本章中的证据</th></tr></thead><tbody>
+<tr><td>Codex</td><td>管理 Thread 与 Turn，执行推理和工具循环，报告模型用量。</td><td>turn/start 参数、thread/tokenUsage/updated 通知。</td></tr>
+<tr><td>服务端</td><td>校验清单、挑选模型、关联任务、记账与控制派发。</td><td>selectedModel、modelSource、用量账本与队列预算状态。</td></tr>
+<tr><td>Bifrost</td><td>持有服务商凭据，转换协议，处理请求失败后的备用链与限流。</td><td>生成配置可离线检查，真实请求行为需要集成验证。</td></tr>
+</tbody></table>
+<p>本章以网关模式为主：Codex 的地址与密钥指向网关，工具层也可通过同一入口使用向量、图像和视频模型。不要把这读成所有配置都强制经网关：没有启用网关时仍有直连路径，RAG 单独设置了 EMBEDDING_BASE_URL 时，使用这条独立连接，不再按 routes.embedding 改写模型和维数。</p>
+</section>
+
+<section class="screen animate-in" id="s11-screen-2">
+<h2 class="screen-heading">清单先通过检查，密钥再按边界传递</h2>
+<p><code>config/models.json</code> 是配置事实的集中入口。providers 记录服务商接口类型、地址和密钥变量名；models 记录用途、上下文、输入类型、原生工具、推理档位、价格与备用模型；routes 和 scenes 描述候选顺序。用途有 chat、embedding、rerank、image、video、tts、asr，登记用途不等于已经实现了对应的产品工具。</p>
+<p><span class="term" data-definition="模型能承担的工作类别。看图和长上下文是 chat 模型的能力条件，不是独立的 purpose；image 则表示生成图像。">purposes</span> 先回答“做什么”。例如 embedding 必须声明 dimensions，chat 必须声明 contextWindow；走 anthropic 格式的对话模型还必须填 maxOutputTokens，供网关转换时使用。备用模型必须覆盖主模型全部用途，但可以缺少搜索或看图能力，启动时对此给出提醒。</p>
+<p><code>validateRegistry</code> 会拒绝不存在的模型引用、非法用途、错误推理档位与非法价格。服务商启用则由 <code>enabledProviders</code> 判断：它声明的 keyEnv、baseUrlEnv 都有值才启用。这个检查不访问上游，也不验证账号余额；Ollama 只声明地址变量时，可以不带供应商密钥启用。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/codex/launch.mjs · 第 133–147 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/codex/launch.mjs" data-start="133" data-end="147">  // 网关模式下由模型路由决定默认的对话模型（CODEX_MODEL 可覆盖），工作流步骤再按需切换（见 messages）。
+  let router = gateway &amp;&amp; registry ? createModelRouter(registry, environment) : null;
+  const searchMode = environment.AGENT_WEB_SEARCH?.trim() ?? "auto";
+  if (!["auto", "off"].includes(searchMode)) throw new Error("AGENT_WEB_SEARCH 必须为 auto 或 off。");
+  const chosen = router?.resolve();
+  const webSearch = searchMode === "auto" &amp;&amp; chosen?.spec.nativeTools?.includes("web_search") ? "live" : "disabled";
+  if (router &amp;&amp; webSearch === "live") router = createModelRouter(registry, environment, { webSearch: true });
+  const warnings = router ? fallbackWarnings(registry, environment) : [];
+  if (gateway) environment = { ...environment, CODEX_BASE_URL: gateway.baseUrl, CODEX_API_KEY: gateway.apiKey, ...(router ? { CODEX_MODEL: chosen.id } : {}) };
+  const env = { ...environment };
+  // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。
+  for (const key of Object.keys(env)) {
+    if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|AGENT_GATEWAY_KEY|PG[A-Z_]+)$/.test(key) || (/_API_KEY$/.test(key) &amp;&amp; key !== "CODEX_API_KEY")) delete env[key];
+  }
+  const model = environment.CODEX_MODEL?.trim() || undefined;</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>133–134 行</strong>：创建模型路由，用它决定网关模式的默认对话模型；CODEX_MODEL 可以覆盖默认候选。</p>
+<p class="tl"><strong>135–136 行</strong>：读取 AGENT_WEB_SEARCH，缺省 auto；只允许 auto 或 off，拼写错误直接报错。</p>
+<p class="tl"><strong>137–138 行</strong>：先选出默认模型，再看它是否声明 web_search，得到 live 或 disabled。</p>
+<p class="tl"><strong>139 行</strong>：搜索开启时重建路由，让之后的对话选择也受搜索能力约束。</p>
+<p class="tl"><strong>140 行</strong>：收集备用链的能力损失提醒；提醒不等于拒绝启动。</p>
+<p class="tl"><strong>141 行</strong>：把地址和 CODEX_API_KEY 换成网关连接值，并使用选中的默认模型名。</p>
+<p class="tl"><strong>142–143 行</strong>：复制出子进程环境，下面只在这个副本里删除变量。</p>
+<p class="tl"><strong>144–146 行</strong>：遍历环境，删除数据库等敏感变量以及 CODEX_API_KEY 以外的所有 *_API_KEY；AGENT_GATEWAY_KEY 本身也被移除。</p>
+<p class="tl"><strong>147 行</strong>：取最终模型名供后续校验和返回；这一步没有向真实模型发送请求。</p>
+</div></div></div>
+<p>生成的网关配置把密钥写成 <code>env.KIMI_API_KEY</code> 这样的变量引用，Compose 只向 gateway 服务传入各家凭据。Codex 的 <code>CODEX_API_KEY</code> 则保存网关访问值；启动参数和模型目录不写密钥正文。启用网关的 AGENT_GATEWAY_KEY 必须符合本阶段前缀校验，且不能同时设置直连 CODEX_BASE_URL / CODEX_API_KEY。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">配置可用与服务可用要分开证明</p><p>离线实验能证明清单校验、配置引用和子进程环境过滤。它没有启动真实 Bifrost，不能据此宣称鉴权、协议转换或故障切换成功。nativeTools 也是能力声明；模型是否实际执行搜索，需要另外检查请求和调用证据，不能只听它说“我搜索了”。</p></div></div>
+</section>
+
+<section class="screen animate-in" id="s11-screen-3">
+<h2 class="screen-heading">这一步选谁：优先级之后还有能力检查</h2>
+<p><span class="term" data-definition="scenes 中的一组有序候选，如 fast 或 strong。场景可以混合不同用途，路由先过滤 purpose，再检查每个候选的能力与启用条件。">场景</span> 是候选组的名字，不是某个固定品牌，也不是价格或质量保证。默认选择取 routes；具体写成“服务商/模型名”时只检查该模型；写场景名时才逐个尝试场景候选。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/gateway/router.mjs · 第 13–33 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/gateway/router.mjs" data-start="13" data-end="33">  const unmet = (id, purpose, needs) =&gt; {
+    const spec = registry.models[id];
+    if (!spec?.purposes.includes(purpose)) return `不能做${LABELS[purpose]}`;
+    const provider = registry.providers[splitModelId(id).provider];
+    if (!enabled.has(splitModelId(id).provider)) return `服务商未启用（.env 里缺 ${[provider.keyEnv, provider.baseUrlEnv].filter(Boolean).join("、")}）`;
+    if (needs.image &amp;&amp; !(spec.inputModalities || ["text"]).includes("image")) return "不能看图";
+    if (needs.contextTokens &amp;&amp; (spec.contextWindow || 0) &lt; needs.contextTokens) return `上下文只有 ${spec.contextWindow || 0}`;
+    const missing = (needs.nativeTools || []).filter(tool =&gt; !spec.nativeTools?.includes(tool));
+    if (missing.length) return `不支持原生能力 ${missing.map(tool =&gt; tool === "web_search" ? "联网搜索（web_search）" : tool).join("、")}`;
+    return null;
+  };
+
+  const pick = (candidates, purpose, needs, source) =&gt; {
+    const reasons = [];
+    for (const id of candidates) {
+      const reason = unmet(id, purpose, needs);
+      if (!reason) return { id, ...splitModelId(id), purpose, spec: registry.models[id], source };
+      reasons.push(`${id}：${reason}`);
+    }
+    throw new AppError(`没有可用的${LABELS[purpose]}模型（${source}）。${reasons.length ? `候选：${reasons.join("；")}` : "没有登记候选。"}`, 503, "MODEL_UNAVAILABLE");
+  };</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>13–14 行</strong>：unmet 接收模型、用途与需求，取得该模型的声明。</p>
+<p class="tl"><strong>15 行</strong>：用途不包含本次 purpose，就给出拒绝原因。</p>
+<p class="tl"><strong>16–17 行</strong>：取出服务商；若不在已算好的 enabled 集合中，就返回未启用原因，并在原因里列出声明的变量名。变量是否有值由 enabledProviders 在创建路由时判断；是否改试下一个候选由 pick 第 28–31 行决定。</p>
+<p class="tl"><strong>18 行</strong>：需要看图时，候选必须声明 image 输入。</p>
+<p class="tl"><strong>19 行</strong>：需要指定上下文长度时，contextWindow 必须足够。</p>
+<p class="tl"><strong>20–21 行</strong>：找出未支持的原生工具；搜索开启时补入的 web_search 也在这里检查。</p>
+<p class="tl"><strong>22–23 行</strong>：没有不满足项就返回 null，结束 unmet。</p>
+<p class="tl"><strong>24–26 行</strong>：空行分隔两个函数；pick 开始建立逐候选原因列表。</p>
+<p class="tl"><strong>27–28 行</strong>：按配置顺序遍历候选，对每个执行上述检查。</p>
+<p class="tl"><strong>29 行</strong>：第一个没有拒绝原因的候选立即返回，并带上模型声明和来源。</p>
+<p class="tl"><strong>30–31 行</strong>：不合格的候选留下原因，继续循环。</p>
+<p class="tl"><strong>32–33 行</strong>：全部不合格则抛出 503 / MODEL_UNAVAILABLE，列出原因；不会降低需求再试。</p>
+</div></div></div>
+<p>搜索开关在服务启动时确定：auto 跟随实际默认模型的 nativeTools，off 关闭，直连模式也关闭。搜索为 live 时，每次对话路由都会自动加入 web_search 要求；<code>turn/start</code> 不携带搜索开关。因此一个支持搜索的默认模型，可能让 fast 和 strong 最后都选到同一个 Kimi 候选。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 284–306 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="284" data-end="306">        // 优先级：步骤 &gt; 任务 &gt; 默认；预算只替换场景或默认选择，能力要求继续生效。
+        const router = this.config.launch.router;
+        let selection = step.model || job.model || null;
+        let modelSource = step.model ? "步骤指定" : job.model ? "任务指定" : "默认路由";
+        if (router &amp;&amp; budget?.downgraded &amp;&amp; !selection?.includes("/")) {
+          selection = budget.downgradeScene;
+          modelSource = "预算降级";
+        }
+        if (selection) modelSource += `：${selection.includes("/") ? "" : "场景 "}${selection}`;
+        const chosen = router?.resolve({ model: selection, needs: step.needs });
+        if (chosen) validateEffort(chosen, step.effort);
+        const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
+        await this.store.patch(job.id, { selectedModel: model, modelSource });
+        await this.publish(threadId);
+        this.gate?.start(job, workflow.grants, step.writes);
+        sent = true;
+        this.sessions.prepareUsage(threadId, { model, taskId: job.id });
+        const result = await this.rpc.request("turn/start", {
+          threadId,
+          clientUserMessageId: job.id,
+          input: prepared,
+          ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),
+        });</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>284–287 行</strong>：取得路由，以步骤、任务、默认的顺序确定 selection，并记录选择层级。</p>
+<p class="tl"><strong>288–291 行</strong>：达到降级比例时，仅把场景或默认选择替换成降级场景；含 / 的具体模型不改选。</p>
+<p class="tl"><strong>292 行</strong>：把具体模型或场景名补进可读的 modelSource。</p>
+<p class="tl"><strong>293 行</strong>：把 selection 和步骤 needs 一起交给路由，降级没有抹掉需求。</p>
+<p class="tl"><strong>294 行</strong>：对已选模型校验 effort；不支持时失败，不会继续遍历其他候选来匹配 effort。</p>
+<p class="tl"><strong>295–297 行</strong>：取得模型名，写入任务的 selectedModel 与 modelSource，再发布状态。</p>
+<p class="tl"><strong>298–299 行</strong>：开启本任务的工具权限上下文，并标记进入发起流程。</p>
+<p class="tl"><strong>300 行</strong>：先关联路由模型与任务，避免用量通知早于 RPC 响应时失去归属。</p>
+<p class="tl"><strong>301–304 行</strong>：发出 turn/start，带 Thread、稳定消息 ID 和已准备的输入。</p>
+<p class="tl"><strong>305–306 行</strong>：网关路由存在时明确带 model 和 effort；档位取步骤值、模型默认值或 null，随后结束 RPC 调用。</p>
+</div></div></div>
+<p>终端 <code>/model strong</code> 为当前会话后续提交选择场景，<code>/model default</code> 清除该选择；工作流步骤仍有更高优先级。运行中的追加走 <code>turn/steer</code>，沿用当前轮次模型，不会中途换模型。追加到已结束轮次需要新开 Turn，才重新使用任务选择与预算检查。</p>
+<div class="pattern-cards">
+<div class="pattern-card"><div class="pattern-title">预算降级仍要满足需求</div><div class="pattern-desc">配置 AGENT_BUDGET_DOWNGRADE_AT=0.8 后，日或月任一已设预算达到 80%，场景或默认选择改用 downgradeScene，缺省 fast。具体模型不改选，但仍受能力校验和硬预算约束；如果新场景全都不满足 needs，就报错，不暗中放宽要求。</div></div>
+<div class="pattern-card"><div class="pattern-title">备用链发生在请求层</div><div class="pattern-desc">fallbacks 由网关处理，只生成已启用服务商的备用关系。它应对上游失败，并不重新理解任务语义。备用模型可能缺搜索或看图，提醒不会阻止启动；已经开始输出后才出错，也没有透明切换继续输出的保证。</div></div>
+</div>
+<p>向量、图像和视频同样按 purpose 选模型。媒体工具的 quality=fast 或 strong 只参与场景选择，不直接传给供应商；省略时使用各自 routes。视频生成提交后返回任务 ID，由后台查询与保存结果；提交结果不确定时不自动重提。本章用这条边界说明：选中了模型不等于异步产物已经完成。</p>
+</section>
+
+<section class="screen animate-in" id="s11-screen-4">
+<h2 class="screen-heading">本次用量怎样入账，达到预算怎样等待</h2>
+<p>一次 Turn 可能多次请求模型。Codex 的通知同时给出 Thread 累计 total 与本次 last；直接累加 total 会重复计算历史。<span class="term" data-definition="当前进程按 Thread 记住已见过的最大累计 totalTokens，只接受增长的通知；入账值来自 last，这个内存水位不是跨进程的持久去重键。">累计水位</span> 用来识别通知是否新增，账本用来记录本次消耗。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/usage/index.mjs · 第 76–85 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/usage/index.mjs" data-start="76" data-end="85">  recordChat({ threadId, turnId, tokenUsage }, context) {
+    const total = tokenUsage.total.totalTokens;
+    if (this.threadTotals.has(threadId) &amp;&amp; total &lt;= this.threadTotals.get(threadId)) return this.pending;
+    this.threadTotals.set(threadId, total);
+    return this.record({ ...context, ...tokenUsage.last, threadId, turnId, source: 'chat' });
+  }
+  async grouped(start, end) {
+    await this.pending;
+    if (!this.pool) return this.rows.filter(row =&gt; row.createdAt &gt;= start &amp;&amp; row.createdAt &lt; end)
+      .map(row =&gt; ({ ...row, day: dayKey(row.createdAt, this.budget.timezone), estimatedCost: row.estimatedCost || 0 }));</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>76–77 行</strong>：recordChat 取得 Thread 的累计 total.totalTokens。</p>
+<p class="tl"><strong>78 行</strong>：已有水位且累计值没有增长，就返回现有写入链，不再入账。</p>
+<p class="tl"><strong>79 行</strong>：记录更高水位；这个 Map 属于当前服务进程。</p>
+<p class="tl"><strong>80–81 行</strong>：只把本次 last 与任务上下文交给 record，来源固定为 chat；结束此方法。</p>
+<p class="tl"><strong>82–83 行</strong>：汇总前等待 pending 写入链。写入失败会使这里也失败，不能当作零用量。</p>
+<p class="tl"><strong>84–85 行</strong>：没有数据库池的独立模块或测试使用内存行，按时间区间过滤并补上当地日期；生产不会因数据库故障自动切到这个分支。</p>
+</div></div></div>
+<p>例如累计值依次为 1000、1120、1120，每次 last 都是 120：当前进程只记前两条，共 240。首次通知不会补记历史累计；重启后水位重新建立，仍只记第一次收到的 last。这不表示停止期间的调用会补账，也不能推导出跨重启的恰好一次记账保证。</p>
+<p>价格按写入当时的清单估算：缓存输入已含在 inputTokens，推理输出已含在 outputTokens，不另重复相加；媒体还可按张或秒计价。未定价不等于免费，记录标为未计价，token 仍计入预算。以后补价格不改旧记录，切币种也不把不同币种金额直接相加。Codex 通知没有网关最终备用模型，账本归属仍是提交的路由模型，因此金额不是供应商账单。</p>
+<div class="translation-block">
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 245–258 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="245" data-end="258">    if (active || all.some((j) =&gt; executing.includes(j.status))) return;
+    const job = pending.find((j) =&gt; j.mode === "append") || pending[0];
+    if (!job) return;
+    const budget = await this.usage?.budgetStatus();
+    if (budget?.exceeded) {
+      this.retryBudget(threadId, budget);
+      await this.publish(threadId);
+      return;
+    }
+    clearTimeout(this.budgetTimers.get(threadId));
+    this.budgetTimers.delete(threadId);
+    if (!(await this.store.patch(job.id, { status: "starting", selectedModel: null, modelSource: null }, ["queued"])))
+      return;
+    await this.publish(threadId);</code></pre></div>
+<div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
+<p class="tl"><strong>245 行</strong>：仍有活动 Turn 或执行中任务就不派发新的轮次；匹配活动轮次的 append 已在更前面处理。</p>
+<p class="tl"><strong>246–247 行</strong>：选出待执行任务，没有任务就返回。</p>
+<p class="tl"><strong>248 行</strong>：等预算状态计算完成；它会等待已收到用量的写入。</p>
+<p class="tl"><strong>249–253 行</strong>：达到上限时登记复查定时器、发布队列状态，然后返回；任务仍是 queued。</p>
+<p class="tl"><strong>254–255 行</strong>：预算允许时清理此 Thread 的旧复查定时器。</p>
+<p class="tl"><strong>256–257 行</strong>：只允许从 queued 条件更新为 starting，同时清空上一步的模型选择；条件不成立就返回。</p>
+<p class="tl"><strong>258 行</strong>：发布 starting 状态；后续才会准备输入、选模型并发出 turn/start。</p>
+</div></div></div>
+<p><span class="term" data-definition="按 AGENT_BUDGET_TIMEZONE 的当地日历确定当天和当月边界，支持夏令时；不简单地在当前时刻加 24 小时。">自然日与自然月</span> 决定额度窗口。日/月 token、日/月金额四个上限独立生效，任一达到就停派；同时超限时 resetsAt 取最晚恢复时间。复查最多间隔 3 分钟，接近边界时缩短等待；额度恢复且没有其他暂停或执行阻塞，排队任务才继续，不需要 /continue。上限为 0 时仍会一直阻止新派发。</p>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">停派不是费用精确封顶</p><p>服务端没有为未来消耗预留额度，活动轮次与指向它的 steer 可以继续，并发请求也可能超出预算。网关虚拟密钥另设每日 token 兜底：默认使用已配置日 token 预算的 1.5 倍向上取整，可由 AGENT_GATEWAY_DAILY_TOKENS 覆盖；两者都未设置时没有这条限流。兜底耗尽可能拒绝在途后续请求，网关重启又会清空自己的计数，不能保证任意长轮次完成。</p></div></div>
+<p>正常超限只是预算等待。账本写入失败则是另一条故障路径：pending 链保留错误，真实通知处理触发 usageError，调度服务停止并要求核对任务。生产依赖 PostgreSQL，不会用一份空内存账本掩盖数据库故障。</p>
+</section>
+
+<section class="screen animate-in" id="s11-screen-5">
+<h2 class="screen-heading">亲手验证：把选择、拒绝和等待分别看清楚</h2>
+<p>使用 Node.js 24 或更高版本，并确认仓库既有 npm 依赖已安装。以下从仓库根进入本阶段；后续命令都在 <code>stages/s11-model-gateway</code> 执行。实验入口会隔离环境，不读取项目 .env，不需要真实模型密钥、Docker 或运行中的服务。</p>
+<pre><code>cd stages/s11-model-gateway
+node --version
+npm run lesson -- list
+npm run lesson -- s11-registry
+npm run lesson -- s11-routing
+npm run lesson -- s11-budget</code></pre>
+<ol>
+<li><strong>清单：</strong>在 s11-registry 的 TAP 报告中找到“模型清单校验”和“网关模式启动 Codex”两项。测试分别把错误备用模型放入内存副本、检查构造后的环境；应出现通过的 ok 记录，不能把测试用的错误配置当作整条实验失败。</li>
+<li><strong>选择：</strong>在 s11-routing 中找到“预算降级默认与步骤场景，具体模型豁免，保留能力约束和来源”。测试分别核对场景降级、具体模型保留、搜索约束与上下文不足时零次 turn/start；这些是不同分支，不是把一次失败请求自动回退成成功。</li>
+<li><strong>等待：</strong>在 s11-budget 中找到“预算阻止 dispatch，保持 queued”和“对话累计只用于去重”。测试推进注入的时钟到次日，断言 B 从 queued 进入 running，无需实际等待一天；累计去重例最终为 240 token，重建水位的独立例仅记 last=120。</li>
+<li><strong>确认结果：</strong>每个命令末尾查看 Node 的 pass / fail，以及入口的“状态”行。入口上方的“预期观察”只是待验证断言，不是通过证明。任何非零退出码或没有实际通过项都需查错，不能只看说明文字。</li>
+</ol>
+<p>还可以直接观察一次路由决策。下面只把内存占位变量交给真实路由函数，不访问网络、不改配置。第一次关闭搜索约束应选 DeepSeek Flash；第二次要求搜索时应选 Kimi；第三次要求 900 万上下文应打印 MODEL_UNAVAILABLE 与逐候选原因。</p>
+<pre><code>node --input-type=module &lt;&lt;'NODE'
+import { loadModelRegistry } from './server/modules/gateway/index.mjs';
+import { createModelRouter } from './server/modules/gateway/router.mjs';
+const registry = loadModelRegistry(process.cwd());
+const environment = { KIMI_API_KEY: 'fixture-only', DEEPSEEK_API_KEY: 'fixture-only' };
+for (const webSearch of [false, true]) {
+  const router = createModelRouter(registry, environment, { webSearch });
+  console.log(webSearch, router.resolve({ model: 'fast' }).id);
+}
+try {
+  createModelRouter(registry, environment).resolve({ model: 'fast', needs: { contextTokens: 9000000 } });
+} catch (error) {
+  console.log(error.code, error.message);
+}
+NODE</code></pre>
+<p>本页三组离线实验调用真实业务模块，RPC、仓储与 fetch 使用夹具；直接向 HTTP handler 投递内存事件，不监听端口。真实 PostgreSQL 持久化和 Bifrost 鉴权、协议转换、限流仍需各自集成门禁；这些离线结果也不证明模型的搜索质量或生成质量。</p>
+<div class="quiz-container" id="s11-quiz">
+<div class="quiz-question-block" data-correct="b" data-explanation-right="配置测试核对的是声明、生成对象与进程环境，不能代替真实请求。" data-explanation-wrong="A 把变量非空当作认证通过。C 忽略备用链只要求用途覆盖，能力损失可能只被提醒。"><h3 class="quiz-question">网关配置只含 env.变量引用，离线启动测试也通过，已经证明了什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>真实服务商密钥有效，且模型已开通</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>配置与 Codex 环境符合预期，真实网关鉴权仍需另外验证</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>主模型和备用模型的能力完全相同</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="c" data-explanation-right="resolve 保留会话搜索要求和步骤 needs；预算降级只换候选来源。" data-explanation-wrong="A、B 都假设单轮可以自行关闭搜索。本阶段搜索由启动配置决定，不能用降级绕过能力检查。"><h3 class="quiz-question">搜索开启，预算达到降级比例，fast 的首个候选不支持 web_search，该怎么选？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>暂时关闭搜索使用它</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>交给 Codex 自己改变本轮搜索配置</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>继续筛选满足搜索与步骤 needs 的候选，全都不满足就报错</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="a" data-explanation-right="首条和增长条各记 last=120，重复水位跳过，共 240。" data-explanation-wrong="B 累加了历史累计。C 把 Thread 历史总量当本次账本总量；recordChat 只用累计去重。"><h3 class="quiz-question">累计通知依次为 1000、1120、1120，每次 last 为 120，当前进程应记多少 token？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>240</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>3240</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>1120</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="b" data-explanation-right="服务端新轮次检查与网关请求限流在不同层，没有费用精确封顶或在途必成功的承诺。" data-explanation-wrong="A 不是预算等待的状态转换。C 混淆降级豁免和硬预算，具体模型仍须经过派发前预算检查。"><h3 class="quiz-question">服务预算达到上限后，哪一种行为符合代码？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>立即中断活动 Turn，排队项转 failed</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>保留 queued，额度恢复后复查；活动 steer 可继续，但网关兜底可能拒绝后续请求</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>具体模型既不降级，也不受硬预算限制</span></button></div><div class="quiz-feedback"></div></div>
+</div>
+<div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s11-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s11-quiz">重新作答</button></div>
+<p><a href="/course/changes.html#s11">→ 打开 s11 阶段演示与实践命令</a></p>
+<p>到这里，Workflow 的每一步既有权限与验收边界，也有可解释的模型选择和用量记录。继续把服务放到长期运行环境时，还要把进程、数据库、网关的启动与故障恢复组织起来；本章的离线检查是这些运行验证的前提。</p>
+</section>
+</div>
+</div>
+</section>
