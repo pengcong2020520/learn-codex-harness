@@ -4,6 +4,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {renderArchitecture} from '../../stages/build-architecture.mjs';
 import {renderChanges} from './build-changes-page.mjs';
+import {validateGlossary,linkGlossaryTerms} from './course-data.mjs';
+import {renderOverview,renderGlossary} from './build-course-pages.mjs';
 const project=fileURLToPath(new URL('../',import.meta.url)),repo=path.dirname(project),dir=path.join(project,'web/curriculum');
 // 新增有课时的阶段时，在此补充章节名称与重点。
 const chapterMetadata={
@@ -70,6 +72,8 @@ return {reference:{repository:'https://github.com/shareAI-lab/learn-claude-code'
 }
 export function buildCurriculum({check=false}={}){
 const output=buildCurriculumData(),lessons=output.lessons;
+const changes=JSON.parse(fs.readFileSync(path.join(repo,'stages/changes.json'),'utf8'));
+const glossary=validateGlossary(JSON.parse(fs.readFileSync(path.join(dir,'glossary.json'),'utf8')),{repository:repo,stages:changes.stages});
 const course=path.join(project,'web/public/course'),serialized=JSON.stringify(output,null,2)+'\n';
 // 章节长文：_handbook.html 模板 + modules/*.html 拼成 handbook.html；课程首页 index.html 由 _reader.html 生成。
 const chapterStages=new Set();
@@ -81,7 +85,7 @@ const chapters=fs.readdirSync(path.join(course,'modules')).filter(f=>f.endsWith(
  if(chapterStages.has(stage))throw Error(`章节阶段重复：${stage}`);
  chapterStages.add(stage);
  if(/\son[a-z]+=/i.test(html))throw Error(`章节 ${f} 含内联事件；交互统一放在 handbook.js`);
- return {stage,id,title,html};
+ return {stage,id,title,html:linkGlossaryTerms(html,glossary)};
 });
 const dots=chapters.map(c=>`<button class="nav-dot" data-target="${c.id}" data-tooltip="${c.stage} ${c.title}" aria-label="${c.stage} ${c.title}"></button>`).join('\n      ');
 const coursePath=chapters.map(c=>`  <a href="#${c.id}">${c.stage} ${c.title}</a>`).join('\n');
@@ -89,7 +93,9 @@ const pages={'learning.js':fs.readFileSync(path.join(project,'web/public/app/lea
 // 课程里的总架构图直接取自各阶段 README 用的同一份生成结果（stages/build-architecture.mjs），不再单独绘制。
 for(const stage of fs.readdirSync(path.join(repo,'stages')).filter(d=>/^s\d\d-/.test(d))){const n=stage.slice(1,3);pages[`assets/s${n}-architecture.svg`]=n==='12'?renderArchitecture(12):fs.readFileSync(path.join(repo,'stages',stage,'images/architecture.svg'),'utf8');}
 // 阶段演示页：模块与新增能力来自 stages/changes.json（node stages/build-changes.mjs 生成），机制演示来自 curriculum/mechanisms/sNN.json（每个阶段一个文件），源码按行号截取并核对。
-pages['changes.html']=renderChanges(JSON.parse(fs.readFileSync(path.join(repo,'stages/changes.json'),'utf8')),Object.fromEntries(fs.readdirSync(path.join(dir,'mechanisms')).filter(f=>/^s\d\d\.json$/.test(f)).sort().map(f=>[f.slice(0,3),JSON.parse(fs.readFileSync(path.join(dir,'mechanisms',f),'utf8'))])),f=>fs.readFileSync(path.join(repo,f),'utf8'));
-if(check){for(const [name,body] of Object.entries(pages))if(fs.readFileSync(path.join(course,name),'utf8')!==body)throw Error(`课程 ${name} 不是最新；请运行 npm run course:build`);console.log(`${lessons.length} lessons, ${chapters.length} handbook chapters, source excerpts and experiment links are current.`);}else{for(const [name,body] of Object.entries(pages))fs.writeFileSync(path.join(course,name),body);console.log(`Built ${lessons.length} source-grounded lessons and ${chapters.length} handbook chapters.`);}
+pages['changes.html']=renderChanges(changes,Object.fromEntries(fs.readdirSync(path.join(dir,'mechanisms')).filter(f=>/^s\d\d\.json$/.test(f)).sort().map(f=>[f.slice(0,3),JSON.parse(fs.readFileSync(path.join(dir,'mechanisms',f),'utf8'))])),f=>fs.readFileSync(path.join(repo,f),'utf8'),glossary);
+pages['overview.html']=renderOverview({stages:changes.stages,introduction:fs.readFileSync(path.join(repo,'stages/introduction.md'),'utf8'),chapterStages});
+pages['glossary.html']=renderGlossary(glossary,changes.stages);
+if(check){for(const [name,body] of Object.entries(pages))if(!fs.existsSync(path.join(course,name))||fs.readFileSync(path.join(course,name),'utf8')!==body)throw Error(`课程 ${name} 不是最新；请运行 npm run course:build`);console.log(`${lessons.length} lessons, ${chapters.length} handbook chapters, ${glossary.length} glossary terms, overview, source excerpts and experiment links are current.`);}else{for(const [name,body] of Object.entries(pages))fs.writeFileSync(path.join(course,name),body);console.log(`Built ${lessons.length} source-grounded lessons, ${chapters.length} handbook chapters, overview and ${glossary.length} glossary terms.`);}
 }
 if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url)buildCurriculum({check:process.argv.includes('--check')});

@@ -28,6 +28,8 @@
       <button class="nav-dot" data-target="module-s11" data-tooltip="s11 模型网关：选谁来做，何时停派" aria-label="s11 模型网关：选谁来做，何时停派"></button>
       <button class="nav-dot" data-target="module-s12" data-tooltip="s12 部署单元：健康、就绪与可恢复状态" aria-label="s12 部署单元：健康、就绪与可恢复状态"></button>
     </div>
+    <a class="workbench-link" href="/course/overview.html">全景</a>
+    <a class="workbench-link" href="/course/glossary.html">术语表</a>
     <a class="workbench-link" href="/course/changes.html">阶段演示</a>
     <a class="workbench-link" href="/course/">机制课程</a>
     <a class="workbench-link" href="/app/index.html?stage=project">进入工作台 ↗</a>
@@ -68,14 +70,14 @@
     <span class="callout-icon">📌</span>
     <div class="callout-content">
       <p class="callout-title">关键认知</p>
-      <p><span class="term" data-definition="运行 JavaScript 程序的环境；这里负责启动并协调 Codex 子进程。">Node.js</span> 不直接调用模型 <span class="term" data-definition="应用通过网络发送请求、接收响应的一种协议。">HTTP</span> 接口。它是编排客户端，<span class="term" data-definition="这里指本机 App Server 进程，接受外部调度并执行模型任务。">Codex</span> 才是真正与远端模型通信的执行引擎。两者通过 <span class="term" data-definition="标准输入/输出管道，一种直接连接进程的通信方式，无需网络端口">stdio</span> 连接。</p>
+      <p><span class="term" data-definition="运行 JavaScript 程序的环境；这里负责启动并协调 Codex 子进程。">Node.js</span> 不直接调用模型 <span class="term" data-definition="应用通过网络发送请求、接收响应的一种协议。">HTTP</span> 接口。它是编排客户端，<span class="term" data-definition="这里指本机 App Server 进程，接受外部调度并执行模型任务。">Codex</span> 才是真正与远端模型通信的执行引擎。两者通过 <a class="term" data-definition="进程间通过标准输入与标准输出管道按行收发数据的本地通信机制。" href="/course/glossary.html#term-stdio">stdio</a> 连接。</p>
     </div>
   </div>
 </section>
 
 <!-- Screen 2: 邮局比喻 + 协议握手 -->
 <section class="screen animate-in" id="m1-screen-2">
-  <h2 class="screen-heading">邮局比喻：<span class="term" data-definition="客户端向执行引擎发起的初始化请求，必须先等待其响应。">initialize</span> → <span class="term" data-definition="客户端在初始化响应成功后发出的单向通知，不是用户任务。">initialized</span></h2>
+  <h2 class="screen-heading">邮局比喻：<a class="term" data-definition="调用任何 App Server 方法之前，客户端必须先发送的协议握手请求。" href="/course/glossary.html#term-initialize">initialize</a> → <a class="term" data-definition="调用任何 App Server 方法之前，客户端必须先发送的协议握手请求。" href="/course/glossary.html#term-initialize">initialized</a></h2>
   <p>把这套通信想象成一个邮局系统：Node 是寄件人，Codex 是邮局，模型服务是收件目的地。寄信前必须先"在柜台登记开户"——这就是协议握手。</p>
 
   <div class="step-cards">
@@ -90,7 +92,7 @@
       <div class="step-num">2</div>
       <div class="step-body">
         <strong>发送 initialize 请求</strong><br>
-        Node 通过 <span class="term" data-definition="一种基于 JSON 的远程过程调用协议，用唯一 id 匹配请求与响应，支持单向通知">JSON-RPC 2.0</span> 发送 <code>initialize</code> 方法。Codex 返回初始化响应，客户端等待这一步成功。
+        Node 通过 <a class="term" data-definition="基于 JSON 编码、通过唯一 id 匹配请求回包并支持单向通知的远端调用协议。" href="/course/glossary.html#term-json-rpc-2-0">JSON-RPC 2.0</a> 发送 <code>initialize</code> 方法。Codex 返回初始化响应，客户端等待这一步成功。
       </div>
     </div>
     <div class="step-card">
@@ -117,7 +119,7 @@
 <!-- Screen 3: Thread/Turn 生命周期 + 事件缓存 -->
 <section class="screen animate-in" id="m1-screen-3">
   <h2 class="screen-heading">Thread 与 Turn：往来档案与一次寄送</h2>
-  <p><span class="term" data-definition="持续会话的容器，代表一段有上下文关联的对话历史">Thread</span> 是一个往来档案，<span class="term" data-definition="单次用户任务的执行单元，包含模型推理与可能的多次工具调用">Turn</span> 是其中一次寄送。单轮 Demo 只新建一个档案、完成一次寄送，但架构已经为多轮做好了准备。</p>
+  <p><a class="term" data-definition="用户与智能体之间持续存在、由 Codex 持久化历史的会话容器。" href="/course/glossary.html#term-thread">Thread</a> 是一个往来档案，<a class="term" data-definition="单次用户输入引发的模型思考、工具调用与回复的完整执行过程。" href="/course/glossary.html#term-turn">Turn</a> 是其中一次寄送。单轮 Demo 只新建一个档案、完成一次寄送，但架构已经为多轮做好了准备。</p>
 
   <div class="flow-steps">
     <div class="flow-step">
@@ -324,7 +326,7 @@
         s01 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
         <strong>s01 → s02</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
         <strong>s03+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
-        本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<span class="term" data-definition="模型服务提供的请求与响应接口约定；这里需要 Responses API 兼容能力。">Responses API</span> 是执行引擎对远端服务的要求。
+        本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<a class="term" data-definition="Codex 用来跟模型对话的 OpenAI Responses 接口；提供该接口的第三方模型可以直接连。" href="/course/glossary.html#term-responses-api">Responses API</a> 是执行引擎对远端服务的要求。
       </div>
     </div>
     <div class="pattern-card">
@@ -445,7 +447,7 @@
     <span class="callout-icon">📌</span>
     <div class="callout-content">
       <p class="callout-title">谁保存历史？</p>
-      <p>多轮上下文由本机 <span class="term" data-definition="本地运行的 Codex App Server 进程，负责持久化会话历史、调用远端模型">Codex App Server</span> 原生持久化。<span class="term" data-definition="运行客户端 JavaScript 的环境，这里负责终端交互和协议编排。">Node</span> 端不维护历史消息数组，也不向模型重发历史，这些工作完全由 Codex 内部管理。</p>
+      <p>多轮上下文由本机 <a class="term" data-definition="Codex 导出的长期运行子进程及其双向 JSON-RPC 平台接口。" href="/course/glossary.html#term-app-server">Codex App Server</a> 原生持久化。<span class="term" data-definition="运行客户端 JavaScript 的环境，这里负责终端交互和协议编排。">Node</span> 端不维护历史消息数组，也不向模型重发历史，这些工作完全由 Codex 内部管理。</p>
     </div>
   </div>
 </section>
@@ -753,7 +755,7 @@
 <div class="pattern-card"><div class="pattern-title">服务端持有什么</div><div class="pattern-desc">读取 .env 中的模型配置，启动 Codex App Server，持有会话与执行中的 Turn。服务端接收 Codex 通知，即使此刻没有客户端查看，也会更新状态。</div></div>
 <div class="pattern-card"><div class="pattern-title">客户端持有什么</div><div class="pattern-desc">读取 .data/connection.json 中的地址与连接令牌，保存当前选中的 Thread id，通过 HTTP 提交和查看。客户端不读取 .env，不启动 Codex，不需要模型 API Key。</div></div>
 </div>
-<p><span class="term" data-definition="可持续恢复的会话，一个 Thread 内可以有多个 Turn。">Thread</span> 是会话，<span class="term" data-definition="一次用户请求在 Codex 内的执行轮次，可能持续产生多条通知。">Turn</span> 是其中的一轮。服务端进程、客户端进程、Codex 子进程则是运行边界。把这三种概念分清，就能回答“关掉哪一个进程会停止哪一部分工作”。</p>
+<p><a class="term" data-definition="用户与智能体之间持续存在、由 Codex 持久化历史的会话容器。" href="/course/glossary.html#term-thread">Thread</a> 是会话，<a class="term" data-definition="单次用户输入引发的模型思考、工具调用与回复的完整执行过程。" href="/course/glossary.html#term-turn">Turn</a> 是其中的一轮。服务端进程、客户端进程、Codex 子进程则是运行边界。把这三种概念分清，就能回答“关掉哪一个进程会停止哪一部分工作”。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">先定验收条件</p><p>客户端退出只停止提交与查看，已交给服务端的一轮继续执行。停止服务端会结束 Codex 子进程；原生历史保留，但 s03 没有持久任务记录来核对中途执行。</p></div></div>
 
 </section>
@@ -762,7 +764,7 @@
 <h2 class="screen-heading">接好入口：HTTP 请求先过连接校验</h2>
 
 <p>给 Agent 一个入口，并不意味着把模型密钥交给每个客户端。服务启动时生成随机连接令牌，写入权限为 <code>0600</code> 的连接文件。客户端每次发送 <code>Authorization: Bearer &lt;令牌&gt;</code>；这个令牌只用于访问 Agent 服务，与远端模型的 API Key 分别管理。</p>
-<p><span class="term" data-definition="客户端发送请求，服务端返回状态码和数据的协议。这里用它连接 CLI 与 Agent 服务。">HTTP</span> 负责外层请求；服务端通过 <span class="term" data-definition="用 JSON 表达方法调用、响应和通知的协议。这里连接服务端与 Codex App Server。">JSON-RPC</span> 调用 Codex。读源码时先看谁在和谁说话，再看同样名为“请求”的操作实际跨过了哪条边界。</p>
+<p><span class="term" data-definition="客户端发送请求，服务端返回状态码和数据的协议。这里用它连接 CLI 与 Agent 服务。">HTTP</span> 负责外层请求；服务端通过 <a class="term" data-definition="基于 JSON 编码、通过唯一 id 匹配请求回包并支持单向通知的远端调用协议。" href="/course/glossary.html#term-json-rpc-2-0">JSON-RPC</a> 调用 Codex。读源码时先看谁在和谁说话，再看同样名为“请求”的操作实际跨过了哪条边界。</p>
 <div class="translation-block">
   <div class="translation-code">
     <span class="translation-label">源码 · stages/s03-service/server/modules/http/index.mjs · 第 38–41 行</span>
@@ -1041,7 +1043,7 @@ npm test</code></pre>
 <section class="screen animate-in" id="s04-screen-4">
 <h2 class="screen-heading">让状态主动到达：SSE 先快照，后事件</h2>
 
-<p>客户端订阅 <code>GET /events?threadId=…</code>，建立 <span class="term" data-definition="Server-Sent Events：服务端通过持续打开的 HTTP 响应，向客户端单向发送事件。">SSE</span> 长连接。服务端有变化时发送数据，不需要客户端每 200 ms 询问一次。消息提交仍走 POST /messages；订阅只负责查看。</p>
+<p>客户端订阅 <code>GET /events?threadId=…</code>，建立 <a class="term" data-definition="服务端通过持久 HTTP 通道向客户端单向实时推送状态变化的事件流协议。" href="/course/glossary.html#term-sse">SSE</a> 长连接。服务端有变化时发送数据，不需要客户端每 200 ms 询问一次。消息提交仍走 POST /messages；订阅只负责查看。</p>
 <p>重连时最容易漏掉的时间窗口在“读快照”和“开始监听”之间。这里先登记监听者，把快照准备期间收到的事件暂存，发送完整快照后再发送暂存事件。下面的 listener 已处于 GET /events 路由内，id 是正在订阅的 Thread。</p>
 <div class="translation-block">
   <div class="translation-code">
@@ -1083,7 +1085,7 @@ npm test</code></pre>
 <section class="screen animate-in" id="s04-screen-5">
 <h2 class="screen-heading">遇到不确定：保留记录，暂停后续执行</h2>
 
-<p>服务重启时，文件里有 A=running、B=queued。你能直接把 A 再发一次吗？不能：程序只知道 A 没有拿到确定结果，不知道它在中止前做到了哪一步。用 <span class="term" data-definition="任务已进入发送或执行阶段，但结果无法确认；保留记录、暂停队列，不自动重发。">unconfirmed</span> 明确表达这份不确定性，比把它当成“什么也没做”更准确。</p>
+<p>服务重启时，文件里有 A=running、B=queued。你能直接把 A 再发一次吗？不能：程序只知道 A 没有拿到确定结果，不知道它在中止前做到了哪一步。用 <a class="term" data-definition="任务派发后遭遇断连或重启且执行结果无法核验时标记的防重复挂起状态。" href="/course/glossary.html#term-unconfirmed">unconfirmed</a> 明确表达这份不确定性，比把它当成“什么也没做”更准确。</p>
 <div class="translation-block">
   <div class="translation-code">
     <span class="translation-label">源码 · stages/s04-events-messages/server/modules/data/index.mjs · 第 33–40 行</span>
@@ -1205,7 +1207,7 @@ npm test</code></pre>
 
 <section class="screen animate-in" id="s05-screen-3">
 <h2 class="screen-heading" id="m3-screen-2">Skills：发现了，还要核对是否允许启用</h2>
-<p><span class="term" data-definition="Codex 原生的方法说明书，以 SKILL.md 表达如何完成某类任务；方法文本本身不授予执行权限。">Skill</span> 的发现由 Codex 完成，启用范围由 Agent 定义决定。服务端先调用 <code>skills/list</code> 获取清单，再按已声明文件的真实路径核对启用状态。</p>
+<p><a class="term" data-definition="以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。" href="/course/glossary.html#term-skill">Skill</a> 的发现由 Codex 完成，启用范围由 Agent 定义决定。服务端先调用 <code>skills/list</code> 获取清单，再按已声明文件的真实路径核对启用状态。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s05-agent-assembly/server/modules/codex/skills.mjs · 第 11–20 行</span>
 <pre><code data-source="stages/s05-agent-assembly/server/modules/codex/skills.mjs" data-start="11" data-end="20">  const requested = new Map(agent.skills.map(skill =&gt; [skill.path, skill]));
@@ -1235,7 +1237,7 @@ npm test</code></pre>
 
 <section class="screen animate-in" id="s05-screen-4">
 <h2 class="screen-heading" id="m3-screen-5">版本作废：会话与排队消息必须使用同一份定义</h2>
-<p>角色变了，已经排队的输入还能按另一种角色执行吗？本章选择先拒绝继续。<span class="term" data-definition="从文件内容计算的指纹，用来检测定义、角色或 Skill 是否变化；不是文件内容本身。">内容哈希</span> 检测源文件变化，描述符哈希则标识核验后的装配结果。</p>
+<p>角色变了，已经排队的输入还能按另一种角色执行吗？本章选择先拒绝继续。<a class="term" data-definition="由定义文件、角色正文与所有启用 Skill 源码联合计算的一致性校验哈希值。" href="/course/glossary.html#term-内容哈希">内容哈希</a> 检测源文件变化，描述符哈希则标识核验后的装配结果。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s05-agent-assembly/server/modules/agents/index.mjs · 第 64–73 行</span>
 <pre><code data-source="stages/s05-agent-assembly/server/modules/agents/index.mjs" data-start="64" data-end="73">  sourceHash() {
@@ -1372,7 +1374,7 @@ npm test</code></pre>
 
 <section class="screen animate-in" id="s06-screen-3">
 <h2 class="screen-heading">按用途授权资料：读取、新建和覆盖是不同操作</h2>
-<p><code>tools.allow</code> 回答“能不能调用 write_file”，资料规则继续回答“能写到哪里”。<span class="term" data-definition="把资料源绑定到 Agent，并声明允许的 read 或 create 操作及访问方式；sourceRef 引用 bindings.sources 中的来源。">dataBindings</span> 和 <code>outputs</code> 一起组成文件访问边界。</p>
+<p><code>tools.allow</code> 回答“能不能调用 write_file”，资料规则继续回答“能写到哪里”。<a class="term" data-definition="按目录规定资料能只读，还是读并且只能新建；没有原地改写权。" href="/course/glossary.html#term-databindings">dataBindings</a> 和 <code>outputs</code> 一起组成文件访问边界。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s06-tools/agents/writing-agent.json · 第 8–16 行</span>
 <pre><code data-source="stages/s06-tools/agents/writing-agent.json" data-start="8" data-end="16">    "tools": { "allow": ["list_files", "read_file", "write_file", "read_webpage"] },
@@ -1432,7 +1434,7 @@ npm test</code></pre>
 
 <section class="screen animate-in" id="s06-screen-4">
 <h2 class="screen-heading" id="m3-screen-4">MCP：一个入口承载工具，更新等到空闲边界</h2>
-<p><span class="term" data-definition="Model Context Protocol，提供标准化的工具发现与调用接口；本项目使用一个本地 HTTP MCP 入口承载已授权工具。">MCP</span> 让 Codex 使用统一协议调用注册表。<code>tools/list</code> 获取工具清单，<code>tools/call</code> 提交名称与参数；这些协议方法由 MCP SDK 处理。</p>
+<p><a class="term" data-definition="驱动端与外部工具服务之间用于工具发现、调用与数据交互的标准化通信协议。" href="/course/glossary.html#term-mcp">MCP</a> 让 Codex 使用统一协议调用注册表。<code>tools/list</code> 获取工具清单，<code>tools/call</code> 提交名称与参数；这些协议方法由 MCP SDK 处理。</p>
 <p><code>ToolManager.open()</code> 构建带版本的注册表并启动本地入口，只监听 <code>127.0.0.1</code> 的动态端口。服务生成随机 Bearer 令牌，经环境变量传给 Codex；配置里只写入口地址和令牌变量名。入口拒绝带 Origin 的请求和无效令牌，按 URL 中的版本定位注册表。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s06-tools/server/modules/tools/mcp-server.mjs · 第 23–31 行</span>
@@ -1516,7 +1518,7 @@ npm test</code></pre>
 <h2 class="screen-heading">这个云端 Agent 还缺什么：跨会话使用经验</h2>
 <p>上一章，Agent 可以读取资料、查看网页并保存结果。这个云端 Agent 还缺什么？同一 Thread 可以延续历史，但新开的 Thread 不会仅凭另一段会话记录就自动继承其中的偏好。本章接入 Codex 原生记忆，同时明确谁能使用、谁能贡献、什么结果已经生成。</p>
 <figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
-<p><span class="term" data-definition="Codex 从会话历史中按条件提炼、合并，并供后续会话使用的记忆；不同于恢复同一 Thread 的完整历史。">原生记忆</span> 的提炼与使用由 Codex 负责。服务端不自行拼接历史摘要、不把摘要塞进用户消息，而是管理配置、存储位置、核验与会话参与资格。CLI 只展示服务端结果并提出设置请求。</p>
+<p><a class="term" data-definition="Codex 后台自动从历史会话提炼并在未来会话中跨窗口使用的长期经验摘要。" href="/course/glossary.html#term-原生记忆">原生记忆</a> 的提炼与使用由 Codex 负责。服务端不自行拼接历史摘要、不把摘要塞进用户消息，而是管理配置、存储位置、核验与会话参与资格。CLI 只展示服务端结果并提出设置请求。</p>
 <table><thead><tr><th>固定产物</th><th>含义</th></tr></thead><tbody>
 <tr><td>raw_memories.md</td><td>提炼得到的原始记忆。</td></tr>
 <tr><td>MEMORY.md</td><td>合并后的详细记忆。</td></tr>
@@ -1662,7 +1664,7 @@ npm run test:codex-memory</code></pre>
       <span class="module-number">s08</span>
       <h2 class="module-title">数据：状态有据可查</h2>
       <p class="module-subtitle">
-        从单文件 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span> 到关系型<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>——理解 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 账本、<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 提醒铃、不可变 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 与原生历史各司其职，读完能向 AI 程序员准确定位状态与权限问题。
+        从单文件 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span> 到关系型<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>——理解 <a class="term" tabindex="0" data-definition="负责持久化记录任务状态、调度发件箱、资源版本及产物追溯等事实的数据库。" href="/course/glossary.html#term-postgresql">PG</a> 账本、<a class="term" tabindex="0" data-definition="仅用于存放待调度唤醒的 Thread ID 集合、不存储任何业务事实的内存服务。" href="/course/glossary.html#term-redis">Redis</a> 提醒铃、不可变 <a class="term" tabindex="0" data-definition="按内容 SHA-256 哈希命名且只允许新建不可原地修改的正文存储文件。" href="/course/glossary.html#term-不可变正文对象">blob</a> 与原生历史各司其职，读完能向 AI 程序员准确定位状态与权限问题。
       </p>
     </header>
 
@@ -1681,26 +1683,26 @@ npm run test:codex-memory</code></pre>
 
       <div class="callout">
         <div class="callout-text">
-          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <span class="term" data-definition="stdio（标准输入输出）是进程间最朴素的通信方式：一个进程把数据写进管道，另一个进程从管道读出。这里主进程和 Codex 之间就用这种方式互发指令和结果。">stdio</span> 通信；橙色标注为本阶段新增或变化的部分。图描述的是职责划分，不是四个独立进程。
+          图示说明：四层是逻辑职责，PG、Redis 为独立服务；上方 <span class="term" data-definition="Codex 是处理自然语言与工具调用的 AI 运行时，运行在独立进程，通过 stdio（标准输入输出）与主进程通信，管理自己的原生存储 .data/codex/。">Codex 原生运行时</span>是独立进程，通过 <a class="term" data-definition="进程间通过标准输入与标准输出管道按行收发数据的本地通信机制。" href="/course/glossary.html#term-stdio">stdio</a> 通信；橙色标注为本阶段新增或变化的部分。图描述的是职责划分，不是四个独立进程。
         </div>
       </div>
 
       <div class="flow-steps" aria-label="s08 分层职责">
         <div class="flow-step"><strong>01 交互入口</strong><p><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> / <span class="term" tabindex="0" data-definition="命令行客户端；在终端输入命令来调用本地服务。">CLI</span> 收消息，校验本地凭据；返回任务 ID 与事件。</p></div><span class="flow-arrow">→</span>
-        <div class="flow-step"><strong>02 装配与调度</strong><p>读取 Agent 配置，写 tasks + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span>；领取任务并驱动 Codex。</p></div><span class="flow-arrow">→</span>
-        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <span class="term" tabindex="0" data-definition="一种把工具能力暴露给模型运行时的协议；s08 使用它，s09 主流程换为原生动态工具。">MCP</span> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>02 装配与调度</strong><p>读取 Agent 配置，写 tasks + <a class="term" tabindex="0" data-definition="与任务记录写入同一数据库事务、用于可靠传递唤醒信号的调度暂存机制。" href="/course/glossary.html#term-outbox">outbox</a>；领取任务并驱动 Codex。</p></div><span class="flow-arrow">→</span>
+        <div class="flow-step"><strong>03 工具与资源</strong><p>接 <a class="term" tabindex="0" data-definition="驱动端与外部工具服务之间用于工具发现、调用与数据交互的标准化通信协议。" href="/course/glossary.html#term-mcp">MCP</a> 工具调用，执行读写；输出正文 blob 与资源版本记录。</p></div><span class="flow-arrow">→</span>
         <div class="flow-step"><strong>04 数据与文件</strong><p>PG 管业务事实，Redis 管唤醒，blob 管正文；原生历史另由 Codex 管理。</p></div>
       </div>
       <div class="pattern-cards stagger-children">
         <div class="pattern-card animate-in" style="--stagger-index:0">
           <div class="pattern-icon">🗄️</div>
-          <div class="pattern-title"><span class="term" tabindex="0" data-definition="关系数据库；把会话、任务、资源版本等记录存成可查询的数据表。">PostgreSQL</span> 账本</div>
+          <div class="pattern-title"><a class="term" tabindex="0" data-definition="负责持久化记录任务状态、调度发件箱、资源版本及产物追溯等事实的数据库。" href="/course/glossary.html#term-postgresql">PostgreSQL</a> 账本</div>
           <div class="pattern-desc">所有业务状态（任务、会话、资源版本）的权威来源。写操作在 PG 事务内完成，保证<span class="term" tabindex="0" data-definition="一组操作作为整体成功或失败；必须说明它覆盖的是 PG 内部，还是跨多个存储。">原子性</span>。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:1">
           <div class="pattern-icon">🔔</div>
           <div class="pattern-title">Redis 提醒铃</div>
-          <div class="pattern-desc">只存 <span class="term" tabindex="0" data-definition="Codex 原生会话；一个 Thread 可以连续接收多条任务并保留自己的历史。">Thread</span> ID <span class="term" data-definition="Set（集合）是一种数据结构，每个元素唯一，无顺序。这里用 Redis Set 存 Thread ID，同一个 Thread 重复推入也只保留一条，去重尚未弹出的唤醒信号。">Set</span>，用于低延迟唤醒调度器。它不存任务数据，失联时 outbox 兜底，不丢任务。</div>
+          <div class="pattern-desc">只存 <a class="term" tabindex="0" data-definition="用户与智能体之间持续存在、由 Codex 持久化历史的会话容器。" href="/course/glossary.html#term-thread">Thread</a> ID <span class="term" data-definition="Set（集合）是一种数据结构，每个元素唯一，无顺序。这里用 Redis Set 存 Thread ID，同一个 Thread 重复推入也只保留一条，去重尚未弹出的唤醒信号。">Set</span>，用于低延迟唤醒调度器。它不存任务数据，失联时 outbox 兜底，不丢任务。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:2">
           <div class="pattern-icon">📦</div>
@@ -1922,7 +1924,7 @@ npm run test:codex-memory</code></pre>
     ═══════════════════════════════════════════════ -->
     <div class="screen" id="m4-screen-blob">
       <h2 class="screen-heading">不可变 Blob：内容寻址与来源追踪</h2>
-<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
+<div class="callout"><div class="callout-text"><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 owner、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（<span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <a class="term" tabindex="0" data-definition="用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。" href="/course/glossary.html#term-docker-compose">Compose</a> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</div></div>
 
       <p>
         sha256 是内容指纹，正文按指纹命名保存。内容改动会生成新 blob，已登记版本不被覆盖；这不等于承诺永久保留。
@@ -2095,7 +2097,7 @@ npm run test:codex-memory</code></pre>
     <header class="module-header">
       <span class="module-number">s09</span>
       <h2 class="module-title">知识：可用且有边界</h2>
-      <p class="module-subtitle">从散落文件到结构化 <span class="term" tabindex="0" data-definition="由原始资料整理出的知识页面；每个生效页面指向一个可追踪的正文版本。">Wiki</span>，从各自判断到统一门禁——Agent 如何安全地"知道"正确的事。</p>
+      <p class="module-subtitle">从散落文件到结构化 <a class="term" tabindex="0" data-definition="从原始资料加工提炼出的受版本跟踪与并发保护的持久化结构化知识页面。" href="/course/glossary.html#term-wiki">Wiki</a>，从各自判断到统一门禁——Agent 如何安全地"知道"正确的事。</p>
     </header>
 
     <!-- ══════════════════════════════════════════════════════════════
@@ -2104,7 +2106,7 @@ npm run test:codex-memory</code></pre>
     <div class="screen" id="m5-screen-overview">
       <h2 class="screen-heading">架构总图：s09 新增了什么</h2>
 
-      <p>s08 已经能可靠存储业务数据并调度任务。s09 解决两个新问题：让 Agent 在本机维护结构化<span class="term" data-definition="知识库（Knowledge Base）：Agent 用来读写结构化知识的命名空间，包含 Wiki 页面和可选的向量索引。">知识库</span>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
+      <p>s08 已经能可靠存储业务数据并调度任务。s09 解决两个新问题：让 Agent 在本机维护结构化<a class="term" data-definition="挂载给 Agent 且具备独立访问权限边界的结构化知识与索引命名空间。" href="/course/glossary.html#term-knowledgebase">知识库</a>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
 
       <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="968" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
@@ -2116,27 +2118,27 @@ npm run test:codex-memory</code></pre>
         <div class="pattern-card animate-in" style="--stagger-index:0">
           <div class="pattern-icon">01</div>
           <div class="pattern-title">交互入口</div>
-          <div class="pattern-desc"><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> POST <code>/messages</code>；knowledge <span class="term" data-definition="CLI：命令行界面（Command Line Interface），在终端输入命令操作程序，相对于图形界面。">CLI</span> 命令；<span class="term" tabindex="0" data-definition="服务器持续向客户端推送事件的 HTTP 通道，用于展示任务进度与输出。">SSE</span> 流响应。新增 knowledge 子命令。</div>
+          <div class="pattern-desc"><span class="term" tabindex="0" data-definition="客户端与服务交换请求和响应的协议；此处用于本地外部接口。">HTTP</span> POST <code>/messages</code>；knowledge <span class="term" data-definition="CLI：命令行界面（Command Line Interface），在终端输入命令操作程序，相对于图形界面。">CLI</span> 命令；<a class="term" tabindex="0" data-definition="服务端通过持久 HTTP 通道向客户端单向实时推送状态变化的事件流协议。" href="/course/glossary.html#term-sse">SSE</a> 流响应。新增 knowledge 子命令。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:1">
           <div class="pattern-icon">02</div>
           <div class="pattern-title">Agent 装配与调度</div>
-          <div class="pattern-desc">读取 <code>agents/*.json</code>；<code>schemaVersion: 1.1</code> 新增 <code>knowledge[]</code>，声明 kbId、mode、actions。路径绑定指定 sourceRoot 与 wikiRoot；写 task + <span class="term" tabindex="0" data-definition="与任务同一事务保存的待投递记录；外部唤醒失败后，可以据此补投。">outbox</span> 同<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>；dynamicTools 回调将工具调用路由至 03 层门禁。</div>
+          <div class="pattern-desc">读取 <code>agents/*.json</code>；<code>schemaVersion: 1.1</code> 新增 <code>knowledge[]</code>，声明 kbId、mode、actions。路径绑定指定 sourceRoot 与 wikiRoot；写 task + <a class="term" tabindex="0" data-definition="与任务记录写入同一数据库事务、用于可靠传递唤醒信号的调度暂存机制。" href="/course/glossary.html#term-outbox">outbox</a> 同<span class="term" tabindex="0" data-definition="一组数据库操作一起提交或一起撤销，避免只完成其中一半。">事务</span>；dynamicTools 回调将工具调用路由至 03 层门禁。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:2">
           <div class="pattern-icon">03</div>
           <div class="pattern-title">通用门禁 ★新增</div>
-          <div class="pattern-desc"><span class="term" data-definition="fail-closed：出现不确定情况时默认拒绝，而非放行，以保证安全。">fail-closed</span> 原则；统一校验工具白名单、资源所有权、<span class="term" tabindex="0" data-definition="Knowledge Base 的缩写，表示一个已挂载且有权限边界的知识库。">KB</span> 挂载权限与任务范围。</div>
+          <div class="pattern-desc"><span class="term" data-definition="fail-closed：出现不确定情况时默认拒绝，而非放行，以保证安全。">fail-closed</span> 原则；统一校验工具白名单、资源所有权、<a class="term" tabindex="0" data-definition="挂载给 Agent 且具备独立访问权限边界的结构化知识与索引命名空间。" href="/course/glossary.html#term-knowledgebase">KB</a> 挂载权限与任务范围。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:3">
           <div class="pattern-icon">04</div>
           <div class="pattern-title">知识与资源服务 ★新增</div>
-          <div class="pattern-desc">Wiki <span class="term" data-definition="乐观锁：提交时检查版本号是否仍匹配，不匹配则拒绝，避免覆盖他人更新。">乐观锁</span>；可选 <span class="term" tabindex="0" data-definition="检索增强生成：先检索相关原始资料片段，再用于回答；这里需单独构建索引。">RAG</span> 索引构建；资源 <span class="term" tabindex="0" data-definition="按内容保存的正文对象；这里是磁盘文件，版本元数据另记在数据库。">blob</span> 版本管理。</div>
+          <div class="pattern-desc">Wiki <a class="term" data-definition="提交 Wiki 更新时比对预期版本号、版本不符则直接拒绝覆盖的并发控制策略。" href="/course/glossary.html#term-乐观锁">乐观锁</a>；可选 <a class="term" tabindex="0" data-definition="在模型推理前先从向量与关键词索引中检索相关资料片段并作为依据注入的机制。" href="/course/glossary.html#term-rag">RAG</a> 索引构建；资源 <a class="term" tabindex="0" data-definition="按内容 SHA-256 哈希命名且只允许新建不可原地修改的正文存储文件。" href="/course/glossary.html#term-不可变正文对象">blob</a> 版本管理。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:4">
           <div class="pattern-icon">05</div>
           <div class="pattern-title">数据与索引</div>
-          <div class="pattern-desc"><span class="term" tabindex="0" data-definition="关系数据库；把会话、任务、资源版本等记录存成可查询的数据表。">PostgreSQL</span> <span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v2（顺序迁移）；<span class="term" tabindex="0" data-definition="内存数据服务；本项目用集合传递调度唤醒信号，业务状态仍在 PG。">Redis</span> 两个独立唤醒路径；<span class="term" tabindex="0" data-definition="按关键词与词频相关性排名的文本检索算法。">BM25</span> 文件；可选 <span class="term" tabindex="0" data-definition="存放并检索文本向量的独立服务，是 RAG 的可选依赖。">Chroma</span>。</div>
+          <div class="pattern-desc"><a class="term" tabindex="0" data-definition="负责持久化记录任务状态、调度发件箱、资源版本及产物追溯等事实的数据库。" href="/course/glossary.html#term-postgresql">PostgreSQL</a> <span class="term" tabindex="0" data-definition="数据结构版本；这里区分数据库表结构 v1/v2 和 Agent 配置格式版本。">schema</span> v2（顺序迁移）；<a class="term" tabindex="0" data-definition="仅用于存放待调度唤醒的 Thread ID 集合、不存储任何业务事实的内存服务。" href="/course/glossary.html#term-redis">Redis</a> 两个独立唤醒路径；<a class="term" tabindex="0" data-definition="依据关键词匹配频次与逆文档频率计算文本相关性得分的成熟全文检索算法。" href="/course/glossary.html#term-bm25">BM25</a> 文件；可选 <a class="term" tabindex="0" data-definition="在 RAG 流程中负责存储文本向量并提供近似高维向量相似度检索的独立服务。" href="/course/glossary.html#term-chroma">Chroma</a>。</div>
         </div>
       </div>
     </div>
@@ -2235,7 +2237,7 @@ npm run test:codex-memory</code></pre>
           <div class="pattern-desc">
             <strong>输入：</strong><code>npm run knowledge -- index &lt;kbId&gt;</code><br>
             <strong>执行者：</strong>KnowledgeWorker（不是 Codex）<br>
-            <strong>输出：</strong><span class="term" tabindex="0" data-definition="尚未生效的构建区；只有索引构建与来源校验通过后才切换生效指针。">staging</span> Chroma <span class="term" tabindex="0" data-definition="Chroma 中的一组向量记录；每个索引修订有对应构建结果。">collection</span> + BM25 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span>；两边就绪后 <span class="term" tabindex="0" data-definition="PostgreSQL 的简称；这里是保存业务事实和事务状态的关系数据库。">PG</span> 切 <code>index_revision</code><br>
+            <strong>输出：</strong><span class="term" tabindex="0" data-definition="尚未生效的构建区；只有索引构建与来源校验通过后才切换生效指针。">staging</span> Chroma <span class="term" tabindex="0" data-definition="Chroma 中的一组向量记录；每个索引修订有对应构建结果。">collection</span> + BM25 <span class="term" tabindex="0" data-definition="一种用键和值保存结构化数据的文本格式，可用于配置或状态文件。">JSON</span>；两边就绪后 <a class="term" tabindex="0" data-definition="负责持久化记录任务状态、调度发件箱、资源版本及产物追溯等事实的数据库。" href="/course/glossary.html#term-postgresql">PG</a> 切 <code>index_revision</code><br>
             <strong>存储：</strong><code>knowledge_jobs</code> 表，Redis 独立 key 唤醒<br>
             <strong>注意：</strong>这是独立的 <span class="term" data-definition="knowledge_jobs：RAG 索引构建任务的专用表，由 KnowledgeWorker 执行，与 Codex 无关，存储与唤醒路径均独立于普通 tasks。">knowledge_jobs</span>，不在 tasks 表
           </div>
@@ -2255,7 +2257,7 @@ npm run test:codex-memory</code></pre>
       <span class="code-keyword">await</span> this.query('UPDATE agent_data.wiki_pages SET current_version=$5 WHERE instance_id=$1 AND kb_id=$3 AND slug=$4 AND $2::uuid IS NOT NULL', [kbId, slug, id], client);</code></pre></div><div class="translation-english"><span class="translation-label">中文对照</span><div class="translation-lines"><p class="tl">第 1–3 行：校验来源、确保页面行存在，再锁定该行读取当前版本。已有页面不会被重复插入。</p><p class="tl">第 4 行：expectedVersion 必须匹配；冲突就拒绝，防止覆盖另一份更新。</p><p class="tl">第 5–6 行：登记新 Wiki 版本和来源，正文 blob 在进入这段 PG 事务前已写入。</p><p class="tl">第 7–8 行：再检查权限，然后切 current_version；这些 PG 操作一起提交。</p></div></div></div>
 
       <div class="callout" id="m5-callout-no-autopublish">
-        <div class="callout-text">Wiki 无后台自动工作进程。<code>knowledge:init</code> 只建目录、部署 <span class="term" data-definition="SKILL.md：放在特定位置的指导文件，帮助 Codex 了解如何操作知识库，但不赋予权限——权限由门禁决定。">SKILL.md</span>，不生成任何 Wiki 内容。必须执行 <code>maintain</code> 命令发任务，Codex 读原文后主动调用 <code>kb_submit_revision</code> 才写入 Wiki。</div>
+        <div class="callout-text">Wiki 无后台自动工作进程。<code>knowledge:init</code> 只建目录、部署 <a class="term" data-definition="以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。" href="/course/glossary.html#term-skill">SKILL.md</a>，不生成任何 Wiki 内容。必须执行 <code>maintain</code> 命令发任务，Codex 读原文后主动调用 <code>kb_submit_revision</code> 才写入 Wiki。</div>
       </div>
     </div>
 
@@ -2334,7 +2336,7 @@ npm run test:codex-memory</code></pre>
     <div class="screen" id="m5-screen-rag">
       <h2 class="screen-heading">RAG 索引：从 Wiki 到向量检索的切换路径</h2>
 
-      <p><span class="term" data-definition="RAG：检索增强生成（Retrieval-Augmented Generation），在生成回答前先检索相关文档片段提供给模型，减少幻觉。">RAG</span> 是可选层，<span class="term" data-definition="Chroma：开源向量数据库，用于存储和检索文本的语义嵌入向量。">Chroma</span> 是可选依赖；未启用 RAG 时可使用 wiki 模式。切换到 RAG 必须走完以下路径——不能热切换，不能在运行时自动生效。</p>
+      <p><a class="term" data-definition="在模型推理前先从向量与关键词索引中检索相关资料片段并作为依据注入的机制。" href="/course/glossary.html#term-rag">RAG</a> 是可选层，<a class="term" data-definition="在 RAG 流程中负责存储文本向量并提供近似高维向量相似度检索的独立服务。" href="/course/glossary.html#term-chroma">Chroma</a> 是可选依赖；未启用 RAG 时可使用 wiki 模式。切换到 RAG 必须走完以下路径——不能热切换，不能在运行时自动生效。</p>
 
       <div class="pattern-cards" id="m5-rag-flow-cards">
         <div class="pattern-card animate-in" style="--stagger-index:0">
@@ -2345,17 +2347,17 @@ npm run test:codex-memory</code></pre>
         <div class="pattern-card animate-in" style="--stagger-index:1">
           <div class="pattern-icon">②</div>
           <div class="pattern-title">发 index 任务</div>
-          <div class="pattern-desc"><code>npm run knowledge -- index general</code> 写入 <code>knowledge_jobs</code> 表，Redis 独立 key 唤醒 KnowledgeWorker（不是 Codex）。Worker 构建 staging Chroma collection + <span class="term" data-definition="BM25：基于词频的传统文本检索算法，与向量检索互补，两者结果通过 RRF 融合。">BM25</span> JSON 文件。</div>
+          <div class="pattern-desc"><code>npm run knowledge -- index general</code> 写入 <code>knowledge_jobs</code> 表，Redis 独立 key 唤醒 KnowledgeWorker（不是 Codex）。Worker 构建 staging Chroma collection + <a class="term" data-definition="依据关键词匹配频次与逆文档频率计算文本相关性得分的成熟全文检索算法。" href="/course/glossary.html#term-bm25">BM25</a> JSON 文件。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:2">
           <div class="pattern-icon">③</div>
           <div class="pattern-title">两边就绪后切指针</div>
-          <div class="pattern-desc">Chroma staging collection 与 BM25 文件均核验来源后，PG 更新 <code>index_revision</code>。<span class="term" data-definition="RRF（Reciprocal Rank Fusion，常数 60）：把向量排名与 BM25 排名融合成一个分数，常数越大对高排名的奖励越平滑。">RRF 60</span> 融合双路结果，无 <span class="term" tabindex="0" data-definition="对初次检索结果再排序；当前实现没有这一步。">rerank</span>，无查询失败 <span class="term" tabindex="0" data-definition="某条路径失败时切到另一条路径；已生效 RAG 的查询失败不会自动改走 Wiki。">fallback</span>。</div>
+          <div class="pattern-desc">Chroma staging collection 与 BM25 文件均核验来源后，PG 更新 <code>index_revision</code>。<a class="term" data-definition="使用常数 60 将向量相似度排名与 BM25 排名融合成综合得分的算法。" href="/course/glossary.html#term-rrf-60">RRF 60</a> 融合双路结果，无 <span class="term" tabindex="0" data-definition="对初次检索结果再排序；当前实现没有这一步。">rerank</span>，无查询失败 <span class="term" tabindex="0" data-definition="某条路径失败时切到另一条路径；已生效 RAG 的查询失败不会自动改走 Wiki。">fallback</span>。</div>
         </div>
         <div class="pattern-card animate-in" style="--stagger-index:3">
           <div class="pattern-icon">④</div>
           <div class="pattern-title">Agent 配置改 rag + 重启</div>
-          <div class="pattern-desc">将 <code>agents/writing-agent.json</code> 的 <code>mode</code> 改为 <code>"rag"</code>，停止并重启服务，<strong>新建 <span class="term" tabindex="0" data-definition="Codex 原生会话；一个 Thread 可以连续接收多条任务并保留自己的历史。">Thread</span></strong> 才生效。旧 Thread 历史不可撤回，旧 Thread 中读到的知识无法移除。</div>
+          <div class="pattern-desc">将 <code>agents/writing-agent.json</code> 的 <code>mode</code> 改为 <code>"rag"</code>，停止并重启服务，<strong>新建 <a class="term" tabindex="0" data-definition="用户与智能体之间持续存在、由 Codex 持久化历史的会话容器。" href="/course/glossary.html#term-thread">Thread</a></strong> 才生效。旧 Thread 历史不可撤回，旧 Thread 中读到的知识无法移除。</div>
         </div>
       </div>
 
@@ -2395,7 +2397,7 @@ npm run test:codex-memory</code></pre>
       <p>以下练习在 <code>stages/s09-knowledge-layer</code> 目录进行。准备知识库时先设置 <code>AGENT_MEMORY_ENABLED=false</code>，执行 <code>npm run knowledge:init</code>，把原文放到 <code>workspace/inputs/general/</code>；维护结束后再读取实际页面。实际运行还需先完成 <code>npm ci</code>、本地环境配置、<code>docker compose up -d postgres redis</code>、<code>npm run data:migrate</code>、<code>npm run server</code>。完整步骤见 <a href="../../?stage=s09">s09 实践环境</a>。</p>
 
       <div class="callout"><div class="callout-text">本轮新增 Web 外部客户端，s09 与当前项目接入受控上传，s01–s08 保留各自的能力边界。受控原文导入采用 <span class="term" tabindex="0" data-definition="由服务端签发给本地操作者请求的上下文，不来自模型参数。">operator</span> 身份，仅支持 md/txt、单文件 ≤256 KiB，且只创建、不覆盖。Wiki 页面列表通过 GET /knowledge/pages 获取，读取时仍校验来源；教学页默认不连接服务，也不运行模型。</div></div>
-<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（schema v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <span class="term" tabindex="0" data-definition="描述并启动一组容器服务的配置工具；相同宿主机端口不能被两套服务同时占用。">Compose</span> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
+<p><span class="term" tabindex="0" data-definition="所有这些本地服务围绕同一台主机运行，不能据此推导多主机能力。">单机</span>单 <span class="term" tabindex="0" data-definition="本机数据所有者标识，服务从本地身份文件取得；不是模型自称的身份。">owner</span>、单 Agent 配置，支持多 Thread；并非多 Agent 编排。s08 使用数据库 agent_s08（schema v1），s09 使用 agent_s09（schema v2），PG 与 Redis 均必需。两套 <a class="term" tabindex="0" data-definition="用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。" href="/course/glossary.html#term-docker-compose">Compose</a> 绑定相同的 5432/6379 端口，不可同时启动；可共享一组依赖并使用不同数据库。</p>
 <table id="m5-limit-table" style="width:100%;border-collapse:collapse;font-size:var(--text-sm);margin:var(--space-6) 0">
         <thead>
           <tr><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">限制项</th><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">说明</th></tr>
@@ -2509,7 +2511,7 @@ npm run test:codex-memory</code></pre>
 <h2 class="screen-heading">这个云端 Agent 还缺什么：把一类任务做完的约定</h2>
 <p>上一章，云端 Agent 已能通过 Wiki / RAG 查依据，文件和知识操作也经过同一道门禁。这个云端 Agent 还缺什么？用户说“写一篇文章”，可能希望先看大纲再决定；用户说“整理这些新资料”，可能还需要一次受限的知识库更新。能调用工具，还不足以表达哪里等人确认、这一次能写到哪里、做到什么才算交付。</p>
 <figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="968" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
-<p>本章把三件事分开。<span class="term" data-definition="方法说明，包含规范、模板与参考资料；教模型怎么做，但不能给工具或资源授权。">Skill</span> 教怎么做；<span class="term" data-definition="部署者声明的一类任务：目标、额外授权、Skill、步骤写入范围、验收与确认点；只组合代码允许的能力。">Workflow</span> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
+<p>本章把三件事分开。<a class="term" data-definition="以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。" href="/course/glossary.html#term-skill">Skill</a> 教怎么做；<a class="term" data-definition="声明一类任务所需临时授权、输入输出边界、终点验收及人工确认点的配置。" href="/course/glossary.html#term-workflow">Workflow</a> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
 <table><thead><tr><th>层</th><th>存放内容</th><th>谁负责</th><th>与权限的关系</th></tr></thead><tbody>
 <tr><td>Agent 包</td><td>agent.json、role.md、skills/</td><td>部署者配置，服务端校验</td><td>Skill 不授权；Workflow 只能组合 Agent 已有能力</td></tr>
 <tr><td>Workspace</td><td>inputs、research、drafts、outputs 与知识资料</td><td>用户与模型在资源规则内读写</td><td>资料不能成为更高权限的配置</td></tr>
@@ -2604,7 +2606,7 @@ npm run test:codex-memory</code></pre>
 
 <section class="screen animate-in" id="s10-screen-4">
 <h2 class="screen-heading">可以提议，不能自批：授权发生在模型之外</h2>
-<p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <span class="term" data-definition="模型提出另一类任务的受限工具，只接受 workflow、params、text 与 reason；只产生 proposed，不提供确认操作。">propose_task</span>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
+<p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <a class="term" data-definition="供模型在发现任务超出当前权限时发起工作流提议、等待人工审核的原语工具。" href="/course/glossary.html#term-propose-task">propose_task</a>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
 <div class="translation-block">
 <div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 149–164 行</span>
 <pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="149" data-end="164">  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
@@ -2728,7 +2730,7 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
 <h2 class="screen-heading">这个云端 Agent 还缺什么：协调模型与用量</h2>
 <p>上一章 s10 用 Skill 教方法，用 Workflow 管步骤、权限与确认。写作任务可以先产出大纲，等用户确认后再继续成稿。这个云端 Agent 还缺什么？大纲和成稿未必适合用同一个模型；知识检索需要向量模型，生成图片又是另一种用途。模型越来越多之后，谁负责挑选，谁持有密钥，花费达到上限时谁来停止派发，都需要明确的执行位置。</p>
 <figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1080" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
-<p><span class="term" data-definition="本阶段使用 Bifrost 承接模型请求：对 Codex 提供 Responses 接口，向上游转换协议，并按配置处理备用链和 token 限流。">模型网关</span> 是请求经过的服务。<span class="term" data-definition="服务端根据用途、场景、步骤需求与预算策略选择本轮提交的模型；它不负责网关内部的失败重试。">模型路由</span> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
+<p><a class="term" data-definition="介于 Codex 与各模型厂商之间负责协议翻译、备用切换与额度管控的中介代理。" href="/course/glossary.html#term-模型网关">模型网关</a> 是请求经过的服务。<a class="term" data-definition="在任务每轮发出前综合用途、业务场景、能力特征与档位动态决策中选模型的逻辑。" href="/course/glossary.html#term-模型路由">模型路由</a> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
 <table><thead><tr><th>角色</th><th>负责什么</th><th>本章中的证据</th></tr></thead><tbody>
 <tr><td>Codex</td><td>管理 Thread 与 Turn，执行推理和工具循环，报告模型用量。</td><td>turn/start 参数、thread/tokenUsage/updated 通知。</td></tr>
 <tr><td>服务端</td><td>校验清单、挑选模型、关联任务、记账与控制派发。</td><td>selectedModel、modelSource、用量账本与队列预算状态。</td></tr>

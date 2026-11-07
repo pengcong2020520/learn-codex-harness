@@ -31,7 +31,12 @@ export async function browser(t){
  const shot=async()=>(await page('Page.captureScreenshot',{format:'png'})).data;
  const viewport=(width,height)=>page('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
  const beforeLoad=source=>page('Page.addScriptToEvaluateOnNewDocument',{source});
- return {open,run,errors,shot,viewport,beforeLoad,clickNavigate};
+ const key=async(key,windowsVirtualKeyCode)=>{await page('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode});await page('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode});};
+ const hover=async selector=>{
+  const point=await run(`const el=document.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};`);
+  await page('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+ };
+ return {open,run,errors,shot,viewport,beforeLoad,clickNavigate,key,hover};
 }
 export const helpers=`const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const until=async(fn,ms=3000)=>{const end=Date.now()+ms;while(Date.now()<end){if(fn())return true;await sleep(30);}return false;};`;

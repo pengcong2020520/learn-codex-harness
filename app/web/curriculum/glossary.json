@@ -1,0 +1,1659 @@
+[
+  {
+    "term": "Codex harness",
+    "aka": [
+      "Codex 运行框架",
+      "harness"
+    ],
+    "stage": "intro",
+    "short": "模型外围负责执行工具、维持循环与管理会话状态的宿主框架。",
+    "detail": "本教程遵循“Agent = 模型 + Harness”公式，不自己造智能体循环，而是将 OpenAI Codex 的 harness 作为黑箱引擎接进服务。模型只负责推理思考，文件读写、命令执行与上下文压缩均由 harness 承担。",
+    "related": [
+      "App Server",
+      "agent loop",
+      "Thread",
+      "Turn",
+      "Item"
+    ],
+    "source": "stages/introduction.md#先从一个公式说起"
+  },
+  {
+    "term": "App Server",
+    "aka": [
+      "应用服务端",
+      "Codex App Server"
+    ],
+    "stage": "intro",
+    "short": "Codex 导出的长期运行子进程及其双向 JSON-RPC 平台接口。",
+    "detail": "它是长期运行的子进程，也是双向 JSON-RPC 平台接口：托管核心线程，把内部事件翻成稳定通知，并能反向发起审批请求。官方把它当作首要集成方案，不是唯一驱动方式。",
+    "related": [
+      "Codex harness",
+      "stdio",
+      "JSON-RPC 2.0",
+      "Thread",
+      "Turn",
+      "Item"
+    ],
+    "source": "stages/introduction.md#App Server：黑箱留出来的那扇门"
+  },
+  {
+    "term": "Item",
+    "aka": [
+      "项目",
+      "交互项"
+    ],
+    "stage": "intro",
+    "short": "用户与智能体交互过程中输入与输出的最小结构化动作单位。",
+    "detail": "一条用户消息、模型回复、工具执行或审批请求。生命周期是 item/started，可选的 item/*/delta，再到 item/completed。",
+    "related": [
+      "Turn",
+      "Thread",
+      "item/agentMessage/delta"
+    ],
+    "source": "stages/introduction.md#三个原语：Item、Turn、Thread"
+  },
+  {
+    "term": "Turn",
+    "aka": [
+      "轮次",
+      "执行轮次"
+    ],
+    "stage": "intro",
+    "short": "单次用户输入引发的模型思考、工具调用与回复的完整执行过程。",
+    "detail": "一次用户请求在 Codex 内展开为一个 Turn，其内部通常包含多个 Item 的连续流转。一个会话内可以依次包含多个串行执行的 Turn。",
+    "related": [
+      "Item",
+      "Thread",
+      "turn/start",
+      "turn/completed",
+      "agent loop"
+    ],
+    "source": "stages/introduction.md#三个原语：Item、Turn、Thread"
+  },
+  {
+    "term": "Thread",
+    "aka": [
+      "会话",
+      "对话线程"
+    ],
+    "stage": "intro",
+    "short": "用户与智能体之间持续存在、由 Codex 持久化历史的会话容器。",
+    "detail": "Thread 代表一个完整的聊天窗口，内部按顺序容纳多个 Turn。它的事件历史完全由 Codex 原生持久化保存，客户端在断开重连后可通过 ID 恢复一致的会话时间线。",
+    "related": [
+      "Turn",
+      "Item",
+      "thread/start",
+      "thread/resume"
+    ],
+    "source": "stages/introduction.md#三个原语：Item、Turn、Thread"
+  },
+  {
+    "term": "agent loop",
+    "aka": [
+      "智能体循环",
+      "Agent 循环"
+    ],
+    "stage": "intro",
+    "short": "模型推理、调用工具、观察结果并回填再推理的核心执行循环。",
+    "detail": "该循环协调用户、模型和工具之间的多步交互。本教程的一大核心原则是“不自造 agent loop”，模型与工具调用的循环完全交由 Codex harness 驱动。",
+    "related": [
+      "Codex harness",
+      "Turn"
+    ],
+    "source": "stages/introduction.md#黑箱里装了什么"
+  },
+  {
+    "term": "stdio",
+    "aka": [
+      "标准输入输出",
+      "标准管道"
+    ],
+    "stage": "intro",
+    "short": "进程间通过标准输入与标准输出管道按行收发数据的本地通信机制。",
+    "detail": "本地主程序启动 Codex 子进程后，无需开启网络端口，直接基于 stdio 管道收发 JSONL 格式的双向 RPC 消息与流式通知。它构成了宿主程序与 App Server 通信的物理通道。",
+    "related": [
+      "App Server",
+      "JSON-RPC 2.0"
+    ],
+    "source": "stages/introduction.md#App Server：黑箱留出来的那扇门"
+  },
+  {
+    "term": "TypeScript SDK",
+    "aka": [
+      "@openai/codex-sdk"
+    ],
+    "stage": "intro",
+    "short": "OpenAI 官方提供的基于子进程脚本模式包装的 Node.js SDK。",
+    "detail": "该 SDK 每次调用 run() 均会启动一个单轮子进程，跑完即退出。事件以单向流形式传出，适合 CI 等一次性任务，但无法处理双向交互审批或把工具调用接回宿主程序。",
+    "related": [
+      "codex exec",
+      "Python SDK",
+      "App Server"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#两个官方 SDK，底下不一样"
+  },
+  {
+    "term": "Python SDK",
+    "aka": [
+      "openai-codex"
+    ],
+    "stage": "intro",
+    "short": "官方提供的驱动 App Server 双向协议的 Python SDK。",
+    "detail": "该 SDK 底层启动一个常驻的 App Server 子进程并维持双向连接。其底层能力与本教程自 s01 起在 Node 中自行实现的 App Server 客户端处在同一层。",
+    "related": [
+      "App Server",
+      "TypeScript SDK",
+      "JSON-RPC 2.0"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#两个官方 SDK，底下不一样"
+  },
+  {
+    "term": "codex exec",
+    "aka": [
+      "脚本模式",
+      "CLI 脚本模式"
+    ],
+    "stage": "intro",
+    "short": "Codex 以命令行非交互方式一次性执行单轮任务的子进程运行模式。",
+    "detail": "TypeScript SDK 底层即使用 codex exec --experimental-json。每一轮执行都是一个独立的进程生命周期，后续轮次必须显式携带对话 ID 进行恢复。",
+    "related": [
+      "TypeScript SDK",
+      "App Server",
+      "Turn"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#循环由 harness 来转"
+  },
+  {
+    "term": "sandboxMode",
+    "aka": [
+      "沙箱模式",
+      "沙箱策略"
+    ],
+    "stage": "s00",
+    "short": "创建 Thread 时指定的文件系统与操作权限隔离等级参数。",
+    "detail": "它决定了 Codex harness 能在多大系统范围内执行操作。在纯问答时设为 read-only 只读模式，只有在确需改写代码时才授予 workspace-write 权限，遵循权限最小化原则。",
+    "related": [
+      "approvalPolicy",
+      "Thread"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#权限由你给"
+  },
+  {
+    "term": "approvalPolicy",
+    "aka": [
+      "审批策略"
+    ],
+    "stage": "s00",
+    "short": "控制模型执行操作或命令前是否必须暂停等待人工批准的判定策略。",
+    "detail": "s00 只把它设为 never：不额外请求批准，沙箱不允许的操作不会靠弹窗放行。",
+    "related": [
+      "sandboxMode",
+      "Turn",
+      "App Server"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#权限由你给"
+  },
+  {
+    "term": "外部程序验收",
+    "aka": [
+      "程序验收",
+      "独立验收"
+    ],
+    "stage": "s00",
+    "short": "由外部程序运行独立测试来判定任务是否完成、不听信模型自述的原则。",
+    "detail": "模型说做完了不算数，必须由模型之外的程序判定。s00 的例子是先确认测试原本失败、修完后测试文件未被改、再跑测试；到 s10 则按 Workflow 的 checks 看产物，不通过记为 needs-review。",
+    "related": [
+      "验收检查",
+      "agent loop"
+    ],
+    "source": "stages/s00-sdk-quickstart/README.md#分工：Codex 做什么，我们做什么"
+  },
+  {
+    "term": "Responses API",
+    "aka": [
+      "OpenAI Responses 接口"
+    ],
+    "stage": "intro",
+    "short": "Codex 用来跟模型对话的 OpenAI Responses 接口；提供该接口的第三方模型可以直接连。",
+    "detail": "第三方模型若要被 Codex 直连调用，必须兼容提供 Responses 接口。它是 Codex 内部与模型通信的基石，直到 s11 引入模型网关后才能将其他格式请求进行转换适配。",
+    "related": [
+      "Codex harness",
+      "模型网关"
+    ],
+    "source": "stages/s01-single-turn/README.md#第一步：接上模型"
+  },
+  {
+    "term": "JSON-RPC 2.0",
+    "aka": [
+      "JSON-RPC"
+    ],
+    "stage": "s01",
+    "short": "基于 JSON 编码、通过唯一 id 匹配请求回包并支持单向通知的远端调用协议。",
+    "detail": "它是 App Server 与外部客户端通信的协议规范。协议消息分为三类：带 id 无 method 的回包、带 id 带 method 的反向请求、以及无 id 的服务端异步事件通知。",
+    "related": [
+      "App Server",
+      "stdio",
+      "turn/start",
+      "turn/completed"
+    ],
+    "source": "stages/s01-single-turn/README.md#第四步：分清三类消息"
+  },
+  {
+    "term": "models.json",
+    "aka": [
+      "模型目录",
+      "模型能力配置"
+    ],
+    "stage": "s01",
+    "short": "声明模型的上下文长度、视觉输入能力与推理档位等元数据的配置文件。",
+    "detail": "每次运行前程序将模型环境配置转换为 models.json 并交予 Codex。Codex 依此感知模型具体能力，但这些仅属能力声明，并不直接向 Agent 授予任何额外系统特权。",
+    "related": [
+      "Responses API",
+      "Codex harness"
+    ],
+    "source": "stages/s01-single-turn/README.md#第一步：接上模型"
+  },
+  {
+    "term": "CODEX_HOME",
+    "aka": [
+      "Codex 状态目录"
+    ],
+    "stage": "s01",
+    "short": "隔离保存当前服务实例配置、会话记录、原生 SQLite 与元数据的宿主目录。",
+    "detail": "教程将其指定在服务隔离的 .data/codex 目录，防止与宿主机个人的 ~/.codex 产生干扰。Codex 原生历史、数据库索引及后续章节的原生记忆均存放于此。",
+    "related": [
+      "Thread",
+      "rollout-*.jsonl",
+      "原生记忆"
+    ],
+    "source": "stages/s01-single-turn/README.md#第三步：在本机跑出一个 Codex"
+  },
+  {
+    "term": "turn/start",
+    "aka": [
+      "发起轮次请求"
+    ],
+    "stage": "s01",
+    "short": "客户端向 App Server 发起新一轮任务执行的 JSON-RPC 请求。",
+    "detail": "携带目标 threadId 与用户 prompt 文本。收到该请求的回包仅代表 Codex 已经受理该轮任务，并不代表任务执行结束，必须等待随后的完成通知。",
+    "related": [
+      "turn/completed",
+      "Turn",
+      "Thread",
+      "JSON-RPC 2.0"
+    ],
+    "source": "stages/s01-single-turn/README.md#第五步：一轮的完整流程"
+  },
+  {
+    "term": "turn/completed",
+    "aka": [
+      "轮次完成通知"
+    ],
+    "stage": "s01",
+    "short": "App Server 在一轮任务全部模型推理与工具调用终结后发出的单向通知。",
+    "detail": "这是判定一轮任务是否完成的唯一终局依据。客户端必须严格比对该通知携带的 turnId，且其内部 status 为 completed 才视作成功，failed 或中断均视为失败。",
+    "related": [
+      "turn/start",
+      "Turn",
+      "Item"
+    ],
+    "source": "stages/s01-single-turn/README.md#第五步：一轮的完整流程"
+  },
+  {
+    "term": "item/agentMessage/delta",
+    "aka": [
+      "消息增量通知",
+      "流式文本增量"
+    ],
+    "stage": "s01",
+    "short": "App Server 向客户端逐段流式推送模型回答文本片段的异步通知事件。",
+    "detail": "客户端根据 itemId 将连续到达的 delta 片段拼接还原为完整的回答正文。在收到对应的 item/completed 通知时，再使用最终确定的完整内容做一致性覆盖。",
+    "related": [
+      "Item",
+      "Turn",
+      "turn/completed"
+    ],
+    "source": "stages/s01-single-turn/README.md#第五步：一轮的完整流程"
+  },
+  {
+    "term": "thread/start",
+    "aka": [
+      "新建会话请求"
+    ],
+    "stage": "s02",
+    "short": "向 App Server 发起新建会话窗口并获取会话 ID 的 RPC 方法。",
+    "detail": "多轮交互中仅第一条消息调用 thread/start 建立窗口。后续轮次均复用此 Thread ID 发送 turn/start，从而保持上下文连续。",
+    "related": [
+      "Thread",
+      "thread/resume",
+      "thread/list"
+    ],
+    "source": "stages/s02-multi-turn/README.md#先理解两个概念"
+  },
+  {
+    "term": "thread/resume",
+    "aka": [
+      "恢复会话请求"
+    ],
+    "stage": "s02",
+    "short": "客户端根据已有会话 ID 重新挂接并恢复历史上下文的 RPC 请求方法。",
+    "detail": "程序重启后，客户端无需重发任何历史消息，直接调用该方法即可恢复上下文。Codex 会在内部从持久化记录中重新加载对话历史。",
+    "related": [
+      "Thread",
+      "thread/start",
+      "excludeTurns",
+      "rollout-*.jsonl"
+    ],
+    "source": "stages/s02-multi-turn/README.md#历史留给 Codex"
+  },
+  {
+    "term": "thread/list",
+    "aka": [
+      "查询会话列表"
+    ],
+    "stage": "s02",
+    "short": "向 App Server 查询当前目录下已持久化历史会话清单的 RPC 方法。",
+    "detail": "客户端在执行 /resume 时调用该接口检索历史列表。随后过滤出属于当前项目的会话供用户选择，实现跨进程恢复。",
+    "related": [
+      "Thread",
+      "thread/resume"
+    ],
+    "source": "stages/s02-multi-turn/README.md#历史留给 Codex"
+  },
+  {
+    "term": "FIFO 输入队列",
+    "aka": [
+      "先进先出缓冲",
+      "输入排队缓冲"
+    ],
+    "stage": "s02",
+    "short": "客户端用于缓冲用户提前敲入的多行输入并按顺序串行交付的先进先出队列。",
+    "detail": "当模型正在回答当前轮次时，用户连续输入的内容会被暂存进 FIFO 队列。上一轮彻底结束并收到 completed 通知后，客户端才从队列中取出下一行发起新一轮，防止输入丢失或输出交织。",
+    "related": [
+      "Turn",
+      "turn/completed"
+    ],
+    "source": "stages/s02-multi-turn/README.md#输入先排队"
+  },
+  {
+    "term": "rollout-*.jsonl",
+    "aka": [
+      "原生会话记录",
+      "rollout 日志"
+    ],
+    "stage": "s02",
+    "short": "Codex 在状态目录下按行追加保存单个会话完整事件与状态的原生持久化文件。",
+    "detail": "同一 Thread 的每一轮追加进 CODEX_HOME 下的这个 jsonl。恢复时 Codex 自己读它，我们的程序不重发历史。上下文太长时的压缩不是读这个文件的步骤。",
+    "related": [
+      "Thread",
+      "CODEX_HOME",
+      "thread/resume"
+    ],
+    "source": "stages/s02-multi-turn/README.md#跑起来看看"
+  },
+  {
+    "term": "excludeTurns",
+    "aka": [
+      "排除历史轮次参数"
+    ],
+    "stage": "s02",
+    "short": "thread/resume 上不把历史轮次回传给客户端的参数；历史仍留在 Codex。",
+    "detail": "设为 true 时，客户端拿不到历史轮次，但 Codex 里的历史完整保留，下一轮仍能用。",
+    "related": [
+      "thread/resume",
+      "Thread"
+    ],
+    "source": "stages/s02-multi-turn/README.md#关键代码"
+  },
+  {
+    "term": "常驻服务端",
+    "aka": [
+      "Resident Server",
+      "Agent 服务端"
+    ],
+    "stage": "s03",
+    "short": "持有 Codex 子进程与执行状态、脱离终端常驻后台运行的服务进程。",
+    "detail": "将单进程架构拆分为常驻服务端与轻量客户端。服务端管理模型密钥与底层执行，客户端随时可以断开连接，正在执行的任务不受客户端退出的影响。",
+    "related": [
+      "App Server",
+      "连接令牌",
+      "会话快照"
+    ],
+    "source": "stages/s03-service/README.md#服务端和客户端"
+  },
+  {
+    "term": "连接令牌",
+    "aka": [
+      "Bearer token",
+      "connection.json"
+    ],
+    "stage": "s03",
+    "short": "服务端每次启动随机生成、仅限本机受信客户端访问的临时身份凭证。",
+    "detail": "每次启动随机生成，和服务地址写入权限 0600 的 .data/connection.json。它只决定能不能连上这个本机服务，与模型 API Key 分开；带 Origin 的请求一律拒绝。",
+    "related": [
+      "常驻服务端",
+      "独占锁"
+    ],
+    "source": "stages/s03-service/README.md#连接令牌：只有本机客户端能连"
+  },
+  {
+    "term": "独占锁",
+    "aka": [
+      "server.lock"
+    ],
+    "stage": "s03",
+    "short": "保证同一个运行工作区目录下仅有一个 Agent 服务运行的文件互斥锁。",
+    "detail": "服务启动时在 .data/server.lock 写入当前进程 PID 实行排他锁定，防止多实例冲突导致 Codex 状态混乱。启动失败或旧进程残留时，确认进程消亡后方可清理旧锁。",
+    "related": [
+      "常驻服务端",
+      "LIFO 资源释放"
+    ],
+    "source": "stages/s03-service/README.md#生命周期：启动有顺序，关闭倒着来"
+  },
+  {
+    "term": "会话快照",
+    "aka": [
+      "Session Snapshot",
+      "状态快照"
+    ],
+    "stage": "s03",
+    "short": "服务端整理并提供给客户端定期读取的会话最新状态与回复汇总结构。",
+    "detail": "客户端发起 POST /turns 得到受理后，通过 GET /state 轮询会话快照以获取增量文本与轮次状态。快照隔离了底层复杂的逐行 RPC 通知，降低客户端状态维护成本。",
+    "related": [
+      "常驻服务端",
+      "Turn",
+      "快照优先重连"
+    ],
+    "source": "stages/s03-service/README.md#一轮由服务端发起"
+  },
+  {
+    "term": "409 TURN_IN_PROGRESS",
+    "aka": [
+      "轮次冲突错误"
+    ],
+    "stage": "s03",
+    "short": "当指定会话上一轮任务尚未结束而收到新任务提交时服务端返回的拒绝状态码。",
+    "detail": "s03 阶段服务端尚未内置排队队列，因此单会话内强制一次只能执行一轮。遇到并发请求直接返回 409，要求调用方必须等待既有轮次终结。",
+    "related": [
+      "Turn",
+      "任务记录",
+      "服务端排队"
+    ],
+    "source": "stages/s03-service/README.md#一轮由服务端发起"
+  },
+  {
+    "term": "LIFO 资源释放",
+    "aka": [
+      "逆向清理",
+      "生命周期回滚"
+    ],
+    "stage": "s03",
+    "short": "服务关闭或异常崩溃时严格按照资源获取倒序逐个执行清理的生命周期机制。",
+    "detail": "启动顺序是独占锁、运行目录、Codex 子进程、HTTP、连接文件。正常关闭或启动失败时按登记的逆序释放，所以连接文件先删、锁最后放。崩溃留下的旧锁要等下次启动确认进程已不在才清。",
+    "related": [
+      "独占锁",
+      "常驻服务端"
+    ],
+    "source": "stages/s03-service/README.md#生命周期：启动有顺序，关闭倒着来"
+  },
+  {
+    "term": "任务记录",
+    "aka": [
+      "Task Record",
+      "messages.json"
+    ],
+    "stage": "s04",
+    "short": "服务端先于模型执行对客户端输入进行落盘记录与状态跟踪的持久化条目。",
+    "detail": "先写入 .data/messages.json，立刻返回 202 queued。状态可从 queued、starting、running 进入 completed，也可能进入 failed、interrupted 或 unconfirmed；失败、中断和结果不确定都会暂停队列。",
+    "related": [
+      "幂等性",
+      "服务端排队",
+      "unconfirmed"
+    ],
+    "source": "stages/s04-events-messages/README.md#任务记录：先记下来，再执行"
+  },
+  {
+    "term": "幂等性",
+    "aka": [
+      "Idempotence",
+      "消息幂等"
+    ],
+    "stage": "s04",
+    "short": "携带相同消息 ID 重复提交时返回既有任务记录而不重复创建执行的机制。",
+    "detail": "客户端提交输入时必须生成唯一消息 ID。如果因网络重试提交相同 ID 且内容一致，直接返回已存在的任务记录；若内容变更则返回 409 拒绝，避免重复触发模型执行。",
+    "related": [
+      "任务记录",
+      "服务端排队"
+    ],
+    "source": "stages/s04-events-messages/README.md#任务记录：先记下来，再执行"
+  },
+  {
+    "term": "服务端排队",
+    "aka": [
+      "按会话排队",
+      "调度排队"
+    ],
+    "stage": "s04",
+    "short": "服务端内部调度器针对同一会话按 FIFO 顺序串行分发执行任务的机制。",
+    "detail": "取代了早期在客户端依赖等待的脆弱方式。上一轮完成通知到达后，调度器被唤醒并自动从队列取出下一条任务发送 turn/start；不同会话之间并发独立、互不干扰。",
+    "related": [
+      "任务记录",
+      "Turn",
+      "FIFO 输入队列"
+    ],
+    "source": "stages/s04-events-messages/README.md#服务端排队：同一会话一次一轮"
+  },
+  {
+    "term": "unconfirmed",
+    "aka": [
+      "状态不确定",
+      "未确认状态"
+    ],
+    "stage": "s04",
+    "short": "任务派发后遭遇断连或重启且执行结果无法核验时标记的防重复挂起状态。",
+    "detail": "当任务已发向 Codex 但未收到确认回复时发生异常，状态置为 unconfirmed 并暂停队列。系统不盲目猜测失败或自动重发，必须经由人工介入核对后输入 /continue 方可恢复调度。",
+    "related": [
+      "任务记录",
+      "服务端排队",
+      "unconfirmed 恢复机制"
+    ],
+    "source": "stages/s04-events-messages/README.md#任务记录：先记下来，再执行"
+  },
+  {
+    "term": "turn/steer",
+    "aka": [
+      "轮次追加",
+      "中途指导"
+    ],
+    "stage": "s04",
+    "short": "在目标轮次仍在执行时向 Codex 动态追加补充要求的底层 RPC 方法。",
+    "detail": "对应客户端显式调用的 /append 命令。若目标轮次仍在运行，则调用 turn/steer 直接注入上下文；若已执行完毕，则将追加要求作为高优先级任务插入普通排队前列新开一轮。",
+    "related": [
+      "Turn",
+      "turn/start",
+      "turn/interrupt"
+    ],
+    "source": "stages/s04-events-messages/README.md#追加：补充给正在执行的那一轮"
+  },
+  {
+    "term": "turn/interrupt",
+    "aka": [
+      "轮次中断"
+    ],
+    "stage": "s04",
+    "short": "当轮次执行超出预设超时阈值时服务端请求 Codex 中断执行的 RPC 方法。",
+    "detail": "一轮超过 AGENT_TURN_TIMEOUT_MS（默认 10 分钟）时，服务端暂停该会话队列，并调用 turn/interrupt 请 Codex 停掉这一轮。",
+    "related": [
+      "Turn",
+      "turn/steer",
+      "服务端排队"
+    ],
+    "source": "stages/s04-events-messages/README.md#服务端排队：同一会话一次一轮"
+  },
+  {
+    "term": "SSE",
+    "aka": [
+      "Server-Sent Events",
+      "服务端事件推送"
+    ],
+    "stage": "s04",
+    "short": "服务端通过持久 HTTP 通道向客户端单向实时推送状态变化的事件流协议。",
+    "detail": "客户端用 GET /events 收 SSE。连接上来先推 snapshot，之后按变化推 session 或 queue，连接失效推 fatal，正常关闭推 shutdown。它替换 s03 的 GET /state 轮询。",
+    "related": [
+      "会话快照",
+      "快照优先重连"
+    ],
+    "source": "stages/s04-events-messages/README.md#事件推送：SSE"
+  },
+  {
+    "term": "快照优先重连",
+    "aka": [
+      "重连补快照"
+    ],
+    "stage": "s04",
+    "short": "客户端断线重连时服务端先下发全量状态快照再回放缓冲增量的同步机制。",
+    "detail": "断线后客户端重连。服务端先登记订阅，再发一份含会话和队列的完整快照，然后补上期间暂存的事件。快照之后的事件不会抢到快照前面，重连也不会把已提交的消息再发一遍。",
+    "related": [
+      "SSE",
+      "会话快照",
+      "任务记录"
+    ],
+    "source": "stages/s04-events-messages/README.md#断线重连：先补快照"
+  },
+  {
+    "term": "Agent 定义",
+    "aka": [
+      "Agent 配置",
+      "writing-agent.json"
+    ],
+    "stage": "s05",
+    "short": "声明 Agent 身份、角色文档、启用技能及执行策略的规范 JSON 配置文件。",
+    "detail": "这是服务的单一装配入口。启动时必须通过严格的 JSON Schema 校验，一旦出现未知字段或违规放宽沙箱策略，服务便直接拒绝启动，保证声明即契约。",
+    "related": [
+      "baseInstructions",
+      "Skill",
+      "内容哈希",
+      "Agent 描述符"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#Agent 定义：一份 JSON 装配一个 Agent"
+  },
+  {
+    "term": "baseInstructions",
+    "aka": [
+      "角色基础提示词",
+      "人设指令"
+    ],
+    "stage": "s05",
+    "short": "在新建或恢复会话时注入 Codex 的系统级角色设定与工作方法提示词。",
+    "detail": "角色从独立的 Markdown 文件加载，通过该参数与 instructions_template 生效。角色描述仅代表工作指导，绝不自动等于系统能力，也严禁突破配置所圈定的沙箱权限。",
+    "related": [
+      "Agent 定义",
+      "Thread",
+      "thread/start",
+      "thread/resume"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#角色：Agent 的人设和工作方法"
+  },
+  {
+    "term": "Skill",
+    "aka": [
+      "技能",
+      "SKILL.md"
+    ],
+    "stage": "s05",
+    "short": "以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。",
+    "detail": "Skill 属于 Codex 原生标准，只负责指导行动方法，绝不附带执行权限。Codex 能够自动发现工作区技能，但必须经过服务端的白名单显式配置授权才准许真正生效。",
+    "related": [
+      "Agent 定义",
+      "skills/config/write",
+      "skill_read"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#Skill：发现不等于授权"
+  },
+  {
+    "term": "skills/config/write",
+    "aka": [
+      "技能配置写入"
+    ],
+    "stage": "s05",
+    "short": "服务端用于向 Codex 显式开启指定技能或禁用白名单外技能的 RPC 方法。",
+    "detail": "启动时和每一轮发出前都重新拉 skills/list。某个 Skill 的启用状态和定义不一致才调用 skills/config/write。范围外的仍然关不掉就停止执行；一轮发出前若有效集合变了，停止并要求受控重启。",
+    "related": [
+      "Skill",
+      "Agent 定义"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#Skill：发现不等于授权"
+  },
+  {
+    "term": "内容哈希",
+    "aka": [
+      "sourceHash",
+      "配置指纹"
+    ],
+    "stage": "s05",
+    "short": "由定义文件、角色正文与所有启用 Skill 源码联合计算的一致性校验哈希值。",
+    "detail": "新建会话或发出一轮前重算定义文件、角色文件和各 Skill 文件的联合哈希。与启动时不一致就作废，后续请求返回 AGENT_CHANGED，必须受控重启；把文件改回去也不能恢复。",
+    "related": [
+      "Agent 描述符",
+      "AGENT_CHANGED",
+      "Agent 定义"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#版本：内容一变，旧版本作废"
+  },
+  {
+    "term": "Agent 描述符",
+    "aka": [
+      "agent-descriptor"
+    ],
+    "stage": "s05",
+    "short": "包含标识、策略、Skill 集合与哈希且无敏感正文的版本元数据文件。",
+    "detail": "服务端启动校验后生成描述符并持久化在 .data/agent-descriptors/。它充当版本追踪的不可变依据，不包含具体密钥或角色全文，用于与会话建立版本绑定。",
+    "related": [
+      "Agent 定义",
+      "内容哈希",
+      "Thread"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#版本：内容一变，旧版本作废"
+  },
+  {
+    "term": "AGENT_CHANGED",
+    "aka": [
+      "版本作废错误"
+    ],
+    "stage": "s05",
+    "short": "检测到 Agent 定义或配置内容变化后使当前旧版本失效并拒绝执行的防护机制。",
+    "detail": "历史会话在创建时与具体版本描述符绑定。若发生文件变更，服务端拒绝在旧会话中执行新任务并抛出 AGENT_CHANGED，要求用户受控重启服务并建立新会话，防止混合执行。",
+    "related": [
+      "内容哈希",
+      "Agent 描述符",
+      "Agent 定义"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#版本：内容一变，旧版本作废"
+  },
+  {
+    "term": "工具注册表",
+    "aka": [
+      "Tool Registry"
+    ],
+    "stage": "s06",
+    "short": "负责管理工具配置声明、预编译参数校验规则并绑定实现模块的装配组件。",
+    "detail": "工具位于 config/tools/，声明与实现解耦。注册表在服务启动时完成初始化装配与 JSON Schema 编译，在执行调用前集中校验工具合法性与入参有效性。",
+    "related": [
+      "tools.allow",
+      "MCP",
+      "tools/call"
+    ],
+    "source": "stages/s06-tools/README.md#工具：一份配置，一个实现"
+  },
+  {
+    "term": "tools.allow",
+    "aka": [
+      "工具白名单"
+    ],
+    "stage": "s06",
+    "short": "在 Agent 定义中严格圈定该助手被允许使用的工具名称许可清单。",
+    "detail": "注册表中存在的工具不等于当前 Agent 均可调用。仅在此名单内的工具才会暴露给模型，即使模型凭名字伪造调用未授权工具，注册表也会直接拦截阻断。",
+    "related": [
+      "工具注册表",
+      "Agent 定义",
+      "PermissionGate"
+    ],
+    "source": "stages/s06-tools/README.md#白名单：Agent 定义说了算"
+  },
+  {
+    "term": "MCP",
+    "aka": [
+      "Model Context Protocol",
+      "模型上下文协议"
+    ],
+    "stage": "s06",
+    "short": "驱动端与外部工具服务之间用于工具发现、调用与数据交互的标准化通信协议。",
+    "detail": "服务启动时在回环地址开启带随机令牌的本地 MCP 服务端并将入口配置给 Codex。Codex 原生关闭 shell，通过标准 MCP 协议向宿主服务拉取工具清单并触发执行。",
+    "related": [
+      "tools/list",
+      "tools/call",
+      "工具注册表"
+    ],
+    "source": "stages/s06-tools/README.md#MCP：Codex 怎么调到我们的工具"
+  },
+  {
+    "term": "dataBindings",
+    "aka": [
+      "资料边界",
+      "用途授权"
+    ],
+    "stage": "s06",
+    "short": "按目录规定资料能只读，还是读并且只能新建；没有原地改写权。",
+    "detail": "inputs 只读；research 和 drafts 为读+新建；outputs 按产物规则只能新建 .md/.txt。路径必须落在这四个目录、不能经符号链接，文件只允许 .md 和 .txt。",
+    "related": [
+      "wx 写入标志",
+      "PermissionGate"
+    ],
+    "source": "stages/s06-tools/README.md#资料边界：按用途授权"
+  },
+  {
+    "term": "tools/list",
+    "aka": [
+      "拉取工具列表"
+    ],
+    "stage": "s06",
+    "short": "引擎向 MCP 服务端拉取已授权可用工具清单及参数 Schema 的请求。",
+    "detail": "服务端在响应此请求时，会依照 tools.allow 白名单对工具进行严格过滤。未经授权的工具完全对模型隐形，防止模型感知越权工具。",
+    "related": [
+      "MCP",
+      "tools.allow",
+      "tools/call"
+    ],
+    "source": "stages/s06-tools/README.md#MCP：Codex 怎么调到我们的工具"
+  },
+  {
+    "term": "tools/call",
+    "aka": [
+      "工具调用请求"
+    ],
+    "stage": "s06",
+    "short": "执行引擎依据模型推理意图向 MCP 服务端发起执行指定工具调用的请求。",
+    "detail": "请求携带调用的工具名与实参。服务端的工具注册表在拦截请求后，按白名单和预编译 Schema 进行双重核验，随后分发至本地实现执行并返回结果。",
+    "related": [
+      "MCP",
+      "tools/list",
+      "工具注册表",
+      "dynamicTools"
+    ],
+    "source": "stages/s06-tools/README.md#MCP：Codex 怎么调到我们的工具"
+  },
+  {
+    "term": "wx 写入标志",
+    "aka": [
+      "不可覆盖写入",
+      "create-only 写入"
+    ],
+    "stage": "s06",
+    "short": "底层以排他排同名模式创建文件的写入标志，目标已存在则立即抛错拒绝。",
+    "detail": "在工具实现 write_file 中采用 flag: \"wx\"。以此强制推行“写过的文件不覆盖”原则，模型若想修改内容必须新建升级版本文件（如 v2），保障数据版本溯源。",
+    "related": [
+      "dataBindings",
+      "不可变正文对象"
+    ],
+    "source": "stages/s06-tools/README.md#资料边界：按用途授权"
+  },
+  {
+    "term": "原生记忆",
+    "aka": [
+      "Native Memory",
+      "Codex 记忆"
+    ],
+    "stage": "s07",
+    "short": "Codex 后台自动从历史会话提炼并在未来会话中跨窗口使用的长期经验摘要。",
+    "detail": "区别于单会话内的历史记录，原生记忆由 Codex 后台在会话闲置时提取要点并合并为摘要。后续新建会话会自动带上这些提炼摘要，而无需宿主程序手动拼装历史。",
+    "related": [
+      "memory_summary.md",
+      "三道开关",
+      "thread/memoryMode/set"
+    ],
+    "source": "stages/s07-memory/README.md#记忆由 Codex 提炼和使用"
+  },
+  {
+    "term": "三道开关",
+    "aka": [
+      "记忆管控开关"
+    ],
+    "stage": "s07",
+    "short": "环境变量总开关、Agent 策略以及单会话贡献标记构成的层级化记忆准入控制。",
+    "detail": "要让一个会话的内容进入提炼，需要 AGENT_MEMORY_ENABLED、该 Agent 允许 contribute，以及这个 Thread 的参与标记。use 只决定是否在后续会话使用记忆。AGENT_MEMORY_GENERATE 另管后台是否生成，同样受总开关约束。",
+    "related": [
+      "原生记忆",
+      "thread/memoryMode/set",
+      "config/read"
+    ],
+    "source": "stages/s07-memory/README.md#三道开关"
+  },
+  {
+    "term": "memory_summary.md",
+    "aka": [
+      "记忆摘要文件"
+    ],
+    "stage": "s07",
+    "short": "Codex 将零散记忆合并提炼后、供未来新建会话自动挂载读取的最终摘要文件。",
+    "detail": "存放在服务专属的 .data/codex/memories/ 下。服务端对外仅提供固定路径的只读与脱敏访问，严禁客户端传入任意路径读取或直接篡改清空记忆文件。",
+    "related": [
+      "raw_memories.md",
+      "原生记忆",
+      "CODEX_HOME"
+    ],
+    "source": "stages/s07-memory/README.md#存在本服务自己的状态目录"
+  },
+  {
+    "term": "raw_memories.md",
+    "aka": [
+      "原始记忆条目"
+    ],
+    "stage": "s07",
+    "short": "会话达到空闲阈值后由后台抽取模型初次提炼出的零散事实记忆记录文件。",
+    "detail": "它记录了从各会话提取出的未经二次合并的原始事实碎片。随后由合并模型按空闲周期整理收敛至 MEMORY.md 和 memory_summary.md。",
+    "related": [
+      "memory_summary.md",
+      "原生记忆"
+    ],
+    "source": "stages/s07-memory/README.md#存在本服务自己的状态目录"
+  },
+  {
+    "term": "thread/memoryMode/set",
+    "aka": [
+      "设置会话记忆模式"
+    ],
+    "stage": "s07",
+    "short": "向 Codex 声明当前 Thread 是否有资格参与记忆提炼的 RPC 方法。",
+    "detail": "对应客户端的 /memory contribute on|off 命令。仅在轮次边界且总开关打开时才允许设置，它只控制该会话未来的贡献资格，不追溯删除历史记忆。",
+    "related": [
+      "三道开关",
+      "原生记忆",
+      "Thread"
+    ],
+    "source": "stages/s07-memory/README.md#分工：Codex 做什么，我们做什么"
+  },
+  {
+    "term": "config/read",
+    "aka": [
+      "读取配置 RPC"
+    ],
+    "stage": "s07",
+    "short": "启动时向 Codex 读回实际生效配置并与预期逐项比对的 RPC 方法。",
+    "detail": "服务启动时必须反查 Codex 内部真实生效的 features.memories 等配置。若与服务端写入的设定不一致，服务直接报错退出，防止假报开启成功。",
+    "related": [
+      "三道开关",
+      "原生记忆",
+      "App Server"
+    ],
+    "source": "stages/s07-memory/README.md#开了不等于已经生成"
+  },
+  {
+    "term": "min_rollout_idle_hours",
+    "aka": [
+      "最小空闲小时数"
+    ],
+    "stage": "s07",
+    "short": "Codex 后台判断会话闲置并触发记忆提炼前必须经过的最短无交互等待时长。",
+    "detail": "该参数写入 Codex 的 config.toml 中的 [memories] 段。它表明记忆提炼是后台异步惰性触发的，并非每轮对话结束后立即执行提炼落盘。",
+    "related": [
+      "原生记忆",
+      "raw_memories.md"
+    ],
+    "source": "stages/s07-memory/README.md#关键代码"
+  },
+  {
+    "term": "PostgreSQL",
+    "aka": [
+      "PG",
+      "关系数据库"
+    ],
+    "stage": "s08",
+    "short": "负责持久化记录任务状态、调度发件箱、资源版本及产物追溯等事实的数据库。",
+    "detail": "本架构中“事实只在 PostgreSQL 里”。它保存了 Codex 所不知道的全部业务元数据与审计记录，即便 Redis 宕机或内存丢失，所有调度状态均可从 PostgreSQL 重新推导。",
+    "related": [
+      "Redis",
+      "outbox",
+      "两类数据，两个主人",
+      "产物追溯"
+    ],
+    "source": "stages/s08-data-layer/README.md#三种存储，各管一件事"
+  },
+  {
+    "term": "Redis",
+    "aka": [
+      "Redis 调度服务"
+    ],
+    "stage": "s08",
+    "short": "仅用于存放待调度唤醒的 Thread ID 集合、不存储任何业务事实的内存服务。",
+    "detail": "调度器将到期的 Thread 推进 Redis 集合，执行器从中弹出进行派发。Redis 在此仅充当轻量唤醒管道，即便数据丢失也不会导致任务丢失，由数据库 outbox 重推恢复。",
+    "related": [
+      "PostgreSQL",
+      "outbox"
+    ],
+    "source": "stages/s08-data-layer/README.md#三种存储，各管一件事"
+  },
+  {
+    "term": "outbox",
+    "aka": [
+      "事务性发件箱",
+      "发件箱模式"
+    ],
+    "stage": "s08",
+    "short": "与任务记录写入同一数据库事务、用于可靠传递唤醒信号的调度暂存机制。",
+    "detail": "提交任务与记录“该叫醒谁”在同一个 DB 事务中原子提交，杜绝了“任务已存却未发唤醒”的半崩溃缺陷。调度轮询定时扫表将到期记录推进 Redis 唤醒执行器。",
+    "related": [
+      "PostgreSQL",
+      "Redis",
+      "任务记录"
+    ],
+    "source": "stages/s08-data-layer/README.md#outbox：先记一笔\"该叫醒谁\""
+  },
+  {
+    "term": "两类数据，两个主人",
+    "aka": [
+      "数据主权划分原则"
+    ],
+    "stage": "s08",
+    "short": "对话历史归 Codex 原生管理，业务事实与审计流归宿主数据库的架构设计原则。",
+    "detail": "对话历史、Codex 索引和原生记忆仍在 CODEX_HOME，不再复制进数据库。PostgreSQL 存会话归属、任务原文与状态、outbox、去重，以及资源版本和依赖。",
+    "related": [
+      "PostgreSQL",
+      "CODEX_HOME",
+      "rollout-*.jsonl"
+    ],
+    "source": "stages/s08-data-layer/README.md#两类数据，两个主人"
+  },
+  {
+    "term": "不可变正文对象",
+    "aka": [
+      "blob",
+      "不可变正文"
+    ],
+    "stage": "s08",
+    "short": "按内容 SHA-256 哈希命名且只允许新建不可原地修改的正文存储文件。",
+    "detail": "正文以 sha256 存储在 .data/files/objects/ 下，数据库仅记录其哈希与版本元数据。通过内容寻址与不可变性，确保任何版本的资料或产物内容均可精准回溯。",
+    "related": [
+      "PostgreSQL",
+      "产物追溯",
+      "wx 写入标志"
+    ],
+    "source": "stages/s08-data-layer/README.md#三种存储，各管一件事"
+  },
+  {
+    "term": "产物追溯",
+    "aka": [
+      "产物依据追溯",
+      "Artifact Lineage"
+    ],
+    "stage": "s08",
+    "short": "产物明确登记其引用的源资料版本号、在原文修改时自动判定失效的溯源机制。",
+    "detail": "产物可声明依据哪些资料的哪个版本。原文更新后，依赖旧版本的派生资源被标成 stale，读取派生内容会被拒绝。这不能证明产物在语义上引用正确。",
+    "related": [
+      "不可变正文对象",
+      "PostgreSQL"
+    ],
+    "source": "stages/s08-data-layer/README.md#产物能追溯到依据"
+  },
+  {
+    "term": "unconfirmed 恢复机制",
+    "aka": [
+      "崩溃重启恢复",
+      "不确定恢复"
+    ],
+    "stage": "s08",
+    "short": "服务重启时将未决任务置为 unconfirmed 并暂停队列的安全机制。",
+    "detail": "重启时把 starting、running、steering 标为 unconfirmed 并暂停所在会话，不向 Codex 重发。只有确定还没派发的 queued 才经 outbox 重新唤醒。",
+    "related": [
+      "unconfirmed",
+      "PostgreSQL",
+      "outbox"
+    ],
+    "source": "stages/s08-data-layer/README.md#关键代码"
+  },
+  {
+    "term": "PermissionGate",
+    "aka": [
+      "门禁",
+      "统一权限门禁"
+    ],
+    "stage": "s09",
+    "short": "拦截所有外部资源访问并严格依据服务端签发上下文执行五项核查的统一门禁。",
+    "detail": "统一把关文件、知识库与索引操作。核验内容包括上下文有效性、工具白名单、资源所有者归属、知识库挂载授权以及任务类型边界，任何一项违规均直接拒绝执行。",
+    "related": [
+      "可信上下文",
+      "dynamicTools",
+      "KnowledgeBase"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#一道门禁，五项检查"
+  },
+  {
+    "term": "可信上下文",
+    "aka": [
+      "Trusted Context",
+      "门禁上下文"
+    ],
+    "stage": "s09",
+    "short": "由服务端在轮次开启时在进程内部签发绑定、轮次结束即撤销的防伪执行凭据。",
+    "detail": "彻底落实“模型无法决定自己是谁”。门禁上下文保存在服务端私有存储中，工具执行时直接从门禁获取而不是读取模型传入的参数，彻底杜绝模型篡改身份实施越权。",
+    "related": [
+      "PermissionGate",
+      "dynamicTools",
+      "Turn"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#身份必须由服务端认定"
+  },
+  {
+    "term": "dynamicTools",
+    "aka": [
+      "动态工具回调"
+    ],
+    "stage": "s09",
+    "short": "Codex 原生提供的将工具调用请求连同当前会话与轮次标识回调给宿主进程的通道。",
+    "detail": "取代单纯的外部独立 MCP，该回调让工具调用直接回到服务端进程内部。这使服务端能取出当前轮次的可信上下文，实施统一门禁鉴权。",
+    "related": [
+      "PermissionGate",
+      "可信上下文",
+      "tools/call"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#身份必须由服务端认定"
+  },
+  {
+    "term": "KnowledgeBase",
+    "aka": [
+      "知识库",
+      "KB"
+    ],
+    "stage": "s09",
+    "short": "挂载给 Agent 且具备独立访问权限边界的结构化知识与索引命名空间。",
+    "detail": "知识库包含 Wiki 页面与可选的向量索引。必须由 Agent 定义显式通过 agent.knowledge[] 挂载并声明所授权的 read/update/index 操作集合，未经挂载的知识库不可碰。",
+    "related": [
+      "Wiki",
+      "RAG",
+      "PermissionGate"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "Wiki",
+    "aka": [
+      "Wiki 知识页",
+      "结构化知识页面"
+    ],
+    "stage": "s09",
+    "short": "从原始资料加工提炼出的受版本跟踪与并发保护的持久化结构化知识页面。",
+    "detail": "知识三层架构中的第二层。每个生效页面由唯一的 slug 标识，明确指向其引用的原始资料版本，必须在专属的知识库维护任务中经由乐观锁并发更新。",
+    "related": [
+      "KnowledgeBase",
+      "乐观锁",
+      "RAG"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "RAG",
+    "aka": [
+      "检索增强生成",
+      "Retrieval-Augmented Generation"
+    ],
+    "stage": "s09",
+    "short": "在模型推理前先从向量与关键词索引中检索相关资料片段并作为依据注入的机制。",
+    "detail": "可选的 Chroma 向量检索加 BM25。新索引完整构建并校验后才切换；构建失败则丢弃，旧索引不动。启动时索引还没就绪就仍按 Wiki 运行；已经生效的 RAG 不可用则直接报错，不悄悄退回。",
+    "related": [
+      "KnowledgeBase",
+      "Chroma",
+      "BM25",
+      "RRF 60"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "Chroma",
+    "aka": [
+      "Chroma 向量数据库"
+    ],
+    "stage": "s09",
+    "short": "在 RAG 流程中负责存储文本向量并提供近似高维向量相似度检索的独立服务。",
+    "detail": "可选的向量库，以独立 Chroma 进程提供 collection。分块由嵌入模型写入。索引构建由同进程的 KnowledgeWorker 轮询知识任务；构建中崩溃不推进已生效索引。",
+    "related": [
+      "RAG",
+      "BM25",
+      "RRF 60"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "BM25",
+    "aka": [
+      "BM25 检索算法"
+    ],
+    "stage": "s09",
+    "short": "依据关键词匹配频次与逆文档频率计算文本相关性得分的成熟全文检索算法。",
+    "detail": "按词频和逆文档频率给分块打分，和 Chroma 的排名一起进入 RRF。源码没有把用途限定为专有名词或型号。",
+    "related": [
+      "RAG",
+      "Chroma",
+      "RRF 60"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "乐观锁",
+    "aka": [
+      "Optimistic Locking",
+      "版本冲突检查"
+    ],
+    "stage": "s09",
+    "short": "提交 Wiki 更新时比对预期版本号、版本不符则直接拒绝覆盖的并发控制策略。",
+    "detail": "在更新 Wiki 页面时，更新请求必须带上读取时获得的版本号。服务端通过数据库行锁检查其 current_version，若已被其他任务提前修改则拒绝提交并抛出 VERSION_CONFLICT。",
+    "related": [
+      "Wiki",
+      "KnowledgeBase",
+      "PostgreSQL"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "RRF 60",
+    "aka": [
+      "倒数排名融合",
+      "Reciprocal Rank Fusion"
+    ],
+    "stage": "s09",
+    "short": "使用常数 60 将向量相似度排名与 BM25 排名融合成综合得分的算法。",
+    "detail": "两路排名按 1/(60+rank) 相加（实现里下标从 0 起，写成 1/(61+i)）。管道名记为 rrf60。没有 rerank。",
+    "related": [
+      "RAG",
+      "Chroma",
+      "BM25"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "Workflow",
+    "aka": [
+      "工作流",
+      "工作流模板"
+    ],
+    "stage": "s10",
+    "short": "声明一类任务所需临时授权、输入输出边界、终点验收及人工确认点的配置。",
+    "detail": "声明一类任务的临时授权、注入的 Skill、可写位置、验收和确认点，不规定拆解和工具顺序。写入限制在该步执行时生效；验收只看结果，不通过记为 needs-review。",
+    "related": [
+      "Skill",
+      "确认点",
+      "验收检查",
+      "propose_task"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#Workflow：管边界和终点，不管路径"
+  },
+  {
+    "term": "propose_task",
+    "aka": [
+      "提议任务原语",
+      "任务提议工具"
+    ],
+    "stage": "s10",
+    "short": "供模型在发现任务超出当前权限时发起工作流提议、等待人工审核的原语工具。",
+    "detail": "践行“可以提议，不能自批”原则。模型自身无法提升权限或擅自改写受限库，调用该工具仅能将任务登记为 proposed 状态，唯有经由人类用户确认后，服务端才会以用户身份授权。",
+    "related": [
+      "Workflow",
+      "确认点",
+      "PermissionGate"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#可以提议，不能自批"
+  },
+  {
+    "term": "确认点",
+    "aka": [
+      "人工确认点",
+      "confirm 检查点"
+    ],
+    "stage": "s10",
+    "short": "需要人拍板的步骤结束后，该任务停在 waiting，不自动派下一步；同一会话的普通对话仍可进行。",
+    "detail": "例如写文章工作流在完成大纲生成并保存至 drafts/ 后，触发确认点暂停。服务端绝不擅自越过确认点发起成稿，必须等待人类用户确认后才派发下一步。",
+    "related": [
+      "Workflow",
+      "propose_task",
+      "验收检查"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#Workflow：管边界和终点，不管路径"
+  },
+  {
+    "term": "验收检查",
+    "aka": [
+      "Workflow Checks",
+      "终点验收"
+    ],
+    "stage": "s10",
+    "short": "步骤结束时由程序独立检验产物文件是否存在且格式合规的目标验证机制。",
+    "detail": "对应配置中的 checks 规则。外部程序只核验最终产物文件物理状态与格式，不检查模型中间调用了哪些具体工具，未通过则置为 needs-review。",
+    "related": [
+      "Workflow",
+      "外部程序验收",
+      "确认点"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#Workflow：管边界和终点，不管路径"
+  },
+  {
+    "term": "skill_read",
+    "aka": [
+      "技能读取工具"
+    ],
+    "stage": "s10",
+    "short": "在原生 shell 关闭时供模型安全读取 SKILL.md 方法说明的只读工具。",
+    "detail": "因为教程在受限沙箱中关闭了 Codex 通用命令行能力，模型无法直接读取技能文件。服务端提供此专用受限工具，让模型能够主动调阅规范指南而不扩大系统权限。",
+    "related": [
+      "Skill",
+      "tools.allow"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#Skill：教 Agent 怎么做"
+  },
+  {
+    "term": "线程目标",
+    "aka": [
+      "Thread Goals"
+    ],
+    "stage": "s10",
+    "short": "Codex 内部能绕过外部任务队列并自主连续多轮推进任务的原生执行能力。",
+    "detail": "Codex 的线程目标一旦活动，会绕过任务队列自动连续发起轮次，也不经过权限门。受限启动设置 features.goals=false，并在启动后核对确实关掉。",
+    "related": [
+      "AGENTS.md",
+      "服务端排队",
+      "Codex harness"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#关掉会绕过边界的原生能力"
+  },
+  {
+    "term": "AGENTS.md",
+    "aka": [
+      "Agent 隐式上下文文件"
+    ],
+    "stage": "s10",
+    "short": "Codex 默认会把工作区及其上级目录的 AGENTS.md 载入模型上下文的项目说明文件。",
+    "detail": "工作区及其上级目录的 AGENTS.md 会进入模型上下文。受限启动加 project_doc_max_bytes=0，并在启动后核对；角色指令仍走 instructions_template。",
+    "related": [
+      "线程目标",
+      "Agent 定义",
+      "baseInstructions"
+    ],
+    "source": "stages/s10-skill-workflow/README.md#关掉会绕过边界的原生能力"
+  },
+  {
+    "term": "模型网关",
+    "aka": [
+      "Model Gateway",
+      "Bifrost"
+    ],
+    "stage": "intro",
+    "short": "介于 Codex 与各模型厂商之间负责协议翻译、备用切换与额度管控的中介代理。",
+    "detail": "本阶段采用开源网关 Bifrost。Codex 全局仅连接网关单一地址并持有网关密钥，各厂商底层真实 API Key 均托管于网关内部，实现多模型统一接驳与安全解耦。",
+    "related": [
+      "config/models.json",
+      "模型路由",
+      "备用链",
+      "用量账本"
+    ],
+    "source": "stages/s11-model-gateway/README.md#模型网关是什么"
+  },
+  {
+    "term": "config/models.json",
+    "aka": [
+      "网关模型清单",
+      "模型网关配置"
+    ],
+    "stage": "s11",
+    "short": "统一登记所有厂商接口类型、模型能力规格、原生工具及路由候选的配置文件。",
+    "detail": "清单定义了 providers 与 models 规格。它为网关的协议转换规则与服务端的动态模型路由逻辑提供单一事实来源。",
+    "related": [
+      "模型网关",
+      "nativeTools",
+      "模型路由"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第一层：统一协议，用上模型自带的能力"
+  },
+  {
+    "term": "nativeTools",
+    "aka": [
+      "原生工具声明",
+      "模型内置工具"
+    ],
+    "stage": "s11",
+    "short": "声明模型支持 web_search 等内置工具以便按会话透明透传的配置项。",
+    "detail": "模型自带工具需在清单显式声明并依实测校验。该能力只能按会话全局开启；开启联网搜索后，模型路由将自动过滤剔除不具备该原生能力的候选模型。",
+    "related": [
+      "config/models.json",
+      "模型路由"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第一层：统一协议，用上模型自带的能力"
+  },
+  {
+    "term": "模型路由",
+    "aka": [
+      "Router",
+      "模型协调器"
+    ],
+    "stage": "s11",
+    "short": "在任务每轮发出前综合用途、业务场景、能力特征与档位动态决策中选模型的逻辑。",
+    "detail": "每一轮按用途、场景、能力和推理档位挑选。谁说了算的次序是：工作流步骤写明的，然后是用户给这个任务指定的场景，最后才是该用途的默认路由。快超预算时改走 fast，来源另记为预算降级。",
+    "related": [
+      "模型网关",
+      "config/models.json",
+      "预算熔断"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第二层：协调多个模型"
+  },
+  {
+    "term": "备用链",
+    "aka": [
+      "Fallbacks",
+      "灾备自动切换"
+    ],
+    "stage": "s11",
+    "short": "当主选模型遭遇宕机、限流或余额枯竭时由网关底层按次序自动轮转的重试链条。",
+    "detail": "在网关内部以 CEL 表达式配置高优先级路由规则。一旦主供应商调用失败，网关透明切换至备用厂商执行，无需中断或在应用层重写业务交互逻辑。",
+    "related": [
+      "模型网关",
+      "模型路由"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第二层：协调多个模型"
+  },
+  {
+    "term": "用量账本",
+    "aka": [
+      "Token 记账",
+      "Token Usage Ledger"
+    ],
+    "stage": "s11",
+    "short": "记下每轮 token 用量，并按模型清单单价估算花费。",
+    "detail": "消费 thread/tokenUsage/updated。同一 Thread 的累计 totalTokens 未增加则视为重复通知并跳过。记录输入、缓存、输出、推理 token 和 estimatedCost，可按模型与来源汇总。",
+    "related": [
+      "预算熔断",
+      "模型网关",
+      "Turn"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第三层：管住 token 和花费"
+  },
+  {
+    "term": "预算熔断",
+    "aka": [
+      "Budget Enforcement",
+      "预算防护"
+    ],
+    "stage": "s11",
+    "short": "当累计花费逼近预算时触发模型降级、超出预算上限时挂起派发新任务的防暴走机制。",
+    "detail": "达到 AGENT_BUDGET_DOWNGRADE_AT（示例 0.8）时，没写死模型的任务改用 fast 场景。达到每日或每月上限则停派新任务，排队保留，额度恢复后继续；正在执行的一轮让它做完。网关访问密钥上另有按 token 的每日限流，不由这次硬上限联动触发。",
+    "related": [
+      "用量账本",
+      "模型路由",
+      "模型网关"
+    ],
+    "source": "stages/s11-model-gateway/README.md#第三层：管住 token 和花费"
+  },
+  {
+    "term": "initialize",
+    "aka": [
+      "握手",
+      "initialized"
+    ],
+    "stage": "s01",
+    "short": "调用任何 App Server 方法之前，客户端必须先发送的协议握手请求。",
+    "detail": "客户端先发 initialize，再发 initialized 通知，双方确认协议版本、功能开关和默认值。之后才是 thread/start 和 turn/start。握手成功不等于 API Key 已经通过验证。",
+    "related": [
+      "JSON-RPC 2.0",
+      "App Server",
+      "thread/start"
+    ],
+    "source": "stages/s01-single-turn/README.md#第五步：一轮的完整流程"
+  },
+  {
+    "term": "早到通知",
+    "aka": [
+      "通知早于回包"
+    ],
+    "stage": "s01",
+    "short": "turn/start 的回包尚未返回、客户端还不知道 turn.id 时已经到达的本轮通知。",
+    "detail": "先按 threadId 放进缓冲，拿到 result.turn.id 后再重放，并按 turnId 严格匹配。对不上当前轮的通知丢弃。回包本身只表示受理。",
+    "related": [
+      "turn/start",
+      "Turn",
+      "Item"
+    ],
+    "source": "stages/s01-single-turn/README.md#第五步：一轮的完整流程"
+  },
+  {
+    "term": "JSON-RPC ID",
+    "aka": [
+      "请求编号"
+    ],
+    "stage": "s02",
+    "short": "客户端为一次 JSON-RPC 调用递增分配的 id，只负责把回包配回这次请求。",
+    "detail": "与 Thread ID、Turn ID、Item ID 各管一事，跟哪一段会话无关。事件归位时先核对 Thread ID，再核对 Turn ID。",
+    "related": [
+      "JSON-RPC 2.0",
+      "Thread",
+      "Turn",
+      "Item"
+    ],
+    "source": "stages/s02-multi-turn/README.md#这么多 ID，头都晕了"
+  },
+  {
+    "term": "运行目录维护",
+    "aka": [
+      "旧运行目录清理"
+    ],
+    "stage": "s03",
+    "short": "只删除确认没人使用的旧 .runs/app-server-* 目录的定期清理。",
+    "detail": "启动时以及之后每小时检查。只删除早于 7 天、且不在最近 5 次之内的目录，并排除当前运行、已加载会话、仍存活的进程和被打开的文件。删协议日志前先把会话位置写入 .data/session-index.json，之后 /resume 仍找得到。",
+    "related": [
+      "常驻服务端",
+      "会话快照"
+    ],
+    "source": "stages/s03-service/README.md#运行目录与维护"
+  },
+  {
+    "term": "skills/list",
+    "aka": [
+      "技能发现清单"
+    ],
+    "stage": "s05",
+    "short": "向 Codex 要工作区里已发现 Skill 及其启用状态的 RPC。",
+    "detail": "启动和每一轮发出前都带 forceReload 拉取。服务端只保留 Agent 定义里声明的路径，并用 skills/config/write 把不一致的启用状态改过来；范围外的仍启用就停止执行。",
+    "related": [
+      "Skill",
+      "skills/config/write",
+      "Agent 定义"
+    ],
+    "source": "stages/s05-agent-assembly/README.md#Skill：发现不等于授权"
+  },
+  {
+    "term": "工具版本",
+    "aka": [
+      "工具描述符"
+    ],
+    "stage": "s06",
+    "short": "把工具配置、允许名单、资料绑定和产物规则算进 Agent 版本，使旧会话不混用两套工具。",
+    "detail": "运行中删除或禁用工具立即生效，随后调用会被拒绝。换一套实现要等正在进行的轮次和工具调用结束才切换。版本变了之后必须新建会话。",
+    "related": [
+      "工具注册表",
+      "Agent 描述符",
+      "tools.allow",
+      "dataBindings"
+    ],
+    "source": "stages/s06-tools/README.md#版本：工具变了，旧会话不混用"
+  },
+  {
+    "term": "MEMORY.md",
+    "aka": [
+      "合并后的详细记忆"
+    ],
+    "stage": "s07",
+    "short": "Codex 把原始记忆合并之后的详细记忆文件，位于 .data/codex/memories/。",
+    "detail": "与 raw_memories.md、memory_summary.md 同为三个固定文件名。服务端只按这些名字读取，不接受客户端传入的路径，不跟随符号链接，也拒绝硬链接。本阶段关掉原生 shell 和写文件时，后台合并写不出最终摘要。",
+    "related": [
+      "raw_memories.md",
+      "memory_summary.md",
+      "原生记忆",
+      "CODEX_HOME"
+    ],
+    "source": "stages/s07-memory/README.md#存在本服务自己的状态目录"
+  },
+  {
+    "term": "原始资料",
+    "aka": [
+      "知识三层的第一层"
+    ],
+    "stage": "s09",
+    "short": "用户放进知识库的原始文件，按不可变快照保存，每个版本都能找回。",
+    "detail": "知识三层的最底层。Wiki 只引用原文的具体版本。文件在 workspace/inputs/，版本和引用关系记在数据库里。",
+    "related": [
+      "Wiki",
+      "KnowledgeBase",
+      "不可变正文对象"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "知识模式",
+    "aka": [
+      "Wiki 模式",
+      "RAG 模式"
+    ],
+    "stage": "s09",
+    "short": "只在服务启动时确定的知识用法，在 Wiki 和可选 RAG 之间取一种。",
+    "detail": "配置写成 RAG 但索引还没就绪时，仍按 Wiki 运行。已经生效的 RAG 不可用则直接报错，不悄悄退回 Wiki。新索引没构建校验完不会切换。",
+    "related": [
+      "Wiki",
+      "RAG",
+      "KnowledgeBase"
+    ],
+    "source": "stages/s09-knowledge-layer/README.md#知识分三层"
+  },
+  {
+    "term": "/ready",
+    "aka": [
+      "就绪探测",
+      "/health"
+    ],
+    "stage": "s12",
+    "short": "判断服务能不能接任务的接口；和只表示进程存活的 /health 分开。",
+    "detail": "/ready 检查数据库、网关健康、模型目录与调度状态，不能接任务时返回 503；/health 只说明 HTTP 进程活着。两者都返回 REVISION 里的版本号，不需要连接令牌，也不计入请求限流。Compose 用 /ready 做 agent 的健康检查。",
+    "related": [
+      "depends_on",
+      "Docker Compose"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "Docker Compose",
+    "aka": [
+      "compose.yaml",
+      "Compose"
+    ],
+    "stage": "s12",
+    "short": "用一份 compose.yaml 声明 postgres、redis、gateway、agent 四个容器及其数据卷、密钥和启动顺序。",
+    "detail": "中间件和 agent 一起以容器交付：版本固定、数据卷外置、随服务启停。每个服务有 healthcheck、restart: unless-stopped、stop_grace_period: 30s、日志轮转和内存上限；只有 agent 发布到宿主 127.0.0.1:4326。",
+    "related": [
+      "depends_on",
+      "/ready",
+      "CONTAINER_APP_DIR"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "depends_on",
+    "aka": [
+      "service_healthy",
+      "启动顺序"
+    ],
+    "stage": "s12",
+    "short": "Compose 里按依赖健康串起启动顺序：postgres 健康后才起 gateway，gateway 健康后才起 agent。",
+    "detail": "条件写成 condition: service_healthy，所以“容器已启动”不够，必须健康检查通过。系统重启后由 systemd 执行 Compose，同样按这个顺序拉起。",
+    "related": [
+      "Docker Compose",
+      "/ready"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "CONTAINER_APP_DIR",
+    "aka": [
+      "固定部署路径"
+    ],
+    "stage": "s12",
+    "short": "容器内项目路径，必须等于宿主部署路径；这是持久化契约。",
+    "detail": "Codex 原生历史里保存的是绝对路径，路径一变旧会话就无法直接恢复。所以回滚是在固定路径上替换代码，不改用带时间戳的新目录。",
+    "related": [
+      "rollout-*.jsonl",
+      "Docker Compose"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "Retry-After",
+    "aka": [
+      "429",
+      "请求限流"
+    ],
+    "stage": "s12",
+    "short": "超出容量时 429 响应里告诉客户端过多少秒再试的响应头。",
+    "detail": "按“连接令牌 + 实际来源地址”每分钟最多 120 次请求，超出返回 429 和 Retry-After；SSE 全局最多 20 个，超出也返回 429。无效令牌合并到同一来源桶，换令牌绕不过去。全局排队超过 200 条返回 429 QUEUE_FULL。",
+    "related": [
+      "SSE",
+      "/ready"
+    ],
+    "source": "stages/s12-deploy/README.md#核心概念"
+  },
+  {
+    "term": "flock",
+    "aka": [
+      "下载锁",
+      "备份锁"
+    ],
+    "stage": "s12",
+    "short": "备份、恢复和下载共用的文件锁；已有一个在进行时，第二个立即被拒绝。",
+    "detail": "备份在宿主机用 bash + docker compose 编排：短暂停止 agent，在 postgres 容器里执行 pg_dump，再用一次性 agent 容器打包并写 manifest，只保留 7 份。下载走 SSH + rsync、限速 200 KB/s，同一时间只允许一个。备份不经 HTTP 提供。",
+    "related": [
+      "CONTAINER_APP_DIR"
+    ],
+    "source": "stages/s12-deploy/README.md#备份与下载"
+  }
+]

@@ -49,6 +49,9 @@ test('浏览器：旧 demoN 与未知链接映射，project 使用 s11 课程与
 
 test('A：1280×900 完整展示十三个阶段与当前项目，窄屏可横向滚动',options,async t=>{
  const {url,b}=await setup(t);await b.viewport(1280,900);await b.open(url+'/?stage=s03');
+ const courseLinks=await b.run(`${helpers}await until(()=>$('.rail-course-links'));const rail=$('.rail-bottom').getBoundingClientRect();return $$('.rail-course-links a').map(el=>{const r=el.getBoundingClientRect();return {href:el.getAttribute('href'),visible:r.top>=rail.top&&r.bottom<=rail.bottom&&r.left>=rail.left&&r.right<=rail.right};});`);
+ assert.deepEqual(courseLinks.map(link=>link.href),['/course/overview.html','/course/glossary.html']);
+ assert.ok(courseLinks.every(link=>link.visible),'课程新入口不被侧栏底部裁切');
  // Read geometry from current nodes in one synchronous sample: refresh() may replace #app.
  for(const height of [900,780]){
   await b.viewport(1280,height);
