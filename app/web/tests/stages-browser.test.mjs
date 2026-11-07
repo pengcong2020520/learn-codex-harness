@@ -65,8 +65,9 @@ test('A：1280×900 完整展示十四个阶段与当前项目，窄屏可横向
   }
  }
  await b.viewport(390,844);
- const mobile=await b.run(`${helpers}const nav=$('.stages');nav.scrollLeft=nav.scrollWidth;const last=$('[data-stage="s13"]').getBoundingClientRect(),bounds=nav.getBoundingClientRect(),project=$('[data-stage="project"]').getBoundingClientRect();return {overflow:getComputedStyle(nav).overflowX,scrollable:nav.scrollWidth>nav.clientWidth,scrolled:nav.scrollLeft>0,lastVisible:last.left>=bounds.left&&last.right<=bounds.right,project:getComputedStyle($('.rail-bottom')).display,projectVisible:project.top>=bounds.bottom&&project.bottom<=innerHeight,documentFits:document.documentElement.scrollWidth<=innerWidth};`);
- assert.equal(mobile.overflow,'auto');assert.ok(mobile.scrollable&&mobile.scrolled&&mobile.lastVisible);assert.notEqual(mobile.project,'none');assert.ok(mobile.projectVisible);assert.ok(mobile.documentFits);
+ const mobile=await b.run(`${helpers}const nav=$('.stages');nav.scrollLeft=nav.scrollWidth;const last=$('[data-stage="s13"]').getBoundingClientRect(),bounds=nav.getBoundingClientRect(),project=$('[data-stage="project"]').getBoundingClientRect();return {overflow:getComputedStyle(nav).overflowX,scrollable:nav.scrollWidth>nav.clientWidth,scrolled:nav.scrollLeft>0,lastVisible:last.left>=bounds.left-1&&last.right<=bounds.right+1,lastRight:last.right,navRight:bounds.right,scrollLeft:nav.scrollLeft,scrollWidth:nav.scrollWidth,clientWidth:nav.clientWidth,project:getComputedStyle($('.rail-bottom')).display,projectVisible:project.top>=bounds.bottom&&project.bottom<=innerHeight,documentFits:document.documentElement.scrollWidth<=innerWidth};`);
+ assert.equal(mobile.overflow,'auto');// scrollLeft is an integer while button widths can be fractional: allow 1px of rounding.
+ assert.ok(mobile.scrollable&&mobile.scrolled&&mobile.lastVisible,JSON.stringify(mobile));assert.notEqual(mobile.project,'none');assert.ok(mobile.projectVisible);assert.ok(mobile.documentFits);
 
 });
 

@@ -7,12 +7,13 @@ import path from 'node:path';
 export const chrome=[process.env.CHROME_PATH,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'].find(file=>file&&fs.existsSync(file));
 
 // 最小 CDP 客户端：一个浏览器连接，扁平会话。
+// CI cold-starts several Chrome processes at once; first launch can exceed 15 s there.
 export async function browser(t){
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'handbook-chrome-'));
  const proc=spawn(chrome,['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-gpu','--window-size=1280,900','about:blank'],{stdio:['ignore','ignore','pipe']});
  const exited=new Promise(r=>proc.once('exit',r));
  t.after(async()=>{proc.kill();await exited;fs.rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
- const endpoint=await new Promise((resolve,reject)=>{let text='';const timer=setTimeout(()=>reject(Error('Chrome 没有在 15 秒内启动')),15000);proc.stderr.on('data',d=>{text+=d;const m=text.match(/DevTools listening on (ws:\/\/\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});proc.on('exit',code=>reject(Error(`Chrome 退出：${code}`)));});
+ const endpoint=await new Promise((resolve,reject)=>{let text='';const timer=setTimeout(()=>reject(Error('Chrome 没有在 60 秒内启动')),60000);proc.stderr.on('data',d=>{text+=d;const m=text.match(/DevTools listening on (ws:\/\/\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});proc.on('exit',code=>reject(Error(`Chrome 退出：${code}`)));});
  const ws=new WebSocket(endpoint);await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no;});t.after(()=>ws.close());
  let id=0;const pending=new Map(),listeners=[];
  ws.onmessage=({data})=>{const msg=JSON.parse(data);if(msg.id&&pending.has(msg.id)){const {resolve,reject}=pending.get(msg.id);pending.delete(msg.id);msg.error?reject(Error(msg.error.message)):resolve(msg.result);}else for(const fn of listeners)fn(msg);};
