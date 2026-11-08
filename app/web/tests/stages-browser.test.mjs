@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {createWorkbench} from '../server.mjs';
 import {browser,helpers,chrome} from './browser.mjs';
 const ids=Array.from({length:12},(_,num)=>`s${String(num).padStart(2,'0')}`);
-const allIds=[...ids,'s12','s13','s14'];
+const allIds=JSON.parse(fs.readFileSync(new URL('../../../stages/changes.json',import.meta.url),'utf8')).stages.map(stage=>stage.id);
 const options={skip:!chrome&&'没有找到 Chrome（可设 CHROME_PATH）'};
 async function setup(t){const app=createWorkbench({port:0,targets:[]});const url=await app.listen();t.after(()=>app.close());return {url,b:await browser(t)};}
 
-test('浏览器：左栏包含十五阶段，逐阶段检查资料/知识页签、能力说明与教学体验',options,async t=>{
+test('浏览器：左栏包含十六阶段，逐阶段检查资料/知识页签、能力说明与教学体验',options,async t=>{
  const {url,b}=await setup(t);
  for(const [num,id] of ids.entries()){
   await b.open(`${url}/?stage=${id}&view=run`);
@@ -47,7 +48,7 @@ test('浏览器：旧 demoN 与未知链接映射，project 使用 s11 课程与
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 
-test('A：1280×900 完整展示十五个阶段与当前项目，窄屏可横向滚动',options,async t=>{
+test('A：1280×900 完整展示十六个阶段与当前项目，窄屏可横向滚动',options,async t=>{
  const {url,b}=await setup(t);await b.viewport(1280,900);await b.open(url+'/?stage=s03');
  const courseLinks=await b.run(`${helpers}await until(()=>$('.rail-course-links'));const rail=$('.rail-bottom').getBoundingClientRect();return $$('.rail-course-links a').map(el=>{const r=el.getBoundingClientRect();return {href:el.getAttribute('href'),visible:r.top>=rail.top&&r.bottom<=rail.bottom&&r.left>=rail.left&&r.right<=rail.right};});`);
  assert.deepEqual(courseLinks.map(link=>link.href),['/course/overview.html','/course/glossary.html']);
@@ -65,7 +66,7 @@ test('A：1280×900 完整展示十五个阶段与当前项目，窄屏可横向
   }
  }
  await b.viewport(390,844);
- const mobile=await b.run(`${helpers}const nav=$('.stages');nav.scrollLeft=nav.scrollWidth;const last=$('[data-stage="s14"]').getBoundingClientRect(),bounds=nav.getBoundingClientRect(),project=$('[data-stage="project"]').getBoundingClientRect();return {overflow:getComputedStyle(nav).overflowX,scrollable:nav.scrollWidth>nav.clientWidth,scrolled:nav.scrollLeft>0,lastVisible:last.left>=bounds.left-1&&last.right<=bounds.right+1,lastRight:last.right,navRight:bounds.right,scrollLeft:nav.scrollLeft,scrollWidth:nav.scrollWidth,clientWidth:nav.clientWidth,project:getComputedStyle($('.rail-bottom')).display,projectVisible:project.top>=bounds.bottom&&project.bottom<=innerHeight,documentFits:document.documentElement.scrollWidth<=innerWidth};`);
+ const mobile=await b.run(`${helpers}const nav=$('.stages');nav.scrollLeft=nav.scrollWidth;const last=$('[data-stage="${allIds.at(-1)}"]').getBoundingClientRect(),bounds=nav.getBoundingClientRect(),project=$('[data-stage="project"]').getBoundingClientRect();return {overflow:getComputedStyle(nav).overflowX,scrollable:nav.scrollWidth>nav.clientWidth,scrolled:nav.scrollLeft>0,lastVisible:last.left>=bounds.left-1&&last.right<=bounds.right+1,lastRight:last.right,navRight:bounds.right,scrollLeft:nav.scrollLeft,scrollWidth:nav.scrollWidth,clientWidth:nav.clientWidth,project:getComputedStyle($('.rail-bottom')).display,projectVisible:project.top>=bounds.bottom&&project.bottom<=innerHeight,documentFits:document.documentElement.scrollWidth<=innerWidth};`);
  assert.equal(mobile.overflow,'auto');// scrollLeft is an integer while button widths can be fractional: allow 1px of rounding.
  assert.ok(mobile.scrollable&&mobile.scrolled&&mobile.lastVisible,JSON.stringify(mobile));assert.notEqual(mobile.project,'none');assert.ok(mobile.projectVisible);assert.ok(mobile.documentFits);
 
@@ -145,7 +146,7 @@ test('4：s06/s07 页面显示实际工具与记忆状态、错误和关闭/开�
 test('5/7：s03 浏览器文案准确区分内存、历史与索引，入口标题不再使用旧体系',options,async t=>{
  const {url,b}=await setup(t);await b.open(url+'/?stage=s03&view=run');
  const actual=await b.run(`${helpers}await until(()=>$('.stage.active'));await sleep(100);$('[data-action="preview"]').click();return {title:document.title,storage:$('.aside').textContent,strip:$('.upgrade-strip').textContent,tasks:$('#tasks').textContent};`);
- assert.match(actual.title,/十五个阶段/);assert.match(actual.storage,/内存 Map 快照[\s\S]*Codex 原生历史[\s\S]*连接信息、运行元数据与会话位置索引/);
+ assert.match(actual.title,/十六个阶段/);assert.match(actual.storage,/内存 Map 快照[\s\S]*Codex 原生历史[\s\S]*连接信息、运行元数据与会话位置索引/);
  assert.match(actual.strip,/内存快照 \+ Codex 原生历史，本地索引辅助恢复/);assert.doesNotMatch(actual.strip,/业务状态存放于/);assert.doesNotMatch(actual.tasks,/本地 JSON · 会话状态/);
 });
 
@@ -208,5 +209,13 @@ test('浏览器：s14 只展示独立部署说明与课程，不发 Agent 请求
  const result=await b.run(`${helpers}await until(()=>$('.stage.active')?.dataset.stage==='s14');await sleep(150);return {pane:$('#pane').textContent,readme:$('#pane a').getAttribute('href'),tabs:$$('[data-tab]').map(el=>el.dataset.tab),connect:$$('[data-action="real"],[data-action="preview"],[data-action="reconnect"]').length,agentRequests:performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/agent/')).length};`);
  assert.match(result.pane,/remote\.sh tunnel/);
  assert.match(result.readme,/stages\/s14-isolation\/README\.md$/);
+ assert.deepEqual(result.tabs,['learn','chat']);assert.equal(result.connect,0);assert.equal(result.agentRequests,0);
+});
+
+test('浏览器：s15 只展示独立部署说明与课程，不发 Agent 请求',options,async t=>{
+ const {url,b}=await setup(t);await b.open(url+'/?stage=s15&view=run');
+ const result=await b.run(`${helpers}await until(()=>$('.stage.active')?.dataset.stage==='s15');await sleep(150);return {pane:$('#pane').textContent,readme:$('#pane a').getAttribute('href'),tabs:$$('[data-tab]').map(el=>el.dataset.tab),connect:$$('[data-action="real"],[data-action="preview"],[data-action="reconnect"]').length,agentRequests:performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/agent/')).length};`);
+ assert.match(result.pane,/remote\.sh tunnel/);
+ assert.match(result.readme,/stages\/s15-hub\/README\.md$/);
  assert.deepEqual(result.tabs,['learn','chat']);assert.equal(result.connect,0);assert.equal(result.agentRequests,0);
 });

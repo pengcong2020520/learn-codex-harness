@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirs, stageNo, stages, stageModules } from "./build-architecture.mjs";
 
-// dirs 包含独立部署 s12、s13、s14；相邻快照继续生成 s13 → s14 增量，不代表容器清单。
+// dirs 包含独立部署 s12–s15；相邻快照继续生成 s14 → s15 增量，不代表容器清单。
 const root = path.dirname(fileURLToPath(import.meta.url));
 const read = (dir, f) => fs.readFileSync(path.join(root, dir, f), "utf8");
 
@@ -17,10 +17,12 @@ const extract = {
   routes: dir => {
     const f = "server/modules/http/index.mjs";
     if (!fs.existsSync(path.join(root, dir, f))) return [];
-    const source = read(dir, f);
+    // Hub 把自己的入口放在独立路由模块，仍属于本阶段新增接口。
+    const source = [f, "server/modules/hub/routes.mjs"]
+      .filter(file => fs.existsSync(path.join(root, dir, file))).map(file => read(dir, file)).join("\n");
     // s12 的公开健康接口在鉴权前按 method + pathname 分支处理。
     return [...source.matchAll(/route === ["']([A-Z]+ \/[^"']*)["']/g)].map(m => m[1])
-      .concat([...source.matchAll(/request.method === ["']([A-Z]+)["'] && pathname === ["']([^"']+)["']/g)].map(m => `${m[1]} ${m[2]}`));
+      .concat([...source.matchAll(/(?:request\.)?method === ["']([A-Z]+)["'] && pathname === ["']([^"']+)["']/g)].map(m => `${m[1]} ${m[2]}`));
   },
   env: dir => fs.existsSync(path.join(root, dir, ".env.example")) ? [...read(dir, ".env.example").matchAll(/^#?\s?([A-Z][A-Z0-9_]+)=/gm)].map(m => m[1]) : [],
   migrations: dir => { const d = path.join(root, dir, "server/modules/data/migrations"); return fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".sql")).sort() : []; },

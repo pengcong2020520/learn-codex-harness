@@ -1799,5 +1799,81 @@
       "系统 uid"
     ],
     "source": "stages/s14-isolation/README.md#核心概念"
+  },
+  {
+    "term": "资源范围",
+    "aka": [
+      "scope",
+      "system / shared / private"
+    ],
+    "stage": "s15",
+    "short": "资源分三档：system 所有人可用、只有 admin 能改；shared 授权的指定用户可用；private 只有所有者。",
+    "detail": "知识库三档都有；工具组只有 system（工具是服务端可信代码）；Skill 有 system 与用户上传的 private，分享给他人需 admin 批准；Agent 只有 system，由权益决定能用哪些。看不见返回 404，看得见但不能改返回 403。",
+    "related": [
+      "资源授权",
+      "权益",
+      "Hub"
+    ],
+    "source": "stages/s15-hub/README.md#核心概念"
+  },
+  {
+    "term": "资源授权",
+    "aka": [
+      "resource_grants",
+      "分享给指定用户"
+    ],
+    "stage": "s15",
+    "short": "所有者把知识库或 Skill 分享给指定用户；被授权者只能使用，不能修改、删除或再分享。",
+    "detail": "每个资源最多授权 20 人，不能授权给自己或已禁用账号。知识库分享不需审批；Skill 会注入他人对话，分享需 admin 批准。撤销立即生效：新任务按新规则，执行中的一轮不中断。",
+    "related": [
+      "资源范围",
+      "审计"
+    ],
+    "source": "stages/s15-hub/README.md#核心概念"
+  },
+  {
+    "term": "权益",
+    "aka": [
+      "plan",
+      "basic / pro"
+    ],
+    "stage": "s15",
+    "short": "决定用户能用哪些 Agent 与工具组、每日 token、同时执行轮数和能建多少知识库与私有 Skill。",
+    "detail": "内置 basic（每日 20 万 token、同时 1 轮、知识库 3 个）与 pro（每日 100 万、同时 2 轮、20 个）。超出每日额度停派新任务，排队保留，次日恢复。有效工具 = Agent 白名单 ∩ 权益工具组 ∩ 工具组可见范围。",
+    "related": [
+      "资源范围",
+      "Hub"
+    ],
+    "source": "stages/s15-hub/README.md#核心概念"
+  },
+  {
+    "term": "Hub",
+    "aka": [
+      "权限与资源 Hub",
+      "hub.can"
+    ],
+    "stage": "s15",
+    "short": "统一判定某用户能否对某资源做 use、read、modify、share、delete，并列出“我能看到的资源”。",
+    "detail": "工具、知识库、Skill、Agent、配额都调用 hub，不再各自判断。每个请求和后台任务先建立该用户的权限快照，没有快照一律拒绝。",
+    "related": [
+      "资源范围",
+      "权益",
+      "审计"
+    ],
+    "source": "stages/s15-hub/README.md#核心概念"
+  },
+  {
+    "term": "审计",
+    "aka": [
+      "permission_events"
+    ],
+    "stage": "s15",
+    "short": "每次分享、撤销、发布、批准、调整权益、新建与删除知识库都追加一条记录，不能修改或删除。",
+    "detail": "记录谁对什么做了什么、从什么变成什么、何时；发布时被清掉的授权名单也写入。数据库层拒绝 UPDATE、DELETE。",
+    "related": [
+      "资源授权",
+      "Hub"
+    ],
+    "source": "stages/s15-hub/README.md#核心概念"
   }
 ]

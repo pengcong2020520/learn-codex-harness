@@ -511,6 +511,35 @@
           "012-runtime-migration.sql"
         ]
       }
+    },
+    {
+      "id": "s15",
+      "dir": "s15-hub",
+      "title": "权限与资源 Hub：能用什么，谁说了算",
+      "summary": "统一可见范围与动作授权；工具取三方交集，Skill 分享经审批，下一轮核对新权限。",
+      "previous": "s14-isolation",
+      "modules": [
+        {
+          "layer": "权限与资源",
+          "name": "资源 Hub",
+          "desc": "可见范围、权益与审批"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "POST /knowledge",
+          "GET /hub",
+          "GET /me/plan",
+          "POST /hub/skills",
+          "POST /hub/plans/assign"
+        ],
+        "env": [],
+        "migrations": [
+          "013-hub.sql",
+          "014-user-knowledge.sql"
+        ]
+      }
     }
   ]
 }

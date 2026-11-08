@@ -21,7 +21,7 @@ const phases = [
     ["s12", "上云部署", "一台没人看着的服务器，也能自己起来、自己恢复", "已完成"],
     ["s13", "账号与认证", "每个用户登录自己的账号，会话和任务都有归属", "已完成"],
     ["s14", "用户隔离", "每个用户一个独立的运行环境，互不可见", "已完成"],
-    ["s15", "权限与资源 Hub", "角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改", "规划中"],
+    ["s15", "权限与资源 Hub", "角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改", "已完成"],
     ["s16", "多主机调度", "任务分到多台机器，坏了一台有人接手", "规划中"]] },
 ];
 
@@ -75,6 +75,7 @@ export function render() {
         const x = CX + si * (cw + GAP), planned = status === "规划中";
         const line = status === "开发中" || status === "已完成" ? "#4A7BB7" : p.line;
         if (id === "s13") a.push(`<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md" target="_blank" rel="noopener noreferrer">`);
+        if (id === "s15") a.push(`<a href="${repositoryUrl}/stages/s15-hub/README.md" target="_blank" rel="noopener noreferrer">`);
         if (id === "s14") a.push(`<a href="${repositoryUrl}/stages/s14-isolation/README.md" target="_blank" rel="noopener noreferrer">`);
         rect(x, cy, cw, ch, planned ? "#FBFBF9" : "#FFFFFF", line, 14, planned ? "6 5" : "");
         rect(x + 18, cy + 18, 48, 26, planned ? "#E3E7EA" : line, "none", 8);
@@ -85,7 +86,7 @@ export function render() {
         }
         t(title, x + (status ? 18 : 78), cy + (status ? 68 : 37), 19, planned ? "#6B7780" : "#1F2933", 700);
         wrap(desc, cw - 36, 15).forEach((text, li) => t(text, x + 18, cy + (status ? 96 : 74) + li * 22, 15, "#6B7780"));
-        if (["s13", "s14"].includes(id)) a.push("</a>");
+        if (["s13", "s14", "s15"].includes(id)) a.push("</a>");
         if (si < row.length - 1) arrow(`M${x + cw + 4},${cy + ch / 2} L${x + cw + GAP - 6},${cy + ch / 2}`, p.line, planned ? "5 4" : "");
       });
       // 换行或换组：从末张卡片下方折回下一行第一张，端点按各行宽度计算。
@@ -106,7 +107,7 @@ export function render() {
   t("学完 s11，就是仓库里的 app/：在它之上做成 Docker 部署、Web 工作台和互动课程。", LX, H - 36, 16, "#6B7780");
 
   const defs = `<defs>${[...new Set([...colors, "#9AA5B1"])].map(c => `<marker id="arrow-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join("")}</defs>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s11 分四组：跑起来、变成服务、装配 Agent、上生产；s12 到 s16 为第五组：走向生产，s12、s13、s14 已完成，s15 到 s16 规划中。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s11 分四组：跑起来、变成服务、装配 Agent、上生产；s12 到 s16 为第五组：走向生产，s12–s15 已完成，s16 规划中。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

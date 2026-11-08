@@ -17,7 +17,8 @@ const chapterSources=[
  ['s10','s10-skill-workflow.html','s10-skill-workflow'],
  ['s12','s12-deploy.html','s12-deploy'],
  ['s13','s13-auth.html','s13-auth'],
- ['s14','s14-isolation.html','s14-isolation']
+ ['s14','s14-isolation.html','s14-isolation'],
+ ['s15','s15-hub.html','s15-hub']
 ];
 const retainedAnchors={
  'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',
@@ -244,4 +245,11 @@ test('长文淡入：首屏直接显示，滚动到的内容会显示出来，�
   return {firstVisible:firstScreen.length>0&&firstScreen.every(el=>!el.classList.contains('is-pending')),pendingBefore,shown};`);
  assert.ok(reveal.firstVisible);assert.ok(reveal.pendingBefore>0);assert.ok(reveal.shown);
  assert.deepEqual(b.errors,[]);
+});
+
+test('s15 长文总架构图声明与 SVG 一致的宽高',()=>{
+ const html=fs.readFileSync(new URL('modules/s15-hub.html',course),'utf8');
+ const tag=html.match(/<img[^>]+src="\/course\/assets\/s15-architecture\.svg"[^>]*>/)[0];
+ const svg=fs.readFileSync(new URL('assets/s15-architecture.svg',course),'utf8');
+ for(const attr of ['width','height'])assert.equal(tag.match(new RegExp(`${attr}="(\\d+)"`))?.[1],svg.match(new RegExp(`${attr}="(\\d+)"`))?.[1]);
 });

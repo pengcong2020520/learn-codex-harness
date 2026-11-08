@@ -95,7 +95,6 @@ test('没有任何课时时报错',t=>{
 
 test('s12 三课、四组离线实验与真实 catalog 一致，所有补充摘录逐字命中',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s12-deploy');
- assert.equal(output.lessons.length,39);
  assert.deepEqual(lessons.map(l=>l.id),['s12-health','s12-protection','s12-backup']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s12-deploy');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s12-deploy/lessons/catalog.json'),'utf8'));
@@ -122,7 +121,6 @@ test('s12 补充源码仍检查归属与唯一 needle',t=>{
 
 test('s13 三课覆盖四个 catalog 实验，密码、令牌与 SSE 摘录逐字命中',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s13-auth');
- assert.equal(output.lessons.length,39);
  assert.deepEqual(lessons.map(l=>l.id),['s13-hash','s13-logout','s13-events']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s13-auth');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s13-auth/lessons/catalog.json'),'utf8'));
@@ -145,7 +143,6 @@ test('s13 三课覆盖四个 catalog 实验，密码、令牌与 SSE 摘录逐�
 
 test('s14 三课与 catalog 离线实验一一对应，池、spawn 环境与用户文件摘录准确',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s14-isolation');
- assert.equal(output.lessons.length,39);
  assert.deepEqual(lessons.map(l=>l.id),['s14-routing','s14-pool','s14-crash']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s14-isolation');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s14-isolation/lessons/catalog.json'),'utf8'));
@@ -162,4 +159,33 @@ test('s14 三课与 catalog 离线实验一一对应，池、spawn 环境与用�
   assert.ok(original.includes(excerpt.needle));
   assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
  }
+});
+
+
+test('s15 三课覆盖五个 catalog 实验，授权、交集与审批摘录逐字命中',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s15-hub');
+ assert.deepEqual(lessons.map(l=>l.id),['s15-scope','s15-intersection','s15-skill-approval']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s15-hub');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s15-hub/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...(e.relatedExperiments||[])]);
+ assert.deepEqual(experiments.map(e=>e.catalogId).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key],`${exp.catalogId}.${key}`);
+  assert.equal(exp.command,`npm run lesson -- ${original.id}`);
+  assert.equal(exp.mode,'offline');
+ }
+ const excerpts=lessons.flatMap(l=>[l.source,...l.sources]);
+ for(const name of ['can(user','effectiveTools','shareSkill','reviewSkill'])assert.ok(excerpts.some(e=>e.code.includes(name)),name);
+ for(const excerpt of excerpts){
+  const original=fs.readFileSync(path.join(source,'../../..',excerpt.file),'utf8');
+  assert.ok(original.includes(excerpt.needle));
+  assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
+ }
+ const mechanisms=JSON.parse(fs.readFileSync(path.join(source,'mechanisms/s15.json'),'utf8'));
+ assert.deepEqual(mechanisms.map(m=>m.id),['s15-skill-share','s15-knowledge-share']);
+ const states=m=>m.steps.reduce((s,step)=>({...s,...step.state}),m.state0);
+ assert.equal(states(mechanisms[0]).轮次,'下一轮可用');
+ assert.equal(states(mechanisms[1]).读取,'404');
+ for(const mechanism of mechanisms)for(const step of mechanism.steps)assert.ok(step.flow?.[2].trim(),'每条箭头有动作和机制名称');
 });

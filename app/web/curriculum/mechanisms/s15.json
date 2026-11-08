@@ -1,0 +1,241 @@
+[
+  {
+    "id": "s15-skill-share",
+    "title": "Skill 分享：bob 提议，admin 批准，carol 下一轮可用",
+    "question": "pending 为什么不能直接变成接收者的可用 Skill？",
+    "file": "stages/s15-hub/server/modules/hub/index.mjs",
+    "start": 224,
+    "end": 250,
+    "expect": "  async shareSkill(id, usernames) {",
+    "notes": {},
+    "actors": [
+      [
+        "bob",
+        "bob · 所有者"
+      ],
+      [
+        "hub",
+        "Hub / PostgreSQL"
+      ],
+      [
+        "admin",
+        "admin · 审批人"
+      ],
+      [
+        "carol",
+        "carol · 运行环境"
+      ]
+    ],
+    "state0": {
+      "申请": "无",
+      "授权": "未授予",
+      "安装": "无副本",
+      "轮次": "未开始"
+    },
+    "steps": [
+      {
+        "flow": [
+          "bob",
+          "hub",
+          "提议 shareSkill"
+        ],
+        "say": "教学模拟：bob 提交 carol 名单，先检查目标状态与名额。",
+        "state": {
+          "申请": "pending"
+        },
+        "lines": [
+          230,
+          230
+        ]
+      },
+      {
+        "flow": [
+          "hub",
+          "carol",
+          "保留 private"
+        ],
+        "say": "pending 不写授权，也不会同步给 carol。",
+        "state": {
+          "授权": "未授予",
+          "安装": "无副本"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "hub",
+          "审阅 readSkill"
+        ],
+        "say": "另一位 admin 读取正文与申请；审阅不安装到自己的目录。",
+        "state": {
+          "申请": "待独立批准"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "hub",
+          "批准 reviewSkill"
+        ],
+        "say": "再次核对目标，授权、approved 与审计在同一事务提交。",
+        "state": {
+          "申请": "approved",
+          "授权": "carol 已获授权"
+        },
+        "lines": [
+          243,
+          243
+        ]
+      },
+      {
+        "flow": [
+          "hub",
+          "carol",
+          "同步 syncSkills"
+        ],
+        "say": "提交后用对应 uid 对账安装集合；同步失败必须报错。",
+        "state": {
+          "安装": "已对账，待核验"
+        },
+        "lines": [
+          248,
+          248
+        ]
+      },
+      {
+        "flow": [
+          "carol",
+          "hub",
+          "重验 ExecutionBoundary"
+        ],
+        "say": "下一轮取新快照；集合变化等待空闲重启，指纹不兼容则新建会话。",
+        "state": {
+          "轮次": "等待空闲核验"
+        }
+      },
+      {
+        "flow": [
+          "hub",
+          "carol",
+          "核验 skills/list"
+        ],
+        "say": "Codex 发现核验通过后，carol 才在新轮次使用 Skill。",
+        "state": {
+          "安装": "核验通过",
+          "轮次": "下一轮可用"
+        }
+      }
+    ],
+    "takeaway": "pending 不授权；approve 后还要完成同步与下一轮核验。自批被拒，reject 不授予权限，活动轮次保留原快照。"
+  },
+  {
+    "id": "s15-knowledge-share",
+    "title": "知识库分享：carol 只读，bob 撤销后返回 404",
+    "question": "为什么共享后的写入是 403，撤销后的新读取是 404？",
+    "file": "stages/s15-hub/server/modules/hub/index.mjs",
+    "start": 105,
+    "end": 127,
+    "expect": "  async grantKnowledge(id, username) {",
+    "notes": {},
+    "actors": [
+      [
+        "bob",
+        "bob · 所有者"
+      ],
+      [
+        "hub",
+        "Hub / PostgreSQL"
+      ],
+      [
+        "carol",
+        "carol · 接收者"
+      ]
+    ],
+    "state0": {
+      "范围": "private",
+      "授权": "无",
+      "读取": "不可见",
+      "修改": "不可见"
+    },
+    "steps": [
+      {
+        "flow": [
+          "bob",
+          "hub",
+          "授权 grantKnowledge"
+        ],
+        "say": "教学模拟：bob 将知识库分享给 carol，无需审批。",
+        "state": {
+          "范围": "shared",
+          "授权": "carol"
+        },
+        "lines": [
+          109,
+          109
+        ]
+      },
+      {
+        "flow": [
+          "carol",
+          "hub",
+          "读取 checkResource"
+        ],
+        "say": "carol 新请求获取快照并验证 read，通过后仍需核对 Agent 挂载与来源。",
+        "state": {
+          "读取": "200"
+        }
+      },
+      {
+        "flow": [
+          "carol",
+          "hub",
+          "尝试 can modify"
+        ],
+        "say": "carol 可见但没有修改权限。",
+        "state": {
+          "修改": "403"
+        }
+      },
+      {
+        "flow": [
+          "bob",
+          "hub",
+          "撤销 revoke"
+        ],
+        "say": "删除 carol 的 grant；这是唯一授权时，scope 回 private。",
+        "state": {
+          "范围": "private",
+          "授权": "已撤销"
+        },
+        "lines": [
+          119,
+          119
+        ]
+      },
+      {
+        "flow": [
+          "carol",
+          "hub",
+          "刷新 snapshot"
+        ],
+        "say": "新的请求不沿用旧授权；当前活动轮次仍保留旧快照。",
+        "state": {
+          "读取": "重新判定"
+        }
+      },
+      {
+        "flow": [
+          "hub",
+          "carol",
+          "返回 404"
+        ],
+        "say": "carol 不再看得见该库；下一轮重新核验挂载，拒绝未授权访问。",
+        "state": {
+          "读取": "404",
+          "修改": "404"
+        }
+      }
+    ],
+    "takeaway": "共享接收者只有 use/read。撤销约束新请求与下一轮，不会抹除已经送入模型上下文的正文。"
+  }
+]

@@ -179,3 +179,15 @@
 **新增模块**：用户运行环境（用户隔离，owner 路由、进程池与 uid）
 
 **新增数据迁移**：`011-user-runtimes.sql`、`012-runtime-migration.sql`
+
+<a id="s15"></a>
+
+## s15：权限与资源 Hub：能用什么，谁说了算
+
+相比 [s14-isolation](s14-isolation/)：统一可见范围与动作授权；工具取三方交集，Skill 分享经审批，下一轮核对新权限。
+
+**新增模块**：资源 Hub（权限与资源，可见范围、权益与审批）
+
+**新增接口**：`POST /knowledge`、`GET /hub`、`GET /me/plan`、`POST /hub/skills`、`POST /hub/plans/assign`
+
+**新增数据迁移**：`013-hub.sql`、`014-user-knowledge.sql`
