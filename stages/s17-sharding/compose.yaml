@@ -128,6 +128,7 @@ services:
     # Codex 历史记录的是绝对路径；换成 release/时间戳路径会导致旧会话无法恢复。
     volumes:
       - "./nodes/node-a/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
       - "./nodes/node-a/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-a/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-a:${CONTAINER_APP_DIR}/backups"
@@ -146,6 +147,7 @@ services:
     <<: *node
     volumes:
       - "./nodes/node-b/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
       - "./nodes/node-b/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-b/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-b:${CONTAINER_APP_DIR}/backups"
@@ -160,6 +162,7 @@ services:
     <<: *node
     volumes:
       - "./nodes/node-c/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
       - "./nodes/node-c/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-c/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-c:${CONTAINER_APP_DIR}/backups"

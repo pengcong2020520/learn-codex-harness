@@ -126,3 +126,11 @@ test('static: 远程账号命令独立使用 SSH TTY、白名单名称并仅接�
   assert.match(remote, /docker compose up -d --wait node-a node-b node-c.*bash deploy\/cluster-ready.sh/);
   assert.doesNotMatch(remote, /docker compose run[^\n]*-T[^\n]*(?:auth:init|user:)/);
 });
+
+test('static: every node mounts the shared gateway provider list read-only (deployment config, not user data)', () => {
+  const compose = fs.readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
+  for (const node of ['node-a', 'node-b', 'node-c']) {
+    const block = compose.split(`\n  ${node}:`)[1].split(/\n  [a-z]/)[0];
+    assert.match(block, /\.\/\.data\/gateway\/enabled-providers\.json:\$\{CONTAINER_APP_DIR\}\/\.data\/gateway\/enabled-providers\.json:ro/);
+  }
+});
