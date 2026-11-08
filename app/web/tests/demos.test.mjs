@@ -10,7 +10,7 @@ test('阶段演示页：没有内联脚本，不再列代码行数，s00–s02�
  const url=await workbench(t);const html=await (await fetch(url+'/course/changes.html')).text();
  assert.doesNotMatch(html,/\son[a-z]+=/i);assert.doesNotMatch(html,/<script(?![^>]*\ssrc=)/);
  assert.doesNotMatch(html,/行数|chg-bar|改动文件/);
- for(const id of ['s00','s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11','s12','s13'])assert.match(html,new RegExp(`<section class="chg-stage" id="${id}">[\\s\\S]*?<article class="mech"`));
+ for(const id of ['s00','s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11','s12','s13','s14'])assert.match(html,new RegExp(`<section class="chg-stage" id="${id}">[\\s\\S]*?<article class="mech"`));
  assert.equal((await fetch(url+'/course/demos.js')).status,200);
 });
 

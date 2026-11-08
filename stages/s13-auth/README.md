@@ -134,4 +134,4 @@ npm run test:offline
 
 ## 下一章
 
-s14 用户隔离：让运行环境与持久状态的隔离边界跟上账号边界，处理共享 Codex 进程、CODEX_HOME 和 workspace 留下的问题。
+[s14 用户隔离](../s14-isolation/README.md)：让运行环境与持久状态的隔离边界跟上账号边界，处理共享 Codex 进程、CODEX_HOME 和 workspace 留下的问题。

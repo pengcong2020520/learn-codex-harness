@@ -1,5 +1,9 @@
 # s14: 用户运行环境
 
+[导论](../introduction.md) · [s13](../s13-auth/README.md) → `s14`
+
+全仓入口：[机制课堂](../../app/web/public/course/index.html#s14) · [阶段演示](../../app/web/public/course/changes.html#s14) · [章节长文](../../app/web/public/course/handbook.html#module-s14) · [总架构图](../../app/web/public/course/assets/s14-architecture.svg)
+
 > **对应六个问题**：③ 之前聊过什么 ⑥ 谁说了算
 
 ## 要回答的问题

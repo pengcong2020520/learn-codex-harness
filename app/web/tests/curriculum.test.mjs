@@ -95,7 +95,7 @@ test('没有任何课时时报错',t=>{
 
 test('s12 三课、四组离线实验与真实 catalog 一致，所有补充摘录逐字命中',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s12-deploy');
- assert.equal(output.lessons.length,36);
+ assert.equal(output.lessons.length,39);
  assert.deepEqual(lessons.map(l=>l.id),['s12-health','s12-protection','s12-backup']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s12-deploy');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s12-deploy/lessons/catalog.json'),'utf8'));
@@ -122,7 +122,7 @@ test('s12 补充源码仍检查归属与唯一 needle',t=>{
 
 test('s13 三课覆盖四个 catalog 实验，密码、令牌与 SSE 摘录逐字命中',()=>{
  const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s13-auth');
- assert.equal(output.lessons.length,36);
+ assert.equal(output.lessons.length,39);
  assert.deepEqual(lessons.map(l=>l.id),['s13-hash','s13-logout','s13-events']);
  const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s13-auth');
  const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s13-auth/lessons/catalog.json'),'utf8'));
@@ -141,4 +141,25 @@ test('s13 三课覆盖四个 catalog 实验，密码、令牌与 SSE 摘录逐�
  assert.match(lessons[0].source.code,/verifyPassword/);
  assert.match(lessons[1].source.code,/authenticate/);
  assert.match(lessons[2].source.code,/event.ownerId === identity.userId/);
+});
+
+test('s14 三课与 catalog 离线实验一一对应，池、spawn 环境与用户文件摘录准确',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s14-isolation');
+ assert.equal(output.lessons.length,39);
+ assert.deepEqual(lessons.map(l=>l.id),['s14-routing','s14-pool','s14-crash']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s14-isolation');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s14-isolation/lessons/catalog.json'),'utf8'));
+ assert.deepEqual(manifest.map(e=>e.catalogId),catalog.map(e=>e.id));
+ for(const exp of manifest){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key],`${exp.catalogId}.${key}`);
+  assert.equal(exp.command,`npm run lesson -- ${exp.catalogId}`);
+ }
+ const excerpts=lessons.flatMap(l=>[l.source,...l.sources]);
+ for(const name of ['withOwner','userSpawn','userEnvironment','readAsUser'])assert.ok(excerpts.some(e=>e.code.includes(name)),name);
+ for(const excerpt of excerpts){
+  const original=fs.readFileSync(path.join(source,'../../..',excerpt.file),'utf8');
+  assert.ok(original.includes(excerpt.needle));
+  assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
+ }
 });

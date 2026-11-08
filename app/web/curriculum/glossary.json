@@ -1742,5 +1742,62 @@
       "dataBindings"
     ],
     "source": "stages/s13-auth/README.md#核心概念"
+  },
+  {
+    "term": "用户运行环境",
+    "aka": [
+      "runtime",
+      "每用户 Codex 进程"
+    ],
+    "stage": "s14",
+    "short": "每个用户一个独立的 Codex App Server 进程，配自己的 CODEX_HOME、工作目录和系统 uid。",
+    "detail": "服务端按会话或任务记录的 owner 把请求路由到该用户的进程；原生历史、索引、记忆和 Skill 副本都在各自的 CODEX_HOME 里，互不可见。第一个 admin 沿用原来的 .data/codex，因为 Codex 历史里存的是绝对路径。",
+    "related": [
+      "进程池",
+      "系统 uid",
+      "请求身份"
+    ],
+    "source": "stages/s14-isolation/README.md#核心概念"
+  },
+  {
+    "term": "进程池",
+    "aka": [
+      "RuntimePool"
+    ],
+    "stage": "s14",
+    "short": "同时最多 4 个用户进程；空闲 10 分钟回收，满了先回收最久未用的空闲进程，都忙时返回 503。",
+    "detail": "判断空闲既看有没有执行中的轮次，也查库里该用户有没有 queued、starting、running、steering 的任务，所以回收不会杀掉正在跑的轮次。同一用户的并发首次请求共用一次启动（single-flight），启动超时 30 秒。",
+    "related": [
+      "用户运行环境"
+    ],
+    "source": "stages/s14-isolation/README.md#核心概念"
+  },
+  {
+    "term": "系统 uid",
+    "aka": [
+      "每用户系统用户",
+      "uid 隔离"
+    ],
+    "stage": "s14",
+    "short": "每个用户的 Codex 进程以专属 uid（从 10001 起）运行，用户目录属主为该 uid、属组为服务组、模式 2770。",
+    "detail": "agent 容器以 uid 0 启动但丢弃全部能力，只保留 SETUID、SETGID、CHOWN、FOWNER，没有 DAC_OVERRIDE。服务端工具靠组权限读写；其他用户的进程不在该组，读不到。子进程 umask 0007，环境变量只给网关地址与访问密钥等白名单。",
+    "related": [
+      "用户运行环境",
+      "readAsUser"
+    ],
+    "source": "stages/s14-isolation/README.md#核心概念"
+  },
+  {
+    "term": "readAsUser",
+    "aka": [
+      "同 uid 读取辅助"
+    ],
+    "stage": "s14",
+    "short": "服务端需要读用户 Codex 创建的文件时，临时以该用户 uid 拉起一个读取进程。",
+    "detail": "读取进程只能读到这个用户本来能读的东西：即使用户放了指向别人文件的软链接，也读不到别人 0600 的文件。服务进程本身不遍历、不修改用户 CODEX_HOME 的内部。",
+    "related": [
+      "系统 uid"
+    ],
+    "source": "stages/s14-isolation/README.md#核心概念"
   }
 ]

@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-07T17:00:02.087Z",
+  "verifiedAt": "2026-11-08T01:34:10.538Z",
   "modelProvider": "local simulated Responses",
   "embeddingProvider": null,
   "semanticQualityVerified": false,
@@ -20,6 +20,7 @@
     "s11-model-gateway/README.md",
     "s12-deploy/README.md",
     "s13-auth/README.md",
+    "s14-isolation/README.md",
     "s01-single-turn/docs/design.md",
     "s02-multi-turn/docs/design.md",
     "s03-service/docs/design.md",
@@ -33,6 +34,7 @@
     "s11-model-gateway/docs/design.md",
     "s12-deploy/docs/design.md",
     "s13-auth/docs/design.md",
+    "s14-isolation/docs/design.md",
     "s00-sdk-quickstart/docs/guide.md",
     "s06-tools/docs/tools.md",
     "s08-data-layer/docs/data-layer.md",
@@ -137,6 +139,13 @@
       "command": "npm test",
       "passed": true,
       "tests": 316,
+      "skipped": 0
+    },
+    {
+      "directory": "s14-isolation",
+      "command": "npm test",
+      "passed": true,
+      "tests": 336,
       "skipped": 0
     }
   ]

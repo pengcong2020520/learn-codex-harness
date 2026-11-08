@@ -35,6 +35,7 @@ jobs:
           - stages/s11-model-gateway
           - stages/s12-deploy
           - stages/s13-auth
+          - stages/s14-isolation
           - app
     defaults:
       run:
