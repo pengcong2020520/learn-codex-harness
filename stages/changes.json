@@ -567,6 +567,7 @@
           "AGENT_NODE_C_DB_PASSWORD",
           "REDIS_PASSWORD",
           "ETCD_ROOT_PASSWORD",
+          "ETCD_HEALTH_PASSWORD",
           "ETCD_NODE_A_PASSWORD",
           "ETCD_NODE_B_PASSWORD",
           "ETCD_NODE_C_PASSWORD"
@@ -603,8 +604,7 @@
           "AGENT_NODE_KEY_C",
           "AGENT_NODE_KEY_C_HASH",
           "AGENT_TRANSFER_MAX_BYTES",
-          "AGENT_SHARD_STRATEGY",
-          "ETCD_HEALTH_PASSWORD"
+          "AGENT_SHARD_STRATEGY"
         ],
         "migrations": [
           "016-sharding.sql",

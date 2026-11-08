@@ -38,7 +38,7 @@ test('deploy 执行：首次未初始化成功退出，不启动 agent 或注册
   const result = fixture(t).run('server-setup.sh');
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /账号尚未初始化：运行 DEPLOY_HOST=fixture-host bash deploy\/remote.sh auth-init/);
-  assert.match(result.calls, /up -d --wait postgres redis etcd gateway/);
+  assert.match(result.calls, /up -d etcd\n[\s\S]*run --rm --no-deps -T etcd-init\n[\s\S]*up -d --wait etcd postgres redis gateway/);
   assert.match(result.calls, /run --rm --no-deps --user 0 -T .*node-a node scripts\/cluster-migrate.mjs/);
   assert.doesNotMatch(result.calls, /up[^\n]* node-a|enable-service|cluster-ready.sh/);
 });

@@ -68,6 +68,7 @@ services:
     environment:
       ETCD_ENDPOINT: http://etcd:2379
       ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:?Set ETCD_ROOT_PASSWORD}
+      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}
       ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
       ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
       ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
@@ -165,7 +166,7 @@ services:
     command: ["etcd", "--name=etcd", "--data-dir=/etcd-data", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd:2380", "--initial-cluster=etcd=http://etcd:2380"]
     volumes: ["etcd-data:/etcd-data"]
     healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "status"]
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]
       interval: 5s
       timeout: 3s
       retries: 10
