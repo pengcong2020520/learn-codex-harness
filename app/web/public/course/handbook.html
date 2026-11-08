@@ -2575,34 +2575,35 @@ npm run test:codex-memory</code></pre>
 <p>部署包的 <code>write-article</code> 有两步：outline 先确定立意与大纲，只能在 drafts 新建文件，完成后等待确认；final 按确认结果完成研究与成稿，可写 research、drafts、outputs，结束后检查 <code>file-exists</code> 与 <code>format</code>。这是目标与边界约定，研究和写作的具体顺序仍留给模型。</p>
 <p><span class="term" data-definition="步骤可新建文件的范围，只能在 Agent 基础权限内收窄；它不额外授予读取或覆盖权限。">writes</span> 在启动时校验，不能超出 Agent 可新建文件的位置；派发时作为 <code>gate.start(job, grants, writes)</code> 的参数交给权限门。自定义 Workflow 不能引用未声明 Skill；授权只能使用代码支持的 <code>knowledge.update</code>，并落在 Agent 可更新的知识库内。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 138–147 行</span>
-<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="138" data-end="147">  outcome(job, turn) {
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 138–148 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="138" data-end="148">  outcome(job, turn) {
     if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
-    let workflow;
-    try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
-    const step = stepOf(workflow, job.step || 0);
-    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
-    if (checks &amp;&amp; !checks.every(check =&gt; check.passed)) return { status: "needs-review", checks };
-    if (step.index &lt; step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
-    return { status: "completed", checks };
+    try {
+      const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+      const step = stepOf(workflow, job.step || 0);
+      const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+      if (!checksPassed(step.checks, checks)) return { status: "needs-review", checks };
+      if (step.index &lt; step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+      return { status: "completed", checks };
+    } catch (error) { return { status: "needs-review", checks: null, error: "Workflow 验收未完成：" + (error?.message || String(error)) }; }
   }</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
 <p class="tl"><strong>138 行</strong>：outcome 根据任务记录与这一轮的结果计算业务状态。</p>
 <p class="tl"><strong>139 行</strong>：Turn 未 completed 或任务是 append 时，直接返回轮次状态，不进入这里的 Workflow 验收。</p>
-<p class="tl"><strong>140 行</strong>：准备保存解析后的 Workflow。</p>
-<p class="tl"><strong>141 行</strong>：解析任务引用；若解析抛错，当前实现回退 completed 且 checks=null，不能说任何 completed 都有验收证据。</p>
+<p class="tl"><strong>140 行</strong>：将解析、选步骤和执行检查统一纳入异常处理。</p>
+<p class="tl"><strong>141 行</strong>：按任务记录的 Workflow 和参数重新解析，解析失败交由 catch 处理。</p>
 <p class="tl"><strong>142 行</strong>：选择当前步骤；job.step 未设置时按第 0 步处理。</p>
 <p class="tl"><strong>143 行</strong>：只运行本步声明的 checks；使用实际产物记录、工作区与允许格式，没有 checks 则为 null。</p>
-<p class="tl"><strong>144 行</strong>：任何一项检查未通过，优先返回 needs-review。</p>
+<p class="tl"><strong>144 行</strong>：每项声明都必须有 passed===true 的结果；结果缺失或检查失败，优先返回 needs-review。</p>
 <p class="tl"><strong>145 行</strong>：有下一步时，confirm 为真则 waiting；否则直接 queued 并把 step 加一。</p>
-<p class="tl"><strong>146 行</strong>：已是最后一步且没有失败检查，才返回 completed。</p>
-<p class="tl"><strong>147 行</strong>：结束结果计算；状态保存和下一次唤醒在调用方完成。</p>
+<p class="tl"><strong>146 行</strong>：已是最后一步且所有声明的检查都通过，才返回 completed。</p>
+<p class="tl"><strong>147 行</strong>：解析、选步骤或执行检查抛错时返回 needs-review、checks=null，并由调用方保存验收未完成的原因。</p>
 </div></div></div>
 <table><thead><tr><th>结果</th><th>含义</th><th>下一件事</th></tr></thead><tbody>
-<tr><td>needs-review</td><td>本轮正常结束，但本步检查未通过</td><td>保存检查结果供核对；不自动重试、不因此暂停队列</td></tr>
+<tr><td>needs-review</td><td>本轮正常结束，但验收出错、结果缺失或检查未通过</td><td>保存检查结果或异常原因供核对；不自动重试、不因此暂停队列</td></tr>
 <tr><td>waiting</td><td>本步允许结束，有下一步且要求确认</td><td>保持当前 step；等待用户确认或结束任务</td></tr>
 <tr><td>queued</td><td>可以继续下一步</td><td>在同一会话空闲且满足调度条件时派发</td></tr>
-<tr><td>completed</td><td>最后一步结束，未出现失败检查</td><td>查看 checks 与产物；状态本身不保证内容质量</td></tr>
+<tr><td>completed</td><td>最后一步结束，声明的检查全部通过</td><td>查看 checks 与产物；状态本身不保证内容质量</td></tr>
 </tbody></table>
 <p>大纲步骤没有声明 checks，进入 waiting 不能单独证明大纲文件已落盘。成稿的两项检查也只检查登记产物存在及格式合规，不检查观点质量和事实准确性。<code>sources-cited</code> 看产物是否带来源版本，<code>wiki-effective</code> 看是否有生效修订，都是结果检查，不检查工具调用顺序。</p>
 <p><span class="term" data-definition="某个任务等用户决定的状态，不是队列暂停；普通 chat 可以继续，但不会自动推进等待任务。">waiting</span> 不占住下一轮执行。用户可以先讨论大纲，再确认并补充“第二部分增加案例”；服务把任务 step 加一，下一轮的用户文本只含确认提示和补充说明，不重复原文；同一轮仍会前置本步任务说明，并附上 Workflow 指定的已启用 Skill。原始要求仍在同一 Thread 历史里。取消等待任务会记为 cancelled，再确认返回 409。</p>
@@ -2612,8 +2613,8 @@ npm run test:codex-memory</code></pre>
 <h2 class="screen-heading">可以提议，不能自批：授权发生在模型之外</h2>
 <p>普通 chat 里，模型发现资料需要整理进 Wiki，却没有该次维护任务的授权。它可以调用 <a class="term" data-definition="供模型在发现任务超出当前权限时发起工作流提议、等待人工审核的原语工具。" href="/course/glossary.html#term-propose-task">propose_task</a>，把想做的事与理由交给用户决定。工具的会话身份来自权限门，不能由模型在参数里自填。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 149–164 行</span>
-<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="149" data-end="164">  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 150–165 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="150" data-end="165">  async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
     if (Object.keys(rest).length) throw new AppError("提议只接受 workflow、params、text 与 reason。", 400);
     const threadId = requireId(context.threadId, "会话 ID");
     const workflow = this.resolve({ id, params });
@@ -2630,23 +2631,23 @@ npm run test:codex-memory</code></pre>
       return { taskId: job.id, status: "proposed", workflow: workflow.id, note: "已提议，等待用户确认；确认前不会执行，也不授予任何权限。" };
     });</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
-<p class="tl"><strong>149 行</strong>：提议只接收 Workflow、参数、正文与理由，其余字段进入 rest；context 来自工具调用的可信上下文。</p>
-<p class="tl"><strong>150 行</strong>：多余字段立即返回 400；模型不能携带 status=queued 改写状态。</p>
-<p class="tl"><strong>151–152 行</strong>：校验会话标识并解析 Workflow；解析检查 Agent 能力，但没有授予任务权限。</p>
-<p class="tl"><strong>153 行</strong>：普通 chat 无需提议，指定 chat 会返回 400。</p>
-<p class="tl"><strong>154 行</strong>：校验正文和理由，理由最多保留 500 字符。</p>
-<p class="tl"><strong>155 行</strong>：进入该 Thread 的串行操作，避免同会话并发越过数量检查。</p>
-<p class="tl"><strong>156–157 行</strong>：已有 3 个 proposed 就返回 429，要求先等用户处理。</p>
-<p class="tl"><strong>158–160 行</strong>：创建新任务标识，绑定会话、用户与 Agent 版本；status 固定为 proposed，step 从 0 开始。</p>
-<p class="tl"><strong>161–162 行</strong>：保存记录并发布状态；这里没有调用 authorize 或唤醒调度。</p>
-<p class="tl"><strong>163 行</strong>：把提议标识和等待确认的说明返回模型，不报告已执行。</p>
-<p class="tl"><strong>164 行</strong>：结束串行操作；方法的闭合括号位于紧接的下一行。</p>
+<p class="tl"><strong>150 行</strong>：提议只接收 Workflow、参数、正文与理由，其余字段进入 rest；context 来自工具调用的可信上下文。</p>
+<p class="tl"><strong>151 行</strong>：多余字段立即返回 400；模型不能携带 status=queued 改写状态。</p>
+<p class="tl"><strong>152–153 行</strong>：校验会话标识并解析 Workflow；解析检查 Agent 能力，但没有授予任务权限。</p>
+<p class="tl"><strong>154 行</strong>：普通 chat 无需提议，指定 chat 会返回 400。</p>
+<p class="tl"><strong>155 行</strong>：校验正文和理由，理由最多保留 500 字符。</p>
+<p class="tl"><strong>156 行</strong>：进入该 Thread 的串行操作，避免同会话并发越过数量检查。</p>
+<p class="tl"><strong>157–158 行</strong>：已有 3 个 proposed 就返回 429，要求先等用户处理。</p>
+<p class="tl"><strong>159–161 行</strong>：创建新任务标识，绑定会话、用户与 Agent 版本；status 固定为 proposed，step 从 0 开始。</p>
+<p class="tl"><strong>162–163 行</strong>：保存记录并发布状态；这里没有调用 authorize 或唤醒调度。</p>
+<p class="tl"><strong>164 行</strong>：把提议标识和等待确认的说明返回模型，不报告已执行。</p>
+<p class="tl"><strong>165 行</strong>：结束串行操作；方法的闭合括号位于紧接的下一行。</p>
 </div></div></div>
 <p>有了 proposed 记录，知识库也还没有因此变化。每个会话最多保留 3 个待确认提议，更多请求返回 429；没有数据层提供的会话身份时工具直接拒绝。真实服务使用 PostgreSQL 模式，离线测试用任务仓储和门禁夹具验证状态行为。</p>
 <p>用户确认走 <code>POST /tasks/confirm</code>。HTTP 入口在 <code>gate.run(gate.user(), dispatch)</code> 中调用确认方法，下面的 authorize 才是在用户身份下核对授权。读取 Skill、模型写“已批准”、再次提交带 queued 的参数，都不能替代这个入口。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 167–185 行</span>
-<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="167" data-end="185">  async confirm({ threadId, taskId, text, ...rest }) {
+<div class="translation-code"><span class="translation-label">源码 · stages/s10-skill-workflow/server/modules/messages/index.mjs · 第 168–186 行</span>
+<pre><code data-source="stages/s10-skill-workflow/server/modules/messages/index.mjs" data-start="168" data-end="186">  async confirm({ threadId, taskId, text, ...rest }) {
     if (Object.keys(rest).length) throw new AppError("确认只接受 threadId、taskId 与 text。", 400);
     requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
     const note = text == null || text === "" ? null : requireText(text);
@@ -2666,16 +2667,16 @@ npm run test:codex-memory</code></pre>
       return this.publicJob(await this.job(taskId));
     });</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
-<p class="tl"><strong>167–168 行</strong>：确认只接受 threadId、taskId 和可选 text；其他字段返回 400。</p>
-<p class="tl"><strong>169–170 行</strong>：校验两个标识，将合法的补充说明保存为 note。</p>
-<p class="tl"><strong>171–172 行</strong>：确认会话可用，再进入该 Thread 的串行操作。</p>
-<p class="tl"><strong>173–174 行</strong>：读取任务并检查它属于当前会话，否则返回 404。</p>
-<p class="tl"><strong>175–177 行</strong>：任务为 proposed 时重新解析 Workflow，并核对它申请的 grants；HTTP 调用方已进入用户身份上下文。</p>
-<p class="tl"><strong>178 行</strong>：结束提议授权分支；waiting 任务不走这次提议授权。</p>
-<p class="tl"><strong>179 行</strong>：提议进入 queued，保留第 0 步；waiting 任务进入 queued 并推进一步，两者都保存 note。</p>
-<p class="tl"><strong>180–181 行</strong>：条件更新只接受 waiting 或 proposed；已取消、已完成等状态返回 409。</p>
-<p class="tl"><strong>182–183 行</strong>：发布状态并唤醒调度；不是在确认函数里直接调用模型。</p>
-<p class="tl"><strong>184–185 行</strong>：返回更新后的公开任务视图，结束串行操作。</p>
+<p class="tl"><strong>168–169 行</strong>：确认只接受 threadId、taskId 和可选 text；其他字段返回 400。</p>
+<p class="tl"><strong>170–171 行</strong>：校验两个标识，将合法的补充说明保存为 note。</p>
+<p class="tl"><strong>172–173 行</strong>：确认会话可用，再进入该 Thread 的串行操作。</p>
+<p class="tl"><strong>174–175 行</strong>：读取任务并检查它属于当前会话，否则返回 404。</p>
+<p class="tl"><strong>176–178 行</strong>：任务为 proposed 时重新解析 Workflow，并核对它申请的 grants；HTTP 调用方已进入用户身份上下文。</p>
+<p class="tl"><strong>179 行</strong>：结束提议授权分支；waiting 任务不走这次提议授权。</p>
+<p class="tl"><strong>180 行</strong>：提议进入 queued，保留第 0 步；waiting 任务进入 queued 并推进一步，两者都保存 note。</p>
+<p class="tl"><strong>181–182 行</strong>：条件更新只接受 waiting 或 proposed；已取消、已完成等状态返回 409。</p>
+<p class="tl"><strong>183–184 行</strong>：发布状态并唤醒调度；不是在确认函数里直接调用模型。</p>
+<p class="tl"><strong>185–186 行</strong>：返回更新后的公开任务视图，结束串行操作。</p>
 </div></div></div>
 <p>确认让任务进入队列；调度器真正取出任务后，才建立本次执行的权限上下文并调用 turn/start。额外授权不会留给后面的普通 chat；任务结束由权限门撤销上下文。用户也可以结束提议，服务只接受 queued、waiting、proposed 的取消，不把它当作正在运行 Turn 的中断操作。</p>
 <p>点击下一步追踪边界。以下是<strong>教学模拟，非真实执行结果</strong>；图中的“模型”仍是 Codex 内的工作模型，并非另一个 Agent。</p>
@@ -2702,7 +2703,7 @@ npm run lesson -- s10-propose</code></pre>
 <p>三个入口各筛选一个测试。要在终端逐行核对断言，可继续运行以下只读命令；范围对应本阶段源码与测试，结果不会写入工作区。</p>
 <pre><code>sed -n '174,213p' tests/agent-core.test.mjs
 sed -n '195,262p' tests/workflows.test.mjs
-sed -n '138,185p' server/modules/messages/index.mjs</code></pre>
+sed -n '138,186p' server/modules/messages/index.mjs</code></pre>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">这些实验究竟证明了什么</p><p>package 入口直接检查包路径、文件限制与指纹变化，没有执行独立的 Skill 安装测试，也没有启动 Codex；撤销由 assertCurrent 源码解释。steps 的权限门只记录 writes，不验证真实文件拦截。propose 的权限门记录授权调用，真实用户身份检查要结合 HTTP 与 PermissionGate 源码。三者均不能证明真实模型会主动读 Skill、正确遵循方法或写出高质量文章。</p></div></div>
 <p>如需进一步验证实际文件门禁和 Skill 同步，仍在本阶段目录执行现有的补充断言：</p>
 <pre><code>node --test --test-name-pattern='^Skill 安装' tests/agent-core.test.mjs
@@ -2822,8 +2823,8 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
 </div></div></div>
 <p>搜索开关在服务启动时确定：auto 跟随实际默认模型的 nativeTools，off 关闭，直连模式也关闭。搜索为 live 时，每次对话路由都会自动加入 web_search 要求；<code>turn/start</code> 不携带搜索开关。因此一个支持搜索的默认模型，可能让 fast 和 strong 最后都选到同一个 Kimi 候选。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 284–306 行</span>
-<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="284" data-end="306">        // 优先级：步骤 &gt; 任务 &gt; 默认；预算只替换场景或默认选择，能力要求继续生效。
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 285–307 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="285" data-end="307">        // 优先级：步骤 &gt; 任务 &gt; 默认；预算只替换场景或默认选择，能力要求继续生效。
         const router = this.config.launch.router;
         let selection = step.model || job.model || null;
         let modelSource = step.model ? "步骤指定" : job.model ? "任务指定" : "默认路由";
@@ -2847,16 +2848,16 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
           ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),
         });</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
-<p class="tl"><strong>284–287 行</strong>：取得路由，以步骤、任务、默认的顺序确定 selection，并记录选择层级。</p>
-<p class="tl"><strong>288–291 行</strong>：达到降级比例时，仅把场景或默认选择替换成降级场景；含 / 的具体模型不改选。</p>
-<p class="tl"><strong>292 行</strong>：把具体模型或场景名补进可读的 modelSource。</p>
-<p class="tl"><strong>293 行</strong>：把 selection 和步骤 needs 一起交给路由，降级没有抹掉需求。</p>
-<p class="tl"><strong>294 行</strong>：对已选模型校验 effort；不支持时失败，不会继续遍历其他候选来匹配 effort。</p>
-<p class="tl"><strong>295–297 行</strong>：取得模型名，写入任务的 selectedModel 与 modelSource，再发布状态。</p>
-<p class="tl"><strong>298–299 行</strong>：开启本任务的工具权限上下文，并标记进入发起流程。</p>
-<p class="tl"><strong>300 行</strong>：先关联路由模型与任务，避免用量通知早于 RPC 响应时失去归属。</p>
-<p class="tl"><strong>301–304 行</strong>：发出 turn/start，带 Thread、稳定消息 ID 和已准备的输入。</p>
-<p class="tl"><strong>305–306 行</strong>：网关路由存在时明确带 model 和 effort；档位取步骤值、模型默认值或 null，随后结束 RPC 调用。</p>
+<p class="tl"><strong>285–288 行</strong>：取得路由，以步骤、任务、默认的顺序确定 selection，并记录选择层级。</p>
+<p class="tl"><strong>289–292 行</strong>：达到降级比例时，仅把场景或默认选择替换成降级场景；含 / 的具体模型不改选。</p>
+<p class="tl"><strong>293 行</strong>：把具体模型或场景名补进可读的 modelSource。</p>
+<p class="tl"><strong>294 行</strong>：把 selection 和步骤 needs 一起交给路由，降级没有抹掉需求。</p>
+<p class="tl"><strong>295 行</strong>：对已选模型校验 effort；不支持时失败，不会继续遍历其他候选来匹配 effort。</p>
+<p class="tl"><strong>296–298 行</strong>：取得模型名，写入任务的 selectedModel 与 modelSource，再发布状态。</p>
+<p class="tl"><strong>299–300 行</strong>：开启本任务的工具权限上下文，并标记进入发起流程。</p>
+<p class="tl"><strong>301 行</strong>：先关联路由模型与任务，避免用量通知早于 RPC 响应时失去归属。</p>
+<p class="tl"><strong>302–305 行</strong>：发出 turn/start，带 Thread、稳定消息 ID 和已准备的输入。</p>
+<p class="tl"><strong>306–307 行</strong>：网关路由存在时明确带 model 和 effort；档位取步骤值、模型默认值或 null，随后结束 RPC 调用。</p>
 </div></div></div>
 <p>终端 <code>/model strong</code> 为当前会话后续提交选择场景，<code>/model default</code> 清除该选择；工作流步骤仍有更高优先级。运行中的追加走 <code>turn/steer</code>，沿用当前轮次模型，不会中途换模型。追加到已结束轮次需要新开 Turn，才重新使用任务选择与预算检查。</p>
 <div class="pattern-cards">
@@ -2892,8 +2893,8 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
 <p>例如累计值依次为 1000、1120、1120，每次 last 都是 120：当前进程只记前两条，共 240。首次通知不会补记历史累计；重启后水位重新建立，仍只记第一次收到的 last。这不表示停止期间的调用会补账，也不能推导出跨重启的恰好一次记账保证。</p>
 <p>价格按写入当时的清单估算：缓存输入已含在 inputTokens，推理输出已含在 outputTokens，不另重复相加；媒体还可按张或秒计价。未定价不等于免费，记录标为未计价，token 仍计入预算。以后补价格不改旧记录，切币种也不把不同币种金额直接相加。Codex 通知没有网关最终备用模型，账本归属仍是提交的路由模型，因此金额不是供应商账单。</p>
 <div class="translation-block">
-<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 245–258 行</span>
-<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="245" data-end="258">    if (active || all.some((j) =&gt; executing.includes(j.status))) return;
+<div class="translation-code"><span class="translation-label">源码 · stages/s11-model-gateway/server/modules/messages/index.mjs · 第 246–259 行</span>
+<pre><code data-source="stages/s11-model-gateway/server/modules/messages/index.mjs" data-start="246" data-end="259">    if (active || all.some((j) =&gt; executing.includes(j.status))) return;
     const job = pending.find((j) =&gt; j.mode === "append") || pending[0];
     if (!job) return;
     const budget = await this.usage?.budgetStatus();
@@ -2908,13 +2909,13 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
       return;
     await this.publish(threadId);</code></pre></div>
 <div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines">
-<p class="tl"><strong>245 行</strong>：仍有活动 Turn 或执行中任务就不派发新的轮次；匹配活动轮次的 append 已在更前面处理。</p>
-<p class="tl"><strong>246–247 行</strong>：选出待执行任务，没有任务就返回。</p>
-<p class="tl"><strong>248 行</strong>：等预算状态计算完成；它会等待已收到用量的写入。</p>
-<p class="tl"><strong>249–253 行</strong>：达到上限时登记复查定时器、发布队列状态，然后返回；任务仍是 queued。</p>
-<p class="tl"><strong>254–255 行</strong>：预算允许时清理此 Thread 的旧复查定时器。</p>
-<p class="tl"><strong>256–257 行</strong>：只允许从 queued 条件更新为 starting，同时清空上一步的模型选择；条件不成立就返回。</p>
-<p class="tl"><strong>258 行</strong>：发布 starting 状态；后续才会准备输入、选模型并发出 turn/start。</p>
+<p class="tl"><strong>246 行</strong>：仍有活动 Turn 或执行中任务就不派发新的轮次；匹配活动轮次的 append 已在更前面处理。</p>
+<p class="tl"><strong>247–248 行</strong>：选出待执行任务，没有任务就返回。</p>
+<p class="tl"><strong>249 行</strong>：等预算状态计算完成；它会等待已收到用量的写入。</p>
+<p class="tl"><strong>250–254 行</strong>：达到上限时登记复查定时器、发布队列状态，然后返回；任务仍是 queued。</p>
+<p class="tl"><strong>255–256 行</strong>：预算允许时清理此 Thread 的旧复查定时器。</p>
+<p class="tl"><strong>257–258 行</strong>：只允许从 queued 条件更新为 starting，同时清空上一步的模型选择；条件不成立就返回。</p>
+<p class="tl"><strong>259 行</strong>：发布 starting 状态；后续才会准备输入、选模型并发出 turn/start。</p>
 </div></div></div>
 <p><span class="term" data-definition="按 AGENT_BUDGET_TIMEZONE 的当地日历确定当天和当月边界，支持夏令时；不简单地在当前时刻加 24 小时。">自然日与自然月</span> 决定额度窗口。日/月 token、日/月金额四个上限独立生效，任一达到就停派；同时超限时 resetsAt 取最晚恢复时间。复查最多间隔 3 分钟，接近边界时缩短等待；额度恢复且没有其他暂停或执行阻塞，排队任务才继续，不需要 /continue。上限为 0 时仍会一直阻止新派发。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">停派不是费用精确封顶</p><p>服务端没有为未来消耗预留额度，活动轮次与指向它的 steer 可以继续，并发请求也可能超出预算。网关虚拟密钥另设每日 token 兜底：默认使用已配置日 token 预算的 1.5 倍向上取整，可由 AGENT_GATEWAY_DAILY_TOKENS 覆盖；两者都未设置时没有这条限流。兜底耗尽可能拒绝在途后续请求，网关重启又会清空自己的计数，不能保证任意长轮次完成。</p></div></div>
@@ -3039,8 +3040,8 @@ NODE</code></pre>
 <table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后的行为</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued，等待执行名额。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>新入队操作返回 429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>超频返回 429 RATE_LIMITED 与 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>满额返回 429 SSE_FULL，Retry-After 为 5 秒。</td></tr></tbody></table>
 <p>任务创建、用户确认和 Workflow 再排队都会进入同一个数据库容量门禁。仓储在事务里先获取实例级 advisory lock，再检查全局和本会话 queued 数量。检查与写入共享事务边界，避免两个并发请求都看到“还剩一个位置”，最后同时入队。等待确认和提议没有算入 queued 容量；确认进入队列时才需要重新过门禁。</p>
 <p>调度器全局串行扫描，按 tasks.sequence 查找可执行任务，并保留已有的会话内追加优先语义。跨会话的活动轮次达到默认 2 个时，不继续开启新轮次。已有活动 Turn 的追加走 steer，不额外占用新轮次名额。暂停会话和预算不足的任务不阻塞其他可执行会话，因此这里不承诺一个阻塞所有会话的严格总 FIFO。</p>
-<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 254–255 行</span>
-<pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="254" data-end="255">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 255–256 行</span>
+<pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="255" data-end="256">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
     if (running.size &gt;= maxConcurrentTurns) return;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">running 统计当前占用执行名额的会话；达到上限直接停止这次新轮次派发。</p><p class="tl">任务仍在持久队列中，后续扫描可以在容量释放后继续；这个 return 没有把任务标为失败。</p></div></div></div>
 <p>Workflow 自动进入下一步时若队列已满，会停在等待确认，容量释放后由用户确认继续，不能绕过门禁超额排队。执行器仍依赖 PostgreSQL 独占锁，这里的并发限制针对服务派发的对话轮次，不限制 Codex 内部工具并行。看到多个工具活动，不能直接推断轮次上限失效。</p>

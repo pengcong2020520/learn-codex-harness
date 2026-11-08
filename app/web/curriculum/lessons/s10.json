@@ -206,8 +206,8 @@
       "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
       "needle": "  outcome(job, turn) {",
       "before": 0,
-      "after": 9,
-      "explanation": "138–147 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。141 行解析失败时回退 completed/checks:null，不能说所有 completed 都证明验收通过。确认与取消见 167–199 行，输入和权限范围见 241–273 行。"
+      "after": 10,
+      "explanation": "138–148 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。每项声明必须有 passed===true 的结果；解析、选步骤或执行检查抛错时返回 needs-review/checks:null，并保存验收未完成的原因。确认与取消见 168–200 行，输入和权限范围见 242–274 行。"
     },
     "scenarios": [
       {
