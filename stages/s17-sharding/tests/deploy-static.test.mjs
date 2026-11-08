@@ -151,3 +151,8 @@ test('static: etcd health uses a dedicated user without shell; both deploy paths
     assert.ok(source.indexOf('docker compose stop node-a node-b node-c') < init, file);
   }
 });
+
+test('static: nodes never tighten the shared gateway config directory (gateway container reads it as another uid)', () => {
+  const source = fs.readFileSync(new URL('../server/modules/runtimes/directories.mjs', import.meta.url), 'utf8');
+  assert.match(source, /'gateway'\]\.includes\(entry\)\) secureTree/);
+});

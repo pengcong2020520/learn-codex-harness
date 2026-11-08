@@ -92,7 +92,8 @@ export function prepareServiceDirectories(root, isolated) {
     const target = path.join(root, name); directory(target);
     fs.chownSync(target, 0, 1000); fs.chmodSync(target, 0o711);
     if (name === '.data') {
-      for (const entry of fs.readdirSync(target)) if (!['users', 'codex', 'transfers'].includes(entry)) secureTree(path.join(target, entry), 0, true);
+      // gateway/ is deployment config read by the gateway container (another uid); nodes must not tighten it.
+      for (const entry of fs.readdirSync(target)) if (!['users', 'codex', 'transfers', 'gateway'].includes(entry)) secureTree(path.join(target, entry), 0, true);
     }
   }
 }
