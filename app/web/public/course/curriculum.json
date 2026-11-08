@@ -94,6 +94,12 @@
       "dir": "stages/s15-hub",
       "name": "权限与资源 Hub",
       "focus": "统一授权、工具三方交集与 Skill 共享审批"
+    },
+    {
+      "id": "s16",
+      "dir": "stages/s16-coordination",
+      "name": "协调面",
+      "focus": "成员租约、control 选举与任期隔离"
     }
   ],
   "lessons": [
@@ -7967,6 +7973,655 @@
             "catalogId": "revocation",
             "stage": "s15-hub",
             "command": "npm run lesson -- revocation",
+            "offlineOrIntegration": "offline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s16-lease",
+      "title": "节点是否存活，由 lease 决定",
+      "principle": "成员键与选举键共用 TTL 10 秒的租约；失约先同步隔离，再关闭业务。",
+      "problem": "节点进程仍存在，但超过 TTL 没有成功续约，还能算集群成员吗？",
+      "change": {
+        "before": "服务已按用户隔离并统一资源授权。",
+        "added": "lease 注册、KeepAlive 事件、成员 Watch 与失权代次。",
+        "kept": "Codex 管理 Thread、Turn 与工具循环；业务事实仍由 PostgreSQL 保存，Redis 负责唤醒。"
+      },
+      "concepts": [
+        {
+          "term": "lease",
+          "meaning": "etcd 维护的有期限租约，过期会删除绑定键。"
+        },
+        {
+          "term": "Watch revision",
+          "meaning": "先读快照 R，再从 R+1 接收变化；重连整读并定时对账。"
+        },
+        {
+          "term": "generation",
+          "meaning": "进程内运行代次，隔离时递增，让旧异步回调失效。"
+        }
+      ],
+      "mechanism": "join 取得 lease，绑定 lost、keepaliveSucceeded 和 keepaliveFailed 事件，再 grant 并写成员键。lost 或单调时钟超过 TTL 会同步 isolate；迟到的成功回包不能复活旧代。Watch 从快照后的 revision 开始，每次连接重新读取成员，5 秒对账，压缩后重建。",
+      "design": {
+        "decision": "把成员与选举键绑定同一租约，存活依据交给 etcd。",
+        "reason": "本机进程状态和网络探测不能证明成员仍有权服务。",
+        "alternative": "只看 ping 会把暂停或分区的旧 control 误认为仍有权写入。",
+        "cost": "续约依赖网络；过期后必须关停旧业务并申请新租约，不能直接恢复旧代。"
+      },
+      "source": {
+        "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+        "needle": "  async join() {",
+        "before": 0,
+        "after": 21,
+        "explanation": "租约事件带 generation 校验；注册键经 lease.put 写入。",
+        "start": 24,
+        "anchor": 24,
+        "code": "  async join() {\n    if (this.closed || this.alive) throw new Error('节点已关闭或已经加入。');\n    const epoch = ++this.generation;\n    const lease = this.client.lease(TTL); // automatic KeepAlive, TTL/3, owned by etcd3\n    this.lease = lease;\n    lease.on('lost', () => { if (this.generation === epoch && this.lease === lease) this.isolate('lease-lost'); });\n    lease.on('keepaliveSucceeded', () => {\n      if (this.generation !== epoch || this.lease !== lease) return;\n      // A delayed reply after a process pause must never revive the old generation.\n      if (this.alive && this.now() - this.lastKeepAlive >= TTL * 1000) this.isolate('keepalive-timeout');\n      if (this.alive && this.lease === lease) { this.lastKeepAlive = this.now(); this.armDeadline(); }\n    });\n    lease.on('keepaliveFailed', () => { if (this.generation === epoch) this.checkLease(); });\n    await lease.grant();\n    if (epoch !== this.generation || lease.revoked() || this.closed) throw notController();\n    this.lastKeepAlive = this.now(); this.alive = true;\n    this.armDeadline();\n    const member = { nodeId: this.nodeId, address: this.address, revision: this.revision,\n      agentHash: this.agentHash, capacity: this.capacity, joinedAt: this.clock() };\n    await lease.put(MEMBERS + this.nodeId).value(JSON.stringify(member));\n    if (epoch !== this.generation || !this.checkLease()) throw notController();\n    this.record('joined', { nodeId: this.nodeId });",
+        "hash": "ab8b739b696fe68a7618038d6aad337d67665270017153ba3c4ed95b0a7a3a2d"
+      },
+      "sources": [
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+          "needle": "  isolate(reason) {",
+          "before": 0,
+          "after": 8,
+          "explanation": "先清空 alive/controller 并递增代次，同步发出 lost。",
+          "start": 62,
+          "anchor": 62,
+          "code": "  isolate(reason) {\n    if (!this.alive && !this.controller) return;\n    this.alive = false; this.controller = false; this.generation++;\n    clearInterval(this.reconcileTimer); clearTimeout(this.watchRetry);\n    clearTimeout(this.timer);\n    this.lease?.release(); // no more automatic renewals after local fencing\n    this.record('isolated', { nodeId: this.nodeId, reason });\n    this.emit('lost', reason); // synchronous admission/result fence before any await\n  }",
+          "hash": "ab8b739b696fe68a7618038d6aad337d67665270017153ba3c4ed95b0a7a3a2d"
+        },
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+          "needle": "  async watchMembers() {",
+          "before": 0,
+          "after": 10,
+          "explanation": "先快照再 Watch，每 5 秒对账。",
+          "start": 89,
+          "anchor": 89,
+          "code": "  async watchMembers() {\n    const epoch = this.generation;\n    this.memberEvents = []; this.memberRevision = '0';\n    await this.refreshMembers(epoch);\n    if (epoch !== this.generation || this.closed) return;\n    this.attachWatch(epoch);\n    clearInterval(this.reconcileTimer);\n    this.reconcileTimer = setInterval(() => {\n      if (epoch === this.generation) void this.reconcile().catch(() => { if (epoch === this.generation) this.record('reconcile-failed'); });\n    }, 5000);\n    this.reconcileTimer.unref?.();",
+          "hash": "ab8b739b696fe68a7618038d6aad337d67665270017153ba3c4ed95b0a7a3a2d"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "正常续约与成员观察",
+          "steps": [
+            {
+              "title": "申请租约",
+              "actor": "节点",
+              "event": "教学模拟 · join",
+              "explain": "etcd 授予 TTL 10 秒租约。",
+              "state": {
+                "租约": "有效",
+                "成员": "待注册"
+              },
+              "lines": []
+            },
+            {
+              "title": "注册成员",
+              "actor": "节点",
+              "event": "教学模拟 · lease.put",
+              "explain": "成员键绑定同一 lease。",
+              "state": {
+                "租约": "有效",
+                "成员": "可观察"
+              },
+              "lines": []
+            },
+            {
+              "title": "观察增量",
+              "actor": "其他节点",
+              "event": "教学模拟 · Watch",
+              "explain": "从快照 R+1 接收事件，重连重新整读。",
+              "state": {
+                "租约": "持续续约",
+                "成员": "缓存已核对"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "暂停超过 TTL 后收到迟到回包",
+          "steps": [
+            {
+              "title": "暂停进程",
+              "actor": "旧 control",
+              "event": "教学模拟 · pause",
+              "explain": "自动 KeepAlive 停止。",
+              "state": {
+                "租约": "等待到期",
+                "入口": "暂停"
+              },
+              "lines": []
+            },
+            {
+              "title": "租约到期",
+              "actor": "etcd",
+              "event": "教学模拟 · lease expiry",
+              "explain": "删除成员和选举键。",
+              "state": {
+                "租约": "失效",
+                "入口": "不可用"
+              },
+              "lines": []
+            },
+            {
+              "title": "收到迟到回包",
+              "actor": "旧 control",
+              "event": "教学模拟 · keepaliveSucceeded",
+              "explain": "单调时钟已超 TTL；先隔离，回包不能复活旧代。",
+              "state": {
+                "租约": "失效",
+                "入口": "503，旧代失效"
+              },
+              "lines": []
+            },
+            {
+              "title": "停止业务",
+              "actor": "ActiveService",
+              "event": "教学模拟 · stop",
+              "explain": "同步停止派发，随后关闭 worker 与用户进程池。",
+              "state": {
+                "租约": "需重新申请",
+                "入口": "503"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "旧 control 解冻后收到之前的 KeepAlive 成功回包，应该怎么处理？",
+        "options": [
+          "直接恢复旧代",
+          "核对单调时钟与代次，超时则保持隔离",
+          "仅检查进程 PID"
+        ],
+        "answer": 1,
+        "explanation": "成功回包可能迟到；超过 TTL 或代次已经变化时不能重新开放入口。"
+      },
+      "stage": "s16-coordination",
+      "ownership": {
+        "codex": "执行已授权轮次并保存原生历史；不决定集群 control 或数据库任期。",
+        "product": "coordination 管理租约、选举和失权隔离；业务服务推进 PG 任期、核对持久任务并决定就绪。"
+      },
+      "reference": {
+        "session": "s16 设计与源码长文",
+        "url": "/course/handbook.html#module-s16",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 etcd、PostgreSQL 与容器故障另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s16-coordination 执行本节离线实验，检查断言与退出码。",
+        "command": "npm run lesson -- lease",
+        "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+        "observe": [
+          "下方测试报告列出实际通过断言。"
+        ],
+        "relatedExperiments": [
+          {
+            "id": "watch",
+            "title": "断线续读与压缩",
+            "mode": "offline",
+            "question": "Watch 断线后如何不漏成员？",
+            "args": [
+              "--test",
+              "--test-name-pattern=^watch:",
+              "tests/coordination.test.mjs"
+            ],
+            "observations": [
+              "下方测试报告列出实际通过断言。"
+            ],
+            "why": "先快照 R，再从 R+1，压缩后重新快照。",
+            "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+            "catalogId": "watch",
+            "stage": "s16-coordination",
+            "command": "npm run lesson -- watch",
+            "offlineOrIntegration": "offline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s16-election",
+      "title": "当选之后，先确认任期再恢复",
+      "principle": "任期取选举键 create revision；协调写入在 etcd 事务内核验，数据库推进完成后才恢复。",
+      "problem": "收到 elected 事件后，为什么还不能马上让 worker 派发任务？",
+      "change": {
+        "before": "单服务实例直接启动完整业务栈。",
+        "added": "control 选举、create revision 任期与主备恢复顺序。",
+        "kept": "Codex 管理 Thread、Turn 与工具循环；业务事实仍由 PostgreSQL 保存，Redis 负责唤醒。"
+      },
+      "concepts": [
+        {
+          "term": "Election",
+          "meaning": "etcd3 通知 elected，应用读取并确认实际选举键。"
+        },
+        {
+          "term": "任期",
+          "meaning": "选举键的 create revision，键删除或重建使旧任期失效。"
+        },
+        {
+          "term": "guardedPut",
+          "meaning": "在同一 etcd 事务内比较选举键 Create 并执行写入。"
+        }
+      ],
+      "mechanism": "elected 核对候选键值、lease 和 generation，取 create revision 后 confirm。guardedPut 将 Create == ownTerm 与写操作放进同一事务，失败隔离并返回 NOT_CONTROLLER。ActiveService 再确认任期，启动业务时先推进 PG cluster_term，再恢复待核对任务与 queued outbox，完成后才 ready。",
+      "design": {
+        "decision": "当选、任期确认、PG 推进、恢复和就绪分成顺序明确的门槛。",
+        "reason": "选举结果不能自动阻止另一存储系统接收旧写入；恢复未完成也不能接流量。",
+        "alternative": "先标 ready 再恢复会让新请求与未核对任务竞争；先读键再普通 put 存在检查与写入之间的竞态。",
+        "cost": "切换存在不可用窗口；PG 任期推进要等待旧事务结束，依赖故障时不能承诺固定恢复时间。"
+      },
+      "source": {
+        "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+        "needle": "  async elected(campaign, epoch) {",
+        "before": 0,
+        "after": 12,
+        "explanation": "任期取 create_revision；confirm 成功后发 controller。",
+        "start": 174,
+        "anchor": 174,
+        "code": "  async elected(campaign, epoch) {\n    const key = await campaign.getCampaignKey();\n    const { kvs } = await this.client.get(key).exec();\n    if (epoch !== this.generation || this.candidate !== campaign || !this.checkLease()) return;\n    const kv = kvs[0];\n    if (!kv || kv.value.toString() !== this.nodeId || kv.lease !== await this.lease.grant()) throw notController();\n    if (epoch !== this.generation || this.candidate !== campaign || !this.checkLease()) return;\n    this.electionKey = key; this.ownTerm = kv.create_revision; this.controller = true;\n    await this.confirm();\n    if (epoch !== this.generation) return;\n    this.record('elected', { nodeId: this.nodeId, term: this.ownTerm });\n    this.emit('controller', this.ownTerm);\n  }",
+        "hash": "ab8b739b696fe68a7618038d6aad337d67665270017153ba3c4ed95b0a7a3a2d"
+      },
+      "sources": [
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+          "needle": "  async guardedPut(key, value) {",
+          "before": 0,
+          "after": 8,
+          "explanation": "比较选举键和写操作属于同一 etcd 事务。",
+          "start": 195,
+          "anchor": 195,
+          "code": "  async guardedPut(key, value) {\n    this.assertController();\n    const epoch = this.generation;\n    const result = await this.client.if(this.electionKey, 'Create', '==', this.ownTerm)\n      .then(this.client.put(key).value(typeof value === 'string' ? value : JSON.stringify(value))).commit();\n    if (epoch !== this.generation) throw notController();\n    if (!result.succeeded) { this.isolate('stale-term'); throw notController(); }\n    this.assertController();\n  }",
+          "hash": "ab8b739b696fe68a7618038d6aad337d67665270017153ba3c4ed95b0a7a3a2d"
+        },
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/fence.mjs",
+          "needle": "export async function advanceTerm(pool, generation) {",
+          "before": 0,
+          "after": 10,
+          "explanation": "推进数据库任期失败不能继续启动业务。",
+          "start": 4,
+          "anchor": 4,
+          "code": "export async function advanceTerm(pool, generation) {\n  assertTerm(generation);\n  const origin = new Error('推进数据库任期调用栈');\n  try {\n    await pool.query('SELECT agent_data.advance_cluster_term($1::bigint)', [generation.term]);\n    generation.assert();\n  } catch (error) {\n    termFailure(error, generation, origin, 'SELECT agent_data.advance_cluster_term');\n    throw error;\n  }\n}",
+          "hash": "a1e784152c49b292c672f8b5b7d338a06b4afb90211263ef4675b9940a476b19"
+        },
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/service.mjs",
+          "needle": "  async activate(term, activationId) {",
+          "before": 0,
+          "after": 17,
+          "explanation": "业务启动、再次确认和写入集群信息均通过后才 ready。",
+          "start": 14,
+          "anchor": 14,
+          "code": "  async activate(term, activationId) {\n    const c = this.coordination;\n    if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;\n    await c.confirm();\n    if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;\n    const generation = { active: true, term, log: this.log,\n      isolate: reason => { if (generation.active) c.isolate(reason); },\n      assert: () => { if (!generation.active || !c.isController() || c.term() !== term) throw notController(); } };\n    this.generation = generation;\n    try {\n      const app = await this.start(generation);\n      this.app = app;\n      generation.assert();\n      await c.confirm();\n      await c.writeInfo();\n      generation.assert(); this.ready = true;\n    } catch (error) {\n      generation.active = false; this.ready = false;",
+          "hash": "85842baac1e8605605bd98c25ac8a0eeaaa6c2594fe4d727f0e0724eb0044906"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "kill 后新 control 接任",
+          "steps": [
+            {
+              "title": "旧节点退出",
+              "actor": "运维",
+              "event": "教学模拟 · docker kill",
+              "explain": "没有正常 revoke 时等待 lease 到期。",
+              "state": {
+                "control": "无可用入口",
+                "任期": "旧值"
+              },
+              "lines": []
+            },
+            {
+              "title": "新候选当选",
+              "actor": "etcd3",
+              "event": "教学模拟 · elected",
+              "explain": "取选举键 create revision 并确认。",
+              "state": {
+                "control": "新节点，未就绪",
+                "任期": "新值待推进"
+              },
+              "lines": []
+            },
+            {
+              "title": "推进并恢复",
+              "actor": "新 control",
+              "event": "教学模拟 · advanceTerm / recover",
+              "explain": "先更新 PG 任期；执行中待核对，queued 经 outbox 唤醒。",
+              "state": {
+                "control": "恢复中",
+                "任期": "PG 已推进"
+              },
+              "lines": []
+            },
+            {
+              "title": "开放入口",
+              "actor": "Caddy",
+              "event": "教学模拟 · /ready",
+              "explain": "恢复完成才转发。",
+              "state": {
+                "control": "新节点可服务",
+                "任期": "新值"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "旧选举键已经消失",
+          "steps": [
+            {
+              "title": "尝试协调写入",
+              "actor": "旧 control",
+              "event": "教学模拟 · guardedPut",
+              "explain": "仍携带旧 ownTerm。",
+              "state": {
+                "事务": "待比较",
+                "节点": "旧代"
+              },
+              "lines": []
+            },
+            {
+              "title": "比较失败",
+              "actor": "etcd",
+              "event": "教学模拟 · Create == term",
+              "explain": "旧键删除或重建，事务不执行 put。",
+              "state": {
+                "事务": "拒绝",
+                "节点": "旧代"
+              },
+              "lines": []
+            },
+            {
+              "title": "立即隔离",
+              "actor": "旧 control",
+              "event": "教学模拟 · isolate",
+              "explain": "返回 409 NOT_CONTROLLER，不再继续服务。",
+              "state": {
+                "事务": "NOT_CONTROLLER",
+                "节点": "隔离"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "新 control 当选后，哪个顺序才允许开放 /ready？",
+        "options": [
+          "先 ready，再慢慢恢复任务",
+          "确认任期 → 推进 PG 任期 → 恢复 → ready",
+          "只要容器 /health 是 200 就可以"
+        ],
+        "answer": 1,
+        "explanation": "/health 表示进程存活；/ready 还要求有效 control、业务恢复和依赖检查通过。"
+      },
+      "stage": "s16-coordination",
+      "ownership": {
+        "codex": "执行已授权轮次并保存原生历史；不决定集群 control 或数据库任期。",
+        "product": "coordination 管理租约、选举和失权隔离；业务服务推进 PG 任期、核对持久任务并决定就绪。"
+      },
+      "reference": {
+        "session": "s16 设计与源码长文",
+        "url": "/course/handbook.html#module-s16",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 etcd、PostgreSQL 与容器故障另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s16-coordination 执行本节离线实验，检查断言与退出码。",
+        "command": "npm run lesson -- election",
+        "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+        "observe": [
+          "下方测试报告列出实际通过断言。"
+        ],
+        "relatedExperiments": [
+          {
+            "id": "service",
+            "title": "主备恢复",
+            "mode": "offline",
+            "question": "热备何时可以运行 worker？",
+            "args": [
+              "--test",
+              "--test-name-pattern=^service:",
+              "tests/coordination.test.mjs"
+            ],
+            "observations": [
+              "下方测试报告列出实际通过断言。"
+            ],
+            "why": "确认任期并恢复数据后才就绪；失权立即停止派发。",
+            "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+            "catalogId": "service",
+            "stage": "s16-coordination",
+            "command": "npm run lesson -- service",
+            "offlineOrIntegration": "offline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s16-fencing",
+      "title": "旧任期写入在数据库被拒绝",
+      "principle": "事务设置 app.term，触发器锁定并核对 cluster_term；CT001 使旧代立即隔离。",
+      "problem": "旧 control 假死后醒来，即使尝试写 PostgreSQL，谁来拒绝它？",
+      "change": {
+        "before": "业务 SQL 依靠当前服务的执行边界。",
+        "added": "数据库任期触发器、CT001 隔离与新 lease 重入。",
+        "kept": "Codex 管理 Thread、Turn 与工具循环；业务事实仍由 PostgreSQL 保存，Redis 负责唤醒。"
+      },
+      "concepts": [
+        {
+          "term": "cluster_term",
+          "meaning": "PG 内的当前任期，只能单调推进。"
+        },
+        {
+          "term": "CT001",
+          "meaning": "缺任期或旧任期写入的数据库错误码；收到后隔离。"
+        },
+        {
+          "term": "FOR SHARE",
+          "meaning": "业务事务持有任期行共享锁到结束，任期推进等待旧事务完成。"
+        }
+      ],
+      "mechanism": "fencePool 把独立 SQL 也放进事务，SET LOCAL app.term。015 为业务表建立语句级 BEFORE 触发器，读取并锁住当前任期，不匹配返回 CT001。termFailure 同步隔离；关闭旧业务、确认用户进程退出后，Rejoin 用新 lease 注册、Watch、campaign，失败按 2–30 秒退避。",
+      "design": {
+        "decision": "数据库执行写入时自行核对任期，进程内 generation 再拦截迟到回调。",
+        "reason": "进程会暂停，网络会分区，单靠本地布尔值不能保护共享数据库。",
+        "alternative": "只在 HTTP 入口检查不能覆盖后台任务；只允许 SET app.maintenance 会给节点绕过触发器的机会。",
+        "cost": "PG、etcd、外部工具和文件没有跨系统事务；旧事务推进前已经完成的动作不可撤销，共享卷写入不受 SQL 触发器保护。"
+      },
+      "source": {
+        "file": "stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql",
+        "needle": "  supplied := current_setting('app.term', true);",
+        "before": 0,
+        "after": 7,
+        "explanation": "锁定当前任期后核对事务任期，缺失或过期抛 CT001。",
+        "start": 37,
+        "anchor": 37,
+        "code": "  supplied := current_setting('app.term', true);\n  -- Hold a shared row lock until COMMIT: an old transaction cannot commit after promotion.\n  actual := agent_data.locked_cluster_term();\n  IF supplied IS NULL OR supplied = '' OR actual IS NULL OR supplied <> actual::text THEN\n    RAISE EXCEPTION 'missing or stale cluster term' USING ERRCODE='CT001';\n  END IF;\n  RETURN NULL;\nEND $$;",
+        "hash": "d4a8559d58d3880eaab9d83dc2114a28991a6af014c80f28c1adca6d46dc64bf"
+      },
+      "sources": [
+        {
+          "file": "stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql",
+          "needle": "DO $$ DECLARE tab record; BEGIN",
+          "before": 0,
+          "after": 5,
+          "explanation": "为 agent_data 业务表建立 BEFORE 语句级触发器，排除 migrations 与 cluster_term。",
+          "start": 45,
+          "anchor": 45,
+          "code": "DO $$ DECLARE tab record; BEGIN\n  FOR tab IN SELECT tablename FROM pg_tables WHERE schemaname='agent_data'\n    AND tablename NOT IN ('migrations','cluster_term') LOOP\n    EXECUTE format('CREATE TRIGGER cluster_term_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_cluster_term()', tab.tablename);\n  END LOOP;\nEND $$;",
+          "hash": "d4a8559d58d3880eaab9d83dc2114a28991a6af014c80f28c1adca6d46dc64bf"
+        },
+        {
+          "file": "stages/s16-coordination/server/modules/data/write.mjs",
+          "needle": "export function termFailure(error, generation, origin, statement) {",
+          "before": 0,
+          "after": 9,
+          "explanation": "CT001 的诊断不能阻止 finally 中的隔离。",
+          "start": 20,
+          "anchor": 20,
+          "code": "export function termFailure(error, generation, origin, statement) {\n  if (error.code !== 'CT001' || error.termDiagnostic) return;\n  let current = true;\n  try { generation.assert(); } catch { current = false; }\n  const diagnostic = current ? '任期过期或漏传任期' : '任期已失效';\n  error.termDiagnostic = { diagnostic, term: generation.term, stack: origin.stack, statement };\n  try { (generation.log || console.error)(`[CT001] ${diagnostic}; term=${generation.term}; ${statement}\\n${origin.stack}`); }\n  catch { /* Logging must not replace CT001 or prevent isolation. */ }\n  finally { generation.isolate?.('database-stale-term'); }\n}",
+          "hash": "2c0ecc3e0f159cc56ab250c4e08936b741cf85a40d3093435016e26b564a4278"
+        },
+        {
+          "file": "stages/s16-coordination/server/modules/coordination/rejoin.mjs",
+          "needle": "  async recover() {",
+          "before": 0,
+          "after": 20,
+          "explanation": "先 stop 和 leaveGeneration，再以新租约加入和竞选。",
+          "start": 15,
+          "anchor": 15,
+          "code": "  async recover() {\n    const c = this.coordination;\n    let backoff = 2000;\n    while (!this.closed && !c.closed) {\n      try {\n        await this.service.stop();\n        if (this.closed || c.closed) return;\n        await c.leaveGeneration();\n        if (this.closed || c.closed) return;\n        await c.join();\n        await c.watchMembers();\n        if (this.closed || c.closed) return;\n        c.campaign();\n        if (!c.checkLease()) throw new Error('campaign lost lease');\n        c.record('rejoined'); return;\n      } catch {\n        c.isolate('rejoin-failed');\n        if (this.closed || c.closed) return;\n        c.record('rejoin-retry', { delayMs: backoff });\n        await this.sleep(backoff);\n        backoff = Math.min(30000, backoff * 2);",
+          "hash": "837c93fe69419abbc0ad3ae6009bd8822f9e052e9171959e8c462a4b32775877"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "有效任期提交",
+          "steps": [
+            {
+              "title": "携带任期",
+              "actor": "业务连接",
+              "event": "教学模拟 · SET LOCAL app.term",
+              "explain": "每个事务捕获本代任期。",
+              "state": {
+                "任期": "新值",
+                "写入": "待核对"
+              },
+              "lines": []
+            },
+            {
+              "title": "锁行核对",
+              "actor": "PostgreSQL",
+              "event": "教学模拟 · require_cluster_term",
+              "explain": "共享锁持续到事务结束，确认任期一致。",
+              "state": {
+                "任期": "一致",
+                "写入": "允许"
+              },
+              "lines": []
+            },
+            {
+              "title": "完成提交",
+              "actor": "PostgreSQL",
+              "event": "教学模拟 · COMMIT",
+              "explain": "释放共享锁。",
+              "state": {
+                "任期": "新值",
+                "写入": "已提交"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "旧 control 醒来后重新加入",
+          "steps": [
+            {
+              "title": "旧代尝试写入",
+              "actor": "旧 control",
+              "event": "教学模拟 · SQL",
+              "explain": "教学推演数据库最后一道保护；正常入口也会先检查时钟。",
+              "state": {
+                "节点": "旧代",
+                "写入": "旧任期"
+              },
+              "lines": []
+            },
+            {
+              "title": "拒绝写入",
+              "actor": "PostgreSQL",
+              "event": "教学模拟 · CT001",
+              "explain": "当前 cluster_term 已推进，旧值不匹配。",
+              "state": {
+                "节点": "待隔离",
+                "写入": "CT001"
+              },
+              "lines": []
+            },
+            {
+              "title": "同步隔离",
+              "actor": "旧 control",
+              "event": "教学模拟 · termFailure",
+              "explain": "关闭接收与派发，再等待旧用户进程退出。",
+              "state": {
+                "节点": "隔离，ready=503",
+                "写入": "拒绝"
+              },
+              "lines": []
+            },
+            {
+              "title": "新租约加入",
+              "actor": "Rejoin",
+              "event": "教学模拟 · join / Watch / campaign",
+              "explain": "不复用旧任期；重新加入不代表已当选或就绪。",
+              "state": {
+                "节点": "新 lease 热备",
+                "写入": "等待当选与恢复"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "新任期已经推进，旧 control 的 SQL 携带旧 app.term，应得到什么结果？",
+        "options": [
+          "继续提交，因为连接还活着",
+          "CT001 拒绝写入，并触发自我隔离",
+          "自动改为新任期后重试"
+        ],
+        "answer": 1,
+        "explanation": "不能把旧任务冒充为新任期；需要隔离旧代，关闭后重新加入，执行中的任务待核对而非自动重发。"
+      },
+      "stage": "s16-coordination",
+      "ownership": {
+        "codex": "执行已授权轮次并保存原生历史；不决定集群 control 或数据库任期。",
+        "product": "coordination 管理租约、选举和失权隔离；业务服务推进 PG 任期、核对持久任务并决定就绪。"
+      },
+      "reference": {
+        "session": "s16 设计与源码长文",
+        "url": "/course/handbook.html#module-s16",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 etcd、PostgreSQL 与容器故障另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s16-coordination 执行本节离线实验，检查断言与退出码。",
+        "command": "npm run lesson -- fencing",
+        "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+        "observe": [
+          "下方测试报告列出实际通过断言。"
+        ],
+        "relatedExperiments": [
+          {
+            "id": "isolation",
+            "title": "自我隔离与迟到结果",
+            "mode": "offline",
+            "question": "失权时怎样停止入口和结果写入？",
+            "args": [
+              "--test",
+              "--test-name-pattern=^isolation:",
+              "tests/coordination.test.mjs"
+            ],
+            "observations": [
+              "下方测试报告列出实际通过断言。"
+            ],
+            "why": "先同步封闭代次，再清理待核对任务和进程池。",
+            "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。",
+            "catalogId": "isolation",
+            "stage": "s16-coordination",
+            "command": "npm run lesson -- isolation",
             "offlineOrIntegration": "offline"
           }
         ]

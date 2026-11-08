@@ -1,0 +1,22 @@
+{
+  "stage": 16,
+  "name": "协调面",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    "node_modules",
+    ".data",
+    ".runs",
+    "workspace (runtime root only)",
+    ".env",
+    "backups"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "保留版本化 examples/*/workspace。",
+    "只增加 coordination 单元与 etcd3 依赖。",
+    "主备服务；共享目录仅用于单机模拟。"
+  ]
+}

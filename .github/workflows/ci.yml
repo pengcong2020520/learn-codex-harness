@@ -37,6 +37,7 @@ jobs:
           - stages/s13-auth
           - stages/s14-isolation
           - stages/s15-hub
+          - stages/s16-coordination
           - app
     defaults:
       run:

@@ -96,6 +96,6 @@ sequenceDiagram
 
 离线测试覆盖策略内核、真实业务方法和调度器，通过测试夹具驱动；它不证明 PostgreSQL 触发器或 uid capability。外部 PG 测试真实执行重复迁移、21 个并发授权争夺 20 个名额、审批、scope 以及审计 UPDATE/DELETE/TRUNCATE 拒绝。Linux uid 测试执行真正的文件辅助进程与跨用户读取拒绝；服务器步骤验证 HTTP、运行中轮次与下一轮权限。
 
-授权只针对指定用户，没有组织、小组、支付、Skill 市场或多主机。数据库与文件系统没有分布式事务；失败由报错、可重试对账与下一轮前核验收敛。已经送进模型上下文的资料不会被远程抹除。下一章的主题是 s16 多主机调度。
+授权只针对指定用户，没有组织、小组、支付、Skill 市场或多主机。数据库与文件系统没有分布式事务；失败由报错、可重试对账与下一轮前核验收敛。已经送进模型上下文的资料不会被远程抹除。下一章的主题是 [s16 协调面](../../s16-coordination/README.md)。
 
 `tests/user-knowledge.test.mjs` 覆盖自建目录/所有者、冲突、basic/pro/admin 数量与并发、动态挂载和 workflow、分享只读、执行中删除拒绝及清理、publish 清单、导入和建目录的父路径替换。`npm run test:data` 中的 `hub-share.integration.mjs` 经真实 PG/HTTP 验证普通用户 Bob 自建 → 导入 → 分享 → Carol 读取 → Dave 404，并检查三个并发创建争夺 basic 剩余一个名额及删除结果。测试双的事务锁不代替真实 PG 验证。

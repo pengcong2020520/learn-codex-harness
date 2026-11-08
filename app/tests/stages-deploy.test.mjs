@@ -57,11 +57,11 @@ test('阶段环境：固定端口、白名单、数据库及 Redis 隔离、密�
   assert.throws(() => stageEnvironment('s03', { ...deployment, AGENT_GATEWAY_KEY: '' }));
 });
 
-// s12–s15 自带独立 Compose 与数据卷，不进入共享 stages 容器。
-for (const id of ['s12', 's13', 's14', 's15']) test(`${id} 自带完整部署，显式排除共享 stages 容器`, () => {
+// s12–s16 自带独立 Compose 与数据卷，不进入共享 stages 容器。
+for (const id of ['s12', 's13', 's14', 's15', 's16']) test(`${id} 自带完整部署，显式排除共享 stages 容器`, () => {
   assert.ok(!STAGE_DEFINITIONS.some(stage => stage.id === id));
   for (const relative of ['compose.yaml', 'deploy/run-stages.mjs', 'deploy/stages.Dockerfile', 'deploy/stages.Dockerfile.dockerignore', 'deploy/server-setup.sh']) {
-    assert.doesNotMatch(fs.readFileSync(path.join(app, relative), 'utf8'), new RegExp({ s12: 's12-deploy', s13: 's13-auth', s14: 's14-isolation', s15: 's15-hub' }[id]));
+    assert.doesNotMatch(fs.readFileSync(path.join(app, relative), 'utf8'), new RegExp({ s12: 's12-deploy', s13: 's13-auth', s14: 's14-isolation', s15: 's15-hub', s16: 's16-coordination' }[id]));
   }
   assert.throws(() => selectStages(id));
 });
@@ -241,8 +241,8 @@ test('健康检查使用连接文件令牌并识别缺失、退化、错端口�
   assert.equal(count, 0);
 });
 
-// s12–s15 自带完整 Compose 部署，不进入共享 stages 容器或其上传包。
-const blocked = ['stages/s15-hub/server/main.mjs', 'stages/s14-isolation/server/main.mjs', 'stages/s13-auth/server/main.mjs', 'stages/s12-deploy/server/main.mjs', 'app/.env', 'app/.env.production', 'app/node_modules/x', 'app/.data/auth.json',
+// s12–s16 自带完整 Compose 部署，不进入共享 stages 容器或其上传包。
+const blocked = ['stages/s16-coordination/server/main.mjs', 'stages/s15-hub/server/main.mjs', 'stages/s14-isolation/server/main.mjs', 'stages/s13-auth/server/main.mjs', 'stages/s12-deploy/server/main.mjs', 'app/.env', 'app/.env.production', 'app/node_modules/x', 'app/.data/auth.json',
   'stages/s03-service/.env', 'stages/s03-service/.data/connection.json', 'stages/s04-events-messages/.runs/log',
   'stages/s08-data-layer/workspace/private.txt', 'stages/s11-model-gateway/node_modules/pg/index.js',
   'stages/s03-service/key.pem', 'stages/s03-service/.npmrc', 'stages/s03-service/.aws/credentials',

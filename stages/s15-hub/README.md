@@ -174,6 +174,6 @@ export function effectiveTools(user, agent, groups) {
 
 Hub 统一回答资源能否看、用、改和分享，运行环境继续隔离用户的进程与原生状态。权限变化在下一轮执行前落实，用量按 owner 归集，审计保存每次管理决定。
 
-下一章：s16 多主机调度。
+下一章：[s16 协调面](../s16-coordination/README.md)。
 
 离线验证在本阶段目录执行 `npm test`。`npm run test:data` 启动临时 PostgreSQL、Redis，运行 data、knowledge 与 hub-share 集成测试；需要本机可监听端口、`initdb`、`pg_ctl`、`redis-server` 和既有 Codex CLI。hub-share 使用普通用户 Bob 经 HTTP 自建库、导入并生成 Wiki、分享给 Carol，核对 Carol 读取成功、写入 403、Dave 404、撤权后下一轮拒绝，以及并发额度和删除清理。模型响应由本地 fixture 提供，不调用真实模型；`npm run test:rag` 另需 Chroma。

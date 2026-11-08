@@ -22,6 +22,7 @@ export const packages = [
   "stages/s13-auth",
   "stages/s14-isolation",
   "stages/s15-hub",
+  "stages/s16-coordination",
   "app",
 ];
 // 只包含不调用真实模型、不依赖 PostgreSQL / Redis 的检查；集成验证见 stages/README.md。

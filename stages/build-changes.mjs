@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirs, stageNo, stages, stageModules } from "./build-architecture.mjs";
 
-// dirs 包含独立部署 s12–s15；相邻快照继续生成 s14 → s15 增量，不代表容器清单。
+// dirs 包含独立部署 s12–s16；相邻快照继续生成 s15 → s16 增量，不代表容器清单。
 const root = path.dirname(fileURLToPath(import.meta.url));
 const read = (dir, f) => fs.readFileSync(path.join(root, dir, f), "utf8");
 
@@ -18,7 +18,7 @@ const extract = {
     const f = "server/modules/http/index.mjs";
     if (!fs.existsSync(path.join(root, dir, f))) return [];
     // Hub 把自己的入口放在独立路由模块，仍属于本阶段新增接口。
-    const source = [f, "server/modules/hub/routes.mjs"]
+    const source = [f, "server/modules/hub/routes.mjs", "server/modules/coordination/node.mjs"]
       .filter(file => fs.existsSync(path.join(root, dir, file))).map(file => read(dir, file)).join("\n");
     // s12 的公开健康接口在鉴权前按 method + pathname 分支处理。
     return [...source.matchAll(/route === ["']([A-Z]+ \/[^"']*)["']/g)].map(m => m[1])

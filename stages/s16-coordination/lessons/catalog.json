@@ -1,0 +1,98 @@
+[
+  {
+    "id": "lease",
+    "title": "租约过期与 Watch 删除",
+    "mode": "offline",
+    "question": "节点消失怎样传到其他成员？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^lease:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "注册键绑定 lease，删除来自 etcd。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  },
+  {
+    "id": "watch",
+    "title": "断线续读与压缩",
+    "mode": "offline",
+    "question": "Watch 断线后如何不漏成员？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^watch:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "先快照 R，再从 R+1，压缩后重新快照。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  },
+  {
+    "id": "election",
+    "title": "选举与任期",
+    "mode": "offline",
+    "question": "谁来决定 control 与任期？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^election:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "etcd3 elected 事件决定当选，选举键 create revision 是任期。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  },
+  {
+    "id": "fencing",
+    "title": "旧任期拒写",
+    "mode": "offline",
+    "question": "旧 control 醒来能覆盖新信息吗？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^fencing:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "事务检查选举键 create revision，旧键删除或重建均拒绝。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  },
+  {
+    "id": "isolation",
+    "title": "自我隔离与迟到结果",
+    "mode": "offline",
+    "question": "失权时怎样停止入口和结果写入？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^isolation:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "先同步封闭代次，再清理待核对任务和进程池。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  },
+  {
+    "id": "service",
+    "title": "主备恢复",
+    "mode": "offline",
+    "question": "热备何时可以运行 worker？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^service:",
+      "tests/coordination.test.mjs"
+    ],
+    "observations": [
+      "下方测试报告列出实际通过断言。"
+    ],
+    "why": "确认任期并恢复数据后才就绪；失权立即停止派发。",
+    "boundary": "注入 etcd3 接口替身，无端口与外部服务；真实选举与到期需要 coordination.integration.mjs。"
+  }
+]

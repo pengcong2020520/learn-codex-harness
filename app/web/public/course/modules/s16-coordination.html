@@ -1,0 +1,214 @@
+<section class="module" id="module-s16">
+<div class="module-content">
+<header class="module-header animate-in">
+<span class="module-number">s16</span>
+<h2 class="module-title">协调面：谁还活着，谁有权写入</h2>
+<p class="module-subtitle">成员由租约定义，control 由 Election 决定；用任期保护协调信息和业务写入，恢复完成后才接收流量。</p>
+</header><div class="module-body">
+<section class="screen animate-in" id="s16-screen-1"><h2 class="screen-heading">从一个服务到三个节点：先回答谁可以服务</h2>
+<p>用户隔离和 Hub 已经回答了某个请求属于谁、能用哪些资源。现在同一套业务放进三个节点，新的问题是：哪个节点可以接收任务，哪个节点应该等待？旧 control 暂停十几秒后又醒来，进程还在、连接还在、内存里还记着自己当选过，这些都不能证明它仍有权派发和写入。这个判断必须有一份所有节点共同认可的依据。</p>
+<figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1640" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
+<p>本章的变化可以用一句话说明：节点是否存活变成租约是否过期。<span class="term" data-definition="etcd 为成员分配的有期限凭据；绑定键随租约失效而删除。进程存在不等于租约有效。">lease</span> 把成员资格交给 etcd。<span class="term" data-definition="当前被 Election 选出并经过任期确认的控制节点；只有完成数据库任期推进和业务恢复后才接收流量。">control</span> 负责完整业务栈，另外两个节点保留协调能力和接任资格。本章尚无用户分片，因此采用一个 control 加两个热备。</p>
+<table><thead><tr><th>单元</th><th>负责的事实或动作</th><th>不能替代什么</th></tr></thead><tbody><tr><td>etcd</td><td>保存 /codex/ 下的成员、选举与协调元数据。</td><td>不保存业务会话、任务与产物正文。</td></tr><tr><td>coordination</td><td>租约、Watch、Election、任期事务、失权隔离和集群状态。</td><td>不能单靠本地状态保护外部数据库。</td></tr><tr><td>PostgreSQL / Redis</td><td>PG 保存业务事实及任期；Redis 唤醒持久队列。</td><td>Redis 唤醒不是任务已完成的证据。</td></tr><tr><td>ActiveService / runtimes</td><td>当选后启动业务，失权后停派并关闭用户进程。</td><td>关闭过程不能撤销已经发生的外部副作用。</td></tr><tr><td>Caddy</td><td>探测 /ready，只转发到完成恢复的 control。</td><td>健康缓存不能替代节点入口自己的任期检查。</td></tr><tr><td>Codex</td><td>复用 Thread，执行 Turn 与工具循环。</td><td>不负责选举、租约或 PostgreSQL 写入授权。</td></tr></tbody></table>
+<p>三个容器在本章共享 .data、workspace、.runs 和 backups，仅用于单机模拟。每用户 uid、独立 Codex 进程、CODEX_HOME 和 Hub 授权继续生效，但三个容器不等于三个独立故障域。数据库、Redis、模型网关和 etcd 本身仍为单实例，控制节点可接任不代表所有依赖都高可用。</p>
+<p>入口端口为 4334，后端 node-a、node-b、node-c 分别使用 4340、4341、4342。节点地址使用 Compose 服务名，etcd 不发布宿主端口。工作台只展示本章课程和独立部署说明；实际体验保持 remote.sh tunnel 运行，在阶段目录登录 CLI。登录后的 admin 可调用 GET /cluster，普通用户不能借此查询完整集群状态。</p>
+<p>理解这张图时先跟着状态走：节点加入只是成员资格，当选才产生 control 任期，确认任期只是开始，推进数据库任期并完成恢复以后才就绪。每一步都能失败，失败就停在对应边界，不能把后一步的成功状态提前写给用户。</p>
+</section>
+<section class="screen animate-in" id="s16-screen-2"><h2 class="screen-heading">成员注册与 Watch：不要用一次 ping 判断权利</h2>
+<p>join 创建固定 TTL 10 秒的租约。etcd3 自动按 TTL/3 续约，应用监听 lost、keepaliveSucceeded 和 keepaliveFailed，不另外实现一套 KeepAlive 定时 RPC。成员键与选举键共享同一 lease：到期时两个键一起消失，正常退出则主动撤销。节点进程被 kill 后没有机会做清理，成员信息仍会在租约到期后被 etcd 删除。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 24–45 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="24" data-end="45">  async join() {
+    if (this.closed || this.alive) throw new Error(&#39;节点已关闭或已经加入。&#39;);
+    const epoch = ++this.generation;
+    const lease = this.client.lease(TTL); // automatic KeepAlive, TTL/3, owned by etcd3
+    this.lease = lease;
+    lease.on(&#39;lost&#39;, () =&gt; { if (this.generation === epoch &amp;&amp; this.lease === lease) this.isolate(&#39;lease-lost&#39;); });
+    lease.on(&#39;keepaliveSucceeded&#39;, () =&gt; {
+      if (this.generation !== epoch || this.lease !== lease) return;
+      // A delayed reply after a process pause must never revive the old generation.
+      if (this.alive &amp;&amp; this.now() - this.lastKeepAlive &gt;= TTL * 1000) this.isolate(&#39;keepalive-timeout&#39;);
+      if (this.alive &amp;&amp; this.lease === lease) { this.lastKeepAlive = this.now(); this.armDeadline(); }
+    });
+    lease.on(&#39;keepaliveFailed&#39;, () =&gt; { if (this.generation === epoch) this.checkLease(); });
+    await lease.grant();
+    if (epoch !== this.generation || lease.revoked() || this.closed) throw notController();
+    this.lastKeepAlive = this.now(); this.alive = true;
+    this.armDeadline();
+    const member = { nodeId: this.nodeId, address: this.address, revision: this.revision,
+      agentHash: this.agentHash, capacity: this.capacity, joinedAt: this.clock() };
+    await lease.put(MEMBERS + this.nodeId).value(JSON.stringify(member));
+    if (epoch !== this.generation || !this.checkLease()) throw notController();
+    this.record(&#39;joined&#39;, { nodeId: this.nodeId });</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>租约事件带 generation 校验；注册键经 lease.put 写入。</p></div></div>
+<p>每次 join 都增加 generation，并把它捕获为 epoch。租约事件只处理当前 lease、当前 epoch 的通知。这个限制很具体：旧租约发出的 lost 不能关闭后来加入的新代；旧租约迟到的成功回包也不能替新代续命。注册成功以后记录 joined，成员内容包含节点地址、REVISION、Agent 定义与指令哈希、容量和加入时间。</p>
+<p>成功回包到达时还要检查单调时钟。进程被暂停以后，定时器、网络回调都可能一起排队，解冻时先运行哪个回调并不可靠。如果距离上次成功 KeepAlive 已经超过 TTL，就先隔离，再考虑是否能更新时间。这样不能靠一条迟到回包把失效的控制权恢复回来；HTTP 入口和业务回调也会检查这个条件，不只依赖定时器。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 89–99 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="89" data-end="99">  async watchMembers() {
+    const epoch = this.generation;
+    this.memberEvents = []; this.memberRevision = &#39;0&#39;;
+    await this.refreshMembers(epoch);
+    if (epoch !== this.generation || this.closed) return;
+    this.attachWatch(epoch);
+    clearInterval(this.reconcileTimer);
+    this.reconcileTimer = setInterval(() =&gt; {
+      if (epoch === this.generation) void this.reconcile().catch(() =&gt; { if (epoch === this.generation) this.record(&#39;reconcile-failed&#39;); });
+    }, 5000);
+    this.reconcileTimer.unref?.();</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先快照再 Watch，每 5 秒对账。</p></div></div>
+<p>Watch 先整前缀读取快照并记住 revision R，然后从 R+1 观察变化。读取快照期间也可能已经收到更新，因此实现会保留快照之后的事件，再把这个后缀应用到整表替换的缓存上，避免成员状态倒退。revision 以字符串保存，用 BigInt 做加一和比较，不把长整数塞进可能丢精度的普通 Number。</p>
+<p>连接恢复不是简单地继续相信旧缓存。每次连接或重连后重新整读前缀，每 5 秒再核对成员和当前 control/任期。发现压缩时重建 Watch，既识别 compact_revision 字段，也识别压缩错误文本。坏 JSON 被记录并忽略，不能让某个成员格式错误破坏整个成员列表。</p>
+<table><thead><tr><th>发生什么</th><th>成员视图怎么变化</th><th>观察时应注意</th></tr></thead><tbody><tr><td>正常 join</td><td>lease.put 写入成员键，Watch 得到 Put。</td><td>成员已存在不代表已经当选。</td></tr><tr><td>进程硬退出</td><td>等 lease 到期后收到 Delete。</td><td>TTL 是成员判断条件，不是端到端恢复 SLA。</td></tr><tr><td>正常停机</td><td>先停业务，再 resign / revoke，键主动消失。</td><td>共享 lease 下 resign 本身也可能撤销成员键。</td></tr><tr><td>Watch 断线或压缩</td><td>重读前缀并建立新 Watch，定时对账纠正差异。</td><td>不能用本地未更新缓存认定成员永远在线。</td></tr><tr><td>暂停后迟到成功回包</td><td>单调时钟检查使旧代失效。</td><td>回包成功不保证到达时租约还有效。</td></tr></tbody></table>
+<p>GET /cluster 展示的剩余 TTL 来自 etcd 的 leaseTimeToLive，不用 joinedAt 推算。加入时间只是事实记录，续约已经发生多少次不能由它得出。接口还提供最近 20 条成员、观察、选举和隔离事件，适合理解切换过程，但这个内存缓冲不是持久审计日志，重启后不能用它还原完整历史。</p>
+</section>
+<section class="screen animate-in" id="s16-screen-3"><h2 class="screen-heading">Election 与任期：检查和写入必须是一个事务</h2>
+<p>etcd3 发出 elected 事件后，应用读取 campaign 对应的键，核对键值确实是本节点、lease 是当前成员租约、generation 没有变化。任期只取这条选举键的 create_revision。全局 revision 会随其他写入增长，时间戳也不能表示选举资格，因此两者都不拿来充当任期。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 174–186 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="174" data-end="186">  async elected(campaign, epoch) {
+    const key = await campaign.getCampaignKey();
+    const { kvs } = await this.client.get(key).exec();
+    if (epoch !== this.generation || this.candidate !== campaign || !this.checkLease()) return;
+    const kv = kvs[0];
+    if (!kv || kv.value.toString() !== this.nodeId || kv.lease !== await this.lease.grant()) throw notController();
+    if (epoch !== this.generation || this.candidate !== campaign || !this.checkLease()) return;
+    this.electionKey = key; this.ownTerm = kv.create_revision; this.controller = true;
+    await this.confirm();
+    if (epoch !== this.generation) return;
+    this.record(&#39;elected&#39;, { nodeId: this.nodeId, term: this.ownTerm });
+    this.emit(&#39;controller&#39;, this.ownTerm);
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>任期取 create_revision；confirm 成功后发 controller。</p></div></div>
+<p>elected 先设置候选任期并调用 confirm，通过后才记录当选事件、发出 controller。ActiveService 收到通知后还会再次确认，避免异步启动链排队时控制权已经变化。热备没有完整 PG 业务连接、Redis worker、用户进程与目录维护器，只有当前有效 control 才启动这些组件。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 195–203 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="195" data-end="203">  async guardedPut(key, value) {
+    this.assertController();
+    const epoch = this.generation;
+    const result = await this.client.if(this.electionKey, &#39;Create&#39;, &#39;==&#39;, this.ownTerm)
+      .then(this.client.put(key).value(typeof value === &#39;string&#39; ? value : JSON.stringify(value))).commit();
+    if (epoch !== this.generation) throw notController();
+    if (!result.succeeded) { this.isolate(&#39;stale-term&#39;); throw notController(); }
+    this.assertController();
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>比较选举键和写操作属于同一 etcd 事务。</p></div></div>
+<p>guardedPut 将 Create == ownTerm 与 put 放进同一 etcd 事务。旧选举键删除时比较失败，后来同名键重建也会得到新的 create revision，因此旧任期不能借同一个键名重新获得写权。失败时同步 isolate 并抛 409 NOT_CONTROLLER，写入不会执行。事务返回后再次核对 generation 和控制权，拒绝在等待期间已经失效的异步结果。</p>
+<p>如果先普通 get，再普通 put，读取之后仍可能失权；两条成功响应无法证明中间没有其他节点当选。这里需要事务比较保护真正的写操作。本章以 /codex/cluster/info 演示这个机制，写入成员数、任期与时间。这个 info 键不绑定成员 lease，保留最近一次信息，因此不能把它直接当作当前 control。GET /cluster 会整读选举前缀，用 create revision 最早的候选查询当前控制节点。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/fence.mjs · 第 4–14 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/fence.mjs" data-start="4" data-end="14">export async function advanceTerm(pool, generation) {
+  assertTerm(generation);
+  const origin = new Error(&#39;推进数据库任期调用栈&#39;);
+  try {
+    await pool.query(&#39;SELECT agent_data.advance_cluster_term($1::bigint)&#39;, [generation.term]);
+    generation.assert();
+  } catch (error) {
+    termFailure(error, generation, origin, &#39;SELECT agent_data.advance_cluster_term&#39;);
+    throw error;
+  }
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>推进数据库任期失败不能继续启动业务。</p></div></div>
+<p>etcd 的事务只保护 etcd。PostgreSQL 有自己的任期行 agent_data.cluster_term，新 control 必须调用单调推进函数；推进成功后，旧任期业务 SQL 才会被数据库拒绝。如果数据库中已经存在更高任期，推进返回 CT001，当前节点立即隔离。不能把数据库值降回自己的任期，也不能在推进失败后继续恢复任务。</p>
+<p>主备恢复顺序是：再次确认 etcd 任期，推进 PG 任期，核对持久任务与会话，恢复 queued outbox，再开放派发和就绪。正在执行的轮次标为 unconfirmed，留给人核对历史，不自动重发可能具有副作用的工具。queued 已有持久记录，可以通过 outbox 重新唤醒，这与不确定轮次的处理方式不同。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/service.mjs · 第 14–31 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/service.mjs" data-start="14" data-end="31">  async activate(term, activationId) {
+    const c = this.coordination;
+    if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
+    await c.confirm();
+    if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
+    const generation = { active: true, term, log: this.log,
+      isolate: reason =&gt; { if (generation.active) c.isolate(reason); },
+      assert: () =&gt; { if (!generation.active || !c.isController() || c.term() !== term) throw notController(); } };
+    this.generation = generation;
+    try {
+      const app = await this.start(generation);
+      this.app = app;
+      generation.assert();
+      await c.confirm();
+      await c.writeInfo();
+      generation.assert(); this.ready = true;
+    } catch (error) {
+      generation.active = false; this.ready = false;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>业务启动、再次确认和写入集群信息均通过后才 ready。</p></div></div>
+<p>ActiveService 捕获本次 activationId 和 generation。业务启动完成后还会确认 control、写入集群信息，最后才把 ready 设为 true。启动中失权时，代次门禁会阻止旧启动结果使服务就绪；后续再次当选也不能让旧通知、查询或 COMMIT 回调复活。这个顺序让“曾当选”和“现在可服务”有清楚的区别。</p>
+</section>
+<section class="screen animate-in" id="s16-screen-4"><h2 class="screen-heading">数据库任期保护：旧 control 醒来也不能冒充新代</h2>
+<p>暂停后的旧进程可能保留数据库连接，正在执行的后台任务也不一定经过新的 HTTP 请求。因此 PG 写入边界独立验证任期。连接包装器将每条独立 SQL 也纳入事务，用 SET LOCAL app.term 写入本代任期；显式事务沿用同一个 client 和 term，直到 COMMIT 或 ROLLBACK。只允许本地门禁通过时发出查询和提交，清理需要的回滚、退订与释放连接仍可执行。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/015-cluster-term.sql · 第 37–44 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql" data-start="37" data-end="44">  supplied := current_setting(&#39;app.term&#39;, true);
+  -- Hold a shared row lock until COMMIT: an old transaction cannot commit after promotion.
+  actual := agent_data.locked_cluster_term();
+  IF supplied IS NULL OR supplied = &#39;&#39; OR actual IS NULL OR supplied &lt;&gt; actual::text THEN
+    RAISE EXCEPTION &#39;missing or stale cluster term&#39; USING ERRCODE=&#39;CT001&#39;;
+  END IF;
+  RETURN NULL;
+END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>锁定当前任期后核对事务任期，缺失或过期抛 CT001。</p></div></div>
+<p>触发器读取 app.term，再通过 locked_cluster_term 取得当前任期并持有 FOR SHARE 锁。任期缺失、空字符串或与实际值不同，统一返回 CT001。共享锁保持到事务结束，新任期推进必须等已有旧事务完成，因此新任期推进成功以后不会再出现一个通过旧任期检查的事务迟到提交。推进之前已完成的旧写入仍是已发生的事实，不能把锁解释为撤销历史。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/015-cluster-term.sql · 第 45–50 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql" data-start="45" data-end="50">DO $$ DECLARE tab record; BEGIN
+  FOR tab IN SELECT tablename FROM pg_tables WHERE schemaname=&#39;agent_data&#39;
+    AND tablename NOT IN (&#39;migrations&#39;,&#39;cluster_term&#39;) LOOP
+    EXECUTE format(&#39;CREATE TRIGGER cluster_term_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_cluster_term()&#39;, tab.tablename);
+  END LOOP;
+END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>为 agent_data 业务表建立 BEFORE 语句级触发器，排除 migrations 与 cluster_term。</p></div></div>
+<p>015-cluster-term.sql 为 agent_data 下除 migrations、cluster_term 外的业务表建立 BEFORE INSERT、UPDATE、DELETE 的语句级触发器。业务表是否受保护需要逐一覆盖，后续新增表也必须配置触发器。SQL 触发器作用于数据库写操作，既不是文件权限，也不是对任意外部 API 的事务补偿。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/write.mjs · 第 20–29 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/write.mjs" data-start="20" data-end="29">export function termFailure(error, generation, origin, statement) {
+  if (error.code !== &#39;CT001&#39; || error.termDiagnostic) return;
+  let current = true;
+  try { generation.assert(); } catch { current = false; }
+  const diagnostic = current ? &#39;任期过期或漏传任期&#39; : &#39;任期已失效&#39;;
+  error.termDiagnostic = { diagnostic, term: generation.term, stack: origin.stack, statement };
+  try { (generation.log || console.error)(`[CT001] ${diagnostic}; term=${generation.term}; ${statement}\n${origin.stack}`); }
+  catch { /* Logging must not replace CT001 or prevent isolation. */ }
+  finally { generation.isolate?.(&#39;database-stale-term&#39;); }
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>CT001 的诊断不能阻止 finally 中的隔离。</p></div></div>
+<p>termFailure 看到 CT001 时记录诊断，在 finally 中隔离 generation；即使日志输出失败也不能阻止隔离。这与 etcd guardedPut 的 NOT_CONTROLLER 是不同边界：前者由数据库任期不匹配拒写，后者由选举键比较失败拒写。课程中的第二个泳道专门演示旧 SQL 到达数据库时的保护；正常请求可能更早被单调时钟或入口门禁挡住，并不是每次解冻都会先出现一条 CT001。</p>
+<table><thead><tr><th>边界</th><th>核对内容</th><th>失败效果</th></tr></thead><tbody><tr><td>etcd guardedPut</td><td>选举键 Create 是否等于 ownTerm。</td><td>事务不写，NOT_CONTROLLER，节点隔离。</td></tr><tr><td>PG 业务触发器</td><td>app.term 是否等于锁定的 cluster_term。</td><td>CT001，业务写入失败，节点隔离。</td></tr><tr><td>本地 generation</td><td>当前调用是否仍属于有效业务代次。</td><td>迟到回调、查询与提交被拒绝。</td></tr><tr><td>运维通道</td><td>app.maintenance=on 且 current_user 是超级用户。</td><td>普通节点试图绕过会收到 42501。</td></tr></tbody></table>
+<p>运维不能只靠一个任意连接都能 SET 的变量绕过保护。PostgreSQL 自定义会话变量无法用普通 GRANT 禁止设置，所以触发器同时检查 current_user 的超级用户身份。节点角色没有超级用户、建库、建角色权限，不能直接写 cluster_term 或 migrations；它们只获准调用固定 search_path 的单调推进函数。长期节点仅持有自己的 PG 和 etcd 凭据，账号管理和数据库升级使用一次性运维容器。</p>
+<p>失权时的任务清理同样不能扩大范围。旧代只记录自己实际派发过的任务 ID，且只将仍为 starting、running 或 steering 的任务标记为待核对。若新任期已经推进，旧代清理也可能得到 CT001；随后由新 control 的恢复过程完成核对。旧 control 不能执行全局 recover，误把新 control 刚派发的任务也标为不确定。</p>
+<p>最容易误读的边界是共享文件。docker pause 冻结整个容器，包括用户 Codex 子进程，解冻后它们可能立刻继续写共享卷。PG 触发器能够拒绝旧任期结果记录，却不能撤销文件写入或外部工具副作用。本章明确只做单机共享卷模拟；后续分片、路由与副本工作需要每节点独立磁盘，不能把数据库任期保护当作全部一致性问题已经解决。</p>
+</section>
+<section class="screen animate-in" id="s16-screen-5"><h2 class="screen-heading">自我隔离与重新加入：先关旧代，再拿新租约</h2>
+<p>isolate 的第一步是同步把 alive、controller 清零并增加 generation，停止相关定时器、释放本地 KeepAlive，然后同步发出 lost。这里不等待网络撤销或数据库清理。只要失权已经确定，新的请求、派发和结果回调就必须停止；清理慢不能成为继续接收任务的理由。/ready 立即返回不可用，完整业务栈随后关闭。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 62–70 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="62" data-end="70">  isolate(reason) {
+    if (!this.alive &amp;&amp; !this.controller) return;
+    this.alive = false; this.controller = false; this.generation++;
+    clearInterval(this.reconcileTimer); clearTimeout(this.watchRetry);
+    clearTimeout(this.timer);
+    this.lease?.release(); // no more automatic renewals after local fencing
+    this.record(&#39;isolated&#39;, { nodeId: this.nodeId, reason });
+    this.emit(&#39;lost&#39;, reason); // synchronous admission/result fence before any await
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先清空 alive/controller 并递增代次，同步发出 lost。</p></div></div>
+<p>关闭 worker、数据库连接与用户进程池需要时间，不能在后台尚未关闭时建立新池。Rejoin 只有一条恢复链，先等待 service.stop，确认旧用户进程已退出，再 leaveGeneration、join、watchMembers 和 campaign。任何一步失败就记录重试事件，按 2、4、8、16、30 秒退避，之后保持 30 秒。进程无法确认退出时持续隔离，不冒险启动第二份用户执行环境。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/rejoin.mjs · 第 15–35 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/rejoin.mjs" data-start="15" data-end="35">  async recover() {
+    const c = this.coordination;
+    let backoff = 2000;
+    while (!this.closed &amp;&amp; !c.closed) {
+      try {
+        await this.service.stop();
+        if (this.closed || c.closed) return;
+        await c.leaveGeneration();
+        if (this.closed || c.closed) return;
+        await c.join();
+        await c.watchMembers();
+        if (this.closed || c.closed) return;
+        c.campaign();
+        if (!c.checkLease()) throw new Error(&#39;campaign lost lease&#39;);
+        c.record(&#39;rejoined&#39;); return;
+      } catch {
+        c.isolate(&#39;rejoin-failed&#39;);
+        if (this.closed || c.closed) return;
+        c.record(&#39;rejoin-retry&#39;, { delayMs: backoff });
+        await this.sleep(backoff);
+        backoff = Math.min(30000, backoff * 2);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先 stop 和 leaveGeneration，再以新租约加入和竞选。</p></div></div>
+<p>重新加入意味着新成员 lease、新 generation 与新的竞选过程；它不会沿用旧 ownTerm，也没有自动切回首选节点的规则。如果另一个 control 已经正常服务，重新加入的节点就是热备。只有之后当选、确认任期并完成业务恢复才有机会就绪。一个节点恢复网络，不等于它马上获得接收用户请求的资格。</p>
+<table><thead><tr><th>接口或探测</th><th>热备 / 隔离节点</th><th>有效 control</th></tr></thead><tbody><tr><td>/health</td><td>进程仍活着时返回 200。</td><td>进程存活返回 200。</td></tr><tr><td>/ready</td><td>503；没有恢复好的业务服务。</td><td>先确认 control 与任期，再检查数据库、网关、模型与队列。</td></tr><tr><td>普通业务 HTTP</td><td>入口门禁拒绝，不凭 Caddy 缓存放行。</td><td>本代有效才交给业务 HTTP 处理。</td></tr><tr><td>GET /cluster</td><td>无有效服务时不可用。</td><td>经登录令牌验证，并且要求 admin。</td></tr></tbody></table>
+<p>Compose 容器健康检查使用 /health，因此 docker compose --wait 不会因为两个热备尚未就绪就把部署判断为失败。Caddy 用 health_uri /ready 决定转发，服务内部再独立检查任期，这两层检查各有职责。SSE 不缓冲，旧业务栈关闭时连接断开，客户端重新连接新 control，再用业务快照和持久状态核对进展。</p>
+<p>正常停机的顺序与网络分区不同：先关闭业务栈，防止共享文件并发，再 resign，最后 revoke 和取消 Watch。共享 lease 下 resign 本身可能已经撤销成员键，重复 revoke 保持幂等。分区时撤销请求可能送不到 etcd，因此释放本地 KeepAlive 并等待远端到期，不能把本地发送动作当成远端删除已经完成。</p>
+<p>选举适配还存在明确版本边界。当前锁定 etcd3 1.1.2，借助 Namespace 接口让 Election 使用已授予的成员 lease，依赖 Campaign 构造、grant 和写选举键的调用顺序。它不是稳定公开的 shared-lease API；升级库必须重新跑认证集成测试，核对成员键与选举键确实绑定同一个 lease，不能仅凭离线替身继续证明兼容。</p>
+</section>
+<section class="screen animate-in" id="s16-screen-6"><h2 class="screen-heading">从离线断言到故障实验：分别记录能证明的事实</h2>
+<p>先运行离线实验理解每个边界。测试注入 etcd3 接口替身，显式发送 elected，不自己实现一个假的候选排序算法来证明真实选举。课程的状态卡片与泳道是固定教学推演；可点击不意味着集群真的发生过故障。必须把实际命令退出码、断言和部署观察分别记录。</p>
+<pre class="terminal">npm run lesson -- list
+npm run lesson -- lease
+npm run lesson -- watch
+npm run lesson -- election
+npm run lesson -- fencing
+npm run lesson -- isolation
+npm run lesson -- service</pre>
+<table><thead><tr><th>实验</th><th>离线观察</th><th>需要外部验证的事实</th></tr></thead><tbody><tr><td>lease / watch</td><td>lost、迟到回包、快照、增量和压缩分支。</td><td>etcd 实际到期删除、网络断开与重连行为。</td></tr><tr><td>election / fencing</td><td>当选键核对、create revision 事务失败、旧代回调被拒。</td><td>真实三成员唯一 control、共享 lease 和旧任期事务拒绝。</td></tr><tr><td>isolation / service</td><td>同步关闭入口、迟到结果失效、先恢复再就绪。</td><td>实际容器进程关闭、PG 触发器、Redis worker 与 Linux uid。</td></tr></tbody></table>
+<p>真实 etcd 集成测试必须指向独立空实例，不能复用正在运行的业务集群。先初始化节点账号与角色，再提供测试连接和三个节点独立凭据，执行 npm run test:coordination。测试核对三成员唯一 control、成员键与选举键的 lease ID、撤销后的接任，以及认证账号无法写 /codex/ 之外的前缀。离线实验不能证明这些网络和认证事实。</p>
+<p>npm run test:data 需要 initdb、pg_ctl 和 redis-server，建立并清理独立临时数据库。coordination-pg 验证缺任期或旧任期写入 CT001、普通节点运维绕过返回 42501、新任期可以写入，以及推进必须等待旧事务提交。这组测试直接覆盖数据库锁与权限，不能用一段静态 SQL 摘录代替运行结果。</p>
+<p>容器故障实验前先完成 README 的配置、账号初始化和部署检查。用 cluster status 找到当前 control，再对该节点执行 kill 或 pause；不要固定认定 node-a 永远是主节点。kill 后等待旧 lease 到期，观察新 control、任期、ready 与对话恢复。pause 超过 TTL 再解冻时，观察旧代隔离、拒写与重新加入。restart: unless-stopped 可能自动重启节点，必须比较 lease 和 term，区分新进程加入与旧任期继续服务。</p>
+<p>网络分区实验同样先确认当前 control，断开其 Compose 网络，超过 TTL 后再接回。预期它先停止接收和派发，再确认旧进程退出，取得新 lease 并重新竞选。集群切换不自动重放不确定轮次，已执行工具必须核对历史。事件缓冲只保留近期 20 条，需要结合容器日志与经认证的 etcd 查询理解完整过程。</p>
+<p>备份、恢复和升级要停止三个节点，不能只停 control：热备可能马上接任并继续写共享卷。操作前保持固定数据路径，确认目标 Compose 项目和数据库，再按部署脚本完成一致停机与恢复。本章三个 agent 默认各 768 MiB，加上依赖的容器上限合计约 3.1 GiB；服务器还要为系统、镜像构建和文件缓存留余量，建议至少 4 GiB，实际负载需要实测。</p>
+<p>本章交付的判断方式有明确边界：lease 定义成员存活，Election 定义 control，etcd 任期事务保护协调写入，PG 触发器保护业务写入，generation 防止旧回调复活。它没有实现按用户分片、路由发布或数据副本；也没有让 PostgreSQL、Redis、网关、etcd 自动获得多故障域能力。下一步的分片与路由、再下一步的副本与故障接管，分别解决用户落点和节点数据接手的问题。</p>
+<div class="quiz-container" id="s16-quiz">
+<div class="quiz-question-block" data-correct="1" data-explanation-right="成功回包可能迟到；超过 TTL 或代次已经变化时不能重新开放入口。" data-explanation-wrong="成功回包可能迟到；超过 TTL 或代次已经变化时不能重新开放入口。"><h3 class="quiz-question">旧 control 解冻后收到之前的 KeepAlive 成功回包，应该怎么处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>直接恢复旧代</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>核对单调时钟与代次，超时则保持隔离</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>仅检查进程 PID</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="1" data-explanation-right="/health 表示进程存活；/ready 还要求有效 control、业务恢复和依赖检查通过。" data-explanation-wrong="/health 表示进程存活；/ready 还要求有效 control、业务恢复和依赖检查通过。"><h3 class="quiz-question">新 control 当选后，哪个顺序才允许开放 /ready？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>先 ready，再慢慢恢复任务</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>确认任期 → 推进 PG 任期 → 恢复 → ready</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只要容器 /health 是 200 就可以</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="1" data-explanation-right="不能把旧任务冒充为新任期；需要隔离旧代，关闭后重新加入，执行中的任务待核对而非自动重发。" data-explanation-wrong="不能把旧任务冒充为新任期；需要隔离旧代，关闭后重新加入，执行中的任务待核对而非自动重发。"><h3 class="quiz-question">新任期已经推进，旧 control 的 SQL 携带旧 app.term，应得到什么结果？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>继续提交，因为连接还活着</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>CT001 拒绝写入，并触发自我隔离</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>自动改为新任期后重试</span></button></div><div class="quiz-feedback"></div></div>
+<div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s16-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s16-quiz">重新作答</button></div></div>
+<p><a href="/course/changes.html#s16">→ 打开 s16 阶段演示</a> · <a href="/course/#s16">→ 打开 s16 机制课堂</a></p>
+</section></div></div></section>

@@ -1,3 +1,4 @@
+import {stageCountLabel} from './stage-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import {defaultTargets} from '../server.mjs';
 
 // Execute the actual rendering/request functions without a listener or a model.
 const source=fs.readFileSync(new URL('../public/app/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
-const ids=Array.from({length:12},(_,num)=>`s${String(num).padStart(2,'0')}`);
+const ids=defaultTargets.filter(target=>target.id!=='project').map(target=>target.id);
 const allIds=JSON.parse(fs.readFileSync(new URL('../../../stages/changes.json',import.meta.url),'utf8')).stages.map(stage=>stage.id);
 function frontend(search=''){
  const elements=new Map(['#app','#pane','#timeline','#tasks','#toast'].map(id=>[id,{innerHTML:'',classList:{add(){},remove(){}}}]));
@@ -219,11 +220,11 @@ test('6：Wiki 文案与实际提交体按 s09 / s10–s11 / project 的授权�
  }
 });
 
-test('7：当前入口与工作台文档统一十六阶段、实际课程覆盖与网关体验边界',()=>{
+test('7：当前入口与工作台文档统一全部已登记阶段、实际课程覆盖与网关体验边界',()=>{
  const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
- assert.match(read('../public/app/index.html'),/<title>Agent Atelier · 十六个阶段<\/title>/);
+ assert.match(read('../public/app/index.html'),new RegExp(`<title>Agent Atelier · ${stageCountLabel}</title>`));
  const app=read('../../README.md'),web=read('../README.md'),root=read('../../../README.md');
- for(const doc of [app,web,root]){assert.match(doc,/十六个阶段/);assert.match(doc,/s01–s15 共 42 节/);assert.doesNotMatch(doc,/五次进化|(?<!十)五个阶段|s03 可配置 Agent|s09 \/ app/);}
+ for(const doc of [app,web,root]){assert.match(doc,new RegExp(stageCountLabel));const curriculum=JSON.parse(read('../public/course/curriculum.json'));assert.ok(doc.includes(`s01–${curriculum.chapters.at(-1).id} 共 ${curriculum.lessons.length} 节`));assert.doesNotMatch(doc,/五次进化|(?<!十)五个阶段|s03 可配置 Agent|s09 \/ app/);}
  for(const id of [...allIds,'project'])assert.match(web,new RegExp(`\\| ${id}`));
  assert.match(web,/尚无 \/models、\/usage/);assert.match(web,/缺课空态|显示空态/);
 });
@@ -355,7 +356,7 @@ test('s12 卡片、课程和运行说明完整，刷新不请求任何实时服�
  assert.equal(f.run('state.target'),'s12');
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
- assert.match(shell,/十六个阶段/);
+ assert.match(shell,new RegExp(stageCountLabel));
  assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
  assert.match(pane,/s12 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机 http:\/\/127\.0\.0\.1:4326/);
  assert.match(pane,/href="[^" ]*stages\/s12-deploy\/README\.md"/);
@@ -376,7 +377,7 @@ test('s13 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s13')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
- assert.match(shell,/十六个阶段/);
+ assert.match(shell,new RegExp(stageCountLabel));
  assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
  assert.match(pane,/s13 需要登录：remote.sh tunnel 后 npm run login/);
  assert.match(pane,/stages\/s13-auth\/README\.md/);
@@ -389,7 +390,7 @@ test('s13 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s13');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
 });
 test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s14&view=run');
@@ -398,7 +399,7 @@ test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s14')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
- assert.match(shell,/十六个阶段/);
+ assert.match(shell,new RegExp(stageCountLabel));
  assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
  assert.match(pane,/s14 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机/);
  assert.match(pane,/stages\/s14-isolation\/README\.md/);
@@ -411,7 +412,7 @@ test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s14');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
 });
 
 test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
@@ -421,7 +422,7 @@ test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s15')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
- assert.match(shell,/十六个阶段/);
+ assert.match(shell,new RegExp(stageCountLabel));
  assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
  assert.match(pane,/s15 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机/);
  assert.match(pane,/stages\/s15-hub\/README\.md/);
@@ -434,5 +435,28 @@ test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s15');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s15','s15'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
+});
+
+test('s16 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+ const f=frontend('?stage=s16&view=run');
+ f.run('render()');
+ assert.equal(f.run('state.target'),'s16');
+ assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s16')"),true);
+ const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
+ assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
+ assert.match(shell,new RegExp(stageCountLabel));
+ assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
+ assert.match(pane,/s16 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机/);
+ assert.match(pane,/stages\/s16-coordination\/README\.md/);
+ assert.match(pane,/AGENT_SERVER_URL=http:\/\/127\.0\.0\.1:4334/);
+ f.run("state.statuses=[{id:'s16',status:'ready'}]");
+ assert.equal(f.run('live()'),false);
+ await f.run('refresh()');
+ await f.run('subscribe()');
+ await assert.rejects(f.run("api('/sessions')"),/SSH 隧道/);
+ assert.deepEqual(f.calls,[]);
+ f.run("state.tab='learn';renderPane()");
+ assert.equal(f.courses.at(-1),'s16');
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
 });

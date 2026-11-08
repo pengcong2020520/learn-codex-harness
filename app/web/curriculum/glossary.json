@@ -1875,5 +1875,97 @@
       "Hub"
     ],
     "source": "stages/s15-hub/README.md#核心概念"
+  },
+  {
+    "term": "etcd",
+    "aka": [
+      "协调面",
+      "coordination"
+    ],
+    "stage": "s16",
+    "short": "保存集群协调元数据的键值存储：成员、当前 control、之后的分片归属表；提供 Lease、Watch、选举与带条件的事务。",
+    "detail": "业务数据仍在 PostgreSQL；etcd 只放小而需要被订阅的协调信息。教程用单节点 etcd 并开启认证（每个节点一个账号，只能读写 /codex/ 前缀），三节点 etcd 写进生产升级文档。",
+    "related": [
+      "成员租约",
+      "Watch",
+      "control 选举"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "成员租约",
+    "aka": [
+      "Lease",
+      "KeepAlive"
+    ],
+    "stage": "s16",
+    "short": "节点注册键绑定在 TTL 10 秒的租约上，约每 3 秒续约；续不上就过期，注册键被 etcd 自动删除。",
+    "detail": "把“节点是否存活”变成“租约是否过期”这个确定的问题。节点正常退出时主动撤销租约，注册键立即消失。",
+    "related": [
+      "etcd",
+      "Watch",
+      "自我隔离"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "Watch",
+    "aka": [
+      "订阅",
+      "对账"
+    ],
+    "stage": "s16",
+    "short": "节点订阅 /codex/members/ 前缀的变化，成员加入或离开时立即得知。",
+    "detail": "每次（重新）建立 Watch 先整前缀重读；另有每 5 秒一次对账，即使 Watch 漏了事件也能纠正本地缓存。",
+    "related": [
+      "etcd",
+      "成员租约"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "control 选举",
+    "aka": [
+      "Election",
+      "任期"
+    ],
+    "stage": "s16",
+    "short": "节点在 /codex/controller 上竞选，当选者是 control；任期取选举键的 create revision，单调递增。",
+    "detail": "control 写 etcd 时带上“选举键的 create revision 仍是我的任期”这个条件；本章只有 control 对外服务，其他节点热备，入口 Caddy 按 /ready 只转发给 control。",
+    "related": [
+      "etcd",
+      "任期隔离"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "任期隔离",
+    "aka": [
+      "fencing token",
+      "cluster_term",
+      "CT001"
+    ],
+    "stage": "s16",
+    "short": "每个保存状态的地方都用同一个任期挡住旧 control：etcd 用事务条件，PostgreSQL 用触发器核对 app.term。",
+    "detail": "新 control 当选后先把数据库任期推进到自己的任期，再恢复派发。触发器核对时对任期行加共享锁直到提交，旧事务不可能在新任期之后提交成功；任期不符的写入以 CT001 拒绝，写入方随即自我隔离。",
+    "related": [
+      "control 选举",
+      "自我隔离"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "自我隔离",
+    "aka": [
+      "self-fencing"
+    ],
+    "stage": "s16",
+    "short": "节点发现租约丢失或任期过期，立即停止服务：/ready 503、不再写结果、执行中轮次标为待核对。",
+    "detail": "等服务完全停下、用户 Codex 进程确认退出后，再用新租约重新加入，失败按 2 秒到 30 秒退避；重新加入前一直是 503。",
+    "related": [
+      "成员租约",
+      "任期隔离"
+    ],
+    "source": "stages/s16-coordination/README.md#核心概念"
   }
 ]

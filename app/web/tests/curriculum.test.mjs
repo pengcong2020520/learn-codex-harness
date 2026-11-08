@@ -189,3 +189,38 @@ test('s15 三课覆盖五个 catalog 实验，授权、交集与审批摘录逐�
  assert.equal(states(mechanisms[1]).读取,'404');
  for(const mechanism of mechanisms)for(const step of mechanism.steps)assert.ok(step.flow?.[2].trim(),'每条箭头有动作和机制名称');
 });
+
+test('s16 三课覆盖六个 catalog 实验，租约、任期事务及 SQL 触发器逐字命中',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s16-coordination');
+ assert.deepEqual(lessons.map(l=>l.id),['s16-lease','s16-election','s16-fencing']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s16-coordination');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s16-coordination/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...e.relatedExperiments]);
+ assert.deepEqual(experiments.map(e=>e.catalogId).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key]);
+  assert.equal(exp.command,`npm run lesson -- ${original.id}`);assert.equal(exp.mode,'offline');
+ }
+ const excerpts=lessons.flatMap(l=>[l.source,...l.sources]);
+ for(const name of ['async join()',"lease.on('lost'",'async elected(',"'Create', '=='",'CT001','CREATE TRIGGER'])assert.ok(excerpts.some(e=>e.code.includes(name)),name);
+ for(const excerpt of excerpts){
+  const original=fs.readFileSync(path.join(source,'../../..',excerpt.file),'utf8');
+  assert.ok(excerpt.code.includes(excerpt.needle));
+  assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
+ }
+ const mechanisms=JSON.parse(fs.readFileSync(path.join(source,'mechanisms/s16.json'),'utf8'));
+ assert.deepEqual(mechanisms.map(m=>m.id),['s16-takeover','s16-stale-control']);
+ const final=m=>m.steps.reduce((s,step)=>({...s,...step.state}),m.state0);
+ assert.equal(final(mechanisms[0]).入口,'新节点 ready');
+ assert.equal(final(mechanisms[0])['PG 任期'],'新值');
+ assert.equal(final(mechanisms[1]).写入,'CT001');
+ assert.equal(final(mechanisms[1]).租约,'新 lease');
+ assert.equal(final(mechanisms[1]).入口,'503');
+ for(const m of mechanisms)for(const step of m.steps)assert.match(step.flow[2],/\S+ [\w/]+/,'箭头为简短动作 + 专有名词');
+});
+
+test('s16 SQL 补充摘录仍强制唯一 needle',t=>{
+ const f=fixture(t);f.edit('lessons/s16.json',rows=>{rows[2].sources[0].needle='missing-trigger';});
+ assert.throws(f.build,/Source needle missing or ambiguous/);
+});
