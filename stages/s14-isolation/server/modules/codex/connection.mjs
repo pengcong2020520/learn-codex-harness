@@ -1,3 +1,4 @@
+import { userFileOperation } from '../runtimes/user-files.mjs';
 import { installedCodex, verifyRestrictedFeatures } from "./compatibility.mjs";
 import { userEnvironment, userSpawn, signalUserProcess } from "./launch.mjs";
 import { spawn } from "node:child_process";
@@ -70,8 +71,19 @@ export class CodexConnection extends EventEmitter {
   }
 
   record(direction, message) {
-    appendFileSync(path.join(this.runtime.runDir, "protocol.jsonl"),
-      this.redact({ direction, message }) + "\n", { mode: 0o600 });
+    const text = this.redact({ direction, message }) + "\n";
+    if (!this.runtime.isolated) { appendFileSync(path.join(this.runtime.runDir, "protocol.jsonl"), text, { mode: 0o600 }); return; }
+    this.recordBuffer = (this.recordBuffer || '') + text;
+    if (Buffer.byteLength(this.recordBuffer) > 16 * 1024 * 1024) throw new Error('运行日志写入积压超过上限。');
+    if (!this.recordPending) {
+      this.recordPending = Promise.resolve().then(async () => {
+        while (this.recordBuffer) {
+          const batch = this.recordBuffer; this.recordBuffer = '';
+          await userFileOperation(this.runtime.uid, 'record', { file: path.join(this.runtime.runDir, 'protocol.jsonl'), text: batch });
+        }
+      }).catch(error => { this.recordFailure = error; this.fail(error); })
+        .finally(() => { this.recordPending = null; });
+    }
   }
 
   send(message) {
@@ -187,6 +199,12 @@ export class CodexConnection extends EventEmitter {
     this.emit("fatal", safe);
   }
 
+  async finishRun() {
+    await this.recordPending;
+    if (this.recordFailure) throw this.recordFailure;
+    await finishRun(this.runtime.runDir, process.pid, this.runtime);
+  }
+
   async close() {
     if (this.closing) return this.exited;
     this.closing = true;
@@ -196,9 +214,9 @@ export class CodexConnection extends EventEmitter {
       waiter.reject(new Error("服务正在关闭，请求结果可能未确认。"));
     }
     this.pending.clear();
-    if (!this.child) { finishRun(this.runtime.runDir); return; }
+    if (!this.child) { await this.finishRun(); return; }
     this.child.stdin.end();
-    if (!this.child.pid) { await this.exited; finishRun(this.runtime.runDir); return; }
+    if (!this.child.pid) { await this.exited; await this.finishRun(); return; }
     const signal = value => this.runtime.isolated
       ? signalUserProcess(this.child.pid, value, { ...this.runtime, env: userEnvironment(this.launch.env, this.runtime.codexHome) })
       : Promise.resolve(this.child.kill(value));
@@ -209,6 +227,6 @@ export class CodexConnection extends EventEmitter {
     clearTimeout(force);
     this.lines?.close();
     this.errors?.close();
-    finishRun(this.runtime.runDir);
+    await this.finishRun();
   }
 }

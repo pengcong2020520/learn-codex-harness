@@ -1,4 +1,4 @@
-import { prepareServiceDirectories, repairRuntimeAccess } from '../server/modules/runtimes/directories.mjs';
+import { prepareServiceDirectories } from '../server/modules/runtimes/directories.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -18,10 +18,9 @@ export async function backup(root, name) {
   if (fs.existsSync(destination)) throw new Error('备份名称已存在。');
   for (const dir of ['workspace', '.data/codex', '.data/users', '.data/files']) fs.mkdirSync(path.join(root, dir), { recursive: true });
   if (!fs.existsSync(path.join(root, '.data/identity.json'))) throw new Error('缺少 .data/identity.json。请先完成初始化再备份。');
-  for (const dir of ['workspace', '.data/codex', '.data/users', '.data/files']) repairRuntimeAccess(path.join(root, dir));
-  await run('tar', ['-czf', path.join(temporary, 'workspace.tar.gz'), '-C', root, 'workspace']);
-  await run('tar', ['-czf', path.join(temporary, 'codex.tar.gz'), '-C', path.join(root, '.data'), 'codex', 'users']);
-  await run('tar', ['-czf', path.join(temporary, 'state.tar.gz'), '-C', path.join(root, '.data'), 'identity.json', 'files']);
+  await run('tar', ['--numeric-owner', '-czf', path.join(temporary, 'workspace.tar.gz'), '-C', root, 'workspace']);
+  await run('tar', ['--numeric-owner', '-czf', path.join(temporary, 'codex.tar.gz'), '-C', path.join(root, '.data'), 'codex', 'users']);
+  await run('tar', ['--numeric-owner', '-czf', path.join(temporary, 'state.tar.gz'), '-C', path.join(root, '.data'), 'identity.json', 'files']);
   await writeManifest(temporary, root);
   fs.renameSync(temporary, destination);
   pruneBackups(root);

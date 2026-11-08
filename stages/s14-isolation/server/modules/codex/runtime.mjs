@@ -1,3 +1,4 @@
+import { userFileOperation } from '../runtimes/user-files.mjs';
 // 每次启动生成私有运行目录和模型目录；不改变已有 Codex 历史存储位置。
 import { mkdir, mkdtemp, writeFile, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -6,10 +7,11 @@ import { readJson, writeJson } from "../storage/index.mjs";
 
 export const RUN_NAME = /^app-server-[a-zA-Z0-9_-]+$/;
 
-export function finishRun(workspace) {
+export function finishRun(workspace, servicePid = process.pid, runtime) {
+  if (runtime?.isolated) return userFileOperation(runtime.uid, 'finish', { runDir: workspace, servicePid });
   const file = path.join(workspace, "run.json");
   const state = readJson(file, null);
-  if (state?.pid === process.pid && !state.stoppedAt) writeJson(file, { ...state, stoppedAt: Date.now() });
+  if (state?.pid === servicePid && !state.stoppedAt) writeJson(file, { ...state, stoppedAt: Date.now() });
 }
 
 export function assertWorkspaceLocation(serviceRoot, physical) {
@@ -28,12 +30,12 @@ export async function resolveWorkspace(root, requested = path.join(root, "worksp
   return physical;
 }
 
-export async function prepareRun(launch, root = PROJECT_ROOT, { workspaceDir, instructions, runsDir, codexHome } = {}) {
+export async function prepareRun(launch, root = PROJECT_ROOT, { workspaceDir, instructions, runsDir, codexHome, servicePid = process.pid } = {}) {
   const stableWorkspace = await resolveWorkspace(root, workspaceDir);
   const runs = runsDir || path.resolve(root, ".runs");
   await mkdir(runs, { recursive: true, mode: 0o700 });
   const workspace = await mkdtemp(path.join(runs, "app-server-"));
-  writeJson(path.join(workspace, "run.json"), { version: 1, pid: process.pid, startedAt: Date.now() });
+  writeJson(path.join(workspace, "run.json"), { version: 1, pid: servicePid, startedAt: Date.now() });
   const args = [...launch.args];
   let catalogFile = null;
   if (launch.catalog) {

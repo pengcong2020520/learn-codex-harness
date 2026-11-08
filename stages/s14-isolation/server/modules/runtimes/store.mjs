@@ -1,7 +1,8 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { transaction } from '../data/database.mjs';
 import { AppError } from '../../../shared/errors.mjs';
-import { prepareDirectories } from './directories.mjs';
+import { prepareDirectories, migrateLegacyTree, uidHasProcesses } from './directories.mjs';
 
 export class RuntimeStore {
   constructor(pool, instanceId, root) { Object.assign(this, { pool, instanceId, root }); }
@@ -22,13 +23,28 @@ export class RuntimeStore {
         SELECT $1,$2,COALESCE(MAX(uid)+1,10001),$3 FROM agent_data.user_runtimes RETURNING *`, [this.instanceId, owner, home])).rows[0];
     });
   }
+  async migrateLegacy(record, options, { hasProcesses = uidHasProcesses, migrateTree = migrateLegacyTree } = {}) {
+    if (!options.isolated || record.codex_home !== path.join(this.root, '.data/codex')) return;
+    await transaction(this.pool, async client => {
+      const { rows } = await client.query('SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2 FOR UPDATE', [this.instanceId, record.user_id]);
+      const current = rows[0];
+      if (!current) throw new Error('运行环境映射不存在。');
+      if (current.migrated_at) return;
+      if (hasProcesses(current.uid)) throw new Error('用户 uid 尚有运行中进程，拒绝移交旧目录。');
+      // 旧根本身可能还是他人 0700；先按路径移交，之后才能 O_DIRECTORY 打开。
+      fs.mkdirSync(current.codex_home, { recursive: true });
+      migrateTree(current.codex_home, current.uid);
+      prepareDirectories(this.root, current, options);
+      await client.query('UPDATE agent_data.user_runtimes SET migrated_at=now() WHERE instance_id=$1 AND user_id=$2', [this.instanceId, current.user_id]);
+    });
+  }
   async migrateDirectories(options) {
     const { rows } = await this.pool.query(`SELECT id FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL AND disabled_at IS NULL
       ORDER BY (role='admin') DESC,created_at,id`, [this.instanceId]);
     for (const row of rows) {
       const record = await this.ensure(row.id);
       // 迁移只立即接管原 admin 原生目录；其他用户目录在首次请求时创建。
-      if (record.codex_home === path.join(this.root, '.data/codex')) prepareDirectories(this.root, record, options);
+      await this.migrateLegacy(record, options);
     }
   }
   async listen(onDisabled, onError) {

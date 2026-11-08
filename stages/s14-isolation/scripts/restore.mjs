@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { prepareServiceDirectories, repairRuntimeAccess } from '../server/modules/runtimes/directories.mjs';
+import { prepareServiceDirectories } from '../server/modules/runtimes/directories.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PROJECT_ROOT } from '../shared/paths.mjs';
@@ -12,11 +12,10 @@ export async function restoreFiles(root, name) {
   await verifyManifest(dir);
   for (const item of ['workspace', '.data/codex', '.data/users', '.data/files']) {
     const target = path.join(root, item);
-    if (fs.existsSync(target)) repairRuntimeAccess(target);
     clearDirectory(target);
   }
-  await run('tar', ['-xzf', path.join(dir, 'workspace.tar.gz'), '-C', root]);
-  for (const file of ['codex.tar.gz', 'state.tar.gz']) await run('tar', ['-xzf', path.join(dir, file), '-C', path.join(root, '.data')]);
+  await run('tar', ['--numeric-owner', '--same-owner', '-xzf', path.join(dir, 'workspace.tar.gz'), '-C', root]);
+  for (const file of ['codex.tar.gz', 'state.tar.gz']) await run('tar', ['--numeric-owner', '--same-owner', '-xzf', path.join(dir, file), '-C', path.join(root, '.data')]);
   console.log('文件恢复完成。');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

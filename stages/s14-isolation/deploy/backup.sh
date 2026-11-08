@@ -31,4 +31,4 @@ docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exis
   gzip > "$partial/database.sql.gz"
 # agent 使用 0:1000 且没有 DAC_OVERRIDE；只修复备份文件，不更改用户树属主。
 if [ "$(id -u)" = 0 ]; then chown 0:1000 backups "$partial" "$partial/database.sql.gz"; fi
-docker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --partial "$name"
+docker compose run --rm --no-deps -T --cap-add DAC_READ_SEARCH agent node scripts/backup.mjs --apply --partial "$name"

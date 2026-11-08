@@ -1,7 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { userFileOperation } from './user-files.mjs';
 import { RuntimePool } from './pool.mjs';
 import { RuntimeRouter, assertToolOwner } from './router.mjs';
 import { RuntimeStore } from './store.mjs';
-import { isolationMode, prepareDirectories, secureTree } from './directories.mjs';
+import { isolationMode, prepareDirectories } from './directories.mjs';
 import { currentIdentity, runOwner } from '../accounts/context.mjs';
 import { prepareRun, finishRun } from '../codex/runtime.mjs';
 import { prepareCodexConfig } from '../codex/config.mjs';
@@ -23,31 +26,44 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, i
     onRemoved: owner => sessions?.invalidateOwner(owner),
     create: async (owner, signal) => {
       const record = await store.ensure(owner);
+      if (isolated) await store.migrateLegacy(record, { isolated, workspace: agent.workspacePath });
       signal.throwIfAborted();
       const paths = prepareDirectories(config.root, record, { isolated, workspace: agent.workspacePath });
       const launch = { ...config.launch, args: [...config.launch.args], env: { ...config.launch.env } };
-      const runtime = await prepareRun(launch, config.root, { ...paths, instructions: agent.instructions });
+      let runtime, installed;
+      if (isolated) {
+        // 只把必要配置和服务自有 Skill 内容交给用户辅助；不传服务环境或数据库密钥。
+        const prepared = await userFileOperation(record.uid, 'prepare', {
+          config: { root: config.root, codexHome: paths.codexHome, memory: config.memory,
+            launch: { args: launch.args, catalog: launch.catalog, env: {} } },
+          paths, instructions: agent.instructions, servicePid: process.pid, mcp: tools.configuration(),
+          skills: agent.skills.map(skill => ({ ...skill, contents: skill.source
+            ? Object.fromEntries(skill.files.map(name => [name, fs.readFileSync(path.join(skill.source, name)).toString('base64')])) : undefined })),
+        });
+        runtime = prepared.runtime; installed = new Map(prepared.installed);
+        launch.env = { ...launch.env, ...prepared.env };
+      } else runtime = await prepareRun(launch, config.root, { ...paths, instructions: agent.instructions });
       Object.assign(runtime, { ownerId: owner, uid: record.uid, gid: record.uid, isolated });
       // 所有可变 Skill 状态、原生路径和记忆核验结果属于这个运行环境。
       const userAgent = Object.create(agent);
-      userAgent.runtime = runtime; userAgent.descriptorWorkspace = agent.workspacePath;
-      const userConfig = { ...config, launch, codexHome: paths.codexHome, runtimeUid: isolated ? record.uid : process.getuid?.(), agent: userAgent };
+      userAgent.installedSkills = installed; userAgent.runtime = runtime; userAgent.descriptorWorkspace = agent.workspacePath;
+      const userConfig = { ...config, launch, codexHome: paths.codexHome, runtimeUid: isolated ? record.uid : process.getuid?.(), runtimeIsolated: isolated, agent: userAgent };
       const rpc = connection({ launch, runtime, redact, cli, log });
       const memory = new MemoryService({ rpc, config: userConfig, sessions, redact });
       const maintenance = new RunMaintenance({ root: config.root, runtime, sessions, runsDir: paths.runsDir, log });
       let closed;
       const value = { rpc, runtime, agent: userAgent, memory, maintenance,
-        close: () => closed ||= (async () => { await rpc.close(); await maintenance.close(); finishRun(runtime.runDir); })() };
+        close: () => closed ||= (async () => { await rpc.close(); await maintenance.close(); await finishRun(runtime.runDir, process.pid, runtime); })() };
       // 启动中 abort/核验失败也必须走同一关闭期限，不能因 close 挂起永占名额。
       const close = () => pool.closeValue(value);
       const abort = () => { void close().catch(error => pool.emit('error', error)); };
       signal.addEventListener('abort', abort, { once: true });
       try {
         signal.throwIfAborted();
-        prepareCodexConfig(userConfig, tools.configuration());
-        installSkills(userAgent, paths.codexHome);
-        secureTree(paths.codexHome, record.uid, isolated);
-        secureTree(runtime.runDir, record.uid, isolated);
+        if (!isolated) {
+          prepareCodexConfig(userConfig, tools.configuration());
+          installSkills(userAgent, paths.codexHome);
+        }
         signal.throwIfAborted();
         await rpc.open();
         signal.throwIfAborted();

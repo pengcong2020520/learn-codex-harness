@@ -1,3 +1,4 @@
+import { readAsUser } from '../runtimes/user-files.mjs';
 import fs from "node:fs";
 import { validateEffort } from "../gateway/router.mjs";
 import { readCompatibility } from "./upgrade.mjs";
@@ -214,7 +215,10 @@ export class AgentDefinition {
     if (!skill) throw new AppError(`Skill 未启用或不存在：${name}`, 404, "SKILL_UNAVAILABLE");
     const files = skill.files || ["SKILL.md"];
     if (!files.includes(file)) throw new AppError(`Skill ${name} 没有这个文件：${file}。可读文件：${files.join("、")}`, 404);
-    const target = path.join(path.dirname(skill.path), file), info = fs.lstatSync(target);
+    const target = path.join(path.dirname(skill.path), file);
+    if (this.runtime?.isolated) return readAsUser(this.runtime.uid, target, { maxBytes: 128 * 1024, isolated: true })
+      .then(content => ({ name, file, files, content: content.toString('utf8') }));
+    const info = fs.lstatSync(target);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new AppError(`Skill 文件无效：${name}/${file}`, 409);
     return { name, file, files, content: fs.readFileSync(target, "utf8") };
   }

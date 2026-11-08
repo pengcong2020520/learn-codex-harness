@@ -248,8 +248,8 @@ test('memory: 每用户只读自己的 CODEX_HOME，开关与摘要不串用户'
     const service = new MemoryService({ config: { root, codexHome: home, memory: {} }, redact: String });
     service.effective = { enabled: index === 1 }; services.push(service);
   }
-  assert.equal(services[0].summary().text, ''); assert.equal(services[1].summary().text, B);
-  assert.match(services[1].snapshot().directory, new RegExp(B));
+  assert.equal((await services[0].summary()).text, ''); assert.equal((await services[1].summary()).text, B);
+  assert.match((await services[1].snapshot()).directory, new RegExp(B));
 });
 // SQL double verifies transaction/allocator semantics, real PG test separately validates locks and constraints.
 export function runtimeStoreFixture(root) {

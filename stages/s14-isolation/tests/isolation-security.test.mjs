@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import { secureTree, repairRuntimeAccess } from '../server/modules/runtimes/directories.mjs';
+import { secureTree } from '../server/modules/runtimes/directories.mjs';
 import { MemoryService } from '../server/modules/memory/index.mjs';
 import { RuntimePool, IDLE_MS, CLOSE_TIMEOUT_MS } from '../server/modules/runtimes/pool.mjs';
 import { RuntimeRouter } from '../server/modules/runtimes/router.mjs';
@@ -28,9 +28,9 @@ function fdOnly(t) {
   // 离线无 SETUID/CHOWN 权限；真实 fchmod + inode 检查证明不触碰外部目标。
   t.mock.method(fs, 'fchownSync', () => {});
 }
-for (const repair of [false, true]) {
-  const label = repair ? 'repairRuntimeAccess' : 'secureTree';
-  const walk = home => repair ? repairRuntimeAccess(home) : secureTree(home, 10001, true);
+{
+  const label = 'secureTree';
+  const walk = home => secureTree(home, 10001, true);
   for (const when of ['before-open', 'after-open', 'hardlink']) test(`${label}: ${when} 调换不修改树外目标`, t => {
     const { home, outside } = files(t), file = path.join(home, 'native');
     fs.writeFileSync(file, 'original', { mode: 0o600 });
@@ -72,14 +72,15 @@ for (const repair of [false, true]) {
     assert.deepEqual(metadata(outside), before);
   });
 }
-for (const when of ['before-open', 'after-open', 'wrong-owner', 'hardlink', 'special']) test(`memory: ${when}，只校验、修改和读取同一 fd`, t => {
+for (const when of ['before-open', 'after-open', 'wrong-owner', 'hardlink', 'special']) test(`memory: ${when}，只校验、读取同一 fd，不改权限`, async t => {
   const uid = process.getuid(), { root, home, outside } = files(t), memories = path.join(home, 'memories');
   fs.mkdirSync(memories); const file = path.join(memories, 'memory_summary.md');
   fs.writeFileSync(file, 'own summary', { mode: 0o600 });
   const before = metadata(outside), outsideIno = fs.statSync(outside).ino, originalIno = fs.statSync(file).ino;
-  fdOnly(t); t.mock.method(process, 'getuid', () => 0);
+  fdOnly(t);
   const mutations = [];
-  t.mock.method(fs, 'fchownSync', (fd, owner) => { const stat = fs.fstatSync(fd); assert.notEqual(stat.ino, outsideIno); assert.equal(owner, uid); mutations.push(stat.ino); });
+  t.mock.method(fs, 'fchownSync', () => assert.fail('记忆读取不能 chown'));
+  t.mock.method(fs, 'fchmodSync', () => assert.fail('记忆读取不能 chmod'));
   const open = fs.openSync, fstat = fs.fstatSync;
   t.mock.method(fs, 'openSync', (target, flags) => {
     if (target !== file) return open(target, flags);
@@ -96,10 +97,10 @@ for (const when of ['before-open', 'after-open', 'wrong-owner', 'hardlink', 'spe
     if (stat.ino === originalIno && when === 'special') stat.mode = fs.constants.S_IFIFO;
     return stat;
   });
-  const service = new MemoryService({ config: { root, codexHome: home, runtimeUid: uid }, redact: String });
+  const service = new MemoryService({ config: { root, codexHome: home, runtimeUid: uid, runtimeIsolated: false }, redact: String });
   service.effective = { enabled: true };
-  if (when === 'after-open') assert.equal(service.summary().text, 'own summary');
-  else { assert.throws(() => service.summary()); assert.ok(!mutations.includes(originalIno)); }
+  if (when === 'after-open') assert.equal((await service.summary()).text, 'own summary');
+  else { await assert.rejects(() => service.summary()); assert.ok(!mutations.includes(originalIno)); }
   assert.deepEqual(metadata(outside), before);
 });
 

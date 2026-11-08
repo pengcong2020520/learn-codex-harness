@@ -86,9 +86,9 @@ test("拒绝状态目录符号链接，不能写入个人目录", t => {
 
 test("只读核验实际配置；不开启模型，不虚构生成进度或已生成状态", async t => {
   const f = memoryFixture(t, { AGENT_MEMORY_ENABLED: "true" });
-  assert.throws(() => f.memory.snapshot(), /尚未核验/);
+  await assert.rejects(() => f.memory.snapshot(), /尚未核验/);
   await f.memory.verify();
-  const state = f.memory.snapshot();
+  const state = (await f.memory.snapshot());
   assert.equal(state.effective.enabled, true);
   assert.equal(state.hasSummary, false);
   assert.equal(state.generationCapability, "blocked");
@@ -102,14 +102,14 @@ test("只读核验实际配置；不开启模型，不虚构生成进度或已�
 test("摘要缺失有明确状态、限长脱敏，元数据查询不返回正文", async t => {
   const f = memoryFixture(t, { AGENT_MEMORY_ENABLED: "true" });
   await f.memory.verify();
-  assert.equal(f.memory.summary().exists, false);
+  assert.equal((await f.memory.summary()).exists, false);
   fs.mkdirSync(f.paths.memories);
   fs.writeFileSync(path.join(f.paths.memories, "memory_summary.md"), `观点 ${fixture.CODEX_API_KEY} ` + "a".repeat(70000));
-  const summary = f.memory.summary();
+  const summary = (await f.memory.summary());
   assert.equal(summary.truncated, true);
   assert.ok(summary.text.includes("[REDACTED]"));
   assert.ok(summary.text.length <= 65536);
-  const state = f.memory.snapshot();
+  const state = (await f.memory.snapshot());
   assert.equal(state.hasSummary, true);
   assert.equal(state.artifacts["memory_summary.md"].text, undefined);
 });
@@ -121,11 +121,11 @@ test("记忆读取拒绝文件/目录链接和硬链接，不从其他目录召�
   const external = path.join(f.root, "external.txt"), summary = path.join(f.paths.memories, "memory_summary.md");
   fs.writeFileSync(external, "不可读");
   fs.symlinkSync(external, summary);
-  assert.throws(() => f.memory.summary());
+  await assert.rejects(() => f.memory.summary());
   fs.unlinkSync(summary); fs.linkSync(external, summary);
-  assert.throws(() => f.memory.summary(), /独立普通文件/);
+  await assert.rejects(() => f.memory.summary(), /独立普通文件/);
   fs.unlinkSync(summary); fs.rmdirSync(f.paths.memories); fs.symlinkSync(f.root, f.paths.memories);
-  assert.throws(() => f.memory.summary(), /真实目录/);
+  await assert.rejects(() => f.memory.summary(), /真实目录/);
 });
 
 test("参与设置只调用原生接口；校验项目归属、参数、活动 turn 和总开关", async t => {

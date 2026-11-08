@@ -235,7 +235,7 @@ test('memory: 关闭时不返回先前保留的共享摘要正文', async t => {
   const root = temporary(t); fs.mkdirSync(path.join(root, '.data/codex/memories'), { recursive: true });
   fs.writeFileSync(path.join(root, '.data/codex/memories/memory_summary.md'), 'old private content');
   const memory = new MemoryService({ config: { root }, redact: String }); memory.effective = { enabled: false };
-  assert.equal(memory.summary().text, '');
+  assert.equal((await memory.summary()).text, '');
 });
 test('logging: 密码、令牌及其哈希字段脱敏', async () => {
   const { createLogRedactor } = await import('../server/modules/config/index.mjs');
@@ -265,7 +265,7 @@ test('migration: 迁移登记可重入，不重复执行已登记版本；新 SQ
   }, release() {} };
   const pool = { connect: async () => client };
   await migrate(pool); await migrate(pool);
-  assert.equal(rows.length, 11); assert.equal(scripts.length, 1);
+  assert.equal(rows.length, 12); assert.equal(scripts.length, 1);
   assert.match(scripts[0], /CREATE TABLE IF NOT EXISTS agent_data.auth_sessions/);
   assert.match(scripts[0], /role IN \('admin','user'\)/);
   assert.match(scripts[0], /users_username_normalized/);

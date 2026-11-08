@@ -37,10 +37,22 @@ export function prepareDirectories(root, record, { isolated, workspace = path.jo
   const paths = { codexHome: record.codex_home, workspaceDir: path.join(workspace, 'users', record.user_id), runsDir: path.join(root, '.runs/users', record.user_id) };
   for (const target of Object.values(paths)) {
     directory(target); assertRealPath(target);
-    secureTree(target, record.uid, isolated);
+    secureDirectory(target, record.uid, isolated);
   }
   return paths;
 }
+// 每次启动只打开三个边界目录本身；Codex 的 0600 文件不能由服务进程打开。
+export function secureDirectory(root, uid, isolated) {
+  assertRealPath(root);
+  const fd = fs.openSync(root, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_DIRECTORY);
+  try {
+    if (!fs.fstatSync(fd).isDirectory()) throw new Error('运行环境目录必须是真实目录。');
+    if (isolated) fs.fchownSync(fd, uid, 1000);
+    fs.fchmodSync(fd, 0o2770);
+  } finally { fs.closeSync(fd); }
+}
+
+// 只用于服务自有文件，不能用于 CODEX_HOME 或 .runs/users 内部。
 // 只在进程尚未启动、目录树无并发写入时迁移/修复权限，不改写原生内容。
 // lstat 只用于避免打开特殊文件；安全判断与权限修改都绑定到 O_NOFOLLOW 打开的 fd。
 // 目录 fd 在遍历期间保持打开；子项仍按目录所在路径访问，父目录被替换的残余竞态尚未消除。
@@ -85,11 +97,32 @@ export function prepareServiceDirectories(root, isolated) {
   }
 }
 
-// 停服备份/恢复时修复可读权限，保留每个文件原来的 uid（不把多个用户归为同一 uid）。
-export function repairRuntimeAccess(root) {
-  if (process.getuid?.() !== 0) return;
-  walkTree(root, (fd, stat) => {
-    fs.fchownSync(fd, stat.uid, 1000);
-    fs.fchmodSync(fd, stat.isDirectory() ? 0o2770 : 0o660);
-  });
+// 一次性旧目录移交：调用方持有迁移锁，migrated_at 为空并确认该 uid 无进程。
+// 此 uid 在本版本完成标记前不允许启动（首次移交时从未运行过进程），无人能调换条目，
+// 因而这里可按路径 lchown/chmod；不能先 open：旧属主的显式 0600 会触发 EACCES。
+export function migrateLegacyTree(root, uid) {
+  assertRealPath(root);
+  const walk = target => {
+    const stat = fs.lstatSync(target);
+    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) return;
+    if (stat.isFile() && stat.nlink !== 1) throw new Error('运行环境拒绝硬链接文件。');
+    fs.lchownSync(target, uid, 1000);
+    fs.chmodSync(target, stat.isDirectory() ? 0o2770 : (stat.mode & 0o7777) | 0o060);
+    if (stat.isDirectory()) for (const name of fs.readdirSync(target)) walk(path.join(target, name));
+  };
+  walk(root);
+}
+
+// /proc 的检查失败必须阻止迁移，不能把不可见的进程当成不存在。
+export function uidHasProcesses(uid) {
+  if (process.platform !== 'linux') throw new Error('旧目录移交需要 Linux /proc 进程检查。');
+  for (const pid of fs.readdirSync('/proc').filter(name => /^\d+$/.test(name))) {
+    let status;
+    try { status = fs.readFileSync(`/proc/${pid}/status`, 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT' || error.code === 'ESRCH') continue; throw error; }
+    const ids = status.match(/^Uid:\s+(.+)$/m);
+    if (!ids) throw new Error('无法核验进程 uid，拒绝移交旧目录。');
+    if (ids[1].trim().split(/\s+/).map(Number).includes(uid)) return true;
+  }
+  return false;
 }

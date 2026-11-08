@@ -108,9 +108,9 @@ test('backup: shell 静态约束、共享 flock、trap、数据库参数、容�
   const { user, database } = postgresIdentity(read('compose.yaml'));
   assert.ok(backup.includes(dumpCommand(user, database).join(' ')));
   assert.ok(restore.includes(psqlCommand(user, database).join(' ')));
-  assert.match(backup, /docker compose run --rm --no-deps -T agent node scripts\/backup.mjs --apply --partial/);
+  assert.match(backup, /docker compose run --rm --no-deps -T --cap-add DAC_READ_SEARCH agent node scripts\/backup.mjs --apply --partial/);
   assert.match(restore, /docker compose run --rm --no-deps -T agent node scripts\/restore.mjs --verify/);
-  assert.match(restore, /docker compose run --rm --no-deps -T agent node scripts\/restore.mjs --files/);
+  assert.match(restore, /docker compose run --rm --no-deps -T --cap-add DAC_OVERRIDE agent node scripts\/restore.mjs --files/);
   assert.match(restore, /\/dev\/tty/); assert.match(restore, /--yes/); assert.match(restore, /node deploy\/ready.mjs/);
   assert.doesNotMatch(read('Dockerfile'), /postgresql-client/);
   const pkg = JSON.parse(read('package.json'));

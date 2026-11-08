@@ -37,7 +37,7 @@ docker compose run --rm --no-deps -T agent node scripts/restore.mjs --verify "$n
 # Keep these arguments in sync with backup-lib.mjs psqlCommand(agent, agent_s14).
 gunzip -c "backups/$name/database.sql.gz" |
   docker compose exec -T postgres psql --no-password -U agent -d agent_s14 -X --set ON_ERROR_STOP=1 --single-transaction
-docker compose run --rm --no-deps -T agent node scripts/restore.mjs --files "$name"
+docker compose run --rm --no-deps -T --cap-add DAC_OVERRIDE agent node scripts/restore.mjs --files "$name"
 docker compose up -d --wait agent
 docker compose exec -T agent node deploy/ready.mjs
 echo '恢复完成，/ready 检查通过。'
