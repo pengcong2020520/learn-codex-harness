@@ -18,7 +18,7 @@ export function transferPath(root, record, kind) {
 }
 export function exportTree(root, record, kind) {
   const directory = transferPath(root, record, kind); assertRealPath(directory);
-  const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory, kind], {
     uid: record.uid, gid: record.uid, cwd: '/', env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore','pipe','pipe'],
   });
   const done = new Promise((resolve, reject) => {
