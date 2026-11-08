@@ -1,0 +1,551 @@
+[
+  {
+    "id": "s17-routing",
+    "title": "用户先落分片，请求再找主节点",
+    "principle": "shardOf 决定用户属于哪个分片；override 优先，归属缓存决定转发目标，409 后只刷新重试一次。",
+    "problem": "同一用户从不同节点进入，怎样仍然续接同一份原生历史？",
+    "change": {
+      "before": "成员租约和 control 已有共同依据。",
+      "added": "槽与范围策略、用户 override、整前缀路由缓存及带 revision 的转发。",
+      "kept": "用户身份、Hub 授权和 Codex 原生会话继续复用。"
+    },
+    "concepts": [
+      {
+        "term": "shardOf",
+        "meaning": "只计算用户分片，不决定主节点；默认 SHA-256 前 32 位取模 64。"
+      },
+      {
+        "term": "override",
+        "meaning": "明确指定用户分片，优先于槽与范围策略。"
+      },
+      {
+        "term": "revision",
+        "meaning": "etcd 快照与 Watch 的版本；接收节点必须是主且本地版本不落后于请求。"
+      }
+    ],
+    "mechanism": "slots 将 64 个槽按 slot % 3 分给三个分片；range 用 UUID 首字节分为 00–54、55–a9、aa–ff。routeOf 先查 override，再查策略与 shards。入口认证后用本地缓存转发；目标核对归属和 revision，409 STALE_ROUTE 使入口整表刷新并只重试一次。未知主或主离线返回 503。",
+    "design": {
+      "decision": "分片键用用户 UUID，将策略、分片归属与入口路由分开。",
+      "reason": "用户的 SQLite、JSONL 和记忆在自己的 CODEX_HOME，不能把不同消息任意分配到不同磁盘。",
+      "alternative": "逐消息轮询无法自动共享用户原生历史；每次请求都读 etcd 增加控制存储依赖。",
+      "cost": "本地缓存存在滞后窗口；策略不能靠改环境变量迁移已有数据，节点离线也没有自动接管。"
+    },
+    "source": {
+      "file": "stages/s17-sharding/server/modules/sharding/strategy.mjs",
+      "needle": "export const SLOT_COUNT = 64;",
+      "before": 0,
+      "after": 11,
+      "explanation": "两种 shardOf 都返回分片 ID；slots 与 range 是不同策略。"
+    },
+    "sources": [
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/cache.mjs",
+        "needle": "  routeOf(userId) {",
+        "before": 0,
+        "after": 7,
+        "explanation": "override 优先；旧数字 override 统一转换为文本分片 ID。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/routing.mjs",
+        "needle": "export function validateRoute(cache, userId, nodeId, revision) {",
+        "before": 0,
+        "after": 17,
+        "explanation": "主节点核验版本；只有 STALE_ROUTE 允许整表刷新后重试一次。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "非主入口转发到用户主节点",
+        "steps": [
+          {
+            "title": "认证请求",
+            "actor": "入口节点",
+            "event": "教学模拟 · Bearer",
+            "explain": "先确认真实用户 ID。",
+            "state": {
+              "入口": "非主节点",
+              "路由": "未读取"
+            },
+            "lines": []
+          },
+          {
+            "title": "定位主节点",
+            "actor": "入口节点",
+            "event": "教学模拟 · routeOf",
+            "explain": "override 或策略得到分片，shards 得到主。",
+            "state": {
+              "入口": "非主节点",
+              "路由": "主节点已定位"
+            },
+            "lines": []
+          },
+          {
+            "title": "核对并处理",
+            "actor": "用户主节点",
+            "event": "教学模拟 · validateRoute",
+            "explain": "归属和 revision 通过后执行。",
+            "state": {
+              "入口": "代理返回",
+              "路由": "核验通过"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "旧归属引发 409 后刷新一次",
+        "steps": [
+          {
+            "title": "命中旧缓存",
+            "actor": "入口节点",
+            "event": "教学模拟 · routeOf",
+            "explain": "用户已经移走，入口尚未收到 Watch。",
+            "state": {
+              "缓存": "旧归属",
+              "重试": "0"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝旧路由",
+            "actor": "旧主节点",
+            "event": "教学模拟 · STALE_ROUTE",
+            "explain": "自己已经不是主，返回 409。",
+            "state": {
+              "缓存": "旧归属",
+              "响应": "409 STALE_ROUTE"
+            },
+            "lines": []
+          },
+          {
+            "title": "刷新快照",
+            "actor": "入口节点",
+            "event": "教学模拟 · refresh",
+            "explain": "整读 etcd 后重新 routeOf。",
+            "state": {
+              "缓存": "新归属",
+              "重试": "1"
+            },
+            "lines": []
+          },
+          {
+            "title": "新主处理",
+            "actor": "新主节点",
+            "event": "教学模拟 · validateRoute",
+            "explain": "重试仍失败则返回错误，不无限循环。",
+            "state": {
+              "缓存": "新归属",
+              "响应": "200"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "收到 409 STALE_ROUTE 后应该怎样处理？",
+      "options": [
+        "整表刷新路由，最多再试一次",
+        "绕过主节点校验直接执行",
+        "无限重试直到成功"
+      ],
+      "answer": 0,
+      "explanation": "一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。"
+    },
+    "stage": "s17-sharding",
+    "ownership": {
+      "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+      "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+    },
+    "reference": {
+      "session": "s17 设计与源码长文",
+      "url": "/course/handbook.html#module-s17",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。"
+    }
+  },
+  {
+    "id": "s17-fencing",
+    "title": "能接收请求，不代表能写这个用户",
+    "principle": "canDispatch/admit 检查租约、主归属与暂停；数据库再以 owner、节点角色和 epoch 拒绝错误写入。",
+    "problem": "缓存判断正确但迁移已经切换，旧节点的在途 SQL 还能提交吗？",
+    "change": {
+      "before": "control 任期保护协调元数据写入。",
+      "added": "按用户分片的准入、事务局部 node/epoch 与 SH001 行触发器。",
+      "kept": "PG 保存任务事实，Redis 只唤醒；每用户 uid 和资源授权继续生效。"
+    },
+    "concepts": [
+      {
+        "term": "canDispatch / admit",
+        "meaning": "本地归属与暂停通过后，还查 PG 的 paused 和 shard_id。"
+      },
+      {
+        "term": "SH001",
+        "meaning": "数据库行归属、节点 SQL 角色或 epoch 不匹配时拒写。"
+      },
+      {
+        "term": "FOR SHARE",
+        "meaning": "事务锁住用户与分片两条映射，到提交才释放，阻止切换越过旧事务。"
+      }
+    ],
+    "mechanism": "owns 要求有效 lease 且缓存 primary 为本节点。canDispatch 在查询 PG 前后核对本地归属和暂停，同时比较 PG paused 与 shard_id；媒体 tick 在每次 poll 前也执行这一检查，drain 等待已登记的媒体工作。业务事务设置 app.node 和 app.shard_epoch，check_shard 锁定两张映射并核对真实 SQL 角色；操作单 paused 允许在途轮次收尾，copying 及后续受保护状态在用户暂停时拒写。UPDATE 校验 OLD 与 NEW。全局表以列级权限限制账号与会话变更。SH001 依据被拒行 owner 刷新并决定是否隔离。",
+    "design": {
+      "decision": "入口准入和数据库行触发器分别守住派发与落库。",
+      "reason": "HTTP 检查无法覆盖在途事务和后台 worker；缓存也可能落后。",
+      "alternative": "只比较客户端传来的 node 字段会被伪造；只在入口判断无法拦住迟到 SQL。",
+      "cost": "映射锁让切换等待旧事务；SQL 不保护文件和外部工具副作用，仍需停写与核对。"
+    },
+    "source": {
+      "file": "stages/s17-sharding/server/modules/sharding/runtime.mjs",
+      "needle": "  async canDispatch(userId) {",
+      "before": 0,
+      "after": 5,
+      "explanation": "准入同时比较本地缓存和持久化映射，paused 时拒绝新派发。"
+    },
+    "sources": [
+      {
+        "file": "stages/s17-sharding/server/modules/data/migrations/018-move-security.sql",
+        "needle": "CREATE OR REPLACE FUNCTION agent_data.check_shard(owner uuid) RETURNS void",
+        "before": 0,
+        "after": 14,
+        "explanation": "两张映射持锁到提交；核对真实 SQL 角色与 epoch，并在用户暂停且操作单处于 copying、copied、switched 或 failed 时拒写；paused 阶段允许既有轮次收尾。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
+        "needle": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger",
+        "before": 0,
+        "after": 9,
+        "explanation": "修改 owner 前后的两行归属都要检查。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/fence.mjs",
+        "needle": "export async function shardFailure(error, generation, origin, statement) {",
+        "before": 0,
+        "after": 16,
+        "explanation": "拒写依据实际被拒行的 owner 诊断；刷新结果决定是否隔离。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/fence.mjs",
+        "needle": "export async function setShard(client, generation) {",
+        "before": 0,
+        "after": 5,
+        "explanation": "使用事务局部 set_config 参数化设置节点和 epoch。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
+        "needle": "DO $$ DECLARE t record; BEGIN",
+        "before": 0,
+        "after": 10,
+        "explanation": "业务表挂接逐行 shard_owner_guard；全局表使用独立节点校验，映射表保留 control 任期保护。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "主节点通过准入并提交",
+        "steps": [
+          {
+            "title": "核对派发",
+            "actor": "主节点",
+            "event": "教学模拟 · canDispatch",
+            "explain": "租约有效，主归属一致，未暂停。",
+            "state": {
+              "准入": "通过",
+              "事务": "未开始"
+            },
+            "lines": []
+          },
+          {
+            "title": "写入身份",
+            "actor": "业务连接",
+            "event": "教学模拟 · setShard",
+            "explain": "事务携带节点和用户分片 epoch。",
+            "state": {
+              "准入": "通过",
+              "事务": "待校验"
+            },
+            "lines": []
+          },
+          {
+            "title": "锁行提交",
+            "actor": "PostgreSQL",
+            "event": "教学模拟 · check_shard",
+            "explain": "节点角色与两张映射一致，允许提交。",
+            "state": {
+              "准入": "通过",
+              "事务": "已提交"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "SQL 拒写与路由复核",
+        "steps": [
+          {
+            "title": "提交旧归属",
+            "actor": "旧主节点",
+            "event": "教学模拟 · SQL",
+            "explain": "用户映射已切换，仍携带旧归属。",
+            "state": {
+              "写入": "待核对",
+              "节点": "旧主"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝写入",
+            "actor": "PostgreSQL",
+            "event": "教学模拟 · SH001",
+            "explain": "行触发器发现节点不匹配。",
+            "state": {
+              "写入": "SH001",
+              "节点": "待复核"
+            },
+            "lines": []
+          },
+          {
+            "title": "刷新归属",
+            "actor": "旧主节点",
+            "event": "教学模拟 · shardFailure",
+            "explain": "确认用户已移到别处，此用户请求失败。",
+            "state": {
+              "写入": "拒绝",
+              "节点": "其余分片继续服务"
+            },
+            "lines": []
+          },
+          {
+            "title": "处理持续分歧",
+            "actor": "诊断分支",
+            "event": "教学模拟 · isolate",
+            "explain": "若原先认为自己是主，刷新后仍如此或刷新失败则隔离。",
+            "state": {
+              "写入": "拒绝",
+              "节点": "持续分歧时隔离"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "只在 HTTP 入口核对主归属，足以阻止旧节点写库吗？",
+      "options": [
+        "足够，缓存永远一致",
+        "不够，SQL 还要核对 owner、节点角色与 epoch",
+        "只检查用户名称即可"
+      ],
+      "answer": 1,
+      "explanation": "迁移和后台任务存在并发窗口，数据库写入时必须再次校验。"
+    },
+    "stage": "s17-sharding",
+    "ownership": {
+      "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+      "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+    },
+    "reference": {
+      "session": "s17 设计与源码长文",
+      "url": "/course/handbook.html#module-s17",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。"
+    }
+  },
+  {
+    "id": "s17-move",
+    "title": "先停写，再搬历史与切换归属",
+    "principle": "操作单绑定用户与节点，暂停并 drain 后复制；先提交 PG，再发布 etcd，最后恢复派发。",
+    "problem": "用户搬到另一个节点，怎样避免两个磁盘副本同时接着执行？",
+    "change": {
+      "before": "用户固定留在原主节点，节点磁盘互不共享。",
+      "added": "admin 手动迁移、持久暂停、按身份复制和不确定失败处理。",
+      "kept": "用户 UUID、数值 uid、原生 Thread 历史及 Hub 授权保持相同。"
+    },
+    "concepts": [
+      {
+        "term": "moveUser",
+        "meaning": "control 持单用户锁，创建操作单并暂停，随后 drain、copy、switchUser、resume、finishMove。"
+      },
+      {
+        "term": "tar / uid",
+        "meaning": "CODEX_HOME 由用户 uid 导出，workspace 用服务身份导出并保留数值属主。"
+      },
+      {
+        "term": "paused",
+        "meaning": "PG 持久暂停保护复制与不确定提交；失败标记操作单并保持暂停，需运维核对恢复。"
+      }
+    ],
+    "mechanism": "beginMove 在任期事务中创建 30 分钟有效的操作单并持久暂停。每节点独立密钥证明调用节点，六个迁移接口按操作单核对用户、control/源/目标和步骤状态。源节点停止新派发与新媒体轮询，drain 等待既有工作并关闭用户进程。home 与 workspace 按各自身份导出，关联 blob 与 BM25 一并搬运；接收限制 1 GiB、检查空间、验证条目并清除特殊权限位。switchUser 先提交 PG 归属与 switched 状态，再发布 etcd override；两端刷新后 finishMove 推进 resumed 并解除暂停。任何失败都尝试 failMove 保持暂停，不自动回退或重放。",
+    "design": {
+      "decision": "复制完成前保持源归属；切换先提交 PG 再发布 etcd；失败保持暂停和已提交归属。",
+      "reason": "原生 SQLite 和 JSONL 在节点磁盘，PG 会话索引无法凭空恢复历史。",
+      "alternative": "先改路由再拷贝会把请求送到不完整目标；拷贝期间继续写会造成两份不同历史。",
+      "cost": "迁移需要源和目标在线、固定绝对部署目录及相同 uid 映射；PG 与 etcd 无跨库原子提交，存在需人工核对的暂停窗口。"
+    },
+    "source": {
+      "file": "stages/s17-sharding/server/modules/sharding/move.mjs",
+      "needle": "export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {",
+      "before": 0,
+      "after": 21,
+      "explanation": "control 先开迁移操作单（beginMove），之后每一步都带着操作单 id：源节点暂停并等执行中轮次结束 → 推进为 copying → 拷贝 → 推进为 copied → 先提交数据库再写 etcd 完成切换（switchUser）→ 目标与源节点恢复 → finishMove。切换只发生在拷贝成功之后；提交结果不确定时不复活旧磁盘，两份副本都保留供恢复。"
+    },
+    "sources": [
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/transfer.mjs",
+        "needle": "export function exportTree(root, record, kind) {",
+        "before": 0,
+        "after": 19,
+        "explanation": "home 以用户 uid，workspace 以服务身份执行导出。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/transfer-worker.mjs",
+        "needle": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();",
+        "before": 0,
+        "after": 16,
+        "explanation": "仅跳过 CODEX_HOME 顶层 tmp；其余链接、特殊文件和不合法属主被拒。"
+      },
+      {
+        "file": "stages/s17-sharding/server/modules/sharding/control.mjs",
+        "needle": "  async switchUser(userId, shardId, operationId) {",
+        "before": 0,
+        "after": 16,
+        "explanation": "先在任期保护的数据库事务里把操作单推进为 switched 并更新 user_shards，提交之后才把 override 写进 etcd。etcd 写失败时用户保持暂停、操作单记为失败，不会出现“etcd 已切换、数据库仍是旧分片”的窗口；两库不是原子事务，所以顺序必须是先 PG 后 etcd。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "搬完后在新节点续聊",
+        "steps": [
+          {
+            "title": "暂停并等待",
+            "actor": "control / 源节点",
+            "event": "教学模拟 · pause / drain",
+            "explain": "创建操作单并持久暂停；停止新派发与新媒体轮询，等待既有工作并关闭用户进程。",
+            "state": {
+              "归属": "源节点",
+              "派发": "暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "复制数据",
+            "actor": "源→目标",
+            "event": "教学模拟 · copy",
+            "explain": "操作单进入 copying；按身份导出，限制接收大小、核对磁盘空间与条目，复制成功推进 copied。",
+            "state": {
+              "归属": "源节点",
+              "数据": "目标已校验"
+            },
+            "lines": []
+          },
+          {
+            "title": "切换映射",
+            "actor": "control",
+            "event": "教学模拟 · switchUser",
+            "explain": "在 PG 事务提交归属与 switched 后，再发布 etcd override，随后刷新两端。",
+            "state": {
+              "归属": "目标节点",
+              "派发": "仍暂停"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复续聊",
+            "actor": "目标节点",
+            "event": "教学模拟 · resume",
+            "explain": "两端解除本地暂停后，finishMove 同时提交 resumed 与 PG paused=false，用相同历史续接 Thread。",
+            "state": {
+              "归属": "目标节点",
+              "派发": "已恢复"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "复制失败与恢复提交不确定",
+        "steps": [
+          {
+            "title": "复制失败",
+            "actor": "目标节点",
+            "event": "教学模拟 · copy",
+            "explain": "未通过校验，不切换归属；源和已产生的目标副本保留。",
+            "state": {
+              "失败点": "copy",
+              "归属": "源节点"
+            },
+            "lines": []
+          },
+          {
+            "title": "记录失败",
+            "actor": "control",
+            "event": "教学模拟 · failMove",
+            "explain": "以原任期记录 failed 并保持 PG 暂停；不自动恢复源，也不重放操作单。",
+            "state": {
+              "操作单": "failed",
+              "派发": "暂停待核对"
+            },
+            "lines": []
+          },
+          {
+            "title": "另一失败窗口",
+            "actor": "control",
+            "event": "教学模拟 · finishMove COMMIT",
+            "explain": "如果收尾提交回复丢失，目标可能已开始执行，不能启用旧磁盘。",
+            "state": {
+              "失败点": "finishMove COMMIT",
+              "归属": "目标节点"
+            },
+            "lines": []
+          },
+          {
+            "title": "保持暂停",
+            "actor": "control",
+            "event": "教学模拟 · failMove",
+            "explain": "尝试持久化 failed 与暂停，保留已提交归属；若失败记录也被拒绝，则由运维核对真实状态。",
+            "state": {
+              "失败点": "提交结果不确定",
+              "派发": "请求暂停并等待核对"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "解除暂停的 COMMIT 回复丢失，可以立即恢复旧磁盘吗？",
+      "options": [
+        "可以，旧副本还在",
+        "可以，同时让两边服务",
+        "不可以，重新暂停并保留目标归属，核对后恢复"
+      ],
+      "answer": 2,
+      "explanation": "目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。"
+    },
+    "stage": "s17-sharding",
+    "ownership": {
+      "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+      "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+    },
+    "reference": {
+      "session": "s17 设计与源码长文",
+      "url": "/course/handbook.html#module-s17",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。"
+    }
+  }
+]

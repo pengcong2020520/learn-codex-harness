@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.runs/
+.data/
+/workspace/
+.DS_Store
+backups/
+.deploy.lock
+.deploy-pending
+
+nodes/

@@ -224,3 +224,38 @@ test('s16 SQL 补充摘录仍强制唯一 needle',t=>{
  const f=fixture(t);f.edit('lessons/s16.json',rows=>{rows[2].sources[0].needle='missing-trigger';});
  assert.throws(f.build,/Source needle missing or ambiguous/);
 });
+
+test('s17 三课覆盖四个 catalog 实验，策略、准入、SQL 与迁移逐字命中',()=>{
+ const output=buildCurriculumData(),lessons=output.lessons.filter(l=>l.stage==='s17-sharding');
+ assert.deepEqual(lessons.map(l=>l.id),['s17-routing','s17-fencing','s17-move']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s17-sharding');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s17-sharding/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...e.relatedExperiments]);
+ assert.deepEqual(experiments.map(e=>e.catalogId).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key]);
+  assert.equal(exp.command,`npm run lesson -- ${original.id}`);assert.equal(exp.mode,'offline');
+ }
+ const excerpts=lessons.flatMap(l=>[l.source,...l.sources]);
+ for(const name of ['shardOf','async canDispatch(', 'async admit(', 'SH001', 'CREATE TRIGGER shard_owner_guard', 'FOR SHARE', 'moveUser', 'await drain(', 'await copy(', "new Set(['tmp'])"])assert.ok(excerpts.some(e=>e.code.includes(name)),name);
+ for(const excerpt of excerpts){
+  const original=fs.readFileSync(path.join(source,'../../..',excerpt.file),'utf8');
+  assert.ok(excerpt.code.includes(excerpt.needle));
+  assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
+ }
+ const mechanisms=JSON.parse(fs.readFileSync(path.join(source,'mechanisms/s17.json'),'utf8'));
+ assert.deepEqual(mechanisms.map(m=>m.id),['s17-route-retry','s17-user-move']);
+ const final=m=>m.steps.reduce((s,step)=>({...s,...step.state}),m.state0);
+ assert.equal(final(mechanisms[0]).响应,'200');
+ assert.equal(final(mechanisms[0]).重试,'1');
+ assert.equal(final(mechanisms[1]).归属,'目标分片');
+ assert.equal(final(mechanisms[1]).数据,'新节点续聊');
+ for(const m of mechanisms)for(const step of m.steps)assert.match(step.flow[2],/\S+ [\w/]+/,'箭头为简短动作 + 专有名词');
+});
+
+
+test('s17 迁移补充摘录必须唯一命中',t=>{
+ const f=fixture(t);f.edit('lessons/s17.json',rows=>{rows[2].sources[0].needle='missing-export';});
+ assert.throws(f.build,/Source needle missing or ambiguous/);
+});

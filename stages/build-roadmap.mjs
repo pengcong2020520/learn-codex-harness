@@ -23,13 +23,16 @@ const phases = [
     ["s14", "用户隔离", "每个用户一个独立的运行环境，互不可见", "已完成"],
     ["s15", "权限与资源 Hub", "角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改", "已完成"],
     ["s16", "协调面", "节点是否存活变成租约是否过期", "已完成"],
-    ["s17", "分片与路由", "用户按分片落到节点，路由表变了大家同时知道", "规划中"],
+    ["s17", "分片与路由", "用户按分片落到节点，路由表变了大家同时知道", "已完成"],
     ["s18", "副本与故障接管", "主节点坏了，从节点接手，丢多少说得清", "规划中"]] },
 ];
 
 const esc = s => String(s).replace(/[&<>"]/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[v]));
 
 export function render() {
+  const stageDirectories = new Map(fs.readdirSync(path.join(root, 'stages'), { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && /^s\d{2}-/.test(entry.name))
+    .map(entry => [entry.name.slice(0, 3), entry.name]));
   const W = 1600, LX = 48, LW = 196, CX = 270, GAP = 28, TOP = 150;
   // 每行最多四张；六张时分为两行三张，宽度按当行数量计算。
   let nextY = TOP;
@@ -76,10 +79,9 @@ export function render() {
       row.forEach(([id, title, desc, status], si) => {
         const x = CX + si * (cw + GAP), planned = status === "规划中";
         const line = status === "开发中" || status === "已完成" ? "#4A7BB7" : p.line;
-        if (id === "s13") a.push(`<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md" target="_blank" rel="noopener noreferrer">`);
-        if (id === "s16") a.push(`<a href="${repositoryUrl}/stages/s16-coordination/README.md" target="_blank" rel="noopener noreferrer">`);
-        if (id === "s15") a.push(`<a href="${repositoryUrl}/stages/s15-hub/README.md" target="_blank" rel="noopener noreferrer">`);
-        if (id === "s14") a.push(`<a href="${repositoryUrl}/stages/s14-isolation/README.md" target="_blank" rel="noopener noreferrer">`);
+        const directory = stageDirectories.get(id);
+        const linked = !planned && directory && fs.existsSync(path.join(root, 'stages', directory, 'README.md'));
+        if (linked) a.push(`<a href="${esc(repositoryUrl)}/stages/${directory}/README.md" target="_blank" rel="noopener noreferrer">`);
         rect(x, cy, cw, ch, planned ? "#FBFBF9" : "#FFFFFF", line, 14, planned ? "6 5" : "");
         rect(x + 18, cy + 18, 48, 26, planned ? "#E3E7EA" : line, "none", 8);
         t(id, x + 42, cy + 36, 15, planned ? "#6B7780" : "#FFFFFF", 700, "middle");
@@ -89,7 +91,7 @@ export function render() {
         }
         t(title, x + (status ? 18 : 78), cy + (status ? 68 : 37), 19, planned ? "#6B7780" : "#1F2933", 700);
         wrap(desc, cw - 36, 15).forEach((text, li) => t(text, x + 18, cy + (status ? 96 : 74) + li * 22, 15, "#6B7780"));
-        if (["s13", "s14", "s15", "s16"].includes(id)) a.push("</a>");
+        if (linked) a.push("</a>");
         if (si < row.length - 1) arrow(`M${x + cw + 4},${cy + ch / 2} L${x + cw + GAP - 6},${cy + ch / 2}`, p.line, planned ? "5 4" : "");
       });
       // 换行或换组：从末张卡片下方折回下一行第一张，端点按各行宽度计算。
@@ -110,7 +112,7 @@ export function render() {
   t("学完 s11，就是仓库里的 app/：在它之上做成 Docker 部署、Web 工作台和互动课程。", LX, H - 36, 16, "#6B7780");
 
   const defs = `<defs>${[...new Set([...colors, "#9AA5B1"])].map(c => `<marker id="arrow-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join("")}</defs>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s11 分四组：跑起来、变成服务、装配 Agent、上生产；s12 到 s18 为第五组：走向生产，s12–s16 已完成，s17、s18 规划中。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s11 分四组：跑起来、变成服务、装配 Agent、上生产；s12 到 s18 为第五组：走向生产，s12–s17 已完成，s18 规划中。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

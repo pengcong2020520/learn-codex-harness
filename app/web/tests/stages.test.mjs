@@ -390,7 +390,7 @@ test('s13 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s13');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17'].includes(t.id)));
 });
 test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s14&view=run');
@@ -412,7 +412,7 @@ test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s14');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17'].includes(t.id)));
 });
 
 test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
@@ -435,7 +435,7 @@ test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s15');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17'].includes(t.id)));
 });
 
 test('s16 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
@@ -458,5 +458,28 @@ test('s16 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.deepEqual(f.calls,[]);
  f.run("state.tab='learn';renderPane()");
  assert.equal(f.courses.at(-1),'s16');
- assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16'].includes(t.id)));
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17'].includes(t.id)));
+});
+
+test('s17 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+ const f=frontend('?stage=s17&view=run');
+ f.run('render()');
+ assert.equal(f.run('state.target'),'s17');
+ assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s17')"),true);
+ const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
+ assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
+ assert.match(shell,new RegExp(stageCountLabel));
+ assert.doesNotMatch(shell,/data-action="(?:real|preview|reconnect)"|data-tab="(?:files|knowledge)"/);
+ assert.match(pane,/s17 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机/);
+ assert.match(pane,/stages\/s17-sharding\/README\.md/);
+ assert.match(pane,/AGENT_SERVER_URL=http:\/\/127\.0\.0\.1:4335/);
+ f.run("state.statuses=[{id:'s17',status:'ready'}]");
+ assert.equal(f.run('live()'),false);
+ await f.run('refresh()');
+ await f.run('subscribe()');
+ await assert.rejects(f.run("api('/sessions')"),/SSH 隧道/);
+ assert.deepEqual(f.calls,[]);
+ f.run("state.tab='learn';renderPane()");
+ assert.equal(f.courses.at(-1),'s17');
+ assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s17','s17'].includes(t.id)));
 });

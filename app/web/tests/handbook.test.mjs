@@ -19,7 +19,8 @@ const chapterSources=[
  ['s13','s13-auth.html','s13-auth'],
  ['s14','s14-isolation.html','s14-isolation'],
  ['s15','s15-hub.html','s15-hub'],
- ['s16','s16-coordination.html','s16-coordination']
+ ['s16','s16-coordination.html','s16-coordination'],
+ ['s17','s17-sharding.html','s17-sharding']
 ];
 const retainedAnchors={
  'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',
@@ -64,7 +65,8 @@ test('长文静态：阶段目录、锚点、资源与新增章节的逐行源�
   assert.match(chapter,/class="term" data-definition="[^"]+"/);
   assert.ok(chapter.indexOf(`/course/assets/${stage}-architecture.svg`)<chapter.indexOf(`id="${stage}-screen-2"`),'总架构图位于前段');
   assert.match(chapter,new RegExp(`href="/course/changes.html#${stage}"`));
-  assert.doesNotMatch(chapter,/拆分|迁移|原来的|改名/,'正文不讲项目改造史');
+  // s17 的用户迁移是产品能力，不能把该术语误判为项目改造史。
+  assert.doesNotMatch(chapter,stage==='s17'?/拆分|原来的|改名/:/拆分|迁移|原来的|改名/,'正文不讲项目改造史');
   const snippets=[...chapter.matchAll(/<code data-source="([^"]+)" data-start="(\d+)" data-end="(\d+)">([\s\S]*?)<\/code>/g)];
   assert.ok(snippets.length>=2,'有可核对的真实源码');
   for(const [,file,start,end,code] of snippets){
@@ -259,5 +261,12 @@ test('s16 长文总架构图声明与 SVG 一致的宽高',()=>{
  const html=fs.readFileSync(new URL('modules/s16-coordination.html',course),'utf8');
  const tag=html.match(/<img[^>]+src="\/course\/assets\/s16-architecture\.svg"[^>]*>/)[0];
  const svg=fs.readFileSync(new URL('assets/s16-architecture.svg',course),'utf8');
+ for(const attr of ['width','height'])assert.equal(tag.match(new RegExp(`${attr}="(\\d+)"`))?.[1],svg.match(new RegExp(`${attr}="(\\d+)"`))?.[1]);
+});
+
+test('s17 长文总架构图声明与 SVG 一致的宽高',()=>{
+ const html=fs.readFileSync(new URL('modules/s17-sharding.html',course),'utf8');
+ const tag=html.match(/<img[^>]+src="\/course\/assets\/s17-architecture\.svg"[^>]*>/)[0];
+ const svg=fs.readFileSync(new URL('assets/s17-architecture.svg',course),'utf8');
  for(const attr of ['width','height'])assert.equal(tag.match(new RegExp(`${attr}="(\\d+)"`))?.[1],svg.match(new RegExp(`${attr}="(\\d+)"`))?.[1]);
 });

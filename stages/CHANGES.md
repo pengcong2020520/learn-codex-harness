@@ -205,3 +205,17 @@
 **新增环境变量**：`AGENT_NODE_ID`、`ETCD_ENDPOINT`、`AGENT_NODE_A_DB_PASSWORD`、`AGENT_NODE_B_DB_PASSWORD`、`AGENT_NODE_C_DB_PASSWORD`、`REDIS_PASSWORD`、`ETCD_ROOT_PASSWORD`、`ETCD_NODE_A_PASSWORD`、`ETCD_NODE_B_PASSWORD`、`ETCD_NODE_C_PASSWORD`
 
 **新增数据迁移**：`015-cluster-term.sql`
+
+<a id="s17"></a>
+
+## s17：分片与路由：让用户找到自己的主节点
+
+相比 [s16-coordination](s16-coordination/)：按用户分片，缓存定位后转发；数据库校验 owner 与 epoch，手动迁移先暂停再切换。
+
+**新增模块**：用户分片（分片与路由，归属缓存、路由与手动迁移）
+
+**新增接口**：`GET /cluster/route`、`POST /cluster/move`
+
+**新增环境变量**：`AGENT_NODE_KEY_A`、`AGENT_NODE_KEY_A_HASH`、`AGENT_NODE_KEY_B`、`AGENT_NODE_KEY_B_HASH`、`AGENT_NODE_KEY_C`、`AGENT_NODE_KEY_C_HASH`、`AGENT_TRANSFER_MAX_BYTES`、`AGENT_SHARD_STRATEGY`、`ETCD_HEALTH_PASSWORD`
+
+**新增数据迁移**：`016-sharding.sql`、`017-shard-diagnostics.sql`、`018-move-security.sql`

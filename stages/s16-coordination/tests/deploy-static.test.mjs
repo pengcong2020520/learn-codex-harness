@@ -56,7 +56,7 @@ test('docs: 协调面教学模板、离线实验、两幅时序与三段真实�
   for (const heading of ['要回答的问题', '核心概念', '分工', '跑起来看看', '关键代码', '限制', '小结']) {
     const index = chapter.indexOf(`## ${heading}\n`); assert.ok(index > previous, heading); previous = index;
   }
-  assert.match(chapter, /下一章：s17 分片与路由/);
+  assert.match(chapter, /下一章：\[s17 分片与路由\]\(\.\.\/s17-sharding\/README\.md\)/);
   const design = read('docs/design.md');
   assert.equal([...design.matchAll(/```mermaid/g)].length, 2);
   const sources = ['server/modules/coordination/index.mjs'].map(read).join('\n');

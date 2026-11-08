@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy", "s13-auth", "s14-isolation", "s15-hub", "s16-coordination"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy", "s13-auth", "s14-isolation", "s15-hub", "s16-coordination", "s17-sharding"];
 // 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
 export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
@@ -43,6 +43,7 @@ const layers = n => [
   { name: "用户隔离", mods: [M("runtimes", "用户运行环境", "owner 路由、进程池与 uid", 14, ["runtimes/"])] },
   { name: "权限与资源", mods: [M("hub", "资源 Hub", "可见范围、权益与审批", 15, ["hub/"])] },
   { name: "协调面", mods: [M("coordination", "集群协调", "租约、选举与任期隔离", 16, ["coordination/", "data/write.mjs"])] },
+  { name: "分片与路由", mods: [M("sharding", "用户分片", "归属缓存、路由与手动迁移", 17, ["sharding/", "data/diagnostics.mjs"])] },
 ];
 // 基础设施：每个阶段都需要、但不单独成章的代码，画在服务框底部的一条带里。until 表示只到哪个阶段为止算基础设施。
 const infra = [{ files: "config/", name: "配置" }, { files: "storage/", name: "存储" }, { files: "codex/", name: "Codex 连接" }, { files: "role/", name: "角色文件", until: 4 }, { files: "data/paths.mjs", name: "路径" }];
@@ -103,6 +104,8 @@ const stageList = [
     path: [["accounts", "核对用户身份"], ["hub", "检查资源与权益"], ["gate", "绑定权限快照"], ["runtimes", "核验用户 Skill"], ["codex", "执行本轮任务"], ["usage", "按 owner 记账"]] },
   { title: "协调面：租约、选举与任期隔离", sub: "节点是否存活变成租约是否过期；新 control 推进数据库任期后恢复，旧任期拒写。",
     path: [["coordination", "注册 lease"], ["coordination", "当选 control"], ["pg", "推进数据库任期"], ["messages", "恢复持久任务"], ["deployment", "开放 ready"], ["codex", "执行本轮任务"]] },
+  { title: "分片与路由：让用户找到自己的主节点", sub: "按用户分片，缓存定位后转发；数据库校验 owner 与 epoch，手动迁移先暂停再切换。",
+    path: [["api", "接收认证请求"], ["sharding", "查 routeOf 缓存"], ["sharding", "转发用户主节点"], ["pg", "核对 shard 与 epoch"], ["codex", "续接原生历史"], ["events", "透传 SSE 事件"]] },
 ];
 // 按阶段编号取：stages[11] 是 s11。
 export const stages = Object.fromEntries(stageList.map((st, i) => [stageNo[i], st]));
@@ -261,7 +264,7 @@ const check = process.argv.includes("--check");
 const problems = checkBindings();
 if (problems.length) throw new Error(`总图和代码对不上，请更新 stages/build-architecture.mjs 里的模块绑定：\n${problems.join("\n")}`);
 dirs.forEach((dir, i) => {
-  // s12–s16 独立快照保持原样；全仓登记图由课程资产承载。
+  // s12–s17 独立快照保持原样；全仓登记图由课程资产承载。
   const file = stageNo[i] >= 12 ? path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`) : path.join(root, dir, "images/architecture.svg"), body = renderArchitecture(stageNo[i]);
   if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
   else fs.writeFileSync(file, body);

@@ -106,12 +106,12 @@ test('长文生成内容使用最新术语解释，源章节不需要手工改�
   assert.ok(matches>0&&untouched>0);
 });
 
-test('全景默认已完成的 s16，增量从 s15 到 s16',()=>{
- assert.equal(stages.at(-1).id,'s16');
- assert.equal(stages.at(-1).previous,'s15-hub');
+test('全景默认已完成的 s17，增量从 s16 到 s17',()=>{
+ assert.equal(stages.at(-1).id,'s17');
+ assert.equal(stages.at(-1).previous,'s16-coordination');
  const overview=read('overview.html');
- assert.match(overview,/data-stage-panel="s16"(?! hidden)/);
- assert.match(overview,/<output[^>]*>s16<\/output>/);
- assert.match(overview,/\/course\/assets\/s16-architecture.svg/);
- assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['集群协调']);
+ assert.match(overview,/data-stage-panel="s17"(?! hidden)/);
+ assert.match(overview,/<output[^>]*>s17<\/output>/);
+ assert.match(overview,/\/course\/assets\/s17-architecture.svg/);
+ assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['用户分片']);
 });
