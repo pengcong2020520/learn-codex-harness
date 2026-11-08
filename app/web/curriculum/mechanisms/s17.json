@@ -4,8 +4,8 @@
     "title": "非主入口：缓存转发、409 与一次刷新",
     "question": "路由缓存过期后，怎样找到新的用户主节点？",
     "file": "stages/s17-sharding/server/modules/sharding/routing.mjs",
-    "start": 16,
-    "end": 36,
+    "start": 22,
+    "end": 42,
     "expect": "export function validateRoute(cache, userId, nodeId, revision) {",
     "notes": {},
     "actors": [
@@ -105,12 +105,12 @@
   },
   {
     "id": "s17-user-move",
-    "title": "迁移：等待旧轮次，拷贝历史，再切换",
+    "title": "迁移：开操作单，等旧轮次，拷贝历史，先提交再切换",
     "question": "怎样让用户在新节点续聊而不产生双写？",
     "file": "stages/s17-sharding/server/modules/sharding/move.mjs",
-    "start": 4,
-    "end": 37,
-    "expect": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {",
+    "start": 3,
+    "end": 24,
+    "expect": "export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {",
     "notes": {},
     "actors": [
       [
@@ -137,7 +137,8 @@
     "state0": {
       "派发": "源节点",
       "归属": "源分片",
-      "数据": "源副本"
+      "数据": "源副本",
+      "操作单": "无"
     },
     "steps": [
       {
@@ -147,71 +148,88 @@
           "发起 moveUser"
         ],
         "say": "教学模拟：admin 指定 username 与目标 shardId，control 持单用户锁。",
-        "state": {}
+        "state": {},
+        "lines": [
+          3,
+          4
+        ]
       },
       {
         "flow": [
           "control",
           "meta",
-          "持久化 paused"
+          "开操作单 beginMove"
         ],
-        "say": "先写 paused=true，再关闭源节点的新入场与派发。",
+        "say": "在任期事务里写 paused=true 并创建操作单（源、目标、有效期 30 分钟）；之后每个内部请求都要带操作单 id。",
         "state": {
-          "派发": "暂停"
-        }
+          "派发": "暂停",
+          "操作单": "paused"
+        },
+        "lines": [
+          6,
+          7
+        ]
       },
       {
         "flow": [
           "control",
           "source",
-          "等待 drain"
+          "暂停并 drain"
         ],
-        "say": "等待执行中轮次、索引、媒体、HTTP 与用户进程引用结束，关闭进程与 SSE。",
-        "state": {}
+        "say": "源节点核对操作单与调用节点后关闭新入场，等待执行中轮次、索引、媒体与用户进程引用结束。",
+        "state": {},
+        "lines": [
+          9,
+          10
+        ]
       },
       {
         "flow": [
           "source",
           "target",
-          "拷贝 CODEX_HOME"
+          "拷贝 CODEX_HOME 与 workspace"
         ],
-        "say": "用户 uid 导出原生历史，跳过顶层 tmp/ 临时辅助文件。",
+        "say": "home 以用户 uid 导出并跳过 tmp/；workspace 以服务身份导出；目标节点限制大小、校验条目、清除特殊权限位后暂存在同级目录。",
         "state": {
-          "数据": "home 已复制"
-        }
-      },
-      {
-        "flow": [
-          "source",
-          "target",
-          "拷贝 workspace"
-        ],
-        "say": "服务身份读取用户工作区，保留数值 uid/gid；校验 tar、暂存发布并搬运关联 blob/BM25。",
-        "state": {
-          "数据": "目标已校验"
-        }
+          "数据": "目标已校验",
+          "操作单": "copying → copied"
+        },
+        "lines": [
+          11,
+          13
+        ]
       },
       {
         "flow": [
           "control",
           "meta",
-          "切换 override"
+          "切换 switchUser"
         ],
-        "say": "更新 PG user_shards，按任期 guardedPut 发布 override，再提交；不是跨库原子事务。",
+        "say": "先在数据库事务里推进为 switched 并改 user_shards，提交之后才写 etcd override；两库不是原子事务，所以顺序必须是先 PG 后 etcd。",
         "state": {
-          "归属": "目标分片"
-        }
+          "归属": "目标分片",
+          "操作单": "switched"
+        },
+        "lines": [
+          14,
+          14
+        ]
       },
       {
         "flow": [
           "control",
           "target",
-          "刷新 resume"
+          "恢复 resume"
         ],
-        "say": "两端刷新缓存并解除本地暂停，最后持久化 paused=false。",
+        "say": "目标与源节点刷新缓存、解除本地暂停，control 收尾 finishMove。",
         "state": {
-          "派发": "目标节点"
-        }
+          "派发": "目标节点",
+          "操作单": "resumed"
+        },
+        "lines": [
+          15,
+          17
+        ]
       },
       {
         "flow": [
@@ -219,12 +237,16 @@
           "target",
           "续接 Thread"
         ],
-        "say": "任意入口的新请求路由到新主，使用同一用户原生历史继续对话。",
+        "say": "任意入口的新请求路由到新主，用同一份原生历史继续对话；旧主写入被 SH001 拒绝。",
         "state": {
           "数据": "新节点续聊"
-        }
+        },
+        "lines": [
+          18,
+          18
+        ]
       }
     ],
-    "takeaway": "copy 未完成不切换；回滚不确定保持暂停。恢复提交回复丢失时保留目标归属，避免旧副本复活。"
+    "takeaway": "拷贝没完成不切换；切换先提交数据库再发布 etcd；提交结果不确定时保持暂停、两份副本都保留，不让旧副本复活。"
   }
 ]

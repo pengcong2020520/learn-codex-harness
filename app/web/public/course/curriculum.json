@@ -8668,11 +8668,11 @@
         "file": "stages/s17-sharding/server/modules/sharding/strategy.mjs",
         "needle": "export const SLOT_COUNT = 64;",
         "before": 0,
-        "after": 10,
+        "after": 11,
         "explanation": "两种 shardOf 都返回分片 ID；slots 与 range 是不同策略。",
         "start": 3,
         "anchor": 3,
-        "code": "export const SLOT_COUNT = 64;\nexport const defaultSlots = () => Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) => [n, SHARDS[n % 3]]));\nexport const slotOf = id => createHash('sha256').update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;\nexport const strategies = {\n  slots: { shardOf: (userId, map) => map.slots[slotOf(userId)] },\n  range: { shardOf(userId) {\n    const prefix = String(userId).replaceAll('-', '').slice(0, 2);\n    if (!/^[a-f0-9]{2}$/i.test(prefix)) throw new Error('范围策略需要十六进制用户 ID。');\n    const n = parseInt(prefix, 16);\n    return n < 0x55 ? '0' : n < 0xaa ? '1' : '2';\n  } },",
+        "code": "export const SLOT_COUNT = 64;\nexport const defaultSlots = () => Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) => [n, SHARDS[n % 3]]));\nexport const slotOf = id => createHash('sha256').update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;\nexport const strategies = {\n  slots: { shardOf: (userId, map) => map.slots[slotOf(userId)] },\n  range: { shardOf(userId) {\n    const prefix = String(userId).replaceAll('-', '').slice(0, 2);\n    if (!/^[a-f0-9]{2}$/i.test(prefix)) throw new Error('范围策略需要十六进制用户 ID。');\n    const n = parseInt(prefix, 16);\n    return n < 0x55 ? '0' : n < 0xaa ? '1' : '2';\n  } },\n};",
         "hash": "84901b8222e736ac0ec76ee2b5a2772936018d23eacece47c156ae3cb55710e8"
       },
       "sources": [
@@ -8680,23 +8680,23 @@
           "file": "stages/s17-sharding/server/modules/sharding/cache.mjs",
           "needle": "  routeOf(userId) {",
           "before": 0,
-          "after": 8,
+          "after": 7,
           "explanation": "override 优先；旧数字 override 统一转换为文本分片 ID。",
           "start": 67,
           "anchor": 67,
-          "code": "  routeOf(userId) {\n    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.\n    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.\n    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);\n    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;\n    const owner = this.shards[shardId];\n    return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };\n  }\n  async close() { this.closed = true; clearInterval(this.timer); clearTimeout(this.retry); await this.watcher?.cancel(); }",
+          "code": "  routeOf(userId) {\n    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.\n    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.\n    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);\n    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;\n    const owner = this.shards[shardId];\n    return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };\n  }",
           "hash": "76899c578297a8a44d4e96229c34b8c00b7f14a8949ffaa999b2c7a03111b770"
         },
         {
           "file": "stages/s17-sharding/server/modules/sharding/routing.mjs",
           "needle": "export function validateRoute(cache, userId, nodeId, revision) {",
           "before": 0,
-          "after": 20,
+          "after": 17,
           "explanation": "主节点核验版本；只有 STALE_ROUTE 允许整表刷新后重试一次。",
-          "start": 16,
-          "anchor": 16,
-          "code": "export function validateRoute(cache, userId, nodeId, revision) {\n  if (!/^\\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) < BigInt(revision)) throw staleRoute();\n}\nexport async function routedRequest({ cache, userId, nodeId, members, local, remote }) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    const route = cache.routeOf(userId), address = targetOf(route, members);\n    try {\n      const result = route.primary === nodeId ? await local(route) : await remote(address, route);\n      if (result?.status === 409 && result.headers?.get('x-cluster-error') === 'STALE_ROUTE') {\n        await result.body?.cancel(); throw staleRoute();\n      }\n      return result;\n    } catch (error) {\n      if (error.code !== 'STALE_ROUTE' || attempt === 1) throw error;\n      await cache.refresh();\n    }\n  }\n}\nconst hop = new Set(['host','connection','keep-alive','transfer-encoding','proxy-authenticate','proxy-authorization','te','trailer','upgrade','x-node-key','x-route-revision','x-route-user']);\nexport function forwardHeaders(headers, key, route, userId) {\n  const result = Object.fromEntries(Object.entries(headers).filter(([k]) => !hop.has(k.toLowerCase())));",
-          "hash": "1467fce477176937fc57593d9bbd161adcd6d7985a36da7fc2625502c1e5c94e"
+          "start": 22,
+          "anchor": 22,
+          "code": "export function validateRoute(cache, userId, nodeId, revision) {\n  if (!/^\\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) < BigInt(revision)) throw staleRoute();\n}\nexport async function routedRequest({ cache, userId, nodeId, members, local, remote }) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    const route = cache.routeOf(userId), address = targetOf(route, members);\n    try {\n      const result = route.primary === nodeId ? await local(route) : await remote(address, route);\n      if (result?.status === 409 && result.headers?.get('x-cluster-error') === 'STALE_ROUTE') {\n        await result.body?.cancel(); throw staleRoute();\n      }\n      return result;\n    } catch (error) {\n      if (error.code !== 'STALE_ROUTE' || attempt === 1) throw error;\n      await cache.refresh();\n    }\n  }\n}",
+          "hash": "093a751fe4afe3b8aebbbc4479e5fcb79e8d27a6085bb45cb332129221156dcb"
         }
       ],
       "scenarios": [
@@ -8866,7 +8866,7 @@
           "meaning": "事务锁住用户与分片两条映射，到提交才释放，阻止切换越过旧事务。"
         }
       ],
-      "mechanism": "owns 要求有效 lease 且缓存 primary 为本节点。canDispatch 再核对本地暂停、PG paused 与 shard_id；admit 不通过返回不可用。业务事务设置 app.node 和 app.shard_epoch，check_shard 同时锁定两张映射并核对真实 SQL 角色。UPDATE 对 OLD 和 NEW 都校验。SH001 刷新后若原先自认为主且仍是主或刷新失败则隔离；确认用户已移走则保留其他分片服务。",
+      "mechanism": "owns 要求有效 lease 且缓存 primary 为本节点。canDispatch 在查询 PG 前后核对本地归属和暂停，同时比较 PG paused 与 shard_id；媒体 tick 在每次 poll 前也执行这一检查，drain 等待已登记的媒体工作。业务事务设置 app.node 和 app.shard_epoch，check_shard 锁定两张映射并核对真实 SQL 角色；操作单 paused 允许在途轮次收尾，copying 及后续受保护状态在用户暂停时拒写。UPDATE 校验 OLD 与 NEW。全局表以列级权限限制账号与会话变更。SH001 依据被拒行 owner 刷新并决定是否隔离。",
       "design": {
         "decision": "入口准入和数据库行触发器分别守住派发与落库。",
         "reason": "HTTP 检查无法覆盖在途事务和后台 worker；缓存也可能落后。",
@@ -8879,43 +8879,43 @@
         "before": 0,
         "after": 5,
         "explanation": "准入同时比较本地缓存和持久化映射，paused 时拒绝新派发。",
-        "start": 7,
-        "anchor": 7,
-        "code": "  async canDispatch(userId) {\n    if (!this.owns(userId) || this.paused.has(userId)) return false;\n    const row = (await this.pool.query('SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1', [userId])).rows[0];\n    return row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;\n  }\n  async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable('用户正在迁移、归属尚未初始化或本节点不是分片主节点。'); }",
-        "hash": "8b44746a044a00ed3823949de978d6076cb472654f46e5e3fcfaec125a623c57"
+        "start": 18,
+        "anchor": 18,
+        "code": "  async canDispatch(userId) {\n    if (!this.owns(userId) || this.paused.has(userId)) return false;\n    const row = (await this.pool.query('SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1', [userId])).rows[0];\n    return this.owns(userId) && !this.paused.has(userId) && row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;\n  }\n  async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable('用户正在迁移、归属尚未初始化或本节点不是分片主节点。'); }",
+        "hash": "865fdc451abbfaf41340541c768bdf28fe25d04422c22cc70d82e3d580e39612"
       },
       "sources": [
         {
-          "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
-          "needle": "CREATE FUNCTION agent_data.check_shard(owner uuid) RETURNS void",
+          "file": "stages/s17-sharding/server/modules/data/migrations/018-move-security.sql",
+          "needle": "CREATE OR REPLACE FUNCTION agent_data.check_shard(owner uuid) RETURNS void",
           "before": 0,
-          "after": 12,
-          "explanation": "两张映射持锁到事务结束；真实 SQL 角色与 app.node 也必须一致。",
-          "start": 37,
-          "anchor": 37,
-          "code": "CREATE FUNCTION agent_data.check_shard(owner uuid) RETURNS void\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nDECLARE actual record; supplied text := current_setting('app.node',true);\nBEGIN\n -- Lock BOTH mappings until commit: migration cannot overtake an old owner's transaction.\n SELECT s.node_id,s.epoch INTO actual FROM user_shards u JOIN shard_owners s USING(shard_id)\n WHERE u.user_id=owner FOR SHARE OF u,s;\n IF actual IS NULL OR actual.node_id IS DISTINCT FROM supplied OR\n    actual.epoch::text IS DISTINCT FROM nullif(current_setting('app.shard_epoch',true),'') OR\n    current_user <> 'agent_' || replace(supplied,'-','_') THEN\n  RAISE EXCEPTION 'missing, foreign or stale shard owner' USING ERRCODE='SH001';\n END IF;\nEND $$;",
-          "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
+          "after": 14,
+          "explanation": "两张映射持锁到提交；核对真实 SQL 角色与 epoch，并在用户暂停且操作单处于 copying、copied、switched 或 failed 时拒写；paused 阶段允许既有轮次收尾。",
+          "start": 30,
+          "anchor": 30,
+          "code": "CREATE OR REPLACE FUNCTION agent_data.check_shard(owner uuid) RETURNS void\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nDECLARE actual record; supplied text := current_setting('app.node',true);\nBEGIN\n -- Lock BOTH mappings until commit: migration cannot overtake an old owner's transaction.\n SELECT s.node_id,s.epoch,u.shard_id,u.paused INTO actual FROM user_shards u JOIN shard_owners s USING(shard_id)\n WHERE u.user_id=owner FOR SHARE OF u,s;\n IF actual IS NULL OR (actual.paused AND EXISTS(SELECT 1 FROM move_operations WHERE user_id=owner AND state IN ('copying','copied','switched','failed'))) OR actual.node_id IS DISTINCT FROM supplied OR\n    actual.epoch::text IS DISTINCT FROM nullif(current_setting('app.shard_epoch',true),'') OR\n    current_user <> 'agent_' || replace(supplied,'-','_') THEN\n  RAISE EXCEPTION 'missing, foreign or stale shard owner' USING ERRCODE='SH001', DETAIL=json_build_object(\n    'ownerId',owner,'shardId',actual.shard_id,'primary',actual.node_id,'epoch',actual.epoch::text,\n    'nodeId',supplied,'suppliedEpoch',current_setting('app.shard_epoch',true))::text;\n END IF;\nEND $$;",
+          "hash": "83147c59efdd679009f68338baabae90c16b51ddb2ad1ff88404119596ed9ecc"
         },
         {
           "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
           "needle": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger",
           "before": 0,
-          "after": 10,
+          "after": 9,
           "explanation": "修改 owner 前后的两行归属都要检查。",
           "start": 50,
           "anchor": 50,
-          "code": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nBEGIN\n IF current_setting('app.maintenance',true)='on' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper) THEN\n  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\n END IF;\n IF TG_OP<>'INSERT' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(OLD))); END IF;\n IF TG_OP<>'DELETE' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(NEW))); END IF;\n IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\nEND $$;\n-- Node identities are SQL roles, not an unchecked caller-supplied app.node.",
+          "code": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nBEGIN\n IF current_setting('app.maintenance',true)='on' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper) THEN\n  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\n END IF;\n IF TG_OP<>'INSERT' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(OLD))); END IF;\n IF TG_OP<>'DELETE' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(NEW))); END IF;\n IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\nEND $$;",
           "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
         },
         {
           "file": "stages/s17-sharding/server/modules/sharding/fence.mjs",
           "needle": "export async function shardFailure(error, generation, origin, statement) {",
           "before": 0,
-          "after": 18,
+          "after": 16,
           "explanation": "拒写依据实际被拒行的 owner 诊断；刷新结果决定是否隔离。",
           "start": 7,
           "anchor": 7,
-          "code": "export async function shardFailure(error, generation, origin, statement) {\n  if (error.code !== 'SH001' || error.shardDiagnostic) return;\n  // The rejected ROW is authoritative. Requester identity alone cannot identify its shard.\n  const row = rowFenceDetail(error), owner = row.ownerId;\n  let before, after, refreshFailed = false;\n  try { before = owner && generation.routes?.routeOf(owner); } catch {}\n  try { await generation.routes?.refresh(); after = owner && generation.routes?.routeOf(owner); }\n  catch { refreshFailed = true; }\n  const believedPrimary = before?.primary === generation.nodeId;\n  const isolate = believedPrimary && (refreshFailed || after?.primary === generation.nodeId);\n  error.shardDiagnostic = { ownerId: owner || null, believedPrimary, refreshFailed, isolate };\n  logFailure(error, generation, origin, statement, 'SH001', {\n    classification: isolate ? 'stale-primary' : believedPrimary ? 'ownership-moved' : owner ? 'wrong-shard-write' : 'unknown-row-owner',\n    rowRouteBefore: before || null, rowRouteAfter: after || null, ...error.shardDiagnostic,\n  });\n  if (isolate) generation.isolate?.(refreshFailed ? 'shard-refresh-failed' : 'database-stale-shard');\n}\nexport async function setShard(client, generation) {\n  generation.assert();",
+          "code": "export async function shardFailure(error, generation, origin, statement) {\n  if (error.code !== 'SH001' || error.shardDiagnostic) return;\n  // The rejected ROW is authoritative. Requester identity alone cannot identify its shard.\n  const row = rowFenceDetail(error), owner = row.ownerId;\n  let before, after, refreshFailed = false;\n  try { before = owner && generation.routes?.routeOf(owner); } catch {}\n  try { await generation.routes?.refresh(); after = owner && generation.routes?.routeOf(owner); }\n  catch { refreshFailed = true; }\n  const believedPrimary = before?.primary === generation.nodeId;\n  const isolate = believedPrimary && (refreshFailed || after?.primary === generation.nodeId);\n  error.shardDiagnostic = { ownerId: owner || null, believedPrimary, refreshFailed, isolate };\n  logFailure(error, generation, origin, statement, 'SH001', {\n    classification: isolate ? 'stale-primary' : believedPrimary ? 'ownership-moved' : owner ? 'wrong-shard-write' : 'unknown-row-owner',\n    rowRouteBefore: before || null, rowRouteAfter: after || null, ...error.shardDiagnostic,\n  });\n  if (isolate) generation.isolate?.(refreshFailed ? 'shard-refresh-failed' : 'database-stale-shard');\n}",
           "hash": "91b1d4071e3e5e7608d621da4ef5f35b9679cf182159229b6af00a48e36553eb"
         },
         {
@@ -8933,11 +8933,11 @@
           "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
           "needle": "DO $$ DECLARE t record; BEGIN",
           "before": 0,
-          "after": 11,
+          "after": 10,
           "explanation": "业务表挂接逐行 shard_owner_guard；全局表使用独立节点校验，映射表保留 control 任期保护。",
           "start": 74,
           "anchor": 74,
-          "code": "DO $$ DECLARE t record; BEGIN\n FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='agent_data'\n  AND tablename NOT IN ('migrations','cluster_term','shard_owners','user_shards') LOOP\n  EXECUTE format('DROP TRIGGER IF EXISTS cluster_term_guard ON agent_data.%I',t.tablename);\n  IF t.tablename IN ('users','auth_sessions','agent_versions','plans','imports') THEN\n   EXECUTE format('CREATE TRIGGER global_node_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_global_node()',t.tablename);\n  ELSE\n   EXECUTE format('CREATE TRIGGER shard_owner_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH ROW EXECUTE FUNCTION agent_data.require_shard_owner()',t.tablename);\n  END IF;\n END LOOP;\nEND $$;\n",
+          "code": "DO $$ DECLARE t record; BEGIN\n FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='agent_data'\n  AND tablename NOT IN ('migrations','cluster_term','shard_owners','user_shards') LOOP\n  EXECUTE format('DROP TRIGGER IF EXISTS cluster_term_guard ON agent_data.%I',t.tablename);\n  IF t.tablename IN ('users','auth_sessions','agent_versions','plans','imports') THEN\n   EXECUTE format('CREATE TRIGGER global_node_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_global_node()',t.tablename);\n  ELSE\n   EXECUTE format('CREATE TRIGGER shard_owner_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH ROW EXECUTE FUNCTION agent_data.require_shard_owner()',t.tablename);\n  END IF;\n END LOOP;\nEND $$;",
           "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
         }
       ],
@@ -9066,7 +9066,7 @@
     {
       "id": "s17-move",
       "title": "先停写，再搬历史与切换归属",
-      "principle": "暂停、等待在途轮次、拷贝、切换 override 与 PG、恢复，全部通过后新主续聊。",
+      "principle": "操作单绑定用户与节点，暂停并 drain 后复制；先提交 PG，再发布 etcd，最后恢复派发。",
       "problem": "用户搬到另一个节点，怎样避免两个磁盘副本同时接着执行？",
       "change": {
         "before": "用户固定留在原主节点，节点磁盘互不共享。",
@@ -9076,7 +9076,7 @@
       "concepts": [
         {
           "term": "moveUser",
-          "meaning": "控制节点持单用户锁，依次暂停、drain、copy、switchUser、resume。"
+          "meaning": "control 持单用户锁，创建操作单并暂停，随后 drain、copy、switchUser、resume、finishMove。"
         },
         {
           "term": "tar / uid",
@@ -9084,60 +9084,60 @@
         },
         {
           "term": "paused",
-          "meaning": "PG 持久暂停是失败时的保护状态；无法确认补偿时保持暂停。"
+          "meaning": "PG 持久暂停保护复制与不确定提交；失败标记操作单并保持暂停，需运维核对恢复。"
         }
       ],
-      "mechanism": "control 先持久化 paused=true，源节点停止新派发并等待轮次、HTTP、索引、媒体和进程引用结束，再关闭用户进程。HTTP 流式 tar 复制 home 与 workspace，home 跳过顶层 tmp/；校验条目后暂存并发布，关联 blob 与 BM25 一并搬运。switchUser 更新 PG 映射并 guardedPut override，刷新两端后解除暂停。失败确认回滚才恢复源；恢复提交回复丢失时保留目标归属并重新暂停，不能盲目启用旧副本。",
+      "mechanism": "beginMove 在任期事务中创建 30 分钟有效的操作单并持久暂停。每节点独立密钥证明调用节点，六个迁移接口按操作单核对用户、control/源/目标和步骤状态。源节点停止新派发与新媒体轮询，drain 等待既有工作并关闭用户进程。home 与 workspace 按各自身份导出，关联 blob 与 BM25 一并搬运；接收限制 1 GiB、检查空间、验证条目并清除特殊权限位。switchUser 先提交 PG 归属与 switched 状态，再发布 etcd override；两端刷新后 finishMove 推进 resumed 并解除暂停。任何失败都尝试 failMove 保持暂停，不自动回退或重放。",
       "design": {
-        "decision": "复制完成前保持源归属，恢复前让两端刷新；失败时宁可继续暂停。",
+        "decision": "复制完成前保持源归属；切换先提交 PG 再发布 etcd；失败保持暂停和已提交归属。",
         "reason": "原生 SQLite 和 JSONL 在节点磁盘，PG 会话索引无法凭空恢复历史。",
         "alternative": "先改路由再拷贝会把请求送到不完整目标；拷贝期间继续写会造成两份不同历史。",
         "cost": "迁移需要源和目标在线、固定绝对部署目录及相同 uid 映射；PG 与 etcd 无跨库原子提交，存在需人工核对的暂停窗口。"
       },
       "source": {
         "file": "stages/s17-sharding/server/modules/sharding/move.mjs",
-        "needle": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {",
+        "needle": "export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {",
         "before": 0,
-        "after": 33,
-        "explanation": "切换只发生在 copy 成功后；恢复提交结果不确定时不复活旧磁盘。",
-        "start": 4,
-        "anchor": 4,
-        "code": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {\n  if (!SHARDS.includes(shardId)) throw new Error('分片必须是 0、1、2。');\n  const source = cache.routeOf(userId), target = cache.shards[shardId];\n  if (!target?.primary) throw unavailable('目标分片无主节点。');\n  if (source.shardId === shardId) {\n    if (await control.isPaused?.(userId)) { await resume(source.primary, userId); await control.pause(userId, false); return { resumed: true, shardId }; }\n    return { unchanged: true };\n  }\n  let switched = false, paused = false, releaseStarted = false;\n  try {\n    await control.pause(userId, true); paused = true;\n    await pause(source.primary, userId);\n    await drain(source.primary, userId);\n    await copy(source.primary, target.primary, userId);\n    await control.switchUser(userId, shardId); switched = true;\n    await resume(target.primary, userId);\n    await resume(source.primary, userId);\n    releaseStarted = true;\n    await control.pause(userId, false);\n    return { userId, from: source.shardId, shardId };\n  } catch (error) {\n    if (releaseStarted) {\n      // A lost resume COMMIT reply can mean the target already dispatched. Never revive the old copy.\n      error.rollbackFailed = true;\n      await control.pause(userId, true).catch(() => {});\n      throw error;\n    }\n    try {\n      if (switched) await control.switchUser(userId, source.shardId);\n      if (paused && !error.rollbackFailed) { await resume(source.primary, userId); await control.pause(userId, false); }\n    } catch { error.rollbackFailed = true; }\n    // Uncertain rollback stays paused. A new control must never automatically resume an incomplete copy.\n    throw error;\n  }",
-        "hash": "446959bf8382325b7c7223f7cdcaaff06e0562e7b1672555f6a0af7714b6f34f"
+        "after": 21,
+        "explanation": "control 先开迁移操作单（beginMove），之后每一步都带着操作单 id：源节点暂停并等执行中轮次结束 → 推进为 copying → 拷贝 → 推进为 copied → 先提交数据库再写 etcd 完成切换（switchUser）→ 目标与源节点恢复 → finishMove。切换只发生在拷贝成功之后；提交结果不确定时不复活旧磁盘，两份副本都保留供恢复。",
+        "start": 3,
+        "anchor": 3,
+        "code": "export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {\n  if (!SHARDS.includes(shardId)) throw new Error('分片必须是 0、1、2。');\n  const term = control.coordination?.term();\n  const op = await control.beginMove(userId, shardId);\n  if (!op) return { unchanged: true };\n  try {\n    await pause(op.source_node, userId, op.id);\n    await drain(op.source_node, userId, op.id);\n    await control.advanceMove(op.id, 'paused', 'copying');\n    await copy(op.source_node, op.target_node, userId, op.id);\n    await control.advanceMove(op.id, 'copying', 'copied');\n    await control.switchUser(userId, shardId, op.id);\n    await resume(op.target_node, userId, op.id);\n    await resume(op.source_node, userId, op.id);\n    await control.finishMove(op);\n    return { userId, from: op.from_shard, shardId, operationId: op.id };\n  } catch (error) {\n    // Never revive an old disk after an uncertain COMMIT or publish; retain both copies for recovery.\n    await control.failMove(op.id, term).catch(() => { error.rollbackFailed = true; });\n    throw error;\n  }\n}",
+        "hash": "b54ddd8fc8204517f01068feb6a67251aa5453a5c3c718b3e3e2d4ad5bd39ba3"
       },
       "sources": [
         {
           "file": "stages/s17-sharding/server/modules/sharding/transfer.mjs",
           "needle": "export function exportTree(root, record, kind) {",
           "before": 0,
-          "after": 10,
+          "after": 19,
           "explanation": "home 以用户 uid，workspace 以服务身份执行导出。",
-          "start": 19,
-          "anchor": 19,
-          "code": "export function exportTree(root, record, kind) {\n  const directory = transferPath(root, record, kind); assertRealPath(directory);\n  const identity = kind === 'home' ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };\n  const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory, kind, String(record.uid)], {\n    ...identity, cwd: '/', env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore','pipe','pipe'],\n  });\n  const stderr = stderrCollector(); child.stderr.on('data', chunk => stderr.append(chunk));\n  const done = new Promise((resolve, reject) => {\n    child.once('error', error => reject(subprocessFailure(error, { kind, phase: 'export', stderr: stderr.text })));\n    child.once('close', (code, signal) => code === 0 ? resolve() : reject(subprocessFailure(new Error('用户目录 tar 导出失败。'),\n      { kind, phase: 'export', stderr: stderr.text, exitCode: code, signal })));",
-          "hash": "69a9418a0c29f5503436419b1f17aab7f6a11fe7fba2b95c064a830fd5e3cb18"
+          "start": 41,
+          "anchor": 41,
+          "code": "export function exportTree(root, record, kind) {\n  const directory = transferPath(root, record, kind); assertRealPath(directory);\n  const identity = kind === 'home' ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };\n  const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory, kind, String(record.uid)], {\n    ...identity, cwd: '/', env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore','pipe','pipe'],\n  });\n  const stderr = stderrCollector(); child.stderr.on('data', chunk => stderr.append(chunk));\n  const done = new Promise((resolve, reject) => {\n    child.once('error', error => reject(subprocessFailure(error, { kind, phase: 'export', stderr: stderr.text })));\n    child.once('close', (code, signal) => code === 0 ? resolve() : reject(subprocessFailure(new Error('用户目录 tar 导出失败。'),\n      { kind, phase: 'export', stderr: stderr.text, exitCode: code, signal })));\n  });\n  done.catch(() => {}); return { stream: child.stdout, done, async stop() {\n    if (child.exitCode === null && child.signalCode === null) {\n      child.stdout.destroy();\n      if (child.pid) await signalUserProcess(child.pid, 'SIGKILL', { ...identity, env: { PATH: '/usr/bin:/bin' } });\n    }\n    await done.catch(() => {});\n  } };\n}",
+          "hash": "702c0c3ffdd50de7951ad46d7400be6e0c91b29819ffe3a453d2ef98b3657308"
         },
         {
           "file": "stages/s17-sharding/server/modules/sharding/transfer-worker.mjs",
           "needle": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();",
           "before": 0,
-          "after": 15,
+          "after": 16,
           "explanation": "仅跳过 CODEX_HOME 顶层 tmp；其余链接、特殊文件和不合法属主被拒。",
           "start": 9,
           "anchor": 9,
-          "code": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();\nfunction inspect(target, top = false) {\n  const s = fs.lstatSync(target);\n  if (s.isSymbolicLink() || (!s.isDirectory() && !s.isFile()) || (s.isFile() && s.nlink !== 1)) throw new Error('迁移拒绝链接和特殊文件。');\n  if (!(kind === 'workspace' ? [0, uid] : [uid]).includes(s.uid) || ![uid, 1000].includes(s.gid)) throw new Error('迁移属主不匹配。');\n  if (s.isDirectory()) for (const name of fs.readdirSync(target)) {\n    if (top && skipTop.has(name)) continue;\n    if (name === '..' || /[\\x00-\\x1f\\x7f\\\\]/.test(name)) throw new Error('迁移文件名含控制字符。');\n    inspect(path.join(target, name));\n  }\n}\ntry {\n  inspect(root, true);\n  const child = spawn('tar', ['--create','--numeric-owner','--format=posix','--file=-',...[...skipTop].map(name => `--exclude=./${name}`),'--directory',root,'.'], { stdio: ['ignore','inherit','inherit'] });\n  child.once('error', e => { console.error(e.message); process.exitCode = 1; });\n  child.once('exit', code => { process.exitCode = code ?? 1; });",
+          "code": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();\nfunction inspect(target, top = false) {\n  const s = fs.lstatSync(target);\n  if (s.isSymbolicLink() || (!s.isDirectory() && !s.isFile()) || (s.isFile() && s.nlink !== 1)) throw new Error('迁移拒绝链接和特殊文件。');\n  if (!(kind === 'workspace' ? [0, uid] : [uid]).includes(s.uid) || ![uid, 1000].includes(s.gid)) throw new Error('迁移属主不匹配。');\n  if (s.isDirectory()) for (const name of fs.readdirSync(target)) {\n    if (top && skipTop.has(name)) continue;\n    if (name === '..' || /[\\x00-\\x1f\\x7f\\\\]/.test(name)) throw new Error('迁移文件名含控制字符。');\n    inspect(path.join(target, name));\n  }\n}\ntry {\n  inspect(root, true);\n  const child = spawn('tar', ['--create','--numeric-owner','--format=posix','--file=-',...[...skipTop].map(name => `--exclude=./${name}`),'--directory',root,'.'], { stdio: ['ignore','inherit','inherit'] });\n  child.once('error', e => { console.error(e.message); process.exitCode = 1; });\n  child.once('exit', code => { process.exitCode = code ?? 1; });\n} catch (e) { console.error(e.message); process.exitCode = 1; }",
           "hash": "11379654cfc7de616fa9a9af97025d6f8120cca34b55d9c13a268b720462544b"
         },
         {
           "file": "stages/s17-sharding/server/modules/sharding/control.mjs",
-          "needle": "  async switchUser(userId, shardId) {",
+          "needle": "  async switchUser(userId, shardId, operationId) {",
           "before": 0,
-          "after": 13,
-          "explanation": "PG 映射与 etcd override 按控制任期更新，但不构成跨库原子事务。",
-          "start": 65,
-          "anchor": 65,
-          "code": "  async switchUser(userId, shardId) {\n    await this.cache.refresh();\n    const old = this.cache.overrides[userId];\n    const previousShard = this.cache.routeOf(userId).shardId;\n    try {\n      await this.locked(async db => {\n        await db.query('UPDATE agent_data.user_shards SET shard_id=$2 WHERE user_id=$1', [userId, shardId]);\n        // guardedPut accepts wire strings verbatim; RouteCache decodes JSON.\n        await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, JSON.stringify(shardId));\n      });\n      await this.cache.refresh();\n    } catch (error) {\n      // An explicit previous-shard override is equivalent to an absent override and guardedPut is fenced.\n      try {",
-          "hash": "4ce29e1c941334642283912d7e12ed51bb49e3055cb702d01ce12f1683632052"
+          "after": 16,
+          "explanation": "先在任期保护的数据库事务里把操作单推进为 switched 并更新 user_shards，提交之后才把 override 写进 etcd。etcd 写失败时用户保持暂停、操作单记为失败，不会出现“etcd 已切换、数据库仍是旧分片”的窗口；两库不是原子事务，所以顺序必须是先 PG 后 etcd。",
+          "start": 110,
+          "anchor": 110,
+          "code": "  async switchUser(userId, shardId, operationId) {\n    const term = this.coordination.term();\n    try {\n      await this.locked(async db => {\n        const op = await this.#advanceMove(db, operationId, 'copied', 'switched');\n        if (op.user_id !== userId || op.to_shard !== shardId) throw new AppError('操作单用户或目标不匹配。', 403);\n        const result = await db.query('UPDATE agent_data.user_shards SET shard_id=$2 WHERE user_id=$1 AND shard_id=$3 AND paused RETURNING user_id', [userId,shardId,op.from_shard]);\n        if (!result.rows[0]) throw new AppError('源分片或暂停状态变化。', 409);\n      }); // COMMIT must complete before publishing the override.\n      await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, JSON.stringify(shardId));\n      await this.cache.refresh();\n    } catch (error) {\n      await this.failMove(operationId, term).catch(() => { error.rollbackFailed = true; });\n      (this.log || console.error)(`迁移切换失败，用户保持暂停: operation=${operationId}, user=${userId}`);\n      throw error;\n    }\n  }",
+          "hash": "d8c2165fcbe28c34369585bbe7dd2c0bc5f84b020857df471dc2ee62afbb76f3"
         }
       ],
       "scenarios": [
@@ -9149,7 +9149,7 @@
               "title": "暂停并等待",
               "actor": "control / 源节点",
               "event": "教学模拟 · pause / drain",
-              "explain": "停新派发，等执行中工作结束并关闭用户进程。",
+              "explain": "创建操作单并持久暂停；停止新派发与新媒体轮询，等待既有工作并关闭用户进程。",
               "state": {
                 "归属": "源节点",
                 "派发": "暂停"
@@ -9160,7 +9160,7 @@
               "title": "复制数据",
               "actor": "源→目标",
               "event": "教学模拟 · copy",
-              "explain": "home 按用户 uid，workspace 按服务身份；跳过 home/tmp。",
+              "explain": "操作单进入 copying；按身份导出，限制接收大小、核对磁盘空间与条目，复制成功推进 copied。",
               "state": {
                 "归属": "源节点",
                 "数据": "目标已校验"
@@ -9171,7 +9171,7 @@
               "title": "切换映射",
               "actor": "control",
               "event": "教学模拟 · switchUser",
-              "explain": "override 和 PG 映射切换，刷新两端。",
+              "explain": "在 PG 事务提交归属与 switched 后，再发布 etcd override，随后刷新两端。",
               "state": {
                 "归属": "目标节点",
                 "派发": "仍暂停"
@@ -9182,7 +9182,7 @@
               "title": "恢复续聊",
               "actor": "目标节点",
               "event": "教学模拟 · resume",
-              "explain": "解除暂停后用同一用户历史续接 Thread。",
+              "explain": "两端解除本地暂停后，finishMove 同时提交 resumed 与 PG paused=false，用相同历史续接 Thread。",
               "state": {
                 "归属": "目标节点",
                 "派发": "已恢复"
@@ -9199,7 +9199,7 @@
               "title": "复制失败",
               "actor": "目标节点",
               "event": "教学模拟 · copy",
-              "explain": "未通过校验，不切换归属。",
+              "explain": "未通过校验，不切换归属；源和已产生的目标副本保留。",
               "state": {
                 "失败点": "copy",
                 "归属": "源节点"
@@ -9207,35 +9207,35 @@
               "lines": []
             },
             {
-              "title": "确认补偿",
+              "title": "记录失败",
               "actor": "control",
-              "event": "教学模拟 · rollback",
-              "explain": "确认源归属后才恢复；不确认则继续暂停。",
+              "event": "教学模拟 · failMove",
+              "explain": "以原任期记录 failed 并保持 PG 暂停；不自动恢复源，也不重放操作单。",
               "state": {
-                "失败点": "copy",
-                "派发": "确认后恢复源"
+                "操作单": "failed",
+                "派发": "暂停待核对"
               },
               "lines": []
             },
             {
               "title": "另一失败窗口",
               "actor": "control",
-              "event": "教学模拟 · COMMIT",
-              "explain": "如果是解除暂停的提交回复丢失，目标可能已经开始执行。",
+              "event": "教学模拟 · finishMove COMMIT",
+              "explain": "如果收尾提交回复丢失，目标可能已开始执行，不能启用旧磁盘。",
               "state": {
-                "失败点": "resume COMMIT",
+                "失败点": "finishMove COMMIT",
                 "归属": "目标节点"
               },
               "lines": []
             },
             {
-              "title": "重新暂停",
+              "title": "保持暂停",
               "actor": "control",
-              "event": "教学模拟 · pause",
-              "explain": "保留目标归属，要求 admin 核对并重试。",
+              "event": "教学模拟 · failMove",
+              "explain": "尝试持久化 failed 与暂停，保留已提交归属；若失败记录也被拒绝，则由运维核对真实状态。",
               "state": {
-                "失败点": "resume COMMIT",
-                "派发": "保持暂停"
+                "失败点": "提交结果不确定",
+                "派发": "请求暂停并等待核对"
               },
               "lines": []
             }
@@ -9247,7 +9247,7 @@
         "options": [
           "可以，旧副本还在",
           "可以，同时让两边服务",
-          "不可以，重新暂停并保留目标归属，核对后重试"
+          "不可以，重新暂停并保留目标归属，核对后恢复"
         ],
         "answer": 2,
         "explanation": "目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。"

@@ -216,6 +216,6 @@
 
 **新增接口**：`GET /cluster/route`、`POST /cluster/move`
 
-**新增环境变量**：`AGENT_NODE_KEY`、`AGENT_SHARD_STRATEGY`、`ETCD_HEALTH_PASSWORD`
+**新增环境变量**：`AGENT_NODE_KEY_A`、`AGENT_NODE_KEY_A_HASH`、`AGENT_NODE_KEY_B`、`AGENT_NODE_KEY_B_HASH`、`AGENT_NODE_KEY_C`、`AGENT_NODE_KEY_C_HASH`、`AGENT_TRANSFER_MAX_BYTES`、`AGENT_SHARD_STRATEGY`、`ETCD_HEALTH_PASSWORD`
 
-**新增数据迁移**：`016-sharding.sql`、`017-shard-diagnostics.sql`
+**新增数据迁移**：`016-sharding.sql`、`017-shard-diagnostics.sql`、`018-move-security.sql`

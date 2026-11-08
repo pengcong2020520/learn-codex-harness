@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-08T13:23:39.469Z",
+  "verifiedAt": "2026-11-08T14:31:09.924Z",
   "modelProvider": "local simulated Responses",
   "embeddingProvider": null,
   "semanticQualityVerified": false,
@@ -172,7 +172,7 @@
       "directory": "s17-sharding",
       "command": "npm test",
       "passed": true,
-      "tests": 476,
+      "tests": 492,
       "skipped": 0
     }
   ]
