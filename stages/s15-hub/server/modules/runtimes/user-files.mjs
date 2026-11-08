@@ -66,7 +66,7 @@ export function runUserFileTask(uid, task, { maxBytes = 1024 * 1024 } = {}) {
       if (failure) return reject(failure);
       try {
         const metadata = JSON.parse(Buffer.concat(meta).toString('utf8'));
-        if (code !== 0 || metadata.error) throw Object.assign(new Error(metadata.error || '用户文件辅助进程失败。'), { code: metadata.code });
+        if (code !== 0 || metadata.error) throw Object.assign(new Error(metadata.error || '用户文件辅助进程失败。'), { code: metadata.code, status: metadata.status });
         resolve({ data: Buffer.concat(output), metadata });
       } catch (error) { reject(error); }
     });

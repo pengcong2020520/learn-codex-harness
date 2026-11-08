@@ -1,3 +1,5 @@
+import { knowledgeBinding } from '../knowledge/directories.mjs';
+import { validateKnowledgeBindings } from '../data/paths.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { transaction } from '../data/database.mjs';
@@ -51,7 +53,7 @@ export class Hub {
   }
   visible(user = this.current().user) {
     return [...this.current().resources.values()].filter(r => decision(user, 'read', r) === 200)
-      .map(r => ({ type: r.type, id: r.id, name: r.name || r.id, scope: r.scope, owner: r.owner ?? null,
+      .map(r => ({ type: r.type, id: r.id, name: r.title || r.name || r.id, scope: r.scope, owner: r.owner ?? null,
         actions: ACTIONS.filter(action => decision(user, action, r) === 200) }));
   }
   async plan(id = currentIdentity()?.userId, active = 0) {
@@ -72,9 +74,9 @@ export class Hub {
     if (snapshot.user.disabled_at) return [];
     return [...this.systemSkills(), ...[...snapshot.resources.values()].filter(r => r.type === 'skill' && r.files && !Array.isArray(r.files) && (owns(snapshot.user, r) || r.scope === 'system' || (r.scope === 'shared' && snapshot.user.grants.includes(key(r)))) && decision(snapshot.user, 'use', r) === 200).map(packagedSkill)];
   }
-  async audit(client, actor, action, type, id, before, after) {
-    await this.query(`INSERT INTO agent_data.permission_events(instance_id,actor_id,action,resource_type,resource_id,before_state,after_state)
-      VALUES($1,$2,$3,$4,$5,$6,$7)`, [actor.id, action, type, id, JSON.stringify(before), JSON.stringify(after)], client);
+  async audit(client, actor, action, type, id, before, after, detail = null) {
+    await this.query(`INSERT INTO agent_data.permission_events(instance_id,actor_id,action,resource_type,resource_id,before_state,after_state,detail)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [actor.id, action, type, id, JSON.stringify(before), JSON.stringify(after), JSON.stringify(detail)], client);
   }
   async mutate(type, id, action, operation) {
     const actorId = currentIdentity()?.userId;
@@ -124,13 +126,13 @@ export class Hub {
     return { revoked: true };
   }
   async publish(id, enabled = true) {
-    return this.mutate('knowledge', id, 'share', async (client, actor, row) => {
+    return this.mutate('knowledge', id, 'share', async (client, actor, row, grants) => {
       if (actor.role !== 'admin') throw new AppError('只有 admin 可以发布。', 403);
       // 取消发布回到 private；不会复活发布前的旧授权。
       await this.query('DELETE FROM agent_data.resource_grants WHERE instance_id=$1 AND resource_type=$2 AND resource_id=$3', ['knowledge', id], client);
       const scope = enabled ? 'system' : 'private';
       await this.query('UPDATE agent_data.knowledge_bases SET visibility=$3 WHERE instance_id=$1 AND id=$2', [id, scope], client);
-      await this.audit(client, actor, 'publish', 'knowledge', id, row.visibility, scope); return { scope };
+      await this.audit(client, actor, 'publish', 'knowledge', id, row.visibility, scope, { revokedGrantees: grants }); return { scope };
     });
   }
   async registerKnowledge(owner, id, binding) {
@@ -143,10 +145,59 @@ export class Hub {
         if (old.source_root !== binding.sourceRoot || old.wiki_root !== binding.wikiRoot) throw new AppError('知识库绑定路径冲突。', 409);
         return false;
       }
+      // A configured default must not silently resurrect a library explicitly deleted via HTTP.
+      if ((await this.query("SELECT 1 FROM agent_data.permission_events WHERE instance_id=$1 AND resource_type='knowledge' AND resource_id=$2 AND action='knowledge:delete' LIMIT 1", [id], client)).rows.length) return false;
       const count = Number((await this.query('SELECT count(*) AS n FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2', [owner], client)).rows[0].n);
-      if (actor.role !== 'admin' && count >= actor.plan.max_knowledge_bases) throw new AppError('知识库数量达到权益上限。', 403);
+      if (actor.role !== 'admin' && count >= actor.plan.max_knowledge_bases) throw new AppError('知识库数量达到权益上限。', 403, 'PLAN_LIMIT');
       await this.query('INSERT INTO agent_data.knowledge_bases(instance_id,id,owner_id,source_root,wiki_root) VALUES($1,$2,$3,$4,$5)', [id, owner, binding.sourceRoot, binding.wikiRoot], client);
       return true;
+    });
+  }
+  async createKnowledge({ kbId, title, ...unknown }, prepare) {
+    if (Object.keys(unknown).length || typeof kbId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(kbId) ||
+        typeof title !== 'string' || !title.trim() || title.length > 200)
+      throw new AppError('需要有效的 kbId（1–64 位小写字母、数字、连字符）和 1–200 字标题。', 400);
+    const binding = knowledgeBinding(kbId);
+    return transaction(this.pool, async client => {
+      await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,15))', [], client);
+      const actor = await this.user(currentIdentity().userId, client);
+      const old = (await this.query('SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND id=$2', [kbId], client)).rows[0];
+      if (old) throw new AppError('知识库 ID 已存在。', 409);
+      const count = Number((await this.query('SELECT count(*) AS n FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2', [actor.id], client)).rows[0].n);
+      if (actor.role !== 'admin' && count >= actor.plan.max_knowledge_bases) throw new AppError('知识库数量达到权益上限。', 403, 'PLAN_LIMIT');
+      const existing = (await this.query('SELECT id,source_root,wiki_root FROM agent_data.knowledge_bases WHERE instance_id=$1', [], client)).rows;
+      try { validateKnowledgeBindings({ ...Object.fromEntries(existing.map(r => [r.id, { sourceRoot: r.source_root, wikiRoot: r.wiki_root }])), [kbId]: binding }); }
+      catch { throw new AppError('知识库路径与已有绑定重叠。', 409); }
+      await this.query(`INSERT INTO agent_data.knowledge_bases(instance_id,id,owner_id,source_root,wiki_root,title,user_created,visibility)
+        VALUES($1,$2,$3,$4,$5,$6,true,'private')`, [kbId, actor.id, binding.sourceRoot, binding.wikiRoot, title.trim()], client);
+      await this.audit(client, actor, 'knowledge:create', 'knowledge', kbId, null, { ownerId: actor.id, title: title.trim(), visibility: 'private', ...binding });
+      // The lock covers count, registry insertion and filesystem preparation. A failed prepare rolls back SQL.
+      await prepare(actor.id, binding, client);
+      return { kbId, title: title.trim(), ownerId: actor.id, visibility: 'private', ...binding };
+    });
+  }
+  async deleteKnowledge(id, cleanup) {
+    return this.mutate('knowledge', id, 'delete', async (client, actor, row, grants) => {
+      // Keep resource writes out while revoking their source records. Task startup is also
+      // serialized by the service ExecutionBoundary; the indexing worker uses Hub's lock.
+      await this.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,1))', [], client);
+      const active = (await this.query(`SELECT 1 FROM agent_data.tasks t JOIN agent_data.conversations c
+        ON c.instance_id=t.instance_id AND c.id=t.thread_id WHERE t.instance_id=$1
+        AND t.status IN ('starting','running','steering') AND $2=ANY(c.hub_knowledge) LIMIT 1`, [id], client)).rows.length;
+      const indexing = (await this.query("SELECT 1 FROM agent_data.knowledge_jobs WHERE instance_id=$1 AND kb_id=$2 AND state='running' LIMIT 1", [id], client)).rows.length;
+      if (active || indexing) throw new AppError('知识库仍被执行中任务挂载。', 409, 'KNOWLEDGE_BUSY');
+      const indexes = (await this.query('SELECT manifest FROM agent_data.knowledge_indexes WHERE instance_id=$1 AND kb_id=$2', [id], client)).rows;
+      await cleanup(row, indexes, client);
+      await this.query('DELETE FROM agent_data.resource_grants WHERE instance_id=$1 AND resource_type=$2 AND resource_id=$3', ['knowledge', id], client);
+      await this.query(`UPDATE agent_data.resources SET state='revoked',updated_at=now() WHERE instance_id=$1 AND owner_id=$2
+        AND (locator=$3 OR starts_with(locator,$3 || '/') OR locator=$4 OR starts_with(locator,$4 || '/'))`, [row.owner_id, row.source_root, row.wiki_root], client);
+      await this.query('UPDATE agent_data.knowledge_bases SET index_revision=NULL WHERE instance_id=$1 AND id=$2', [id], client);
+      await this.query('UPDATE agent_data.wiki_pages SET current_version=NULL WHERE instance_id=$1 AND kb_id=$2', [id], client);
+      for (const table of ['wiki_versions', 'wiki_pages', 'knowledge_mounts', 'knowledge_jobs', 'knowledge_indexes'])
+        await this.query(`DELETE FROM agent_data.${table} WHERE instance_id=$1 AND kb_id=$2`, [id], client);
+      await this.query('DELETE FROM agent_data.knowledge_bases WHERE instance_id=$1 AND id=$2', [id], client);
+      await this.audit(client, actor, 'knowledge:delete', 'knowledge', id, { ...row, grantees: grants }, null);
+      return { kbId: id, deleted: true };
     });
   }
   async upload(body) {

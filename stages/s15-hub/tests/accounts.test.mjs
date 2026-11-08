@@ -265,7 +265,7 @@ test('migration: 迁移登记可重入，不重复执行已登记版本；新 SQ
   }, release() {} };
   const pool = { connect: async () => client };
   await migrate(pool); await migrate(pool);
-  assert.equal(rows.length, 13); assert.equal(scripts.length, 1);
+  assert.equal(rows.length, 14); assert.equal(scripts.length, 1);
   assert.match(scripts[0], /CREATE TABLE IF NOT EXISTS agent_data.auth_sessions/);
   assert.match(scripts[0], /role IN \('admin','user'\)/);
   assert.match(scripts[0], /users_username_normalized/);

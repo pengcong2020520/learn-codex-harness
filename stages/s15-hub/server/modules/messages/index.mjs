@@ -1,10 +1,11 @@
+import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
 import { currentIdentity, runOwner } from "../accounts/context.mjs";
 import { userWorkspace } from "../accounts/workspace.mjs";
 import { validateEffort } from "../gateway/router.mjs";
 import { randomUUID } from "node:crypto";
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
-import { runChecks, stepOf } from "../workflows/index.mjs";
+import { checksPassed, runChecks, stepOf } from "../workflows/index.mjs";
 
 const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]), steps: null });
 
@@ -149,19 +150,26 @@ export class MessageService {
       if (id !== "chat") throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
       return CHAT;
     }
-    return workflows.resolve(id, params);
+    return workflows.resolve(id, params, kbId => Boolean(this.permissionHub && effectiveKnowledgeMounts(this.config.agent, this.permissionHub).some(m => m.kbId === kbId && m.actions.includes('update'))));
   }
   // 一步结束后的去向：验收不通过 → needs-review（不暂停队列、不自动重试）；还有下一步 → 需要确认就 waiting，
   // 否则直接排队进入下一步；最后一步 → completed。
-  outcome(job, turn) {
+  async outcome(job, turn) {
     if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
-    let workflow;
-    try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
-    const step = stepOf(workflow, job.step || 0);
-    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? userWorkspace(this.config.agent.descriptorWorkspace || this.config.agent.runtime.workspaceDir, job.userId) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
-    if (checks && !checks.every(check => check.passed)) return { status: "needs-review", checks };
-    if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
-    return { status: "completed", checks };
+    try {
+      const resolve = () => this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+      // 完成通知只有 owner 身份，没有 Hub 快照；验收与派发一样，按持久化任务的 owner 重新加载权限。
+      const workflow = this.permissionHub
+        ? await runOwner(job.userId, () => this.permissionHub.withUser(job.userId, resolve))
+        : resolve();
+      const step = stepOf(workflow, job.step || 0);
+      const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? userWorkspace(this.config.agent.descriptorWorkspace || this.config.agent.runtime.workspaceDir, job.userId) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+      if (step.checks.length && !checksPassed(step.checks, checks)) return { status: "needs-review", checks };
+      if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+      return { status: "completed", checks };
+    } catch (error) {
+      return { status: "needs-review", checks: null, error: `Workflow 验收未完成：${error.message}` };
+    }
   }
   // 模型在任务中提议另一个 workflow：只校验并记录为 proposed，不排队、不授权。由工具调用，context 来自权限门。
   async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
@@ -436,11 +444,11 @@ export class MessageService {
       turn = this.sessions.getTurn(job.threadId, turnId);
     const ended = terminal.includes(turn?.status);
     if (ended) await this.sessions.persistTurn?.(job.threadId, turn);
-    const { status, checks, step: next } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
+    const { status, checks, step: next, error } = ended ? await this.outcome(job, turn) : { status: "running", checks: null };
     if (
       !(await this.patchOutcome(
         job,
-        { turnId, status, error: turn?.error || null, ...(checks ? { checks } : {}), ...(next !== undefined ? { step: next } : {}) },
+        { turnId, status, error: error || turn?.error || null, checks, ...(next !== undefined ? { step: next } : {}) },
         executing,
       ))
     )
@@ -472,10 +480,10 @@ export class MessageService {
     await this.sessions.persistTurn?.(threadId, turn);
     for (const job of await this.store.list(threadId))
       if (job.turnId === turn.id && executing.includes(job.status)) {
-        const { status, checks, step } = this.outcome(job, turn);
+        const { status, checks, step, error } = await this.outcome(job, turn);
         await this.patchOutcome(
           job,
-          { status, error: turn.error || null, ...(checks ? { checks } : {}), ...(step !== undefined ? { step } : {}) },
+          { status, error: error || turn.error || null, checks, ...(step !== undefined ? { step } : {}) },
           executing,
         );
       }

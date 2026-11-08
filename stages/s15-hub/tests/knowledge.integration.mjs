@@ -72,7 +72,7 @@ test('知识 Web 接口底层：原文导入、不可覆盖、目录隔离、任
   assert.equal(listed.pages[0].versionId,page.versionId);assert.equal(listed.truncated,false);
   await assert.rejects(r.run(()=>r.knowledge.pages('b')),/未授权/);
   const dir=path.join(r.files.workspace,'inputs/a');fs.renameSync(dir,dir+'-real');fs.symlinkSync(dir+'-real',dir);
-  await assert.rejects(r.run(()=>r.knowledge.importSource({kbId:'a',name:'link.md',content:'test'})),/真实目录/);
+  await assert.rejects(r.run(()=>r.knowledge.importSource({kbId:'a',name:'link.md',content:'test'})),/真实目录|变化或包含链接/);
 });
 
 test('真实 Codex + PG + Redis：动态工具任务身份、维护范围持久化、Wiki 生成与读取闭环', {timeout:60000}, async t=>{

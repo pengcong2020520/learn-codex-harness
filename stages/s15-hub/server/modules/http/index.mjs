@@ -73,10 +73,10 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       if (route === 'POST /auth/logout') { await accounts.logout(identity); return json(200, { loggedOut: true }); }
       if (route === 'GET /workbench') {
         const definition = config.agent?.definition?.agent;
-        const visibleKnowledge = new Set(knowledge ? (await knowledge.list()).map(kb => kb.kbId) : []);
+        const visibleKnowledge = knowledge ? await knowledge.list() : [];
         return json(200, { agent: definition ? { id: definition.id, version: definition.version,
           skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
-          outputs: definition.outputs, knowledge: (definition.knowledge || []).filter(mount => visibleKnowledge.has(mount.kbId)), workflows: config.agent.workflows.list() } : null,
+          outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }
@@ -85,6 +85,8 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       if (route === 'GET /knowledge/pages' && knowledge) return json(200, await knowledge.pages(url.searchParams.get('kbId')));
       if (route === 'POST /knowledge/source' && knowledge) return json(201, await knowledge.importSource(await readBody(request)));
 
+      if (route === 'POST /knowledge' && knowledge) return json(201, await knowledge.create(await readBody(request)));
+      if (request.method === 'DELETE' && /^\/knowledge\/[^/]+$/.test(pathname) && knowledge) return json(200, await knowledge.delete(decodeURIComponent(pathname.slice('/knowledge/'.length))));
       if (route === 'GET /knowledge' && knowledge) return json(200, { knowledge: await knowledge.list() });
       if (route === 'GET /knowledge/read' && knowledge) return json(200, await knowledge.read({ kbId: url.searchParams.get('kbId'), slug: url.searchParams.get('slug') }));
       if (route === 'POST /knowledge/search' && knowledge) return json(200, await knowledge.search(await readBody(request)));

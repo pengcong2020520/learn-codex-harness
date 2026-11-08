@@ -1,3 +1,4 @@
+import { transaction } from '../data/database.mjs';
 // A separate durable job type and Redis key, sharing the single process worker lifecycle.
 export class KnowledgeWorker {
   constructor(service, redis) { this.controller = new AbortController(); this.service = service; this.redis = redis; this.key = `agent:${service.instanceId}:knowledge-ready`; }
@@ -28,7 +29,10 @@ export class KnowledgeWorker {
         ON k.instance_id=j.instance_id AND k.id=j.kb_id WHERE j.instance_id=$1 AND j.id=$3 AND j.state='queued' AND $2::uuid IS NOT NULL`, [id])).rows[0];
       if (!pending || (await s.gate.permissionHub.plan(pending.owner_id)).exceeded) return;
     }
-    const job = (await s.systemQuery(`UPDATE agent_data.knowledge_jobs SET state='running' WHERE instance_id=$1 AND id=$3 AND state='queued' AND $2::uuid IS NOT NULL RETURNING *`, [id])).rows[0];
+    const job = await transaction(s.pool, async client => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,15))', [s.instanceId]);
+      return (await s.systemQuery(`UPDATE agent_data.knowledge_jobs SET state='running' WHERE instance_id=$1 AND id=$3 AND state='queued' AND $2::uuid IS NOT NULL RETURNING *`, [id], client)).rows[0];
+    });
     if (!job) return;
     try {
       const owner = (await s.systemQuery('SELECT owner_id FROM agent_data.knowledge_bases WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [job.kb_id])).rows[0];

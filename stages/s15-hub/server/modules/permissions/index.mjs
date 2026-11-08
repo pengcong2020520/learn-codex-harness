@@ -1,3 +1,4 @@
+import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
 import { can } from '../hub/policy.mjs';
 import { runIdentity, currentIdentity } from '../accounts/context.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -68,10 +69,16 @@ export class PermissionGate {
   mount(kbId, action = 'read') {
     const context = this.current();
     this.permissionHub?.checkResource('knowledge', kbId, action === 'read' ? 'read' : 'modify');
-    const mount = (this.agent.definition.agent.knowledge || []).find(m => m.kbId === kbId);
+    const mount = effectiveKnowledgeMounts(this.agent, this.permissionHub).find(m => m.kbId === kbId);
     if (!mount || !mount.actions.includes(action)) denied();
     if (action !== 'read' && context.kind === 'task' && !context.grants.some(g => g.type === 'knowledge.update' && g.kbId === kbId)) denied();
     return mount;
+  }
+  bindings() {
+    const bindings = { ...(this.knowledgeBases || this.agent.definition.bindings.knowledgeBases || {}) };
+    if (this.permissionHub) for (const r of this.permissionHub.current().resources.values())
+      if (r.type === 'knowledge') bindings[r.id] = { sourceRoot: r.source_root, wikiRoot: r.wiki_root };
+    return bindings;
   }
   check(action, target = {}) {
     const context = this.current();
@@ -83,9 +90,12 @@ export class PermissionGate {
     if (typeof target.path === 'string') {
       const locator = target.path;
       if (locator.includes('..') || locator.includes('\\') || locator.startsWith('/')) denied();
-      for (const [kbId, binding] of Object.entries(this.knowledgeBases || this.agent.definition.bindings.knowledgeBases || {})) {
+      for (const [kbId, binding] of Object.entries(this.bindings())) {
         if (covers(binding.wikiRoot, locator)) denied();
-        if (covers(binding.sourceRoot, locator)) { if (!['read','list'].includes(action)) denied(); this.mount(kbId, 'read'); }
+        if (covers(binding.sourceRoot, locator)) { if (!['read','list'].includes(action)) denied(); this.mount(kbId, 'read');
+          // A dynamic knowledge mount grants its source tree read-only even if a static dataBinding is narrower.
+          if (this.permissionHub?.resource('knowledge', kbId)?.user_created) return;
+        }
       }
       if (action === 'create' && context.kind === 'task' && context.writes && !context.writes.some(root => covers(root, locator))) denied();
       const permission = action === 'list' ? 'read' : action;

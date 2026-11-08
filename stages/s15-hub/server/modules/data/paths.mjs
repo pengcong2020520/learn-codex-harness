@@ -19,7 +19,7 @@ export function resourcePath(value) {
 export function validateKnowledgeBindings(bindings = {}) {
   const roots = [];
   for (const [id, binding] of Object.entries(bindings)) {
-    if (!/^[a-z][a-z0-9-]{0,47}$/.test(id)) throw new Error("知识库 ID 无效。");
+    if (!/^[a-z0-9-]{1,64}$/.test(id)) throw new Error("知识库 ID 无效。");
     for (const field of ["sourceRoot", "wikiRoot"]) {
       const root = resourcePath(binding[field]);
       if (roots.some((other) => covers(root, other) || covers(other, root)))

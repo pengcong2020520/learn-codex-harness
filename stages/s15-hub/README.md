@@ -18,7 +18,7 @@
 | shared | 所有者、指定被授权者、admin | 所有者、admin |
 | system | 所有用户，受权益限制 | admin |
 
-知识库分享无需审批；每个资源最多授权 20 人，不能授权给自己、不存在或已禁用账号。禁用账号的授权记录保留但不生效。有授权时为 shared，最后一条撤销后回 private。发布为 system 会清除指定授权；取消发布回 private。
+知识库分享无需审批；每个资源最多授权 20 人，不能授权给自己、不存在或已禁用账号。禁用账号的授权记录保留但不生效。有授权时为 shared，最后一条撤销后回 private。发布为 system 会清除指定授权；取消发布回 private。两者的 publish 审计在同一事务写入 `detail.revokedGrantees`，保留被清除的用户 ID 名单。
 
 | 权益 | Agent | 工具组 | 每日 token | 同时轮次 | 知识库 | 私有 Skill |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
@@ -73,7 +73,13 @@ npm run hub -- publish general
 npm run hub -- unpublish general
 ```
 
-知识库由可信 Agent 配置注册，默认归部署初始 owner；分享命令须由该知识库所有者或 admin 执行。专用服务器验收中准备 bob 所有的知识库，方法见 [验收步骤](docs/hub-acceptance.md)。知识库创建数量由 Hub 注册入口检查，修改绑定路径不会覆盖既有库。降级不删除已有资料；超过数量上限时拒绝新建。
+普通用户可以自行创建知识库：`npm run knowledge -- create my-notes "我的资料"`，对应 `POST /knowledge {kbId,title}`。所有者由登录身份确定，初始为 private；kbId 是 1–64 位小写字母、数字或连字符，在实例内全局唯一，重复返回 409。标题为 1–200 字。原文与 Wiki 分别放在 `workspace/users/<owner>/inputs/<kbId>` 和 `workspace/users/<owner>/research/<kbId>/wiki`，与 `knowledge:init` 共用目录准备实现。
+
+basic 最多拥有 3 个知识库、pro 最多 20 个，admin 不限；配置注册的库也计入所有者数量。Hub 在同一事务取得实例锁后计数并创建，并发也不会超额，超出返回 403 `PLAN_LIMIT`。降级保留已有资料，超额时拒绝新增。可信 Agent 配置仍可注册默认归部署初始 owner 的库，修改绑定路径不会覆盖既有库。
+
+用户自建库采用 Agent **第一个 knowledge 挂载项**的默认模式和动作，再与 Hub 可见权限取交集；没有 knowledge 项的 Agent 不挂载。静态库仍按显式 kbId 匹配，不能借此访问未声明的静态库。原文只读；任务 update/index 仍需 `knowledge.update` workflow 授权，受分享者只有 read。新建库立即支持 Wiki；默认 rag 时先以 Wiki 工作，构建索引后按原有重启边界启用 RAG。
+
+所有者或 admin 可调用 `DELETE /knowledge/:id`：撤销全部授权，删除 Wiki/索引登记、Chroma/BM25 索引及两处目录，原文资源记录标为 revoked。有执行中任务挂载或索引正在执行时返回 409 `KNOWLEDGE_BUSY`。目录操作遵守 s14：Linux 隔离模式使用所有者 uid 的辅助进程；本机模式使用服务端受限工具路径。创建、删除分别记录 `knowledge:create`、`knowledge:delete` 审计。
 
 准备仅含 `SKILL.md` 与 `references/` 下 `.md/.txt` 的目录。正文及附件合计最多 128 KiB，不接受代码、链接、路径穿越。`SKILL.md` 的 frontmatter 使用 Codex 原生格式；发现与解析继续由 Codex 完成。
 
@@ -93,6 +99,8 @@ npm run hub -- skill:unshare <id> carol
 
 | CLI 子命令 | 接口 |
 | --- | --- |
+| knowledge -- create `<kbId> <title>` | POST /knowledge `{kbId,title}` |
+| 删除知识库（HTTP） | DELETE /knowledge/:id |
 | hub / plan | GET /hub、GET /me/plan |
 | share / grants / unshare | POST、GET /hub/knowledge/:id/grants；DELETE /hub/knowledge/:id/grants/:username |
 | publish / unpublish | POST、DELETE /hub/knowledge/:id/publish |
@@ -167,3 +175,5 @@ export function effectiveTools(user, agent, groups) {
 Hub 统一回答资源能否看、用、改和分享，运行环境继续隔离用户的进程与原生状态。权限变化在下一轮执行前落实，用量按 owner 归集，审计保存每次管理决定。
 
 下一章：s16 多主机调度。
+
+离线验证在本阶段目录执行 `npm test`。`npm run test:data` 启动临时 PostgreSQL、Redis，运行 data、knowledge 与 hub-share 集成测试；需要本机可监听端口、`initdb`、`pg_ctl`、`redis-server` 和既有 Codex CLI。hub-share 使用普通用户 Bob 经 HTTP 自建库、导入并生成 Wiki、分享给 Carol，核对 Carol 读取成功、写入 403、Dave 404、撤权后下一轮拒绝，以及并发额度和删除清理。模型响应由本地 fixture 提供，不调用真实模型；`npm run test:rag` 另需 Chroma。

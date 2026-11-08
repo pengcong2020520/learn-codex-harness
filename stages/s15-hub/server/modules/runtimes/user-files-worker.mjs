@@ -11,6 +11,14 @@ try {
     fs.writeFileSync(1, data); fs.writeFileSync(3, JSON.stringify(metadata));
   } else {
     switch (task.operation) {
+      case 'knowledge-create': {
+        const { prepareKnowledgeDirectories } = await import('../knowledge/directories.mjs');
+        value = prepareKnowledgeDirectories(task.workspace, task.bindings, { exclusive: true }); break;
+      }
+      case 'knowledge-delete': {
+        const { removeKnowledgeDirectories } = await import('../knowledge/directories.mjs');
+        value = removeKnowledgeDirectories(task.workspace, task.binding); break;
+      }
       case 'prepare': {
         const { prepareRun } = await import('../codex/runtime.mjs');
         const { prepareCodexConfig } = await import('../codex/config.mjs');
@@ -49,6 +57,6 @@ try {
     fs.writeFileSync(1, JSON.stringify(value)); fs.writeFileSync(3, '{}');
   }
 } catch (error) {
-  fs.writeFileSync(3, JSON.stringify({ error: error.message.slice(0, 1000), code: error.code }));
+  fs.writeFileSync(3, JSON.stringify({ error: error.message.slice(0, 1000), code: error.code, status: error.status }));
   process.exitCode = 1;
 }

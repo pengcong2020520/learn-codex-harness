@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { defineWorkflows, describe, runChecks } from "../server/modules/workflows/index.mjs";
+import { checksPassed, defineWorkflows, describe, runChecks, stepOf } from "../server/modules/workflows/index.mjs";
 import { PermissionGate } from "../server/modules/permissions/index.mjs";
 import { createTools as createTaskTools } from "../server/modules/tools/tasks.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
@@ -94,6 +94,36 @@ async function messageRig(t, workflows, gate, environment = fixture) {
   const started = async count => { await until(() => rpc.calls.filter(call => call.method === "turn/start").length >= count); return rpc.calls.filter(call => call.method === "turn/start")[count - 1].params.input; };
   return { root, agent, rpc, store, messages, sessions, session, submit, started };
 }
+
+test("声明 checks 的 workflow 步骤必须收到全部通过的验收结果；缺失、空、部分结果不能完成", () => {
+  const definitions = defineWorkflows({ ...base, workflows: [report,
+    { id: "review", steps: [{ id: "review", goal: "核查", checks: ["format", "sources-cited"] },
+      { id: "final", goal: "定稿", checks: ["format"] }] }] });
+  for (const id of ["report", "review"]) {
+    const required = stepOf(definitions.resolve(id)).checks;
+    const passed = required.map(id => ({ id, passed: true }));
+    for (const results of [undefined, null, [], passed.slice(1), [{ id: "unrelated", passed: true }],
+      passed.map(check => ({ ...check, passed: false })), passed.map(check => ({ ...check, passed: "true" }))])
+      assert.equal(checksPassed(required, results), false, `${id}: ${JSON.stringify(results)}`);
+    assert.equal(checksPassed(required, passed), true);
+  }
+});
+
+test("验收解析异常不能将声明 checks 的步骤记为 completed，也不能沿用上一步验收", async t => {
+  for (const workflow of [report, { id: "review", steps: [{ id: "review", goal: "核查", checks: ["format"] },
+    { id: "final", goal: "定稿", checks: ["format"] }] }]) {
+    const r = await messageRig(t, [workflow]);
+    await r.submit("broken", { workflow: workflow.id });
+    await r.started(1);
+    r.store.patch("broken", { checks: [{ id: "format", passed: true }] });
+    t.mock.method(r.messages, "resolve", () => { throw new Error("无法取得 workflow 验收定义"); });
+    r.rpc.finish(r.session.id);
+    await until(() => !["starting", "running"].includes(r.store.get("broken").status));
+    assert.equal(r.store.get("broken").status, "needs-review");
+    assert.equal(r.store.get("broken").checks, null);
+    assert.match(r.store.get("broken").error, /Workflow 验收未完成/);
+  }
+});
 
 test("按 workflow 入队与派发：注入任务说明和 Skill，旧 knowledge 字段等价于知识维护，追加不能换 workflow", async t => {
   const r = await messageRig(t, [{ id: "knowledge-maintain" }, report]);

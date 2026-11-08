@@ -14,7 +14,7 @@ const BUILTIN = Object.freeze({
   "knowledge-maintain": {
     id: "knowledge-maintain", label: "知识库维护", skill: "knowledge",
     params: { type: "object", required: ["kbId"], additionalProperties: false,
-      properties: { kbId: { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$", description: "要维护的知识库" } } },
+      properties: { kbId: { type: "string", pattern: "^[a-z0-9-]{1,64}$", description: "要维护的知识库" } } },
     grants: [{ type: "knowledge.update", kbId: { param: "kbId" } }],
     checks: ["wiki-effective"]
   }
@@ -59,7 +59,7 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
   return freeze({
     list: () => [...workflows.values()].map(({ id, label, params, checks, steps }) => ({ id, label, params: params || null, checks: checks || [],
       steps: steps ? steps.map(({ id: step, goal, confirm, checks, model, needs, effort }) => ({ id: step, goal, confirm: confirm === true, checks: checks || [], model: model || null, ...(needs ? { needs } : {}), ...(effort ? { effort } : {}) })) : null })),
-    resolve(id = "chat", params = null) {
+    resolve(id = "chat", params = null, allowsKnowledge = () => false) {
       const workflow = workflows.get(id);
       if (typeof id !== "string" || !workflow) throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
       if (params != null && (typeof params !== "object" || Array.isArray(params))) throw new AppError("Workflow 参数必须是对象。", 400);
@@ -67,7 +67,7 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
         if (!workflow.validate(params ?? {})) throw new AppError(`Workflow 参数不合法：${workflow.validate.errors?.[0]?.instancePath || "/"} ${workflow.validate.errors?.[0]?.message || ""}`.trim(), 400);
       } else if (params && Object.keys(params).length) throw new AppError(`Workflow ${id} 不接受参数。`, 400);
       const grants = (workflow.grants || []).map(grant => ({ type: grant.type, kbId: typeof grant.kbId === "object" ? params[grant.kbId.param] : grant.kbId }));
-      for (const grant of grants) if (!updatable.has(grant.kbId)) throw new AppError(`Agent 没有更新知识库 ${grant.kbId} 的权限。`, 403, "FORBIDDEN");
+      for (const grant of grants) if (!updatable.has(grant.kbId) && !allowsKnowledge(grant.kbId)) throw new AppError(`Agent 没有更新知识库 ${grant.kbId} 的权限。`, 403, "FORBIDDEN");
       return freeze({ id, label: workflow.label, skill: workflow.skill || null, params: workflow.validate ? { ...params } : null, grants, checks: [...(workflow.checks || [])],
         steps: workflow.steps ? workflow.steps.map(step => ({ id: step.id, goal: step.goal, writes: step.writes ? [...step.writes] : null, confirm: step.confirm === true, checks: [...(step.checks || [])], model: step.model || null, ...(step.needs ? { needs: { ...step.needs } } : {}), ...(step.effort ? { effort: step.effort } : {}) })) : null });
     }
@@ -98,6 +98,11 @@ export function describe(workflow, index = 0) {
 }
 
 // 验收只看结果：产物、引用、生效的修订；不检查调用过哪些工具或按什么顺序做。
+export function checksPassed(required, results) {
+  return Array.isArray(results) && required.every(id => results.some(check => check.id === id && check.passed === true))
+    && results.every(check => check.passed === true);
+}
+
 export function runChecks(checks, turn, { workspaceDir, formats = [] } = {}) {
   const artifacts = Object.values(turn.artifacts || {}), revisions = Object.values(turn.revisions || {});
   const result = (id, passed, detail) => ({ id, label: CHECK_LABELS[id], passed, detail });

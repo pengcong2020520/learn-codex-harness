@@ -98,6 +98,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       store: new MediaJobs(data.pool, data.scope), files: resources, usage, gate, agent, redact, log: safeLog }) : null;
     lifecycle.defer(() => media?.close());
     const boundary = new ExecutionBoundary();
+    if (knowledge) knowledge.boundary = boundary;
     // 提议任务的工具在消息服务就绪后才可用；之前调用会明确报错。
     const tasks = { propose: (context, args) => { if (!messages) throw new Error("任务服务尚未就绪。"); return messages.propose(context, args); } };
     const skillReader = { read: (name, file) => agent.readSkill(name, file) };

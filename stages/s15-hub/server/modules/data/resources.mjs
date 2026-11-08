@@ -5,7 +5,7 @@ import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
-import { MAX_MEDIA_BYTES, mediaFormat } from "./files.mjs";
+import { MAX_MEDIA_BYTES, mediaFormat, createFileTools } from "./files.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
 const hash = (content) => createHash("sha256").update(content).digest("hex");
@@ -35,12 +35,26 @@ export class Resources extends Repository {
       return result;
     });
   }
+  dynamicSource(locator) {
+    return this.gate?.permissionHub && [...this.gate.permissionHub.current().resources.values()]
+      .find(kb => kb.type === 'knowledge' && kb.user_created && covers(kb.source_root, locator));
+  }
+  sourceFiles(locator) {
+    const kb = this.dynamicSource(locator);
+    if (!kb || kb.owner_id !== this.ownerId) return this.files;
+    this.gate.check('read', { kbId: kb.id });
+    return createFileTools(this.files.workspace, { workspaceDir: this.files.workspace,
+      sources: [{ id: `knowledge:${kb.id}`, locator: kb.source_root, actions: ['read'], readOnly: true }],
+      assertCurrent: () => this.gate.current() });
+  }
   source(locator, action) {
     this.gate?.check(action, { path: locator });
     const found = this.sources
       .filter((s) => s.actions.includes(action) && covers(s.locator, locator))
       .sort((a, b) => b.locator.length - a.locator.length)[0];
     if (found) return found.id;
+    const kb = action === 'read' && this.dynamicSource(locator);
+    if (kb) return `knowledge:${kb.id}`;
     if (action === "create" && covers(this.outputs.directory, locator))
       return "agent-output";
     throw new AppError("未授权访问这个资料范围。", 403);
@@ -150,7 +164,7 @@ export class Resources extends Repository {
       await this.readable(await this.row(locator));
     }
     // Existing bounded reader also enforces links, path, file type, size and Agent revision.
-    const output = this.files.read_file({ ...args, max_chars: 256 * 1024 });
+    const output = this.sourceFiles(locator).read_file({ ...args, max_chars: 256 * 1024 });
     const body = this.blob(output.content);
     const metadata = await this.locked(async (client) => {
       let row = await this.row(locator, client);
@@ -164,7 +178,7 @@ export class Resources extends Repository {
               randomUUID(),
               this.source(locator, "read"),
               locator,
-              this.sources.some(source => (source.readOnly || !source.actions.includes("create")) && covers(source.locator, locator)) || Object.values(this.gate?.knowledgeBases || {}).some(kb => covers(kb.sourceRoot, locator)) ? "original" : "knowledge",
+              this.sources.some(source => (source.readOnly || !source.actions.includes("create")) && covers(source.locator, locator)) || Object.values(this.gate?.bindings?.() || this.gate?.knowledgeBases || {}).some(kb => covers(kb.sourceRoot, locator)) ? "original" : "knowledge",
             ],
             client,
           )
@@ -187,7 +201,7 @@ export class Resources extends Repository {
     });
     // Recheck after awaits: revoked data is never served from a stale cache.
     await this.readable(await this.row(locator));
-    this.files.check(locator, "read");
+    this.sourceFiles(locator).check(locator, "read");
     return {
       ...output,
       ...metadata,
@@ -213,7 +227,7 @@ export class Resources extends Repository {
       let output;
       try {
         if (!owns({ id: this.ownerId }, source)) { await this.readShared(source, { max_chars: 256 * 1024 }); continue; }
-        output = this.files[/\.(png|jpeg|webp|mp4)$/i.test(source.locator) ? "read_binary" : "read_file"]({
+        output = this.sourceFiles(source.locator)[/\.(png|jpeg|webp|mp4)$/i.test(source.locator) ? "read_binary" : "read_file"]({
           path: source.locator,
           max_chars: 256 * 1024,
         });
@@ -239,7 +253,7 @@ export class Resources extends Repository {
     }
   }
   async list_files(args) {
-    const result = this.files.list_files(args);
+    const result = this.sourceFiles(args.path || "").list_files(args);
     const entries = [];
     for (const entry of result.entries) {
       const locator = result.path === "." ? entry.name : `${result.path}/${entry.name}`;
@@ -296,7 +310,7 @@ export class Resources extends Repository {
         if (typeof reference.path !== "string" || !reference.path)
           throw new AppError("path 必须是非空字符串，或填写 resourceId 和 versionId。");
         this.source(reference.path, "read");
-        this.files.check(reference.path, "read");
+        this.sourceFiles(reference.path).check(reference.path, "read");
         source = await this.row(reference.path, client);
         if (!source) throw new AppError("路径尚未登记，请先通过 read_file 读取该路径。", 404);
         versionId = source.current_version;
@@ -424,11 +438,17 @@ export class Resources extends Repository {
   }
   async registerImported(kb, locator, content) {
     this.gate.permissionHub.checkResource('knowledge', kb.id, 'modify');
-    const body = this.blob(content), id = randomUUID(), versionId = randomUUID();
+    const body = this.blob(content), versionId = randomUUID();
     return this.locked(async client => {
       // 显式保存授权资源的 owner；不切换请求身份，admin 导入也不会写入自己的工作区。
-      await this.query(`INSERT INTO agent_data.resources(instance_id,id,owner_id,source_id,locator,kind,state)
-        SELECT $1,$3,$4,$5,$6,'original','pending' WHERE $2::uuid IS NOT NULL`, [id, kb.owner_id, this.source(locator, 'read'), locator], client);
+      const row = (await this.query(`INSERT INTO agent_data.resources(instance_id,id,owner_id,source_id,locator,kind,state)
+        SELECT $1,$3,$4,$5,$6,'original','pending' WHERE $2::uuid IS NOT NULL
+        ON CONFLICT(instance_id,owner_id,locator) DO UPDATE SET source_id=EXCLUDED.source_id,kind='original',state='pending'
+        WHERE resources.state='revoked' RETURNING id,current_version`, [randomUUID(), kb.owner_id, this.source(locator, 'read'), locator], client)).rows[0];
+      if (!row) throw new AppError('该路径仍有有效资料登记。', 409);
+      const id = row.id;
+      // Recreating a deleted KB can reuse a revoked path; old immutable versions remain history.
+      if (row.current_version) await this.invalidate(id, client);
       await this.query(`INSERT INTO agent_data.resource_versions(instance_id,id,resource_id,revision,blob,bytes)
         SELECT $1,$3,$4,$5,$6,$7 WHERE $2::uuid IS NOT NULL`, [versionId,id,body.revision,body.blob,body.bytes], client);
       await this.query(`UPDATE agent_data.resources SET current_version=$4,state='ready' WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL`, [id,versionId], client);

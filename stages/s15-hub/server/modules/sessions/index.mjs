@@ -1,3 +1,4 @@
+import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
 import { can } from '../hub/policy.mjs';
 import { busyError } from "../runtimes/pool.mjs";
 import { currentIdentity, runOwner } from "../accounts/context.mjs";
@@ -57,7 +58,7 @@ export class SessionService extends EventEmitter {
         await this.config.agent.bind(result.thread.id);
         if (this.permissionHub) {
           const visible = new Set(this.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id));
-          result.hubKnowledge = (this.config.agent.definition.agent.knowledge || []).map(m => m.kbId).filter(id => visible.has(id));
+          result.hubKnowledge = effectiveKnowledgeMounts(this.config.agent, this.permissionHub).map(m => m.kbId).filter(id => visible.has(id));
           await this.repository.query('UPDATE agent_data.conversations SET hub_knowledge=$4 WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [result.thread.id, result.hubKnowledge]);
         }
         await this.rpc.request("thread/memoryMode/set", { threadId: result.thread.id, mode: this.config.memory.contribute ? "enabled" : "disabled" });
@@ -87,7 +88,7 @@ export class SessionService extends EventEmitter {
       const row = await this.repository.conversation(threadId);
       for (const id of row.hub_knowledge || []) this.permissionHub.checkResource('knowledge', id, 'read');
       const visible = new Set(this.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id));
-      const mounted = (this.config.agent.definition.agent.knowledge || []).map(m => m.kbId).filter(id => visible.has(id));
+      const mounted = effectiveKnowledgeMounts(this.config.agent, this.permissionHub).map(m => m.kbId).filter(id => visible.has(id));
       const next = [...new Set([...(row.hub_knowledge || []), ...mounted])];
       if (next.length !== (row.hub_knowledge || []).length)
         await this.repository.query('UPDATE agent_data.conversations SET hub_knowledge=$4 WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [threadId, next]);

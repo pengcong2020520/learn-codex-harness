@@ -65,7 +65,7 @@ export async function openDatabase(url) {
   }
 }
 
-const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql'].map((name, index) => {
+const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql', 'migrations/014-user-knowledge.sql'].map((name, index) => {
   const sql = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
   return { version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex') };
 });

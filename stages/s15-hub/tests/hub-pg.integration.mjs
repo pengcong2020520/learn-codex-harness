@@ -38,7 +38,10 @@ test('Hub PG：迁移重复、授权约束/并发上限、scope 联动、审批�
   assert.equal((await pool.query('SELECT count(*)::int n FROM agent_data.resource_grants WHERE instance_id=$1',[instanceId])).rows[0].n,20);
   await assert.rejects(pool.query("UPDATE agent_data.knowledge_bases SET visibility='private' WHERE instance_id=$1 AND id='general'",[instanceId]),/scope must match/);
   await assert.rejects(pool.query("UPDATE agent_data.resource_grants SET granted_by=granted_by WHERE instance_id=$1",[instanceId]),/replace grants/);
+  const revoked = (await pool.query("SELECT grantee_id FROM agent_data.resource_grants WHERE instance_id=$1 AND resource_id='general'", [instanceId])).rows.map(r=>r.grantee_id).sort();
   await as('alice',()=>hub.publish('general')); assert.equal((await pool.query('SELECT count(*)::int n FROM agent_data.resource_grants WHERE instance_id=$1',[instanceId])).rows[0].n,0);
+  const published = (await pool.query("SELECT detail FROM agent_data.permission_events WHERE instance_id=$1 AND action='publish' ORDER BY id DESC LIMIT 1", [instanceId])).rows[0];
+  assert.deepEqual(published.detail.revokedGrantees.sort(), revoked);
   await as('alice',()=>hub.publish('general',false));
   const skill=await as('bob',()=>hub.upload({name:'notes',files:{'SKILL.md':'---\nname: notes\ndescription: notes\n---\n# Notes'}}));
   await as('bob',()=>hub.shareSkill(skill.id,['carol']));

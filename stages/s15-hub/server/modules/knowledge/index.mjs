@@ -1,4 +1,7 @@
 import fs from 'node:fs';
+import { declaredKnowledgeMounts, effectiveKnowledgeMounts } from './mounts.mjs';
+import { prepareKnowledgeDirectories, removeKnowledgeDirectories, createSourceFile } from './directories.mjs';
+import { userFileOperation } from '../runtimes/user-files.mjs';
 import { resourcePath, validateKnowledgeBindings } from '../data/paths.mjs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -13,7 +16,7 @@ export class KnowledgeService extends Repository {
   }
   async open() {
     const bindings = validateKnowledgeBindings(this.agent.definition.bindings.knowledgeBases || {});
-    const existing = (await this.query('SELECT id,source_root,wiki_root FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
+    const existing = (await this.query('SELECT id,source_root,wiki_root,user_created FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
     validateKnowledgeBindings({ ...Object.fromEntries(existing.map(row => [row.id, { sourceRoot: row.source_root, wikiRoot: row.wiki_root }])), ...bindings });
     for (const [id, binding] of Object.entries(bindings)) {
       if (this.gate.permissionHub) { await this.gate.permissionHub.registerKnowledge(this.ownerId, id, binding); continue; }
@@ -25,16 +28,18 @@ export class KnowledgeService extends Repository {
     }
     // Registry covers every persisted KB, including KBs omitted from this Agent's configuration.
     // Otherwise a broad source binding could bypass an absent Agent mount via read_file.
-    const registered = (await this.query('SELECT id,source_root,wiki_root FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
+    const registered = (await this.query('SELECT id,source_root,wiki_root,user_created FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
     validateKnowledgeBindings(Object.fromEntries(registered.map(row => [row.id, { sourceRoot: row.source_root, wikiRoot: row.wiki_root }])));
     this.gate.knowledgeBases = Object.freeze(Object.fromEntries(registered.map(row => [row.id,
       Object.freeze({ sourceRoot: row.source_root, wikiRoot: row.wiki_root })])));
     const ids = new Set();
     this.modes = {};
-    for (const mount of this.agent.definition.agent.knowledge || []) {
-      if (!bindings[mount.kbId] || ids.has(mount.kbId) || !mount.actions.includes('read')) fail('知识库绑定缺失、重复或没有 read 权限。');
+    const modeBindings = { ...Object.fromEntries(registered.map(r => [r.id, { sourceRoot: r.source_root, wikiRoot: r.wiki_root }])), ...bindings };
+    for (const mount of declaredKnowledgeMounts(this.agent, registered.map(r => ({ ...r, type: 'knowledge' })))) {
+      if (!modeBindings[mount.kbId] || ids.has(mount.kbId) || !mount.actions.includes('read')) fail('知识库绑定缺失、重复或没有 read 权限。');
       ids.add(mount.kbId);
       const kb = (await this.query('SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL AND id=$3', [mount.kbId])).rows[0];
+      if (!kb) continue; // Explicitly deleted configured defaults stay deleted until POST /knowledge.
       // Effective mode changes only at service startup; queued tasks/Threads bind the resulting descriptor.
       const prepared = mount.mode === 'rag' && kb.index_revision && this.rag && await this.rag.ready(this, kb);
       const previous = (await this.query('SELECT effective_mode FROM agent_data.knowledge_mounts WHERE instance_id=$1 AND agent_id=$3 AND kb_id=$4 AND $2::uuid IS NOT NULL', [this.agent.definition.agent.id, mount.kbId])).rows[0];
@@ -57,12 +62,45 @@ export class KnowledgeService extends Repository {
   }
   async list() {
     this.gate.current();
-    const mounts = this.agent.definition.agent.knowledge || [];
+    const mounts = effectiveKnowledgeMounts(this.agent, this.gate.permissionHub);
     const owned = this.gate.permissionHub ? new Set(this.gate.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id)) : new Set((await this.query('SELECT id FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2')).rows.map(row => row.id));
     return Promise.all(mounts.filter(m => owned.has(m.kbId)).map(async m => { const kb = await this.kb(m.kbId); return {
-      kbId: kb.id, visibility: kb.visibility, desiredMode: m.mode, effectiveMode: this.modes[kb.id], indexRevision: kb.index_revision,
-      pending: m.mode !== this.modes[kb.id], actions: m.actions
+      kbId: kb.id, title: kb.title || kb.id, visibility: kb.visibility, desiredMode: m.mode, effectiveMode: this.modes[kb.id] || 'wiki', indexRevision: kb.index_revision,
+      pending: m.mode !== (this.modes[kb.id] || 'wiki'), actions: m.actions
     }; }));
+  }
+  async ownerFiles(owner, client) {
+    const record = (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [owner], client)).rows[0];
+    if (!record) throw new AppError('所有者运行环境尚未初始化。', 409);
+    return { uid: record.uid, workspace: path.join(path.dirname(this.resources.files.workspace), owner) };
+  }
+  async create(body) {
+    this.gate.current();
+    if (!this.gate.permissionHub) throw new AppError('需要 Hub。', 409);
+    return this.gate.permissionHub.createKnowledge(body, async (owner, binding, client) => {
+      const { uid, workspace } = await this.ownerFiles(owner, client), bindings = { [body.kbId]: binding };
+      if (process.getuid?.() === 0) await userFileOperation(uid, 'knowledge-create', { workspace, bindings });
+      else prepareKnowledgeDirectories(workspace, bindings, { exclusive: true });
+    });
+  }
+  async delete(id) {
+    this.gate.current();
+    if (!this.gate.permissionHub) throw new AppError('需要 Hub。', 409);
+    const remove = () => this.gate.permissionHub.deleteKnowledge(id, async (row, indexes, client) => {
+      // Active in-memory contexts supplement durable starting/running task records.
+      if ([...this.gate.runs.values()].some(run => run.context.policy?.resources.has(`knowledge:${id}`) &&
+          this.gate.permissionHub.run(run.context.policy, () => effectiveKnowledgeMounts(this.agent, this.gate.permissionHub).some(m => m.kbId === id))))
+        throw new AppError('知识库仍被执行中任务挂载。', 409, 'KNOWLEDGE_BUSY');
+      if (indexes.some(i => i.manifest) && !this.rag) throw new AppError('需要恢复 RAG 配置后清理索引。', 409);
+      for (const index of indexes) if (index.manifest) await this.rag.discard(index.manifest);
+      const { uid, workspace } = await this.ownerFiles(row.owner_id, client);
+      const binding = { sourceRoot: row.source_root, wikiRoot: row.wiki_root };
+      if (process.getuid?.() === 0) await userFileOperation(uid, 'knowledge-delete', { workspace, binding });
+      else removeKnowledgeDirectories(workspace, binding);
+    });
+    const result = await (this.boundary ? this.boundary.run(remove) : remove());
+    delete this.modes[id];
+    return result;
   }
   async pages(kbId) {
     await this.kb(kbId);
@@ -74,7 +112,11 @@ export class KnowledgeService extends Repository {
     // Listing grants no content validity; read() rechecks every source before returning the body.
     return { kbId, pages: rows.slice(0, 200), truncated: rows.length > 200 };
   }
-  async importSource({ kbId, name, content, ...unknown }) {
+  async importSource(body) {
+    const operation = () => this.importSourceAtBoundary(body);
+    return this.boundary ? this.boundary.run(operation) : operation();
+  }
+  async importSourceAtBoundary({ kbId, name, content, ...unknown }) {
     if (Object.keys(unknown).length || !['operator', 'user'].includes(this.gate.current().kind))
       throw new AppError('原文导入只允许本地操作者。', 403, 'FORBIDDEN');
     const kb = await this.kb(kbId, 'update');
@@ -89,22 +131,9 @@ export class KnowledgeService extends Repository {
     if (this.gate.permissionHub && !ownerRuntime) throw new AppError('所有者运行环境尚未初始化。', 409);
     const relative = `${kb.source_root}/${name}`;
     this.gate.check('read', { path: relative });
-    // Human ingestion is separate from agent write_file: KB sources stay read-only to the agent.
-    let directory = base;
-    for (const part of ['', ...kb.source_root.split('/')]) {
-      if (part) directory = path.join(directory, part);
-      const info = fs.lstatSync(directory);
-      if (!info.isDirectory() || info.isSymbolicLink()) throw new AppError('原文目录必须是真实目录。', 409);
-    }
+    // Human ingestion remains separate from agent write_file (sources are read-only).
     this.gate.current();
-    try {
-      const fd = fs.openSync(path.join(directory, name), fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW, 0o660);
-      try {
-        if (ownerRuntime && process.getuid?.() === 0) fs.fchownSync(fd, ownerRuntime.uid, 1000);
-        fs.writeFileSync(fd, content); fs.fsyncSync(fd);
-      } finally { fs.closeSync(fd); }
-    }
-    catch (error) { if (error.code === 'EEXIST') throw new AppError('同名原文已存在，请更换文件名；未覆盖。', 409); throw error; }
+    createSourceFile(base, kb.source_root, name, content, ownerRuntime?.uid);
     try {
       const saved = this.gate.permissionHub
         ? await this.resources.registerImported(kb, relative, content)
@@ -115,7 +144,7 @@ export class KnowledgeService extends Repository {
     }
   }
   wikiPath(locator) {
-    return Object.entries(this.agent.definition.bindings.knowledgeBases || {}).find(([, b]) => locator === b.wikiRoot || locator.startsWith(b.wikiRoot + '/'));
+    return Object.entries(this.gate.bindings()).find(([, b]) => locator === b.wikiRoot || locator.startsWith(b.wikiRoot + '/'));
   }
   async sourceVersions(kb, references, client) {
     if (!Array.isArray(references) || !references.length || references.length > 200) fail('必须引用 1–200 个当前原始资料版本。');

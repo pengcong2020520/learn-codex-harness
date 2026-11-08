@@ -1,8 +1,8 @@
 import fs from 'node:fs';
+import { prepareKnowledgeDirectories } from '../server/modules/knowledge/directories.mjs';
 import { identity } from '../server/modules/data/database.mjs';
 import { userWorkspace } from '../server/modules/accounts/workspace.mjs';
 import { selectAgentFile } from '../server/modules/agents/selection.mjs';
-import { validateKnowledgeBindings } from '../server/modules/data/paths.mjs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -25,15 +25,14 @@ try {
     directory(sharedWorkspace);
     const workspace = userWorkspace(sharedWorkspace, identity(root).ownerId);
     directory(workspace);
-    for (const [id, binding] of Object.entries(validateKnowledgeBindings(definition.bindings.knowledgeBases || {}))) {
-      directory(path.join(workspace, binding.sourceRoot)); directory(path.join(workspace, binding.wikiRoot));
-    }
+    prepareKnowledgeDirectories(workspace, definition.bindings.knowledgeBases || {});
     // Skill 属于 Agent 包，服务启动时同步到 CODEX_HOME，不再复制进工作区。
     console.log('知识目录已准备。把原始 .md/.txt 放入所配置的 sourceRoot，然后启动服务；Agent 包里的 Skill 会在启动时自动安装。');
   } else {
     const client = new AgentClient(loadClientConnection());
     let result;
-    if (command === 'list') result = await client.request('/knowledge');
+    if (command === 'create') result = await client.request('/knowledge', { kbId, title: rest.join(' ') });
+    else if (command === 'list') result = await client.request('/knowledge');
     else if (command === 'read') result = await client.request(`/knowledge/read?kbId=${encodeURIComponent(kbId)}&slug=${encodeURIComponent(rest[0] || '')}`);
     else if (command === 'search') result = await client.request('/knowledge/search',{ kbId,query:rest.join(' ') });
     else if (command === 'index') result = await client.request('/knowledge/index',{ kbId });
@@ -41,7 +40,7 @@ try {
     else if (command === 'maintain' && kbId && rest.join(' ').trim()) {
       const session = await client.request('/sessions',{});
       result = await client.request('/messages',{ threadId:session.id,clientMessageId:randomUUID(),text:rest.join(' '),workflow:'knowledge-maintain',params:{kbId} });
-    } else throw new Error('用法：npm run knowledge -- list | read <kbId> <slug> | search <kbId> <问题> | maintain <kbId> <要求> | index <kbId> | job <jobId>');
+    } else throw new Error('用法：npm run knowledge -- create <kbId> <title> | list | read <kbId> <slug> | search <kbId> <问题> | maintain <kbId> <要求> | index <kbId> | job <jobId>');
     console.log(JSON.stringify(result,null,2));
   }
 } catch (error) { console.error(error.message); process.exitCode = 1; }
