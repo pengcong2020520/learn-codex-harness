@@ -1,0 +1,50 @@
+[
+  {
+    "id": "routing",
+    "title": "按 owner 取得连接",
+    "mode": "offline",
+    "question": "后台派发会不会继承另一个用户的请求身份？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^routing:",
+      "tests/runtimes.test.mjs"
+    ],
+    "observations": [
+      "Node 测试实际通过；断言失败将非零退出。"
+    ],
+    "why": "连接选择来自认证或任务 owner；通知还要核对连接 owner。",
+    "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
+  },
+  {
+    "id": "pool",
+    "title": "第五个运行环境",
+    "mode": "offline",
+    "question": "超过 4 个名额时，哪个进程能被关闭？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^pool:",
+      "tests/runtimes.test.mjs"
+    ],
+    "observations": [
+      "Node 测试实际通过；断言失败将非零退出。"
+    ],
+    "why": "仅回收没有租约、轮次与排队任务的最久未用进程；全忙返回 503。",
+    "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
+  },
+  {
+    "id": "crash",
+    "title": "进程崩溃的影响范围",
+    "mode": "offline",
+    "question": "bob 的连接失败会不会停止 alice 的轮次？",
+    "args": [
+      "--test",
+      "--test-name-pattern=^crash:",
+      "tests/runtimes.test.mjs"
+    ],
+    "observations": [
+      "Node 测试实际通过；断言失败将非零退出。"
+    ],
+    "why": "只调用失败 owner 的恢复路径，不设置全局 failure。",
+    "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
+  }
+]
