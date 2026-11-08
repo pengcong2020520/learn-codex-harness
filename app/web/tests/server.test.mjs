@@ -55,9 +55,10 @@ test('默认目标 id 与工作台前端的阶段键一致，旧 demoN 链接映
   const { defaultTargets } = await import('../server.mjs');
   const main = fs.readFileSync(new URL('../public/app/main.js', import.meta.url), 'utf8');
   const keys = [...main.slice(main.indexOf('const stages={'), main.indexOf('};', main.indexOf('const stages={'))).matchAll(/^ (s\d\d):\{/gm)].map(m => m[1]);
-  assert.deepEqual(defaultTargets.filter(t => t.id !== 'project').map(t => t.id), keys.filter(id=>!['s12','s13','s14'].includes(id))); // s12、s13、s14 是独立部署，不是实时目标。
-  assert.ok(!defaultTargets.some(t=>['s12','s13','s14'].includes(t.id)));
-  assert.deepEqual(keys,Array.from({length:15},(_,num)=>`s${String(num).padStart(2,'0')}`));
+  assert.deepEqual(defaultTargets.filter(t => t.id !== 'project').map(t => t.id), keys.filter(id=>!['s12','s13','s14','s15'].includes(id))); // s12–s15 是独立部署，不是实时目标。
+  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15'].includes(t.id)));
+  const registered=JSON.parse(fs.readFileSync(new URL('../../../stages/changes.json',import.meta.url),'utf8')).stages.map(stage=>stage.id);
+  assert.deepEqual(keys,registered);
   assert.match(main, /demo1:'s01',demo2:'s02',demo3:'s07',demo4:'s08',demo5:'s09'/);
   assert.deepEqual(defaultTargets.map(t=>t.port),[null,null,null,4313,4319,4323,4324,4325,4314,4315,4316,4318,4317]);
   for(const [num,target] of defaultTargets.entries()){

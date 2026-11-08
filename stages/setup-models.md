@@ -12,7 +12,7 @@ npm run setup:model
 | --- | --- | --- |
 | A：ChatGPT 账号登录 | 已有可用订阅，希望使用订阅额度，不单独填写 API Key；仅使用 OpenAI 模型 | 默认 s01–s10 |
 | B：一个 API Key | 已有模型服务商密钥，希望直连一个支持 Responses API 的模型 | 默认 s01–s10 |
-| C：多个 API Key | 需要多家模型、协议转换、备用模型和用量管理 | s11、s12、s13、s14 与 app，默认同时配置 |
+| C：多个 API Key | 需要多家模型、协议转换、备用模型和用量管理 | s11、s12、s13、s14、s15 与 app，默认同时配置 |
 
 `s00-sdk-quickstart` 使用 SDK，直接读取本机登录或 `CODEX_API_KEY`。向导只提示，不改 s00；继续按 [s00 说明](s00-sdk-quickstart/README.md) 操作。
 
@@ -96,13 +96,13 @@ app 使用相同脚本，把上述前缀目录换成 `app`。s11 与 app 同时�
 ## 检查配置与启动
 
 ```bash
-npm run setup:model -- --check            # 只读，默认 s00–s14 与 app
+npm run setup:model -- --check            # 只读，默认 s00–s15 与 app
 npm run setup:model -- --check --stage s05
 npm run doctor                            # 默认全部，不调用模型
 npm run doctor -- --stage s01 --handshake
 ```
 
-`--check` 列出阶段、模式、缺项和登录状态，并校验直连 Base URL。对 s01–s10，`.env` 不存在且没有模型环境变量时显示“未配置”；有部分 API 配置（包括空的配置行）时显示 API Key 模式及缺项；三项都未设置时检查已有登录。已有登录（A）下，若 `CODEX_MODEL_CATALOG_ENABLED` 不是 `false`，缺项为“设 CODEX_MODEL_CATALOG_ENABLED=false”。s11、s12、s13、s14 与 app 始终标为“API Key（模型网关）”，缺少 `AGENT_GATEWAY_KEY` 时提示选择路线 C，不检查登录链接。未通过检查时退出码为 1。检查不改写 `.env`。
+`--check` 列出阶段、模式、缺项和登录状态，并校验直连 Base URL。对 s01–s10，`.env` 不存在且没有模型环境变量时显示“未配置”；有部分 API 配置（包括空的配置行）时显示 API Key 模式及缺项；三项都未设置时检查已有登录。已有登录（A）下，若 `CODEX_MODEL_CATALOG_ENABLED` 不是 `false`，缺项为“设 CODEX_MODEL_CATALOG_ENABLED=false”。s11、s12、s13、s14、s15 与 app 始终标为“API Key（模型网关）”，缺少 `AGENT_GATEWAY_KEY` 时提示选择路线 C，不检查登录链接。未通过检查时退出码为 1。检查不改写 `.env`。
 
 s00 是上述“未配置”规则的例外：按本机登录或 `CODEX_API_KEY` 判断；没有 Key 时显示“已有登录”，`--check` 检查本机登录，不要求 `.env`，也不要求阶段登录链接或本地模型目录开关。
 
@@ -137,3 +137,5 @@ s12 使用模型网关配置，不建立 link-login 链接；部署步骤见 [s1
 s13 同样使用模型网关，不进入 link-login 默认列表；独立部署与登录步骤见 [s13 README](s13-auth/README.md)。
 
 s14 使用模型网关，不进入 link-login 默认列表；独立部署、用户运行环境与端口 4328 见 [s14 README](s14-isolation/README.md)。通过 SSH 隧道使用 CLI，不接入共享 stages 容器或工作台实时目标。
+
+s15 使用模型网关，不进入 link-login 默认列表；权限与资源 Hub 的独立部署与端口 4329 见 [s15 README](s15-hub/README.md)。通过 SSH 隧道使用 CLI，不接入共享 stages 容器或工作台实时目标。

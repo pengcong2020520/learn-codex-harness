@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
 // 键是阶段编号（取自目录名，可以不连续）。s00 是 SDK 入门，只有章节文档，没有设计说明。
-const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-service", 4: "s04-events-messages", 5: "s05-agent-assembly", 6: "s06-tools", 7: "s07-memory", 8: "s08-data-layer", 9: "s09-knowledge-layer", 10: "s10-skill-workflow", 11: "s11-model-gateway", 12: "s12-deploy", 13: "s13-auth", 14: "s14-isolation" };
+const STAGES = { 1: "s01-single-turn", 2: "s02-multi-turn", 3: "s03-service", 4: "s04-events-messages", 5: "s05-agent-assembly", 6: "s06-tools", 7: "s07-memory", 8: "s08-data-layer", 9: "s09-knowledge-layer", 10: "s10-skill-workflow", 11: "s11-model-gateway", 12: "s12-deploy", 13: "s13-auth", 14: "s14-isolation", 15: "s15-hub" };
 const CHAPTERS = ["s00-sdk-quickstart", ...Object.values(STAGES)];
 const options = new Set(process.argv.slice(2));
 if ([...options].some(option => !["--integration", "--docs-only", "--rag"].includes(option))) {
@@ -52,14 +52,23 @@ for (const [name, kind] of docs) {
   const file = path.join(root, name), doc = fs.readFileSync(file, "utf8");
   if (kind === "chapter") {
     const stage = name.split("/")[0], id = stage.slice(0, 3);
-    assert.ok(doc.startsWith(`# ${id}: `), `${name} 标题应以「${id}: 」开头`);
-    assert.ok(doc.includes(`\`${id}\` → `) || doc.includes(`→ \`${id}\``), `${name} 缺少章节导航`);
-    for (const heading of CHAPTER_HEADINGS) {
-      assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
+    if (id === "s15") {
+      // 独立快照保留原有文档结构；登记不改写章节正文。
+      assert.ok(doc.startsWith(`# ${id}：`), `${name} 缺少阶段标题`);
+      for (const heading of ["要回答的问题", "核心概念", "分工", "跑起来看看", "关键代码", "小结"]) assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
+      assert.match(doc, /对应六个问题：⑤ 能用什么 ⑥ 谁说了算/);
+      assert.match(doc, /下一章：s16/);
+      assertExcerpts(stage, doc, name);
+    } else {
+      assert.ok(doc.startsWith(`# ${id}: `), `${name} 标题应以「${id}: 」开头`);
+      assert.ok(doc.includes(`\`${id}\` → `) || doc.includes(`→ \`${id}\``), `${name} 缺少章节导航`);
+      for (const heading of CHAPTER_HEADINGS) {
+        assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
+      }
+      assert.match(doc, /^> \*\*对应六个问题\*\*：/m, `${name} 缺少「对应六个问题」`);
+      assert.ok(doc.includes("[导论](../introduction.md)"), `${name} 的章节导航缺少导论`);
+      assertExcerpts(stage, doc, name);
     }
-    assert.match(doc, /^> \*\*对应六个问题\*\*：/m, `${name} 缺少「对应六个问题」`);
-    assert.ok(doc.includes("[导论](../introduction.md)"), `${name} 的章节导航缺少导论`);
-    assertExcerpts(stage, doc, name);
   }
   if (kind === "introduction") {
     assert.ok(doc.startsWith("# 导论："), `${name} 标题应以「导论：」开头`);
@@ -68,10 +77,11 @@ for (const [name, kind] of docs) {
     }
   }
   if (kind === "design") {
-    for (const heading of ["设计原理", "架构改进", "技术实现流程", "核心代码"]) {
+    const hubDesign = name === "s15-hub/docs/design.md";
+    for (const heading of hubDesign ? ["职责与决策", "数据与一致性", "运行边界", "Skill 同步"] : ["设计原理", "架构改进", "技术实现流程", "核心代码"]) {
       assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
     }
-    assert.ok(doc.includes("伪代码"), `${name} 未标明伪代码`);
+    if (!hubDesign) assert.ok(doc.includes("伪代码"), `${name} 未标明伪代码`);
   }
   assert.equal((doc.match(/^```/gm) || []).length % 2, 0, `${name} 代码块未闭合`);
   for (const match of doc.replace(/^```[^\n]*\n[\s\S]*?^```/gm, "").matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {

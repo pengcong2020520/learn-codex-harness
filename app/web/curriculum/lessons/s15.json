@@ -1,0 +1,504 @@
+[
+  {
+    "id": "s15-scope",
+    "title": "看得见资源，为什么仍不能修改",
+    "principle": "Hub 将可见范围与动作授权一起判定：不可见返回 404，可见但动作不允许返回 403。",
+    "problem": "bob 分享知识库给 carol 后，carol 能读也能写吗？撤销后应该返回什么？",
+    "change": {
+      "before": "用户身份、进程和个人文件已有隔离，跨用户资源还没有统一的分享判定。",
+      "added": "private/shared/system、指定授权与 use/read/modify/share/delete 进入同一个 Hub。",
+      "kept": "个人会话和普通文件保持 owner 隔离，Agent 挂载与 workflow 授权继续约束执行。"
+    },
+    "concepts": [
+      {
+        "term": "scope",
+        "meaning": "private 面向所有者；shared 增加指定被授权者；system 面向所有用户，但仍受权益限制。"
+      },
+      {
+        "term": "动作授权",
+        "meaning": "共享接收者只有 use/read，修改与分享仍由所有者或 admin 管理。"
+      },
+      {
+        "term": "权限快照",
+        "meaning": "普通请求读取最新状态；执行中的轮次保留启动快照，新轮次重新核验。"
+      }
+    ],
+    "mechanism": "Hub.withUser 获取认证身份的资源快照，checkResource 先定位资源再调用 can。policy.decision 先排除缺失、禁用用户和个人边界，再判断 scope、指定 grants 与权益。bob 授权 carol 后，知识库由 private 变 shared；carol 读取为 200，修改为 403。bob 撤销后，carol 的新请求看不见资源，返回 404；已有轮次保留自己的快照，下一轮重新检查已挂载库。",
+    "design": {
+      "decision": "列表、读取与管理动作使用同一策略内核。",
+      "reason": "隐藏资源存在性与拒绝可见资源的写操作，是两个不同结果。",
+      "alternative": "只过滤列表而不检查读取、工具和来源接口，会留下绕过入口。",
+      "cost": "数据库授权与文件操作不能原子提交；已发给模型的正文无法通过撤销抹除。"
+    },
+    "source": {
+      "file": "stages/s15-hub/server/modules/hub/index.mjs",
+      "needle": "  can(user, action, resource) { return can(user, action, resource); }",
+      "before": 0,
+      "after": 4,
+      "explanation": "Hub 对外提供 can，并在 checkResource 中使用当前可信快照。"
+    },
+    "sources": [
+      {
+        "file": "stages/s15-hub/server/modules/hub/policy.mjs",
+        "needle": "export function decision(user, action, resource) {",
+        "before": 0,
+        "after": 21,
+        "explanation": "先判断可见性，再判断动作；personal 分支在 admin 豁免之前。"
+      },
+      {
+        "file": "stages/s15-hub/server/modules/hub/index.mjs",
+        "needle": "  async grantKnowledge(id, username) {",
+        "before": 0,
+        "after": 9,
+        "explanation": "知识库授权无需审批，授权与审计在同一事务完成。"
+      },
+      {
+        "file": "stages/s15-hub/server/modules/hub/index.mjs",
+        "needle": "  async revoke(type, id, username) {",
+        "before": 0,
+        "after": 14,
+        "explanation": "撤销授权；Skill 还会清理待审批名单及安装副本。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "分享后只读",
+        "steps": [
+          {
+            "title": "分享知识库",
+            "actor": "bob",
+            "event": "教学模拟 · grantKnowledge",
+            "explain": "所有者指定 carol，无需 admin 审批。",
+            "state": {
+              "范围": "shared",
+              "读取": "待验证"
+            },
+            "lines": []
+          },
+          {
+            "title": "读取资料",
+            "actor": "carol",
+            "event": "教学模拟 · checkResource / read",
+            "explain": "新请求取得授权快照。",
+            "state": {
+              "范围": "shared",
+              "读取": "200"
+            },
+            "lines": []
+          },
+          {
+            "title": "尝试修改",
+            "actor": "carol",
+            "event": "教学模拟 · can / modify",
+            "explain": "可见但没有修改动作。",
+            "state": {
+              "范围": "shared",
+              "读取": "写入 403"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "撤销后的新请求",
+        "steps": [
+          {
+            "title": "撤销授权",
+            "actor": "bob",
+            "event": "教学模拟 · revoke",
+            "explain": "删除 carol 的 grant；若最后一条授权被删，scope 回 private。",
+            "state": {
+              "授权": "已撤销",
+              "读取": "旧轮次保留快照"
+            },
+            "lines": []
+          },
+          {
+            "title": "再次读取",
+            "actor": "carol",
+            "event": "教学模拟 · snapshot / can",
+            "explain": "新请求不再看见知识库。",
+            "state": {
+              "授权": "无",
+              "读取": "404"
+            },
+            "lines": []
+          },
+          {
+            "title": "开启下一轮",
+            "actor": "服务端",
+            "event": "教学模拟 · ExecutionBoundary",
+            "explain": "重新核对挂载库，不能沿用旧授权。",
+            "state": {
+              "授权": "最新规则",
+              "读取": "拒绝未授权挂载"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "carol 能看见 bob 共享的知识库，但试图修改正文，应该怎样响应？",
+      "options": [
+        "200，因为可见就可以修改",
+        "403；撤销后新请求则返回 404",
+        "由模型判断是否需要修改"
+      ],
+      "answer": 1,
+      "explanation": "共享授予 use/read，修改仍受动作限制；不可见与可见但无权操作分别为 404 和 403。"
+    },
+    "stage": "s15-hub",
+    "ownership": {
+      "codex": "维护各用户的 Thread、Turn 与原生 Skill 发现，执行已授权的一轮；不审批资源分享。",
+      "product": "从认证或持久任务取得身份；Hub 决定权益与资源动作，门禁绑定轮次快照，运行环境同步并核验 Skill。"
+    },
+    "reference": {
+      "session": "s15 设计与源码长文",
+      "url": "/course/handbook.html#module-s15",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 PG 与 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s15-hub 执行本节离线实验，并检查测试退出码。"
+    }
+  },
+  {
+    "id": "s15-intersection",
+    "title": "有效工具为什么是三个集合的交集",
+    "principle": "Agent 白名单、权益工具组与资源可见范围必须同时允许，任一层都不能扩大其他层。",
+    "problem": "Agent 配置允许 read_webpage，basic 用户为什么仍不能联网？",
+    "change": {
+      "before": "Agent 白名单和任务门禁限定工具与资料边界。",
+      "added": "Hub 将用户权益与工具组 scope 纳入有效工具集合，原生搜索也检查 web 工具组。",
+      "kept": "工具实现由服务端可信配置提供，参数校验、workflow 临时授权与可写路径限制继续有效。"
+    },
+    "concepts": [
+      {
+        "term": "三方交集",
+        "meaning": "有效工具 = Agent 白名单 ∩ 权益工具组 ∩ 工具组可见范围。"
+      },
+      {
+        "term": "basic / pro",
+        "meaning": "basic 提供 writing、files/knowledge；pro 覆盖全部系统 Agent 与工具组，仍受 Agent 白名单约束。"
+      },
+      {
+        "term": "停派与并发",
+        "meaning": "权益配额决定下一轮是否可派发；超额保持 queued，已有轮次继续，全局最多 2 轮。"
+      }
+    ],
+    "mechanism": "checkTool 从当前快照取 tool_group，effectiveTools 先用 decision 筛选用户能 use 的组，再展开组内工具并与 agent.tools.allow 过滤交集。basic 的 plan 不含 web，即使 Agent 白名单含 read_webpage 也不会放行；pro 的星号展开系统集合，但不替代白名单。nativeSearch 也检查 web 组，不能借原生搜索绕过权益。派发前按 owner 汇总用量与并发，basic 每日 200,000 token、1 轮，pro 每日 1,000,000 token、2 轮。",
+    "design": {
+      "decision": "工具注册与回调执行共用 Hub 策略。",
+      "reason": "只在展示时隐藏工具，无法阻止伪造调用或不匹配的运行配置。",
+      "alternative": "把三个名单取并集会让其中任一名单扩权；只查 Agent 无法体现用户权益。",
+      "cost": "权限变化要在执行边界重新取快照，原生搜索配置变化可能需要空闲重启。"
+    },
+    "source": {
+      "file": "stages/s15-hub/server/modules/hub/index.mjs",
+      "needle": "  checkTool(name, agent) {",
+      "before": 0,
+      "after": 4,
+      "explanation": "工具回调查可信快照和三方交集；未入集合统一拒绝。"
+    },
+    "sources": [
+      {
+        "file": "stages/s15-hub/server/modules/hub/policy.mjs",
+        "needle": "export function effectiveTools(user, agent, groups) {",
+        "before": 0,
+        "after": 3,
+        "explanation": "decision 同时检查权益与 scope，然后过滤 Agent 白名单。"
+      },
+      {
+        "file": "stages/s15-hub/server/modules/hub/index.mjs",
+        "needle": "  async nativeSearch(id) {",
+        "before": 0,
+        "after": 4,
+        "explanation": "原生搜索同样需要可用的 web 组及 read_webpage。"
+      },
+      {
+        "file": "stages/s15-hub/server/modules/hub/policy.mjs",
+        "needle": "export function quota(user, used, active, resetsAt) {",
+        "before": 0,
+        "after": 6,
+        "explanation": "admin 豁免权益上限，但全局同时轮次限制仍生效。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "pro 也必须符合白名单",
+        "steps": [
+          {
+            "title": "取得快照",
+            "actor": "Hub",
+            "event": "教学模拟 · snapshot",
+            "explain": "用户为 pro，系统工具组可见。",
+            "state": {
+              "权益": "pro",
+              "工具": "待筛选"
+            },
+            "lines": []
+          },
+          {
+            "title": "筛选工具",
+            "actor": "Hub",
+            "event": "教学模拟 · effectiveTools",
+            "explain": "read_webpage 同时出现在可用组与 Agent 白名单。",
+            "state": {
+              "权益": "pro",
+              "工具": "包含 read_webpage"
+            },
+            "lines": []
+          },
+          {
+            "title": "回调核验",
+            "actor": "服务端",
+            "event": "教学模拟 · checkTool",
+            "explain": "可信轮次上下文内核对名称。",
+            "state": {
+              "权益": "pro",
+              "工具": "允许"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "白名单不能扩大 basic 权益",
+        "steps": [
+          {
+            "title": "提出联网请求",
+            "actor": "模型",
+            "event": "教学模拟 · read_webpage",
+            "explain": "Agent 允许此工具，但当前用户为 basic。",
+            "state": {
+              "权益": "basic",
+              "工具": "待核对"
+            },
+            "lines": []
+          },
+          {
+            "title": "筛掉 web 组",
+            "actor": "Hub",
+            "event": "教学模拟 · decision",
+            "explain": "basic 只允许 files、knowledge。",
+            "state": {
+              "权益": "basic",
+              "工具": "不含 read_webpage"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝调用",
+            "actor": "服务端",
+            "event": "教学模拟 · checkTool",
+            "explain": "原生搜索同样受到 web 组限制。",
+            "state": {
+              "权益": "basic",
+              "工具": "404 HUB_DENIED"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "pro 用户的 Agent 白名单没有某个工具，Hub 能因为 pro 而放行吗？",
+      "options": [
+        "可以，pro 覆盖系统工具",
+        "不可以，仍须满足 Agent 白名单",
+        "只要工具组可见就可以"
+      ],
+      "answer": 1,
+      "explanation": "权益扩大可选择的系统集合，不扩大 Agent 白名单；三方必须同时允许。"
+    },
+    "stage": "s15-hub",
+    "ownership": {
+      "codex": "维护各用户的 Thread、Turn 与原生 Skill 发现，执行已授权的一轮；不审批资源分享。",
+      "product": "从认证或持久任务取得身份；Hub 决定权益与资源动作，门禁绑定轮次快照，运行环境同步并核验 Skill。"
+    },
+    "reference": {
+      "session": "s15 设计与源码长文",
+      "url": "/course/handbook.html#module-s15",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 PG 与 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s15-hub 执行本节离线实验，并检查测试退出码。"
+    }
+  },
+  {
+    "id": "s15-skill-approval",
+    "title": "Skill 从 pending 到下一轮可用",
+    "principle": "所有者提议，另一位 admin 批准；提交授权后同步安装集合，新轮次在运行边界核验。",
+    "problem": "bob 提议把私有 Skill 分享给 carol，为什么 pending 时 carol 还不能使用？",
+    "change": {
+      "before": "Skill 随可信配置装配到每用户独立的 Codex 目录。",
+      "added": "文本 Skill 上传、指定分享申请、独立 admin 审批、授权审计与安装集合对账。",
+      "kept": "Codex 原生解析与发现 Skill；执行能力仍来自可信工具，进程重启仍遵守空闲边界。"
+    },
+    "concepts": [
+      {
+        "term": "pending",
+        "meaning": "只保存提议者与接收名单，不写 resource_grants，因此不产生新授权。"
+      },
+      {
+        "term": "approve / reject",
+        "meaning": "另一位 admin 复核目标和剩余名额，approve 才写授权；reject 只结束申请。"
+      },
+      {
+        "term": "安装集合对账",
+        "meaning": "提交后同步对应用户 Skill；集合变化等待空闲重启与发现核验，不直接打断活动轮次。"
+      }
+    ],
+    "mechanism": "shareSkill 要求当前用户是所有者，校验接收名单后写 pending。reviewSkill 在事务里取得申请，拒绝非 admin、自批或非 pending 状态。approve 再次校验目标与上限，写 grants、approved 状态和审计；事务提交后 syncSkills 同步接收者。carol 下一轮取得新权限，在空闲边界重启并核验集合；若会话指纹不兼容需新建会话。撤销立即移除安装副本，当前轮次仍保留启动快照。",
+    "design": {
+      "decision": "提议与批准分离；数据库提交和安装同步分别报告结果。",
+      "reason": "用户提供的指令会影响接收者行为，需要独立审阅，且不能把文件同步伪装成数据库原子操作。",
+      "alternative": "pending 就安装会让未批准内容提前生效；批准人安装到自己目录也不能代表接收者成功。",
+      "cost": "同步失败时授权可能已经提交；接口报错，通过重试对账和下一轮前核验收敛。"
+    },
+    "source": {
+      "file": "stages/s15-hub/server/modules/hub/index.mjs",
+      "needle": "  async shareSkill(id, usernames) {",
+      "before": 0,
+      "after": 8,
+      "explanation": "只有所有者提议；申请进入 pending，没有 insertGrant。"
+    },
+    "sources": [
+      {
+        "file": "stages/s15-hub/server/modules/hub/index.mjs",
+        "needle": "  async reviewSkill(id, approve) {",
+        "before": 0,
+        "after": 18,
+        "explanation": "拒绝自批；批准才插入授权，事务结束后才同步接收者。"
+      },
+      {
+        "file": "stages/s15-hub/server/modules/hub/index.mjs",
+        "needle": "  async allowedSkills(id) {",
+        "before": 0,
+        "after": 4,
+        "explanation": "禁用用户安装集合为空，其他用户仅返回自身可用的 Skill。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "bob 提议，admin 批准，carol 下一轮可用",
+        "steps": [
+          {
+            "title": "提交名单",
+            "actor": "bob",
+            "event": "教学模拟 · shareSkill",
+            "explain": "指定 carol，写 pending。",
+            "state": {
+              "申请": "pending",
+              "安装": "carol 无新副本"
+            },
+            "lines": []
+          },
+          {
+            "title": "独立审阅",
+            "actor": "admin",
+            "event": "教学模拟 · readSkill",
+            "explain": "读取文本与申请，不安装到管理员目录。",
+            "state": {
+              "申请": "待批准",
+              "安装": "carol 无新副本"
+            },
+            "lines": []
+          },
+          {
+            "title": "批准并同步",
+            "actor": "Hub",
+            "event": "教学模拟 · reviewSkill / syncSkills",
+            "explain": "提交授权与审计后，同步 carol 的安装集合。",
+            "state": {
+              "申请": "approved",
+              "安装": "已对账"
+            },
+            "lines": []
+          },
+          {
+            "title": "下一轮核验",
+            "actor": "carol",
+            "event": "教学模拟 · ExecutionBoundary",
+            "explain": "集合变化先空闲重启，发现核验后可用；指纹不兼容则新建会话。",
+            "state": {
+              "申请": "approved",
+              "安装": "下一轮可用"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "自批或拒绝不产生授权",
+        "steps": [
+          {
+            "title": "尝试自批",
+            "actor": "提议者",
+            "event": "教学模拟 · reviewSkill",
+            "explain": "即使提议者是 admin 也不能自己批准。",
+            "state": {
+              "申请": "pending",
+              "授权": "403，无新 grant"
+            },
+            "lines": []
+          },
+          {
+            "title": "另一位 admin 拒绝",
+            "actor": "admin",
+            "event": "教学模拟 · reject",
+            "explain": "将状态置为 rejected，写审计。",
+            "state": {
+              "申请": "rejected",
+              "授权": "无新 grant"
+            },
+            "lines": []
+          },
+          {
+            "title": "接收者发起新轮次",
+            "actor": "carol",
+            "event": "教学模拟 · allowedSkills",
+            "explain": "未获授权的 Skill 不进入安装集合。",
+            "state": {
+              "申请": "rejected",
+              "授权": "不可用"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "审批已提交但 Skill 文件同步失败时，可以告诉 carol 已可使用吗？",
+      "options": [
+        "可以，approved 就代表全部完成",
+        "不可以，接口报错，需对账并在新轮次前核验",
+        "把申请自动改回 pending 即可"
+      ],
+      "answer": 1,
+      "explanation": "数据库与文件系统没有同一事务；权限已提交不代表安装与发现已通过。"
+    },
+    "stage": "s15-hub",
+    "ownership": {
+      "codex": "维护各用户的 Thread、Turn 与原生 Skill 发现，执行已授权的一轮；不审批资源分享。",
+      "product": "从认证或持久任务取得身份；Hub 决定权益与资源动作，门禁绑定轮次快照，运行环境同步并核验 Skill。"
+    },
+    "reference": {
+      "session": "s15 设计与源码长文",
+      "url": "/course/handbook.html#module-s15",
+      "adaptation": "依据本阶段 README、design.md 与源码编写。状态推演为固定教学模拟；真实 PG 与 Linux uid 另行验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s15-hub 执行本节离线实验，并检查测试退出码。"
+    }
+  }
+]

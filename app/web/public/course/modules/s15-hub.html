@@ -1,0 +1,198 @@
+<section class="module" id="module-s15">
+<div class="module-content">
+<header class="module-header animate-in"><span class="module-number">s15</span><h2 class="module-title">权限与资源 Hub：能用什么，谁说了算</h2><p class="module-subtitle">把资源可见性、动作、权益与分享审批放在同一处判定；执行中的轮次保留快照，下一轮核对新规则。</p></header>
+<div class="module-body">
+<section class="screen animate-in" id="s15-screen-1">
+<h2 class="screen-heading">用户已经隔离，怎样让资源有边界地共享</h2>
+<p>bob 和 carol 各有自己的运行环境、原生历史与工作目录。现在 bob 想把一个知识库分享给 carol，又想让 carol 使用自己写的 Skill。共享不能等同于把两个目录合在一起：carol 可以读知识库，却不能改 bob 的原文；Skill 是会影响模型行为的指令，不能在 bob 提交名单时就进入 carol 的执行环境。服务还要知道，授权撤销后哪一次请求开始拒绝，以及正在执行的任务是否继续。</p>
+
+<figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1528" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
+
+<p><span class="term" data-definition="统一处理资源可见性、动作授权、用户权益、分享审批、配额与审计的服务模块；不接管 Codex 执行循环。">权限与资源 Hub</span> 回答两个问题：这个用户能不能看到资源，以及看到以后能做哪个动作。资源包括 Agent、工具组、知识库和 Skill，动作固定为 use、read、modify、share、delete。GET /hub 返回可见资源的类型、scope、所有者用户名与可执行动作，客户端不必自己猜权限。</p>
+<table><thead><tr><th>单元</th><th>本章职责</th><th>继续保留的边界</th></tr></thead><tbody>
+<tr><td>Hub</td><td>可见范围、动作、权益、授权审批、配额与审计。</td><td>身份来自认证或持久任务 owner，不接受模型提供的身份。</td></tr>
+<tr><td>PermissionGate</td><td>把最新授权快照绑定到可信轮次上下文。</td><td>Agent 挂载、workflow 临时授权和输出范围仍需满足。</td></tr>
+<tr><td>sessions / messages</td><td>新轮次重验共享知识库，按用户权益决定派发。</td><td>任务继续持久化排队，全局同时最多两轮。</td></tr>
+<tr><td>runtimes / Codex</td><td>同步用户 Skill，空闲时受控重启并核验发现结果。</td><td>每用户进程、目录与 uid 保持独立，Codex 执行 Thread / Turn。</td></tr>
+<tr><td>PostgreSQL</td><td>保存权益、授权、审批、scope 联动和只追加审计。</td><td>数据库提交不等于文件系统同步已成功。</td></tr>
+</tbody></table>
+<p>会话与普通文件仍是个人隔离对象。admin 能管理 Hub 资源，不代表可以通过分享接口进入别人的会话。工具组与 Agent 都是 system 资源，由部署者提供定义和代码；本章不允许用户上传新的工具实现，也不提供动态 Agent 上传。用户可以上传的 Skill 只包含指令文本，实际执行能力仍取决于可信工具与权限判定。</p>
+<p>这套服务是独立部署，默认端口 4329。工作台展示教材和部署说明，通过 remote.sh tunnel 建立 SSH 隧道后，CLI 连接本机 http://127.0.0.1:4329。共享工作台不会把 s15 注册成实时代理目标。这里的授权说明用于理解服务端行为，静态卡片和泳道演示本身不会创建账号、授权或安装 Skill。</p>
+</section>
+<section class="screen animate-in" id="s15-screen-2">
+<h2 class="screen-heading">同一判定：先决定看得见，再决定能做什么</h2>
+<p><span class="term" data-definition="资源的可见范围。private 面向所有者，shared 额外面向指定接收者，system 面向系统用户；权益和动作限制仍需另外满足。">scope</span> 描述资源面向谁。private 由所有者和 admin 使用、修改；shared 增加指定接收者的 use/read，修改仍由所有者和 admin 管理；system 对用户开放使用，但受权益限制，修改由 admin 管理。知识库删除有显式所有者规则，不能把通用表格当成省略具体动作检查的理由。</p>
+<table><thead><tr><th>请求</th><th>结果</th><th>原因</th></tr></thead><tbody>
+<tr><td>carol 读取 bob 未分享的 private 知识库</td><td>404</td><td>资源对 carol 不可见，不透露存在性。</td></tr>
+<tr><td>bob 分享后，carol 读取该库</td><td>200</td><td>指定授权使资源可见，read 是允许动作。</td></tr>
+<tr><td>carol 修改共享库</td><td>403</td><td>资源可见，但共享接收者没有 modify。</td></tr>
+<tr><td>bob 撤销后，carol 发起新的读取</td><td>404</td><td>新快照中不再存在 carol 的授权。</td></tr>
+</tbody></table>
+<p>Hub 的 can 方法委托给策略内核，checkResource 则从当前可信快照查资源，再检查动作。模型不能通过参数声称自己是 bob；currentIdentity 来自认证上下文，后台执行则取持久任务的 owner。列表也用同一个 decision 过滤，并逐项计算 actions，避免列表显示与实际请求使用两套不同规则。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 39–43 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="39" data-end="43">  can(user, action, resource) { return can(user, action, resource); }
+  resource(type, id) { return this.current().resources.get(`${type}:${id}`); }
+  check(action, resource) { return can(this.current().user, action, resource); }
+  checkResource(type, id, action = 'read') { const r = this.resource(type, id); this.check(action, r); return r; }
+  checkAgent(agent) { return this.checkResource('agent', agent.definition.agent.id, 'use'); }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>can 是统一入口；resource 从当前快照取对象，check 使用当前用户。checkResource 把资源定位和动作判定接在一起，而不是找到 ID 就直接返回内容。</p></div></div>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/policy.mjs · 第 9–30 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/policy.mjs" data-start="9" data-end="30">export function decision(user, action, resource) {
+  if (!ACTIONS.includes(action)) throw new AppError('未知权限动作。', 400);
+  if (!user || user.disabled_at || !resource) return 404;
+  // 会话、普通文件仍属于个人隔离边界；admin 不借 Hub 进入别人的会话。
+  if (resource.type === 'personal') return owns(user, resource) ? 200 : 404;
+  if (user.role === 'admin') return 200;
+  const scope = resource.scope ?? resource.visibility ?? 'private';
+  const owner = owns(user, resource);
+  const granted = user.grants?.includes(`${resource.type}:${resource.id}`);
+  const visible = owner || scope === 'system' || (scope === 'shared' &amp;&amp; granted);
+  if (!visible) return 404;
+  const plan = user.plan || PLANS.basic;
+  if (resource.type === 'agent' &amp;&amp; !includes(plan.agents, resource.planId || resource.id)) return 404;
+  if (resource.type === 'tool_group' &amp;&amp; !includes(plan.tool_groups, resource.id)) return 404;
+  if (resource.type === 'knowledge' &amp;&amp; action === 'delete' &amp;&amp; owner) return 200;
+  return ['use', 'read'].includes(action) || (scope !== 'system' &amp;&amp; owner) ? 200 : 403;
+}
+export function can(user, action, resource) {
+  const status = decision(user, action, resource);
+  if (status !== 200) throw new AppError(status === 404 ? '资源不存在或未授权。' : '没有执行这个动作的权限。', status, 'HUB_DENIED');
+  return true;
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>首先拒绝不存在、禁用或缺少资源的情况。personal 在 admin 分支之前检查归属；随后判断 owner、scope 和指定授权。Agent 与工具组还检查权益，最终才按 use/read 或所有者管理动作放行。can 将非 200 结果转为带状态码的 HUB_DENIED。</p></div></div>
+
+<p>bob 分享知识库无需审批，但名单有严格限制：每个资源最多授权 20 人，不能授权给自己、不存在或已禁用账号。禁用账号的旧授权保留，身份加载失败使其不能继续使用。有授权时 scope 为 shared，最后一条撤销后回 private。这些约束在业务方法和数据库约束中落实，不能仅靠前端禁用按钮。</p>
+<p>所有 Hub 写操作在实例级事务锁内执行，资源行再用 FOR UPDATE 取得，分享名单与审计一起提交。发布为 system 会清除指定授权；取消发布回 private，不会自动恢复发布之前的名单。两次操作均把清除的用户 ID 写到 publish 审计的 detail.revokedGrantees，因此管理员能够追踪一次公开范围调整究竟撤掉了哪些指定授权。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 105–113 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="105" data-end="113">  async grantKnowledge(id, username) {
+    return this.mutate('knowledge', id, 'share', async (client, actor, row, before) =&gt; {
+      if (row.visibility === 'system') throw new AppError('system 资源无需授权。', 409);
+      const [target] = await this.targets(client, row.owner_id, [username], before);
+      await this.insertGrant(client, actor, 'knowledge', id, target.id);
+      const after = [...new Set([...before, target.id])];
+      await this.audit(client, actor, 'share', 'knowledge', id, before, after); return { grantees: after, scope: 'shared' };
+    });
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先检查 share 动作，system 资源无需指定授权。targets 验证用户名与剩余名额，insertGrant 写授权，audit 记前后名单；外层 mutate 管理事务。</p></div></div>
+
+<p>授权通过只是读取链路的起点。知识库还要符合 Agent 的挂载规则，修改与索引继续需要对应知识库的 workflow 授权，读取再核验原文版本、Wiki 或 RAG 索引。共享原文按登记 owner 的工作区定位，由原 owner 的 uid 辅助进程读取；请求身份仍是 carol，不会为了读一份共享资料就临时变成 bob。</p>
+<p>普通用户可以通过 POST /knowledge 创建自己的 private 库，所有者取登录身份。库 ID 为 1–64 位小写字母、数字或连字符，在实例内唯一；标题为 1–200 字。数量检查、登记与目录准备共用事务边界。用户创建的库只可继承 Agent 第一个 knowledge 挂载项的默认动作和模式；没有挂载项就不挂载，未声明的静态库也不能借这个规则获得权限。</p>
+<p>删除只允许所有者或 admin。在持久任务或活动 gate 上下文中仍被挂载、或索引正在执行时，返回 409 KNOWLEDGE_BUSY。允许删除后，清理授权、Wiki 和索引登记、外部索引与 owner 目录，并将原文资源标为 revoked。数据库和目录没有跨系统事务：清理失败不能报告成功，已清理的文件也不能靠 SQL 回滚自动恢复。</p>
+</section>
+<section class="screen animate-in" id="s15-screen-3">
+<h2 class="screen-heading">工具三方交集与权益：有一层不允许，就不能执行</h2>
+<p>Agent 配置可以声明 read_webpage，但 basic 用户没有 web 工具组权益；同样，pro 可以使用全部系统工具组，也不能调用 Agent 没有声明的工具。<span class="term" data-definition="工具必须同时属于 Agent 白名单、用户权益允许的工具组以及该用户可见的工具组范围；三个集合取交集。">有效工具</span> 把三道限制合起来：Agent 白名单 ∩ 权益工具组 ∩ 工具组可见范围。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 44–48 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="44" data-end="48">  checkTool(name, agent) {
+    const groups = [...this.current().resources.values()].filter(r =&gt; r.type === 'tool_group');
+    if (!effectiveTools(this.current().user, agent.definition.agent, groups).includes(name)) missing();
+    return true;
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>回调从本轮可信快照取所有工具组，再用 effectiveTools 判断名称。模型知道工具名不等于获得权限，未进入有效集合会被拒绝。</p></div></div>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/policy.mjs · 第 31–34 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/policy.mjs" data-start="31" data-end="34">export function effectiveTools(user, agent, groups) {
+  return [...new Set(groups.filter(group =&gt; decision(user, 'use', { ...group, type: 'tool_group' }) === 200)
+    .flatMap(group =&gt; group.tools).filter(name =&gt; agent.tools.allow.includes(name)))];
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先用 decision 筛选允许 use 的工具组。这个判断同时包含 scope 与权益；再展开组内 tools，过滤 Agent 的 allow，最后去重。任何一方减少集合，结果只能减少。</p></div></div>
+
+<table><thead><tr><th>权益</th><th>Agent / 工具组</th><th>每日 token</th><th>用户并发</th><th>知识库 / 私有 Skill</th></tr></thead><tbody>
+<tr><td>basic</td><td>writing；files、knowledge</td><td>200,000</td><td>1</td><td>各 3</td></tr>
+<tr><td>pro</td><td>全部系统 Agent 与工具组</td><td>1,000,000</td><td>2</td><td>各 20</td></tr>
+<tr><td>admin</td><td>豁免权益限制，管理操作仍审计</td><td>权益不限</td><td>仍受全局最多 2 轮限制</td><td>权益不限</td></tr>
+</tbody></table>
+<p>新用户默认为 basic，admin 通过 HTTP 分配权益。pro 的星号表示按可信目录展开全部系统集合，没有第三档权益。writing 是权益里的配置选择器，部署中对应 agents/writing/，Agent ID 为 writing-assistant。选择 Agent 时仍需 Hub 校验当前部署的授权资源，不能把配置选择器、Agent ID 与任意可上传代码混为一谈。</p>
+<p>原生联网搜索也必须检查 web 工具组。即使模型声明支持原生搜索，用户没有 web 权益仍不能启用；不能因为它不走普通 MCP 工具回调，就绕开相同限制。工具组与 Agent 保持 system，也不代表所有用户都自动享有它们：system 解决资源范围，plan 进一步限制实际可选集合。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 67–71 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="67" data-end="71">  async nativeSearch(id) {
+    const snapshot = await this.snapshot(id);
+    const group = snapshot.resources.get('tool_group:web');
+    return decision(snapshot.user, 'use', group) === 200 &amp;&amp; group.tools.includes('read_webpage');
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>nativeSearch 重新取用户快照，要求 web 组允许 use，且组内包含 read_webpage。原生能力与业务工具因此服从同一权益来源。</p></div></div>
+
+<p>配额同样发生在派发前。服务按 owner_id 汇总用量，时区沿用 AGENT_BUDGET_TIMEZONE；读取前等待账本写入链，写入失败保持拒绝派发。达到每日上限时任务仍为 queued，由定时唤醒在预算时区的次日再检查。已在运行的一轮与当前轮次的追加继续完成，因此配额不是对正在生成的 token 做逐个截断。</p>
+<p>并发按执行任务与活动会话去重计数，先服从全局两轮，再服从用户权益。basic 的另一个任务可以继续等待，并不意味着其他用户必须一起等待。admin 豁免每日 token 与资源数量的权益上限，也不能突破全局轮次容量。降级保留已有资料，数量超额时拒绝新增；它不会为了凑回额度而删除用户知识库。</p>
+<p>一次降级还可能改变工具和原生搜索的允许集合。新的轮次取得最新权益，必要时在空闲边界重启用户进程。旧轮次继续使用启动快照，避免执行到一半时同一个工具动作突然换用另一套身份事实。这里要分别观察任务排队状态、用户运行环境集合与用量账本，不能只看客户端按钮是否显示。</p>
+</section>
+<section class="screen animate-in" id="s15-screen-4">
+<h2 class="screen-heading">Skill 分享：提议不授权，批准后还要安装与核验</h2>
+<p>Skill 上传后是 private，先同步到所有者自己的 CODEX_HOME/skills。上传接口接收 JSON 文本文件映射，不解压归档，只接受 SKILL.md 与 references/ 下的 .md/.txt，最多 50 个文件，合计 128 KiB。路径穿越、链接与代码文件不被接受。Codex 负责 frontmatter 解析和原生发现，服务负责验证允许集合；文本指令不会凭空得到新的工具执行能力。</p>
+<p>bob 提议把 Skill 分享给 carol 时，shareSkill 校验所有者和接收名单，然后写入 pending。它只记录需要审阅的申请，不插入 resource_grants。carol 此时既没有新授权，也没有因此安装的新副本。再次提议会更新待审名单并清除旧审批身份，不能把之前的一次通过当成任意新名单的授权。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 224–232 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="224" data-end="232">  async shareSkill(id, usernames) {
+    return this.mutate('skill', id, 'share', async (client, actor, row, before) =&gt; {
+      if (!owns(actor, row)) throw new AppError('共享申请由所有者提出。', 403);
+      const targets = await this.targets(client, row.owner_id, usernames, before);
+      await this.query(`INSERT INTO agent_data.skill_share_requests(instance_id,skill_id,proposed_by,grantees,status) VALUES($1,$2,$3,$4,'pending')
+        ON CONFLICT(instance_id,skill_id) DO UPDATE SET proposed_by=EXCLUDED.proposed_by,grantees=EXCLUDED.grantees,status='pending',reviewed_by=NULL,updated_at=now()`, [id, actor.id, targets.map(u =&gt; u.id)], client);
+      await this.audit(client, actor, 'share', 'skill', id, before, { status: 'pending', usernames }); return { status: 'pending' };
+    });
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>所有者是申请的唯一发起者。写入 pending 与审计在事务内完成；这里没有 insertGrant，也没有面向接收者的 syncSkills。</p></div></div>
+
+<p>另一位 admin 先通过 readSkill 查看正文和申请，审阅不会把待审内容安装到管理员自己的运行目录。reviewSkill 要求角色为 admin 且不是 proposed_by，申请必须仍为 pending；非 admin、自批与重复审批分别被拒绝。approve 时再次查接收者状态与剩余名额，避免提交申请到审批之间的变化绕过约束。</p>
+
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 233–251 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="233" data-end="251">  async reviewSkill(id, approve) {
+    const result = await this.mutate('skill', id, 'share', async (client, actor, row, before) =&gt; {
+      const request = (await this.query('SELECT * FROM agent_data.skill_share_requests WHERE instance_id=$1 AND skill_id=$2 FOR UPDATE', [id], client)).rows[0];
+      if (actor.role !== 'admin' || request?.proposed_by === actor.id) throw new AppError('需要另一位 admin 审批，不能自批。', 403);
+      if (request?.status !== 'pending') throw new AppError('没有待审批申请。', 409);
+      if (approve) {
+        const users = (await this.query('SELECT username FROM agent_data.users WHERE instance_id=$1 AND id=ANY($2::uuid[])', [request.grantees], client)).rows;
+        const targets = await this.targets(client, row.owner_id, users.map(u =&gt; u.username), before);
+        for (const target of targets) await this.insertGrant(client, actor, 'skill', id, target.id);
+      }
+      const status = approve ? 'approved' : 'rejected';
+      await this.query('UPDATE agent_data.skill_share_requests SET status=$3,reviewed_by=$4,updated_at=now() WHERE instance_id=$1 AND skill_id=$2', [id, status, actor.id], client);
+      await this.audit(client, actor, approve ? 'skill:approve' : 'skill:reject', 'skill', id, request, { status, grantees: request.grantees });
+      return { status, owners: request.grantees };
+    });
+    if (approve) await this.syncSkills?.(result.owners);
+    return { status: result.status };
+  }
+  async assign(username, planId) {</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>只有 approve 分支调用 insertGrant。授权、approved/rejected 和审计在同一事务提交；syncSkills 放在提交之后，且只在批准时调用。返回 approved 的前提还包括同步调用没有报错。</p></div></div>
+
+<table><thead><tr><th>时点</th><th>数据库状态</th><th>carol 的执行环境</th></tr></thead><tbody>
+<tr><td>bob 上传</td><td>private，所有者 bob</td><td>没有新副本。</td></tr>
+<tr><td>bob 提议 carol</td><td>pending，没有新 grant</td><td>仍没有新副本。</td></tr>
+<tr><td>admin approve</td><td>approved、授权与审计提交</td><td>开始安装集合对账；失败会报错。</td></tr>
+<tr><td>carol 下一轮</td><td>重新读取权限快照</td><td>集合变化等待空闲重启，发现核验后可用。</td></tr>
+<tr><td>bob 撤销</td><td>删除 grant，也从 pending 名单移除</td><td>立即移除安装副本；活动轮次保留原快照。</td></tr>
+</tbody></table>
+<p>“下一轮可用”包含明确前提。批准之后，运行环境先以接收者 uid 对账安装集合，冷启动与同步共享该 owner 的串行边界；集合改变时等待活动轮次结束，在空闲租约关闭旧进程，重新启动并核验 Skill。若旧会话的指纹已不兼容，需要新建会话，原历史仍保留。批准动作不直接把新指令塞进 carol 正在执行的一轮。</p>
+<p>reject 只把申请置为 rejected 并写审计，不授予权限。所有者撤销无需再次审批，会立即移除接收者安装副本；同时把该接收者从待审批名单删除，防止旧申请之后又把已撤销对象授权回来。对账只删除本服务 manifest 管理的 Skill，不触碰 .system 或其他目录。</p>
+<p>数据库提交和文件同步之间没有分布式事务。同步失败时授权可能已经提交，接口会报错，不能把 SQL 回滚当成已完成的补偿。重试撤销会再次清理副本，下一次用户进程启动完整对账，在核验完成之前不执行新轮次。这也是演示中必须分别显示申请、授权、安装、轮次四种状态的原因。</p>
+<p>权限撤销不会远程抹去已经发送给模型的正文。活动轮次继续持有启动快照，下一轮才按新规则检查 Agent、Skill 与会话已挂载知识库。普通 HTTP 读取则取得最新快照，所以 bob 撤销知识库分享后，carol 新请求返回 404，与旧轮次继续完成并不矛盾。</p>
+</section>
+<section class="screen animate-in" id="s15-screen-5">
+<h2 class="screen-heading">用真实实验验证规则，用部署验收证明外部边界</h2>
+<p>离线实验调用本阶段真实 Hub 策略、业务方法与调度器，用测试夹具驱动资源、时钟和安装集合。课程中的状态卡片和泳道是固定教学推演，不能替代测试结果。先在 stages/s15-hub 执行实验，再比较实际断言与自己的判断；如果断言失败，命令必须以非零状态退出。</p>
+<pre class="terminal">npm run lesson -- list
+npm run lesson -- scope
+npm run lesson -- intersection
+npm run lesson -- skill-approval
+npm run lesson -- quota
+npm run lesson -- revocation</pre>
+<table><thead><tr><th>实验</th><th>主要观察</th><th>不能据此证明</th></tr></thead><tbody>
+<tr><td>scope</td><td>private 不可见，shared 只读，非法目标和超过 20 人被拒。</td><td>真实 PostgreSQL 触发器和并发锁已经运行。</td></tr>
+<tr><td>intersection</td><td>分别改变白名单、权益、scope，任一层都不能被扩大。</td><td>外部模型实际执行了某种原生能力。</td></tr>
+<tr><td>skill-approval</td><td>pending 不授权，approve 同步，reject 不授权，撤销清副本。</td><td>生产容器具备 uid 切换与文件权限。</td></tr>
+<tr><td>quota</td><td>超额仍 queued，改变测试时钟后恢复，并发按权益限制。</td><td>真实模型费用或 token 会被精确封顶。</td></tr>
+<tr><td>revocation</td><td>旧轮次保留快照，新任务用新规则，集合变化受控重启。</td><td>已经进入模型上下文的资料能够被抹除。</td></tr>
+</tbody></table>
+<p>外部验收要验证另一组事实。PostgreSQL 测试真实执行重复执行数据库升级、并发授权竞争、审批、scope 联动与审计修改拒绝；Linux uid 测试真正启动文件辅助进程并检查跨用户读取拒绝。服务器验收还要经 HTTP 走完整路径：bob 创建、导入与分享知识库，carol 读取成功而写入 403，未获授权用户 404，bob 撤销后新的访问与下一轮被拒绝。</p>
+<p>permission_events 保存 actor、动作、资源、前后状态、detail 与时间，UPDATE、DELETE、TRUNCATE 都被触发器拒绝。这保护正常数据库写接口下的审计记录，并不取消数据库超级管理员的管理能力。共享来源也要保持版本一致：原文变化但尚未登记新版本时返回 SOURCE_STALE，不能为了让读取看似成功而返回旧内容。</p>
+<p>本章边界保持清楚：只支持指定用户名，没有组织、小组、支付、Skill 市场或多主机。权益由 admin 手动分配，工具代码由部署者交付。文件系统与数据库的跨系统失败通过报错、可重试对账和新轮次前核验收敛；路径复核仍存在同 uid 恶意进程造成的竞态窗口，不能替代系统隔离。本机非 root 模式没有系统 uid 隔离，生产容器不能切 uid 时应拒绝启动。</p>
+<p>动手时先完成阶段 README 中的独立部署、账号初始化和模型配置，再保持 SSH 隧道运行，以自己的账号登录 CLI。审批使用另一位 admin 的身份，读取与撤销结果用 carol 的新请求验证。需要数据库、端口或容器的检查应单独记录执行结果，不能将离线实验成功写成部署已验收。</p>
+<div class="quiz-container" id="s15-quiz">
+
+<div class="quiz-question-block" data-correct="1" data-explanation-right="共享授予 use/read，修改仍受动作限制；不可见与可见但无权操作分别为 404 和 403。" data-explanation-wrong="共享授予 use/read，修改仍受动作限制；不可见与可见但无权操作分别为 404 和 403。"><h3 class="quiz-question">carol 能看见 bob 共享的知识库，但试图修改正文，应该怎样响应？</h3><div class="quiz-options">
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>200，因为可见就可以修改</span></button>
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>403；撤销后新请求则返回 404</span></button>
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>由模型判断是否需要修改</span></button>
+</div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="1" data-explanation-right="权益扩大可选择的系统集合，不扩大 Agent 白名单；三方必须同时允许。" data-explanation-wrong="权益扩大可选择的系统集合，不扩大 Agent 白名单；三方必须同时允许。"><h3 class="quiz-question">pro 用户的 Agent 白名单没有某个工具，Hub 能因为 pro 而放行吗？</h3><div class="quiz-options">
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，pro 覆盖系统工具</span></button>
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不可以，仍须满足 Agent 白名单</span></button>
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只要工具组可见就可以</span></button>
+</div><div class="quiz-feedback"></div></div>
+<div class="quiz-question-block" data-correct="1" data-explanation-right="数据库与文件系统没有同一事务；权限已提交不代表安装与发现已通过。" data-explanation-wrong="数据库与文件系统没有同一事务；权限已提交不代表安装与发现已通过。"><h3 class="quiz-question">审批已提交但 Skill 文件同步失败时，可以告诉 carol 已可使用吗？</h3><div class="quiz-options">
+<button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，approved 就代表全部完成</span></button>
+<button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不可以，接口报错，需对账并在新轮次前核验</span></button>
+<button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>把申请自动改回 pending 即可</span></button>
+</div><div class="quiz-feedback"></div></div>
+<div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s15-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s15-quiz">重新作答</button></div></div>
+<p><a href="/course/changes.html#s15">→ 打开 s15 阶段演示</a> · <a href="/course/#s15">→ 打开 s15 机制课堂</a></p>
+</section></div></div></section>

@@ -36,6 +36,7 @@ jobs:
           - stages/s12-deploy
           - stages/s13-auth
           - stages/s14-isolation
+          - stages/s15-hub
           - app
     defaults:
       run:

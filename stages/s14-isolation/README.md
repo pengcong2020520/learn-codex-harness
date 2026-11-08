@@ -123,4 +123,4 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
 
 ## 下一章
 
-s15 权限与资源 Hub：在用户运行环境之上明确资源共享、配额与权益。
+[s15 权限与资源 Hub](../s15-hub/README.md)：在用户运行环境之上明确资源共享、配额与权益。

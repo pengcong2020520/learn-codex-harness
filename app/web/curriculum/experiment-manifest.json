@@ -930,6 +930,110 @@
       "stage": "s14-isolation",
       "command": "npm run lesson -- crash",
       "offlineOrIntegration": "offline"
+    },
+    {
+      "id": "s15-scope",
+      "title": "可见与可修改",
+      "mode": "offline",
+      "question": "为什么一个接口返回 404，另一个返回 403？",
+      "args": [
+        "--test",
+        "--test-name-pattern=Hub scope|Hub grants",
+        "tests/hub.test.mjs"
+      ],
+      "observations": [
+        "private 不可见；shared 被授权者只能 use/read；20 人上限和非法对象被拒。"
+      ],
+      "why": "调用生产 Hub 策略与业务方法，使用显式测试夹具驱动资源、时钟、调度或文件集合。",
+      "boundary": "不监听端口，不证明真实 PG 触发器或 Linux uid；外部验收另行执行。",
+      "catalogId": "scope",
+      "stage": "s15-hub",
+      "command": "npm run lesson -- scope",
+      "offlineOrIntegration": "offline"
+    },
+    {
+      "id": "s15-intersection",
+      "title": "有效工具三方交集",
+      "mode": "offline",
+      "question": "basic 为什么不能调用 web 工具？",
+      "args": [
+        "--test",
+        "--test-name-pattern=Hub 交集",
+        "tests/hub.test.mjs"
+      ],
+      "observations": [
+        "同时改变 Agent 白名单、权益和 scope，观察任何一层都不能被其他层扩大。"
+      ],
+      "why": "调用生产 Hub 策略与业务方法，使用显式测试夹具驱动资源、时钟、调度或文件集合。",
+      "boundary": "不监听端口，不证明真实 PG 触发器或 Linux uid；外部验收另行执行。",
+      "catalogId": "intersection",
+      "stage": "s15-hub",
+      "command": "npm run lesson -- intersection",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "quota",
+          "title": "每日配额与每用户并发",
+          "mode": "offline",
+          "question": "超额的任务去了哪里？",
+          "args": [
+            "--test",
+            "--test-name-pattern=Hub 配额|Hub 调度",
+            "tests/hub.test.mjs"
+          ],
+          "observations": [
+            "任务仍为 queued；变更测试时钟后恢复；basic 同用户 1 轮，pro 2 轮。"
+          ],
+          "why": "调用生产 Hub 策略与业务方法，使用显式测试夹具驱动资源、时钟、调度或文件集合。",
+          "boundary": "不监听端口，不证明真实 PG 触发器或 Linux uid；外部验收另行执行。",
+          "catalogId": "quota",
+          "stage": "s15-hub",
+          "command": "npm run lesson -- quota",
+          "offlineOrIntegration": "offline"
+        }
+      ]
+    },
+    {
+      "id": "s15-skill-approval",
+      "title": "Skill 共享审批与同步",
+      "mode": "offline",
+      "question": "上传的 Skill 何时进入接收者目录？",
+      "args": [
+        "--test",
+        "--test-name-pattern=Hub Skill",
+        "tests/hub.test.mjs"
+      ],
+      "observations": [
+        "pending 没有授权；approve 才同步；reject 不授权；撤销立刻删除安装副本。"
+      ],
+      "why": "调用生产 Hub 策略与业务方法，使用显式测试夹具驱动资源、时钟、调度或文件集合。",
+      "boundary": "不监听端口，不证明真实 PG 触发器或 Linux uid；外部验收另行执行。",
+      "catalogId": "skill-approval",
+      "stage": "s15-hub",
+      "command": "npm run lesson -- skill-approval",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "revocation",
+          "title": "权限变更与轮次边界",
+          "mode": "offline",
+          "question": "降级或撤销会打断正在运行的一轮吗？",
+          "args": [
+            "--test",
+            "--test-name-pattern=Hub 生效边界|Hub runtime",
+            "tests/hub.test.mjs"
+          ],
+          "observations": [
+            "旧轮次保留快照；新任务读新规则；Skill 集合变化后空闲受控重启。"
+          ],
+          "why": "调用生产 Hub 策略与业务方法，使用显式测试夹具驱动资源、时钟、调度或文件集合。",
+          "boundary": "不监听端口，不证明真实 PG 触发器或 Linux uid；外部验收另行执行。",
+          "catalogId": "revocation",
+          "stage": "s15-hub",
+          "command": "npm run lesson -- revocation",
+          "offlineOrIntegration": "offline"
+        }
+      ]
     }
   ]
 }
