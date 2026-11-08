@@ -95,14 +95,14 @@ etcd 使用独立的 `health` 用户和同名角色，**只能读取精确的 `h
 2. **从任意节点进入**：用 Caddy 登录并聊天。另在容器网络内分别从 `http://node-a:4340`、`http://node-b:4341`、`http://node-c:4342` 请求同一用户会话，应到同一主节点。使用 [端口集成测试](tests/sharding-http.integration.mjs) 检查 HTTP 转发、SSE 和 STALE_ROUTE；不要把节点端口发布到公网。
 3. **共享知识**：bob 创建知识库并授予 carol；将二者放到不同主节点，carol 的 `kb_read`/`kb_search` 成功，未授权 dave 返回 404。撤销后再次读也应 404。正文只来自 bob 的主节点。
 4. **节点故障**：先在状态中确认 node-b 所有的分片，然后执行 `docker compose kill node-b`。租约至多约 10 秒后成员消失；它的分片 503，另外两个分片仍可对话。`docker compose up -d node-b` 后原主恢复并将未确认轮次标为待核对，不自动重跑。也可用 `docker compose pause node-b`，等待 15 秒再 `docker compose unpause node-b`，观察旧代次隔离并重新加入；用 `docker network disconnect codex-harness-s17_default "$(docker compose ps -q node-b)"` 模拟分区，再用 `docker network connect --alias node-b ...` 恢复网络。
-5. **迁移**：确认源、目标都在线，用 admin 执行 `npm run cluster -- move bob 2`。若 bob 已在 2，选择其他分片。源节点不接新派发，等正在执行的轮次结束才拷贝。重新查询会话、原生历史、记忆和知识库，应与迁移前一致；用 `stat -c '%u:%g'` 比较两端目录和原生文件，数值属主不变。若中途失败，检查暂停与 override，再核对重试；不要手工只修改 etcd 键。
+5. **迁移**：确认源、目标都在线，**在客户端**设置 `AGENT_SERVER_URL` 指向 SSH 隧道入口（例如 `http://127.0.0.1:4335`），运行 `npm run login` 并使用 admin 账号登录，然后执行 `npm run cluster -- move <user> <shard>`，例如 `npm run cluster -- move bob 2`。若 bob 已在 2，选择其他分片。源节点不接新派发，等正在执行的轮次结束才拷贝。重新查询会话、原生历史、记忆和知识库，应与迁移前一致；用 `stat -c '%u:%g'` 比较两端目录和原生文件，数值属主不变。CODEX_HOME 的顶层 `tmp/` 是 Codex 运行时临时目录，不复制；workspace 由服务身份通过组 1000 读写，保留 root 或用户 uid 的数值属主。若中途失败，检查暂停与 override，再核对重试；不要手工只修改 etcd 键。
 
 外部验收（需相应服务，沙箱未执行）：
 
 ```bash
 npm run test:data              # 临时真实 PG + Redis；含 sharding-pg.integration.mjs
 npm run test:ports             # 监听回环端口的 HTTP/CLI/SSE 测试
-npm run test:runtimes:uid      # Linux root，验证 s14 uid 和文件隔离
+npm run test:runtimes:uid      # Linux 0:1000 + 专用 PG/Redis；含双节点迁移、模拟模型续聊与旧主 SH001
 npm run test:hub:pg
 npm run test:hub:uid
 # 使用独立、带认证的测试 etcd，不指向正在服务的 /codex/。

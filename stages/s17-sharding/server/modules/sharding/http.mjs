@@ -139,6 +139,9 @@ export function createShardedHandler(coordination, service, runtime, control) {
         await tar.done;
         if (!response.ok) throw new Error('目标节点拒绝用户目录。');
         await response.arrayBuffer();
+        } catch (error) {
+          // fetch may fail first when the exporter closes its stream; keep its diagnostic.
+          await tar.stop(); await tar.done; throw error;
         } finally { await tar.stop(); }
       }
       await copyContent(app, runtime, userId, address);

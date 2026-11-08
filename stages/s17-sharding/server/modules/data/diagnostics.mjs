@@ -27,7 +27,8 @@ export function errorSummary(error, generation = {}, origin = error, statement =
     primary: token(route?.primary), term: token(String(generation.term ?? '')),
     localShards: Object.entries(generation.routes?.shards || {}).filter(([, value]) => value.primary === generation.nodeId)
       .map(([shardId, value]) => ({ shardId: token(shardId), epoch: token(String(value.epoch ?? '')) })),
-    operation, table, row: rowFenceDetail(error), frames };
+    operation, table, row: rowFenceDetail(error), frames,
+    ...(error?.subprocessDiagnostic ? { subprocess: error.subprocessDiagnostic } : {}) };
 }
 export function logFailure(error, generation = {}, origin = error, statement = '', kind = 'database', extra = {}) {
   const summary = { ...errorSummary(error, generation, origin, statement), ...extra };

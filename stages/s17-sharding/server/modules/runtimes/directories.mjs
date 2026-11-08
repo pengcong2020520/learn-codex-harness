@@ -20,6 +20,17 @@ function directory(target) {
   const info = fs.lstatSync(target);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('运行环境目录必须是真实目录，拒绝符号链接。');
 }
+// The DB is shared by nodes; its absolute home records the allocating node's root.
+// Only the two known layouts can be rebased, never an arbitrary stored path.
+export function runtimeHome(root, record) {
+  const stored = record.codex_home;
+  const layouts = ['.data/codex', `.data/users/${record.user_id}/codex`];
+  if (!/^[a-f0-9-]{36}$/.test(record.user_id) || typeof stored !== 'string' || !path.isAbsolute(stored) ||
+      path.normalize(stored) !== stored || /[\x00-\x1f\x7f\\]/.test(stored)) throw new Error('CODEX_HOME 映射不在允许目录内。');
+  const layout = layouts.find(value => stored.endsWith('/' + value));
+  if (!layout) throw new Error('CODEX_HOME 映射不在允许目录内。');
+  return path.join(root, layout);
+}
 // 系统父目录仅供穿越；不开放枚举。用户边界目录始终是 uid:1000 / 2770。
 export function prepareDirectories(root, record, { isolated, workspace = path.join(root, 'workspace') }) {
   if (!/^[a-f0-9-]{36}$/.test(record.user_id)) throw new Error('无效 owner。');
@@ -32,9 +43,7 @@ export function prepareDirectories(root, record, { isolated, workspace = path.jo
   parent(path.join(root, '.runs')); parent(path.join(root, '.runs/users'));
   assertRealPath(path.dirname(workspace)); parent(workspace); parent(path.join(workspace, 'users'));
   parent(path.join(root, '.data/users', record.user_id));
-  const expected = [path.join(root, '.data/codex'), path.join(root, '.data/users', record.user_id, 'codex')];
-  if (!expected.includes(record.codex_home)) throw new Error('CODEX_HOME 映射不在允许目录内。');
-  const paths = { codexHome: record.codex_home, workspaceDir: path.join(workspace, 'users', record.user_id), runsDir: path.join(root, '.runs/users', record.user_id) };
+  const paths = { codexHome: runtimeHome(root, record), workspaceDir: path.join(workspace, 'users', record.user_id), runsDir: path.join(root, '.runs/users', record.user_id) };
   for (const target of Object.values(paths)) {
     directory(target); assertRealPath(target);
     secureDirectory(target, record.uid, isolated);

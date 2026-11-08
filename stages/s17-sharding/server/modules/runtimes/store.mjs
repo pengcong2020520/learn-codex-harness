@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { transaction } from '../data/database.mjs';
 import { AppError } from '../../../shared/errors.mjs';
-import { prepareDirectories, migrateLegacyTree, uidHasProcesses } from './directories.mjs';
+import { prepareDirectories, migrateLegacyTree, uidHasProcesses, runtimeHome } from './directories.mjs';
 
 export class RuntimeStore {
   constructor(pool, instanceId, root) { Object.assign(this, { pool, instanceId, root }); }
@@ -26,7 +26,8 @@ export class RuntimeStore {
     });
   }
   async migrateLegacy(record, options, { hasProcesses = uidHasProcesses, migrateTree = migrateLegacyTree } = {}) {
-    if (!options.isolated || record.codex_home !== path.join(this.root, '.data/codex')) return;
+    if (!options.isolated || !record.codex_home?.endsWith('/.data/codex')) return;
+    runtimeHome(this.root, record); // validate the legacy layout before entering migration
     await transaction(this.pool, async client => {
       const { rows } = await businessQuery(client, 'SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2 FOR UPDATE', [this.instanceId, record.user_id]);
       const current = rows[0];
@@ -34,8 +35,9 @@ export class RuntimeStore {
       if (current.migrated_at) return;
       if (hasProcesses(current.uid)) throw new Error('用户 uid 尚有运行中进程，拒绝移交旧目录。');
       // 旧根本身可能还是他人 0700；先按路径移交，之后才能 O_DIRECTORY 打开。
-      fs.mkdirSync(current.codex_home, { recursive: true });
-      migrateTree(current.codex_home, current.uid);
+      const home = runtimeHome(this.root, current);
+      fs.mkdirSync(home, { recursive: true });
+      migrateTree(home, current.uid);
       prepareDirectories(this.root, current, options);
       await businessQuery(client, 'UPDATE agent_data.user_runtimes SET migrated_at=now() WHERE instance_id=$1 AND user_id=$2', [this.instanceId, current.user_id]);
     });
