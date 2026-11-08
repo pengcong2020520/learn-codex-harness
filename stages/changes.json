@@ -488,6 +488,29 @@
           "010-accounts.sql"
         ]
       }
+    },
+    {
+      "id": "s14",
+      "dir": "s14-isolation",
+      "title": "用户隔离：每个用户一个运行环境",
+      "summary": "可信 owner 选择独立进程与原生目录；池控制名额，uid/gid 约束文件访问。",
+      "previous": "s13-auth",
+      "modules": [
+        {
+          "layer": "用户隔离",
+          "name": "用户运行环境",
+          "desc": "owner 路由、进程池与 uid"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [],
+        "env": [],
+        "migrations": [
+          "011-user-runtimes.sql",
+          "012-runtime-migration.sql"
+        ]
+      }
     }
   ]
 }

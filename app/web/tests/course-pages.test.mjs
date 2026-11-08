@@ -106,12 +106,12 @@ test('长文生成内容使用最新术语解释，源章节不需要手工改�
   assert.ok(matches>0&&untouched>0);
 });
 
-test('全景默认已完成的 s13，增量从 s12 到 s13',()=>{
- assert.equal(stages.at(-1).id,'s13');
- assert.equal(stages.at(-1).previous,'s12-deploy');
+test('全景默认已完成的 s14，增量从 s13 到 s14',()=>{
+ assert.equal(stages.at(-1).id,'s14');
+ assert.equal(stages.at(-1).previous,'s13-auth');
  const overview=read('overview.html');
- assert.match(overview,/data-stage-panel="s13"(?! hidden)/);
- assert.match(overview,/<output[^>]*>s13<\/output>/);
- assert.match(overview,/\/course\/assets\/s13-architecture.svg/);
- assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['账号与认证']);
+ assert.match(overview,/data-stage-panel="s14"(?! hidden)/);
+ assert.match(overview,/<output[^>]*>s14<\/output>/);
+ assert.match(overview,/\/course\/assets\/s14-architecture.svg/);
+ assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['用户运行环境']);
 });

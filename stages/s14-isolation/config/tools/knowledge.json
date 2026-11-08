@@ -1,0 +1,134 @@
+{
+  "enabled": true,
+  "module": "server/modules/tools/knowledge.mjs",
+  "tools": [
+    {
+      "name": "kb_list",
+      "label": "查看知识库",
+      "description": "列出当前 Agent 获准的知识库及生效模式。",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kb_read",
+      "label": "读取 Wiki",
+      "description": "读取生效 Wiki 和来源引用；来源失效时拒绝。",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kbId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$"
+          }
+        },
+        "required": [
+          "kbId",
+          "slug"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kb_search",
+      "label": "查询知识",
+      "description": "按当前知识库生效模式查询：Wiki 文本搜索或 Chroma+BM25，不混用或自动回退。",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kbId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "kbId",
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kb_submit_revision",
+      "label": "更新 Wiki",
+      "description": "仅显式知识维护任务可调用。携带 expectedVersion（新建 null）和已读取的本库原始来源版本；校验通过后自动生效。",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kbId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 262144
+          },
+          "expectedVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9-]{36}$"
+          },
+          "source_versions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "resourceId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9-]{36}$"
+                },
+                "versionId": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9-]{36}$"
+                }
+              },
+              "required": [
+                "resourceId",
+                "versionId"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "kbId",
+          "slug",
+          "content",
+          "expectedVersion",
+          "source_versions"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # 导论：Codex harness 是什么，为什么用它来做 Agent
 
-`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s06](s06-tools/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [s12](s12-deploy/) → [s13](s13-auth/README.md) → [app](../app/)
+`导论` → [s00](s00-sdk-quickstart/) → [s01](s01-single-turn/) → [s02](s02-multi-turn/) → [s03](s03-service/) → [s04](s04-events-messages/) → [s05](s05-agent-assembly/) → [s06](s06-tools/) → [s07](s07-memory/) → [s08](s08-data-layer/) → [s09](s09-knowledge-layer/) → [s10](s10-skill-workflow/) → [s11](s11-model-gateway/) → [s12](s12-deploy/) → [s13](s13-auth/README.md) → [s14](s14-isolation/README.md) → [app](../app/)
 > *"Agent = 模型 + Harness"* — 模型负责想，harness 负责做。这套教程带你亲手做一个云端 Agent：不自己造 harness，而是把 OpenAI Codex 的 harness 接进来，把精力留给业务。
 
 ---
@@ -42,7 +42,7 @@
 | [s11](s11-model-gateway/) | 管好模型：一个网关统一协议、协调多个模型、管住 token 和花费 |
 | [s12（已完成）](s12-deploy/README.md) | 上云部署 —— 一台没人看着的服务器，也能自己起来、自己恢复 |
 | [s13（已完成）](s13-auth/README.md) | 账号与认证 —— 每个用户登录自己的账号，会话和任务都有归属 |
-| s14（规划中） | 用户隔离 —— 每个用户一个独立的运行环境，互不可见 |
+| [s14（已完成）](s14-isolation/README.md) | 用户隔离 —— 每个用户一个独立的运行环境，互不可见 |
 | s15（规划中） | 权限与资源 Hub —— 角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改 |
 | s16（规划中） | 多主机调度 —— 任务分到多台机器，坏了一台有人接手 |
 
@@ -247,7 +247,7 @@ flowchart LR
   s10 --> s11["s11 管好模型<br/>模型网关"]
   s11 --> s12["s12 上云部署（已完成）"]
   s12 --> s13["s13 账号与认证（已完成）"]
-  s13 --> s14["s14 用户隔离（规划中）"]
+  s13 --> s14["s14 用户隔离（已完成）"]
   s14 --> s15["s15 权限与资源 Hub（规划中）"]
   s15 --> s16["s16 多主机调度（规划中）"]
 ```

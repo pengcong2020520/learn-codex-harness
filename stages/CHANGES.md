@@ -169,3 +169,13 @@
 **新增接口**：`GET /auth/me`、`POST /auth/logout`、`POST /auth/login`
 
 **新增数据迁移**：`010-accounts.sql`
+
+<a id="s14"></a>
+
+## s14：用户隔离：每个用户一个运行环境
+
+相比 [s13-auth](s13-auth/)：可信 owner 选择独立进程与原生目录；池控制名额，uid/gid 约束文件访问。
+
+**新增模块**：用户运行环境（用户隔离，owner 路由、进程池与 uid）
+
+**新增数据迁移**：`011-user-runtimes.sql`、`012-runtime-migration.sql`

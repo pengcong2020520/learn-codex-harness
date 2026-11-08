@@ -82,6 +82,12 @@
       "dir": "stages/s13-auth",
       "name": "账号与认证",
       "focus": "密码校验、令牌吊销与 owner 归属"
+    },
+    {
+      "id": "s14",
+      "dir": "stages/s14-isolation",
+      "name": "用户隔离",
+      "focus": "owner 路由、运行环境池与系统文件边界"
     }
   ],
   "lessons": [
@@ -6814,6 +6820,545 @@
         "url": "https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md",
         "adaptation": "根据本章 README、设计与源码编写；离线断言不代替真实数据库、端口或服务器验收。",
         "label": "本章设计依据"
+      }
+    },
+    {
+      "id": "s14-routing",
+      "title": "首次请求如何取得自己的用户进程",
+      "principle": "同一 owner 共享一次启动，不同 owner 使用独立进程、原生目录和系统身份。",
+      "problem": "两个同账号请求同时到来，会不会启动两个 Codex，或拿到别人的连接？",
+      "change": {
+        "before": "登录和资源记录已有归属，原生进程与状态仍共享。",
+        "added": "withOwner 预占名额并共享启动 Promise，userSpawn 与 userEnvironment 限定系统身份和环境。",
+        "kept": "继续使用 Codex App Server、Thread / Turn 与全局任务队列。"
+      },
+      "concepts": [
+        {
+          "term": "single-flight",
+          "meaning": "同一 owner 在 starting 状态下复用 entry.ready；启动过程不重复。"
+        },
+        {
+          "term": "租约 refs",
+          "meaning": "进入请求先增加引用，finally 释放；有租约不能回收。"
+        },
+        {
+          "term": "uid/gid",
+          "meaning": "容器中用户进程使用独立数值身份，清空补充组；本机非 root 模式没有系统隔离。"
+        }
+      ],
+      "mechanism": "withOwner 在串行 admission 中核对账号并查 owner。新 entry 先以 starting 占位，再把启动 Promise 存为 ready；同时到来的同 owner 请求增加租约并等待同一 Promise。启动在锁外完成后，context.run 将 operation 绑定到该用户连接。最终 spawn 用 uid/gid 和 umask 0007，环境只保留网关访问值、PATH、LANG 和用户自己的 HOME、CODEX_HOME、CODEX_SQLITE_HOME。后台请求从持久任务取 owner，不能继承其他用户身份。",
+      "design": {
+        "decision": "先登记启动占位，再在锁外等待进程就绪。",
+        "reason": "防止同用户重复启动，同时让其他用户申请租约。",
+        "alternative": "每次请求各自启动会浪费名额；共享进程无法隔离原生历史。",
+        "cost": "首次请求需要启动与核验，期限 30 秒；/ready 不保证每个用户已启动。"
+      },
+      "source": {
+        "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+        "needle": "  async withOwner(owner, operation) {",
+        "before": 0,
+        "after": 39,
+        "explanation": "先占名额，复用 entry.ready；租约覆盖等待与业务执行。",
+        "start": 60,
+        "anchor": 60,
+        "code": "  async withOwner(owner, operation) {\n    if (!owner) throw new Error('运行环境缺少可信 owner。');\n    const nested = this.context.getStore();\n    if (nested?.owner === owner && nested.state === 'ready' && !this.disabled.has(owner) && !this.closed)\n      return operation(nested.value);\n    const entry = await this.serial(async () => {\n      if (this.closed) throw new AppError('运行环境池已关闭。', 503);\n      if (this.disabled.has(owner)) throw new AppError('账号已禁用。', 403, 'ACCOUNT_DISABLED');\n      await this.assertEnabled(owner);\n      let entry = this.entries.get(owner);\n      if (entry?.state === 'closing') throw busyError();\n      if (!entry) {\n        if (this.entries.size >= RUNTIME_LIMIT) {\n          let victim;\n          for (const candidate of [...this.entries.values()].sort((a, b) => a.lastUsed - b.lastUsed)) {\n            if (await this.idle(candidate)) { victim = candidate; break; }\n          }\n          if (!victim) throw busyError();\n          await this.remove(victim);\n        }\n        entry = { owner, refs: 0, lastUsed: this.now(), state: 'starting', controller: new AbortController() };\n        this.entries.set(owner, entry);\n        entry.ready = this.start(entry);\n        entry.ready.catch(() => {});\n      }\n      entry.refs++; entry.lastUsed = this.now();\n      return entry;\n    });\n    try {\n      const value = await entry.ready;\n      if (entry.state !== 'ready') throw new AppError('运行环境已关闭，请核对任务。', 503);\n      return await this.context.run(entry, () => operation(value));\n    } finally {\n      entry.refs--; entry.lastUsed = this.now();\n      if (this.sweeping && entry.state === 'ready') {\n        clearTimeout(entry.idleTimer);\n        entry.idleTimer = setTimeout(() => { void this.sweep().catch(error => this.emit('error', error)); }, IDLE_MS);\n        entry.idleTimer.unref();\n      }\n    }",
+        "hash": "32f0b9327c9159098d10234bdfc2edcd29627335ec7c6829f3efdc47facfec96"
+      },
+      "sources": [
+        {
+          "file": "stages/s14-isolation/server/modules/codex/launch.mjs",
+          "needle": "export function userEnvironment(environment, home) {",
+          "before": 0,
+          "after": 6,
+          "explanation": "最终环境采用白名单，不复制数据库、Redis 或服务商凭据。",
+          "start": 199,
+          "anchor": 199,
+          "code": "export function userEnvironment(environment, home) {\n  const env = {};\n  for (const name of ['CODEX_BASE_URL', 'CODEX_API_KEY', 'PATH', 'LANG']) {\n    if (environment[name] !== undefined) env[name] = environment[name];\n  }\n  return { ...env, CODEX_HOME: home, CODEX_SQLITE_HOME: home, HOME: home };\n}",
+          "hash": "642fbf699f75cb3f39ae8eddd18a8f50e80f083cab733ff92c8b92841bb3d532"
+        },
+        {
+          "file": "stages/s14-isolation/server/modules/codex/launch.mjs",
+          "needle": "export function userSpawn(executable, args, { uid, gid, isolated }) {",
+          "before": 0,
+          "after": 6,
+          "explanation": "固定脚本设置 umask；可执行文件与参数逐项传递。",
+          "start": 207,
+          "anchor": 207,
+          "code": "export function userSpawn(executable, args, { uid, gid, isolated }) {\n  return {\n    command: '/bin/sh',\n    args: ['-c', 'umask 0007 && exec \"$0\" \"$@\"', executable, ...args],\n    options: isolated ? { uid, gid } : {},\n  };\n}",
+          "hash": "642fbf699f75cb3f39ae8eddd18a8f50e80f083cab733ff92c8b92841bb3d532"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "同 owner 的首次并发请求",
+          "steps": [
+            {
+              "title": "申请租约",
+              "actor": "请求 A",
+              "event": "教学模拟 · withOwner",
+              "explain": "认证 owner 进入池。",
+              "state": {
+                "进程": "无",
+                "租约": "0"
+              },
+              "lines": []
+            },
+            {
+              "title": "预留启动",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · entry.ready",
+              "explain": "starting 也占名额。",
+              "state": {
+                "进程": "starting",
+                "租约": "1"
+              },
+              "lines": []
+            },
+            {
+              "title": "复用启动",
+              "actor": "请求 B",
+              "event": "教学模拟 · entry.ready",
+              "explain": "同 owner 不创建第二个进程。",
+              "state": {
+                "进程": "同一 Promise",
+                "租约": "2"
+              },
+              "lines": []
+            },
+            {
+              "title": "路由执行",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · context.run",
+              "explain": "核验通过，两个 operation 使用同一用户连接。",
+              "state": {
+                "进程": "ready",
+                "租约": "执行结束释放"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "启动超时不能成为可用连接",
+          "steps": [
+            {
+              "title": "等待启动",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · START_TIMEOUT_MS",
+              "explain": "30 秒启动期限。",
+              "state": {
+                "进程": "starting",
+                "名额": "已占用"
+              },
+              "lines": []
+            },
+            {
+              "title": "中止启动",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · AbortController",
+              "explain": "请求失败，晚到进程仍需清理。",
+              "state": {
+                "进程": "closing",
+                "名额": "仍占用"
+              },
+              "lines": []
+            },
+            {
+              "title": "清理结束",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · entries.delete",
+              "explain": "清理完成才释放，防止短暂超出 4 个进程。",
+              "state": {
+                "进程": "已关闭",
+                "名额": "已释放"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "同 owner 第二个请求在 starting 时到来，应怎样处理？",
+        "options": [
+          "另开一个进程",
+          "等待同一个 entry.ready，并持有租约",
+          "借用任意 ready 进程"
+        ],
+        "answer": 1,
+        "explanation": "owner 是池项键，启动 Promise 与租约一起保证 single-flight 和使用期间不回收。"
+      },
+      "stage": "s14-isolation",
+      "ownership": {
+        "codex": "在各用户进程内维护 Thread、Turn、原生历史与 Skill；不从请求参数决定 owner。",
+        "product": "认证身份与持久任务 owner 决定路由；服务管理名额、uid/gid、目录、工具权限与故障恢复。"
+      },
+      "reference": {
+        "session": "s14 设计与源码长文",
+        "url": "/course/handbook.html#module-s14",
+        "adaptation": "依据本阶段源码与设计编写。泳道与状态为教学模拟；系统权限需要 Linux 容器验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "command": "npm run lesson -- routing",
+        "action": "在 stages/s14-isolation 执行离线实验。",
+        "observe": [
+          "Node 测试实际通过；断言失败将非零退出。"
+        ],
+        "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
+      }
+    },
+    {
+      "id": "s14-pool",
+      "title": "第 5 个用户到来时，回收谁",
+      "principle": "容量回收只选择没有租约、执行中轮次和排队任务的最久未用进程。",
+      "problem": "池中已经有 4 个用户，第 5 个请求能直接挤掉最早启动的进程吗？",
+      "change": {
+        "before": "进程随请求创建，需要明确机器能承载多少用户运行环境。",
+        "added": "4 个名额、最久空闲回收、10 分钟定时清扫与全忙 503。",
+        "kept": "全局执行轮次上限仍为 2；运行环境名额不等于轮次并发。"
+      },
+      "concepts": [
+        {
+          "term": "RUNTIME_LIMIT",
+          "meaning": "最多 4 项；starting 和尚未完成清理的 closing 项也占名额。"
+        },
+        {
+          "term": "lastUsed",
+          "meaning": "记录请求使用时间，容量不足时按时间升序寻找符合空闲条件的候选。"
+        },
+        {
+          "term": "RUNTIME_BUSY",
+          "meaning": "无可回收对象返回 503，Retry-After 为 10 秒，不受理消息。"
+        }
+      ],
+      "mechanism": "admission 串行核对 entries.size。满 4 项时按 lastUsed 从旧到新检查 idle：必须 ready、refs 为 0，且 isBusy 确认没有轮次与排队任务。遇到可回收对象，await remove 关闭连接与工具并清理缓存，然后再登记新人。第 5 个用户触发回收不必等待 10 分钟；定时 sweep 才额外检查 IDLE_MS。忙碌查询失败时保守跳过，不能猜测空闲。",
+      "design": {
+        "decision": "名额检查与租约登记串行，关闭完成后才删池项。",
+        "reason": "既不能回收正在使用的连接，也不能在旧进程未退出时放进新进程。",
+        "alternative": "只按启动先后淘汰会中断活跃任务；先删项再清理会突破容量。",
+        "cost": "所有对象忙碌时需要拒绝新用户；关闭与持久化清理延迟会占用名额。"
+      },
+      "source": {
+        "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+        "needle": "        if (this.entries.size >= RUNTIME_LIMIT) {",
+        "before": 0,
+        "after": 8,
+        "explanation": "排序仅决定候选顺序；idle 判断和 await remove 才决定能否释放名额。",
+        "start": 72,
+        "anchor": 72,
+        "code": "        if (this.entries.size >= RUNTIME_LIMIT) {\n          let victim;\n          for (const candidate of [...this.entries.values()].sort((a, b) => a.lastUsed - b.lastUsed)) {\n            if (await this.idle(candidate)) { victim = candidate; break; }\n          }\n          if (!victim) throw busyError();\n          await this.remove(victim);\n        }\n        entry = { owner, refs: 0, lastUsed: this.now(), state: 'starting', controller: new AbortController() };",
+        "hash": "32f0b9327c9159098d10234bdfc2edcd29627335ec7c6829f3efdc47facfec96"
+      },
+      "sources": [
+        {
+          "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+          "needle": "  async idle(entry) {",
+          "before": 0,
+          "after": 8,
+          "explanation": "请求租约与持久任务状态一起决定空闲。",
+          "start": 28,
+          "anchor": 28,
+          "code": "  async idle(entry) {\n    if (entry.state !== 'ready' || entry.refs) return false;\n    try { return !await this.isBusy(entry.owner); }\n    catch (error) {\n      this.log(`运行环境 ${entry.owner} 忙碌查询失败，本轮跳过回收：${error.message}`);\n      return false;\n    }\n  }\n  closeValue(value) {",
+          "hash": "32f0b9327c9159098d10234bdfc2edcd29627335ec7c6829f3efdc47facfec96"
+        },
+        {
+          "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+          "needle": "  async remove(entry, error) {",
+          "before": 0,
+          "after": 15,
+          "explanation": "先停进程、处理 owner 状态和缓存，再释放池项。",
+          "start": 129,
+          "anchor": 129,
+          "code": "  async remove(entry, error) {\n    if (entry.removing) return entry.removing;\n    entry.state = 'closing';\n    clearTimeout(entry.idleTimer);\n    entry.controller.abort(error || new Error('运行环境已回收。'));\n    entry.removing = (async () => {\n      // 先停止进程与工具；确认任务状态后才释放名额，防止迟到通知与新进程交叉。\n      if (entry.value) await this.closeValue(entry.value);\n      else await entry.creating?.then(value => this.closeValue(value), () => {});\n      if (error) await this.onLost(entry.owner, error);\n      await this.onRemoved(entry.owner);\n      if (this.entries.get(entry.owner) === entry) this.entries.delete(entry.owner);\n    })();\n    return entry.removing;\n  }\n  crash(entry, error) { return this.serial(() => this.entries.get(entry.owner) === entry ? this.remove(entry, error) : undefined); }",
+          "hash": "32f0b9327c9159098d10234bdfc2edcd29627335ec7c6829f3efdc47facfec96"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "最久空闲者被替换",
+          "steps": [
+            {
+              "title": "容量已满",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · entries.size = 4",
+              "explain": "第 5 个 owner 尚未占位。",
+              "state": {
+                "名额": "4 / 4",
+                "候选": "待检查"
+              },
+              "lines": []
+            },
+            {
+              "title": "逐个检查",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · lastUsed → idle",
+              "explain": "跳过有租约或有任务的对象。",
+              "state": {
+                "名额": "4 / 4",
+                "候选": "最久空闲者"
+              },
+              "lines": []
+            },
+            {
+              "title": "等待关闭",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · await remove",
+              "explain": "进程和工具先停止。",
+              "state": {
+                "名额": "4 / 4",
+                "候选": "closing"
+              },
+              "lines": []
+            },
+            {
+              "title": "预留新人",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · entries.set",
+              "explain": "旧项清理结束后启动新人。",
+              "state": {
+                "名额": "4 / 4",
+                "候选": "新用户 starting"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "全部忙碌时拒绝",
+          "steps": [
+            {
+              "title": "逐个核对",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · idle",
+              "explain": "四项都不符合回收条件。",
+              "state": {
+                "名额": "4 / 4",
+                "响应": "待决定"
+              },
+              "lines": []
+            },
+            {
+              "title": "返回重试",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · busyError",
+              "explain": "503 RUNTIME_BUSY，Retry-After: 10。",
+              "state": {
+                "名额": "4 / 4",
+                "响应": "503，未受理"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "第 5 个用户触发容量回收，候选还必须满足哪项？",
+        "options": [
+          "启动最早即可",
+          "必须先满 10 分钟",
+          "ready、无租约、无执行中轮次和排队任务"
+        ],
+        "answer": 2,
+        "explanation": "容量回收不要求等待 10 分钟，但必须逐项证明空闲。"
+      },
+      "stage": "s14-isolation",
+      "ownership": {
+        "codex": "在各用户进程内维护 Thread、Turn、原生历史与 Skill；不从请求参数决定 owner。",
+        "product": "认证身份与持久任务 owner 决定路由；服务管理名额、uid/gid、目录、工具权限与故障恢复。"
+      },
+      "reference": {
+        "session": "s14 设计与源码长文",
+        "url": "/course/handbook.html#module-s14",
+        "adaptation": "依据本阶段源码与设计编写。泳道与状态为教学模拟；系统权限需要 Linux 容器验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "command": "npm run lesson -- pool",
+        "action": "在 stages/s14-isolation 执行离线实验。",
+        "observe": [
+          "Node 测试实际通过；断言失败将非零退出。"
+        ],
+        "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
+      }
+    },
+    {
+      "id": "s14-crash",
+      "title": "读文件与处理故障，始终限定在当前用户",
+      "principle": "服务读取用户文件也要服从用户权限；一个进程的失败只进入该 owner 的恢复路径。",
+      "problem": "服务替用户读取产物时，能否以自身权限绕过文件边界？一个用户崩溃又会影响谁？",
+      "change": {
+        "before": "API 按 owner 过滤，仍需约束底层文件读取和连接故障范围。",
+        "added": "readAsUser 用短命用户进程读取，池在 owner 范围关闭、恢复并清理。",
+        "kept": "资源归属、工具权限和任务状态核对仍不可省略。"
+      },
+      "concepts": [
+        {
+          "term": "readAsUser",
+          "meaning": "隔离模式使用指定 uid 的辅助进程读取；必须指定有效 maxBytes。"
+        },
+        {
+          "term": "同一 fd 校验",
+          "meaning": "打开后 fstat 检查普通文件、单链接及属主；校验和读取绑定同一描述符。"
+        },
+        {
+          "term": "unconfirmed",
+          "meaning": "进程丢失后的执行中任务需要核对，不能把未知结果当成失败后自动重发。"
+        }
+      ],
+      "mechanism": "readAsUser 校验上限后按 isolated 选择用户辅助进程或本机读取。辅助进程以 uid/gid 启动且只保留固定 PATH 与 LANG；文件读取拒绝符号链接、非普通文件、多硬链接和属主不匹配，并限制正文、元数据与耗时。运行连接崩溃则进入该 owner 的 remove：先停止进程，再 onLost 恢复执行中状态，最后清缓存。其他用户的连接与任务不变。文件读取和故障处理共享同一原则：只能使用可信 owner 所对应的系统权限与状态范围。",
+      "design": {
+        "decision": "文件读取显式降到用户身份，故障按 owner 收口。",
+        "reason": "服务持有其他资源的权限，不能替用户扩大读取范围；单个连接失败不能停止全体用户。",
+        "alternative": "服务直接按路径读取，或将单用户故障设置为全局 failure，都扩大了影响范围。",
+        "cost": "用户文件读取需要短命进程；独立 uid 不隔离 CPU、内存、网络，也不免除路径竞态边界。"
+      },
+      "source": {
+        "file": "stages/s14-isolation/server/modules/runtimes/user-files.mjs",
+        "needle": "export async function readAsUser(uid, file, { maxBytes, isolated =",
+        "before": 0,
+        "after": 8,
+        "explanation": "有效上限是必填项；isolated 决定是否使用用户辅助进程。",
+        "start": 78,
+        "anchor": 78,
+        "code": "export async function readAsUser(uid, file, { maxBytes, isolated = process.getuid?.() === 0 && uid !== process.getuid(), metadata = false, truncate = false, metadataOnly = false } = {}) {\n  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes > 16 * 1024 * 1024) throw new Error('必须指定有效的读取上限。');\n  const options = { maxBytes, truncate, metadataOnly };\n  const result = isolated\n    ? await runUserFileTask(uid, { operation: 'read', file, options }, { maxBytes })\n    : readLocalFile(process.getuid?.() ?? uid, file, options);\n  return metadata ? result : result.data;\n}\n",
+        "hash": "0cfa94a1faf8ff2abd7b2481faa279153aa45dc6591fa009b59997bcf5c4704f"
+      },
+      "sources": [
+        {
+          "file": "stages/s14-isolation/server/modules/runtimes/user-files.mjs",
+          "needle": "  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);",
+          "before": 0,
+          "after": 6,
+          "explanation": "以同一个 fd 核对类型、链接数、属主并读取。",
+          "start": 19,
+          "anchor": 19,
+          "code": "  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);\n  try {\n    const stat = fs.fstatSync(fd);\n    if (!stat.isFile() || stat.nlink !== 1) throw new Error('读取产物必须是独立普通文件。');\n    if (stat.uid !== uid) throw new Error('读取产物属主不匹配。');\n    const chunks = []; let length = 0;\n    while (!metadataOnly && length <= maxBytes) {",
+          "hash": "0cfa94a1faf8ff2abd7b2481faa279153aa45dc6591fa009b59997bcf5c4704f"
+        },
+        {
+          "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+          "needle": "  crash(entry, error) {",
+          "before": 0,
+          "after": 0,
+          "explanation": "崩溃只删除仍属于该 owner 的当前池项。",
+          "start": 144,
+          "anchor": 144,
+          "code": "  crash(entry, error) { return this.serial(() => this.entries.get(entry.owner) === entry ? this.remove(entry, error) : undefined); }",
+          "hash": "32f0b9327c9159098d10234bdfc2edcd29627335ec7c6829f3efdc47facfec96"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "按用户身份读取产物",
+          "steps": [
+            {
+              "title": "检查上限",
+              "actor": "readAsUser",
+              "event": "教学模拟 · maxBytes",
+              "explain": "调用方明确读取上限。",
+              "state": {
+                "身份": "可信 uid",
+                "读取": "待执行"
+              },
+              "lines": []
+            },
+            {
+              "title": "启动辅助进程",
+              "actor": "runUserFileTask",
+              "event": "教学模拟 · uid / gid",
+              "explain": "使用精简环境，不继承服务密钥。",
+              "state": {
+                "身份": "文件 owner",
+                "读取": "检查 fd"
+              },
+              "lines": []
+            },
+            {
+              "title": "返回正文",
+              "actor": "readLocalFile",
+              "event": "教学模拟 · fstat / readSync",
+              "explain": "普通独立文件且属主正确才可读取。",
+              "state": {
+                "身份": "匹配",
+                "读取": "有界结果"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "单个用户进程崩溃",
+          "steps": [
+            {
+              "title": "连接失败",
+              "actor": "CodexConnection",
+              "event": "教学模拟 · fatal",
+              "explain": "故障属于该连接绑定的 owner。",
+              "state": {
+                "用户A": "ready",
+                "用户B": "失败"
+              },
+              "lines": []
+            },
+            {
+              "title": "关闭并恢复",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · remove / onLost",
+              "explain": "B 的执行中任务待核对，不自动重发。",
+              "state": {
+                "用户A": "继续执行",
+                "用户B": "unconfirmed"
+              },
+              "lines": []
+            },
+            {
+              "title": "清理缓存",
+              "actor": "RuntimePool",
+              "event": "教学模拟 · onRemoved",
+              "explain": "B 下次访问从自己的原生历史恢复。",
+              "state": {
+                "用户A": "不变",
+                "用户B": "已移除"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "离线 crash 实验通过，能证明真实 Linux uid 文件隔离吗？",
+        "options": [
+          "能，所有隔离都已验证",
+          "不能；它检验故障范围，系统权限需容器验收",
+          "能，只要有 ownerId"
+        ],
+        "answer": 1,
+        "explanation": "catalog 的 crash 实验使用模拟连接，不切 uid；文件读取源码与 OS 权限必须分别核对。"
+      },
+      "stage": "s14-isolation",
+      "ownership": {
+        "codex": "在各用户进程内维护 Thread、Turn、原生历史与 Skill；不从请求参数决定 owner。",
+        "product": "认证身份与持久任务 owner 决定路由；服务管理名额、uid/gid、目录、工具权限与故障恢复。"
+      },
+      "reference": {
+        "session": "s14 设计与源码长文",
+        "url": "/course/handbook.html#module-s14",
+        "adaptation": "依据本阶段源码与设计编写。泳道与状态为教学模拟；系统权限需要 Linux 容器验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "command": "npm run lesson -- crash",
+        "action": "在 stages/s14-isolation 执行离线实验。本实验只核对用户崩溃的影响范围；readAsUser 与真实文件权限另按隔离验收说明验证。",
+        "observe": [
+          "Node 测试实际通过；断言失败将非零退出。"
+        ],
+        "boundary": "使用真实池、路由与业务模块及模拟连接；不监听端口、不访问 PG、不切换 uid；系统权限另跑容器验收。"
       }
     }
   ]

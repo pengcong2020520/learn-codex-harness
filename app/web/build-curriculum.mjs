@@ -21,7 +21,8 @@ const chapterMetadata={
  s10:{name:'Skill 与 Workflow',focus:'Skill 教方法，Workflow 管边界和终点'},
  s11:{name:'模型网关',focus:'模型清单、能力路由与用量预算'},
  s12:{name:'部署单元',focus:'健康与就绪、容量限制、备份与恢复'},
- s13:{name:'账号与认证',focus:'密码校验、令牌吊销与 owner 归属'}
+ s13:{name:'账号与认证',focus:'密码校验、令牌吊销与 owner 归属'},
+ s14:{name:'用户隔离',focus:'owner 路由、运行环境池与系统文件边界'}
 };
 export function buildCurriculumData({repository=repo,curriculumDir=dir}={}){
  const stageDirs=new Set(fs.readdirSync(path.join(repository,'stages'),{withFileTypes:true}).filter(d=>d.isDirectory()&&/^s\d\d-[a-z0-9-]+$/.test(d.name)).map(d=>d.name));

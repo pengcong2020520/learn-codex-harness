@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy", "s13-auth"];
+export const dirs = ["s00-sdk-quickstart", "s01-single-turn", "s02-multi-turn", "s03-service", "s04-events-messages", "s05-agent-assembly", "s06-tools", "s07-memory", "s08-data-layer", "s09-knowledge-layer", "s10-skill-workflow", "s11-model-gateway", "s12-deploy", "s13-auth", "s14-isolation"];
 // 阶段编号取自目录名；编号可以不连续，中间留给以后插入的阶段。
 export const stageNo = dirs.map(dir => Number(dir.slice(1, 3)));
 const c = { bg: "#FBFBF9", ink: "#1F2933", muted: "#6B7780", faint: "#B8C0C6", line: "#E3E7EA", card: "#FFFFFF",
@@ -40,6 +40,7 @@ const layers = n => [
     M("router", "模型路由", "统一协议，转给上游", 11, ["gateway/"], 3)] },
   { name: "部署", mods: [M("deployment", "就绪与容量", "健康探测、限流与关闭", 12, ["deployment/"])] },
   { name: "账号", mods: [M("accounts", "账号与认证", "登录、令牌与 owner 归属", 13, ["accounts/"])] },
+  { name: "用户隔离", mods: [M("runtimes", "用户运行环境", "owner 路由、进程池与 uid", 14, ["runtimes/"])] },
 ];
 // 基础设施：每个阶段都需要、但不单独成章的代码，画在服务框底部的一条带里。until 表示只到哪个阶段为止算基础设施。
 const infra = [{ files: "config/", name: "配置" }, { files: "storage/", name: "存储" }, { files: "codex/", name: "Codex 连接" }, { files: "role/", name: "角色文件", until: 4 }, { files: "data/paths.mjs", name: "路径" }];
@@ -94,6 +95,8 @@ const stageList = [
     path: [["api", "接收请求"], ["deployment", "检查就绪与限流"], ["messages", "限制轮次并发"], ["codex", "执行任务"], ["pg", "持久化状态"], ["deployment", "关闭与恢复"]] },
   { title: "账号与认证：请求有身份，资源有归属", sub: "登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。",
     path: [["api", "提交登录"], ["accounts", "验证密码与令牌"], ["gate", "绑定 owner 门禁"], ["pg", "按 owner 查询"], ["codex", "执行任务"], ["events", "过滤 owner 推送"]] },
+  { title: "用户隔离：每个用户一个运行环境", sub: "可信 owner 选择独立进程与原生目录；池控制名额，uid/gid 约束文件访问。",
+    path: [["api", "接收认证请求"], ["accounts", "核对用户身份"], ["runtimes", "申请用户租约"], ["codex", "启动用户进程"], ["runtimes", "路由 owner RPC"], ["events", "推送用户事件"]] },
 ];
 // 按阶段编号取：stages[11] 是 s11。
 export const stages = Object.fromEntries(stageList.map((st, i) => [stageNo[i], st]));
@@ -252,7 +255,7 @@ const check = process.argv.includes("--check");
 const problems = checkBindings();
 if (problems.length) throw new Error(`总图和代码对不上，请更新 stages/build-architecture.mjs 里的模块绑定：\n${problems.join("\n")}`);
 dirs.forEach((dir, i) => {
-  // s12、s13 独立快照保持原样；全仓登记图由课程资产承载。
+  // s12、s13、s14 独立快照保持原样；全仓登记图由课程资产承载。
   const file = stageNo[i] >= 12 ? path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`) : path.join(root, dir, "images/architecture.svg"), body = renderArchitecture(stageNo[i]);
   if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
   else fs.writeFileSync(file, body);

@@ -1,0 +1,263 @@
+[
+  {
+    "id": "s14-first-request",
+    "title": "首次请求：single-flight 启动后路由",
+    "question": "同 owner 并发请求如何共用一次启动？",
+    "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+    "start": 60,
+    "end": 93,
+    "expect": "  async withOwner(owner, operation) {",
+    "notes": {
+      "82": "启动 Promise 保存在 owner 池项里。"
+    },
+    "actors": [
+      [
+        "request",
+        "用户请求"
+      ],
+      [
+        "pool",
+        "RuntimePool"
+      ],
+      [
+        "runtime",
+        "用户 Codex"
+      ],
+      [
+        "router",
+        "owner 路由"
+      ]
+    ],
+    "state0": {
+      "进程": "无",
+      "租约": "0",
+      "路由": "未选择"
+    },
+    "steps": [
+      {
+        "flow": [
+          "request",
+          "pool",
+          "申请 withOwner"
+        ],
+        "say": "教学模拟：可信 owner 发起首次请求。",
+        "state": {
+          "进程": "待创建"
+        },
+        "lines": [
+          60,
+          60
+        ]
+      },
+      {
+        "flow": [
+          "pool",
+          "pool",
+          "登记 starting"
+        ],
+        "say": "先占名额，再发起创建。",
+        "state": {
+          "进程": "starting"
+        },
+        "lines": [
+          80,
+          80
+        ]
+      },
+      {
+        "flow": [
+          "request",
+          "pool",
+          "复用 entry.ready"
+        ],
+        "say": "同 owner 第二个请求增加租约，等待同一个启动。",
+        "state": {
+          "租约": "2"
+        },
+        "lines": [
+          85,
+          85
+        ]
+      },
+      {
+        "flow": [
+          "pool",
+          "runtime",
+          "等待 entry.ready"
+        ],
+        "say": "用户进程按 uid/gid 与独立 HOME 启动并核验。",
+        "state": {
+          "进程": "核验中"
+        },
+        "lines": [
+          89,
+          89
+        ]
+      },
+      {
+        "flow": [
+          "pool",
+          "router",
+          "绑定 context.run"
+        ],
+        "say": "就绪后只把该 owner 的连接交给 operation。",
+        "state": {
+          "进程": "ready"
+        },
+        "lines": [
+          91,
+          91
+        ]
+      },
+      {
+        "flow": [
+          "router",
+          "runtime",
+          "发送 owner RPC"
+        ],
+        "say": "会话与任务请求使用当前用户连接。",
+        "state": {
+          "路由": "当前 owner"
+        }
+      },
+      {
+        "flow": [
+          "request",
+          "pool",
+          "释放 refs"
+        ],
+        "say": "请求结束释放各自租约。",
+        "state": {
+          "租约": "0"
+        },
+        "lines": [
+          93,
+          93
+        ]
+      }
+    ],
+    "takeaway": "同 owner 共用启动 Promise；不同 owner 不共用进程。/ready 不表示所有用户都已启动。"
+  },
+  {
+    "id": "s14-fifth-user",
+    "title": "第 5 个用户：回收最久空闲进程",
+    "question": "4 个名额已满，哪个进程可以让位？",
+    "file": "stages/s14-isolation/server/modules/runtimes/pool.mjs",
+    "start": 72,
+    "end": 83,
+    "expect": "        if (this.entries.size >= RUNTIME_LIMIT) {",
+    "notes": {
+      "78": "关闭与清理完成后才登记新进程。"
+    },
+    "actors": [
+      [
+        "request",
+        "第 5 个用户"
+      ],
+      [
+        "pool",
+        "RuntimePool"
+      ],
+      [
+        "tasks",
+        "轮次与任务"
+      ],
+      [
+        "runtime",
+        "候选进程"
+      ]
+    ],
+    "state0": {
+      "名额": "4 / 4",
+      "候选": "未选"
+    },
+    "steps": [
+      {
+        "flow": [
+          "request",
+          "pool",
+          "申请 withOwner"
+        ],
+        "say": "教学模拟：新的 owner 到来。",
+        "state": {
+          "候选": "待排序"
+        }
+      },
+      {
+        "flow": [
+          "pool",
+          "pool",
+          "排序 lastUsed"
+        ],
+        "say": "从最久未用的候选开始检查。",
+        "state": {
+          "候选": "最久未用者"
+        },
+        "lines": [
+          74,
+          74
+        ]
+      },
+      {
+        "flow": [
+          "pool",
+          "tasks",
+          "检查 idle"
+        ],
+        "say": "必须 ready、无租约、无轮次及排队任务；查询失败也跳过。",
+        "state": {
+          "候选": "已证实空闲"
+        },
+        "lines": [
+          75,
+          75
+        ]
+      },
+      {
+        "flow": [
+          "pool",
+          "runtime",
+          "执行 remove"
+        ],
+        "say": "等待关闭进程和工具、清理缓存；期间仍占名额。",
+        "state": {
+          "候选": "closing",
+          "名额": "4 / 4"
+        },
+        "lines": [
+          78,
+          78
+        ]
+      },
+      {
+        "flow": [
+          "runtime",
+          "pool",
+          "释放 entry"
+        ],
+        "say": "清理结束后删除旧池项。",
+        "state": {
+          "候选": "已移除",
+          "名额": "3 / 4"
+        }
+      },
+      {
+        "flow": [
+          "pool",
+          "pool",
+          "登记 starting"
+        ],
+        "say": "新用户占位并开始启动。",
+        "state": {
+          "候选": "新用户",
+          "名额": "4 / 4"
+        },
+        "lines": [
+          81,
+          81
+        ]
+      }
+    ],
+    "takeaway": "容量回收不必等 10 分钟。全部忙则 503 RUNTIME_BUSY / Retry-After: 10；不会挤掉执行中的用户。"
+  }
+]
