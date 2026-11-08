@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { validateEffort } from "../gateway/router.mjs";
 import { readCompatibility } from "./upgrade.mjs";
 import { selectAgentFile } from "./selection.mjs";
-import { CONTRACTS, digest } from "./contracts.mjs";
+import { CONTRACTS, digest, modelContract, knowledgeModeContract, compatibleRecordedV2 } from "./contracts.mjs";
 import { resourcePath, covers, validateKnowledgeBindings } from "../data/paths.mjs";
 export { resourcePath } from "../data/paths.mjs";
 import path from "node:path";
@@ -158,6 +158,7 @@ export class AgentDefinition {
       contribute: config.memory.enabled && this.definition.agent.memory.contribute };
     if (this.definition.agent.knowledge?.length && (config.memory.enabled || config.memory.use || config.memory.contribute)) throw new Error('挂载知识库时请设置 AGENT_MEMORY_ENABLED=false；首版禁用共享原生记忆，避免重新注入范围外知识。');
     this.memory = { ...config.memory };
+    this.modelPolicy = modelContract(config.launch);
     if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };
     // 工作流步骤指定的模型在启动时就解析一遍：写错的场景名、没启用的服务商当场报错，而不是跑到那一步才失败。
     for (const workflow of this.workflows.list()) for (const step of workflow.steps || []) {
@@ -181,8 +182,12 @@ export class AgentDefinition {
     const { version: _label, instructions: _path, ...effectiveAgent } = this.definition.agent;
     const descriptor = { schemaVersion: "2.0", contracts: CONTRACTS, agentId: this.definition.agent.id,
       definitionHash: digest(effectiveAgent), roleHash: digest(this.role), toolVersion, tools: this.definition.agent.tools.allow,
-      skills: skills.map(({ id, name, path: file, source, version, scope = "system" }) => ({ name, path: this.descriptorWorkspace && source ? path.join(this.root, ".data/codex/skills", id, "SKILL.md") : file, version, scope })), workspaceDir: this.descriptorWorkspace || this.runtime.workspaceDir,
-      knowledgeBindings: this.definition.bindings.knowledgeBases || {}, knowledgeModes: this.knowledgeModes || {}, sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
+      // Physical paths remain on runtime/availableSkills, never in the policy identity.
+      skills: skills.map(({ id, name, version, scope = "system" }) => ({ id, name, version, scope }))
+        .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      workspaceDir: "workspace",
+      knowledgeBindings: this.definition.bindings.knowledgeBases || {}, knowledgeModes: knowledgeModeContract(this.knowledgeModes), sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
+      modelPolicy: this.modelPolicy,
       dataVersion: CONTRACTS.resources, knowledgeVersion: CONTRACTS.knowledge };
     this.descriptor = freeze({ ...descriptor, hash: digest(descriptor) });
     if (this.repository) return this.repository.saveAgent(this.descriptor);
@@ -198,14 +203,25 @@ export class AgentDefinition {
   }
   assertCompatible(threadId, jobHash) {
     this.assertCurrent();
-    if (this.repository) return this.repository.conversation(threadId).then(row => this.checkBinding(row.agent_hash, jobHash));
+    if (this.repository) return this.repository.conversation(threadId).then(async row => {
+      const recorded = new Map();
+      for (const hash of new Set([row.agent_hash, jobHash]))
+        if (hash && hash !== this.descriptor?.hash && this.repository.agentDescriptor)
+          recorded.set(hash, await this.repository.agentDescriptor(hash));
+      this.checkBinding(row.agent_hash, jobHash, recorded);
+    });
     const previous = readJson(this.bindingsFile, {})[threadId];
-    this.checkBinding(previous, jobHash);
+    const recorded = new Map();
+    for (const hash of new Set([previous, jobHash]))
+      if (/^[a-f0-9]{64}$/.test(hash || '') && hash !== this.descriptor?.hash)
+        recorded.set(hash, readJson(path.join(this.root, '.data/agent-descriptors', `${hash}.json`), null));
+    this.checkBinding(previous, jobHash, recorded);
   }
-  checkBinding(previous, jobHash) {
+  checkBinding(previous, jobHash, recorded = new Map()) {
     if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不自动迁移权限，请新建会话。", 409, "LEGACY_THREAD");
     const aliases = readCompatibility(this.root).aliases;
-    const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash;
+    const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash ||
+      (recorded.get(hash)?.hash === hash && compatibleRecordedV2(recorded.get(hash), this.descriptor));
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
   // skill_read 的实现：只读已核验启用的 Skill；文件限于打包时的白名单（SKILL.md 与 references/ 下的文本）。

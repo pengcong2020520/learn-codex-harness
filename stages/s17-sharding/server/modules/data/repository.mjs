@@ -24,6 +24,9 @@ export class Repository {
       [descriptor.hash, descriptor],
     );
   }
+  async agentDescriptor(hash) {
+    return (await this.query('SELECT descriptor FROM agent_data.agent_versions WHERE instance_id=$1 AND hash=$3 AND $2::uuid IS NOT NULL', [hash])).rows[0]?.descriptor;
+  }
   async bind(threadId, hash, cwd, name = "") {
     const result = await this.query(
       `INSERT INTO agent_data.conversations(instance_id,id,owner_id,agent_hash,cwd,name)

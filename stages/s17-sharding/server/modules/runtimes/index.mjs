@@ -1,5 +1,6 @@
 import { withShardUser } from '../sharding/fence.mjs';
 import { skillSignature } from '../hub/skills.mjs';
+import { modelContract } from '../agents/contracts.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { userFileOperation } from './user-files.mjs';
@@ -67,7 +68,8 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, p
       userAgent.skills = selectedSkills;
       userAgent.assertCurrent = () => agent.assertCurrent();
       userAgent.permissionHub = permissionHub;
-      userAgent.installedSkills = installed; userAgent.runtime = runtime; userAgent.descriptorWorkspace = agent.workspacePath;
+      userAgent.installedSkills = installed; userAgent.runtime = runtime;
+      userAgent.modelPolicy = modelContract(launch);
       const userConfig = { ...config, launch, codexHome: paths.codexHome, runtimeUid: isolated ? record.uid : process.getuid?.(), runtimeIsolated: isolated, agent: userAgent };
       const rpc = connection({ launch, runtime, redact, cli, log });
       const memory = new MemoryService({ rpc, config: userConfig, sessions, redact });

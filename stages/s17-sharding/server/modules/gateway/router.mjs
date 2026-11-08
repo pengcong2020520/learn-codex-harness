@@ -53,6 +53,13 @@ export function createModelRouter(registry, environment = {}, { webSearch = fals
 
   return {
     resolve,
+    // Routing inputs without deployment endpoints/keys, UI labels or pricing.
+    contract() {
+      return { enabled: [...enabled].sort(), override, webSearch,
+        routes: registry.routes || {}, scenes: registry.scenes || {},
+        models: Object.fromEntries(Object.entries(registry.models).map(([id, { displayName, description, pricing, ...spec }]) => [id, spec])),
+      };
+    },
     catalog() {
       const models = Object.fromEntries(PURPOSES.map(purpose => [purpose, Object.entries(registry.models)
         .filter(([id, spec]) => enabled.has(splitModelId(id).provider) && spec.purposes.includes(purpose))
