@@ -21,7 +21,7 @@ export function hubFixture() {
     }, release() { unlock?.(); } };
   }, async query(sql, values = []) {
     const [, a, b, c, d, e, f] = values;
-    if (/^(BEGIN|COMMIT|ROLLBACK|SET TRANSACTION)/.test(sql) || sql.includes('pg_advisory_xact_lock')) return result([]);
+    if (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql) || sql.includes('pg_advisory_xact_lock')) return result([]);
     if (sql.includes('row_to_json(p)')) return result(state.users.filter(u => u.id === a).map(u => ({ ...u, plan: PLANS[u.plan_id] })));
     if (sql.startsWith('SELECT id FROM agent_data.plans')) return result(PLANS[values[0]] ? [{ id: values[0] }] : []);
     if (sql.startsWith('SELECT coalesce(sum(total_tokens)')) return result([{ n: state.usage.filter(r => r.owner === a && r.time >= +b && r.time < +c).reduce((n, r) => n + r.tokens, 0) }]);

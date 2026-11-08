@@ -26,13 +26,12 @@ export class Hub {
   }
   async snapshot(id = currentIdentity()?.userId, { allowDisabled = false } = {}) {
     return transaction(this.pool, async client => {
-      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const user = await this.user(id, client, allowDisabled);
       user.grants = (await this.query('SELECT resource_type,resource_id FROM agent_data.resource_grants WHERE instance_id=$1 AND grantee_id=$2', [id], client)).rows.map(r => `${r.resource_type}:${r.resource_id}`);
       const knowledge = (await this.query(`SELECT k.*,u.username AS owner FROM agent_data.knowledge_bases k JOIN agent_data.users u ON u.instance_id=k.instance_id AND u.id=k.owner_id WHERE k.instance_id=$1`, [], client)).rows.map(r => ({ ...r, type: 'knowledge', scope: r.visibility }));
       const skills = (await this.query(`SELECT s.*,u.username AS owner FROM agent_data.hub_skills s JOIN agent_data.users u ON u.instance_id=s.instance_id AND u.id=s.owner_id WHERE s.instance_id=$1`, [], client)).rows.map(r => ({ ...r, type: 'skill' }));
       return { user, resources: new Map([...this.catalog(), ...knowledge, ...skills].map(r => [key(r), r])) };
-    });
+    }, { isolation: 'REPEATABLE READ', readOnly: true });
   }
   current() { const value = this.context.getStore(); if (!value) throw new Error('Hub 缺少可信权限快照。'); return value; }
   run(snapshot, operation) { return this.context.run(snapshot, operation); }

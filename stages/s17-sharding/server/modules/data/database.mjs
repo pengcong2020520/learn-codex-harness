@@ -5,10 +5,18 @@ import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { readJson, writeJson } from "../storage/index.mjs";
 
-export async function transaction(pool, operation) {
+export async function transaction(pool, operation, { isolation, readOnly } = {}) {
+  // Transaction characteristics must precede the fencing wrapper's SET LOCAL/set_config.
+  const level = typeof isolation === 'string' ? isolation.toUpperCase() : isolation;
+  if (isolation !== undefined && !['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SERIALIZABLE'].includes(level))
+    throw new TypeError('transaction isolation 必须是有效的 PostgreSQL 隔离级别。');
+  if (readOnly !== undefined && typeof readOnly !== 'boolean')
+    throw new TypeError('transaction readOnly 必须是 boolean。');
+  const begin = 'BEGIN' + (level ? ` ISOLATION LEVEL ${level}` : '') +
+    (readOnly === undefined ? '' : readOnly ? ' READ ONLY' : ' READ WRITE');
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await client.query(begin);
     const result = await operation(client);
     await client.query("COMMIT");
     return result;

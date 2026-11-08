@@ -49,7 +49,6 @@ const allowed = [
   ["scripts/upgrade-sessions.mjs", "pool.query(\n          \"SELECT descriptor FROM agent_data.agent_versions WHERE instance_id=$1 AND hash=$2\",", "停服升级工具，只读旧 Agent 描述；连接显式 maintenance:true。"],
   ['server/modules/coordination/fence.mjs', "pool.query('SELECT agent_data.advance_cluster_term($1::bigint)',", '推进任期必须先于业务 fence；受专用 PG 函数/节点权限保护。'],
   ['server/modules/deployment/index.mjs', "pool.query({ text: 'SELECT 1', query_timeout: 3000 })", '只读健康探测。'],
-  ['server/modules/hub/index.mjs', "client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')", '只读权限快照的事务属性，client 来自 transaction(data.pool)。'],
   ['server/modules/hub/index.mjs', "client.query('SELECT id FROM agent_data.plans WHERE id=$1',", '只读套餐枚举，client 来自 transaction(data.pool)。'],
   ['server/modules/runtimes/index.mjs', "pool.query('SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2',", '只读运行目录查询，pool 是 data.pool。'],
   ['server/modules/runtimes/store.mjs', "client.query('UNLISTEN agent_runtime_disabled')", '失效后仍需释放 LISTEN，不访问业务表。'],

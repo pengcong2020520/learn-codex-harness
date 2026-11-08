@@ -44,15 +44,18 @@ export function fencePool(pool, generation) {
     let inTransaction = false;
     const query = (args, origin = new Error('业务 SQL 调用栈')) => {
       const text = typeof args[0] === 'string' ? args[0] : args[0]?.text || '';
-      const cleanup = /^\s*(ROLLBACK|UNLISTEN)\b/i.test(text);
+      const statement = text.replace(/^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, '');
+      const cleanup = /^(ROLLBACK|UNLISTEN)\b/i.test(statement);
       if (!cleanup) assertTerm(generation);
       const failure = async error => { await shardFailure(error, generation, origin, text); termFailure(error, generation, origin, text); throw error; };
       return (async () => {
-        if (/^\s*BEGIN\b/i.test(text)) {
+        if (/^SET\s+(?:(?:LOCAL|SESSION)\s+)?TRANSACTION\b/i.test(statement))
+          throw Object.assign(new Error('编程错误：隔离包装已在 BEGIN 后设置事务上下文，禁止 SET TRANSACTION；请使用 transaction(pool, fn, { isolation, readOnly })，在同一条 BEGIN 中声明事务特性。'), { code: 'TRANSACTION_OPTIONS_REQUIRED' });
+        if (/^BEGIN\b/i.test(statement)) {
           const result = await target.query(...args); inTransaction = true;
           await setTerm(target); return result;
         }
-        if (/^\s*(COMMIT|ROLLBACK)\b/i.test(text)) {
+        if (/^(COMMIT|ROLLBACK)\b/i.test(statement)) {
           try { return await target.query(...args); } finally { inTransaction = false; }
         }
         if (inTransaction || cleanup) return target.query(...args);
