@@ -97,7 +97,7 @@ test('remote heredoc commands cannot swallow the rest of the script from stdin',
 
 test('static: 首次部署等待基础服务、迁移并只读检查账号，未初始化成功返回且不启动 agent', () => {
   const setup = read('deploy/server-setup.sh');
-  const steps = ['up -d --wait postgres redis etcd gateway', 'node scripts/cluster-migrate.mjs', 'npm run -s agent:init', 'node scripts/accounts.mjs status', 'uninitialized)', 'up -d --wait --force-recreate node-a node-b node-c caddy', 'bash deploy/enable-service.sh', 'bash deploy/cluster-ready.sh'];
+  const steps = ['up -d etcd\n', 'run --rm --no-deps -T etcd-init', 'up -d --wait etcd postgres redis gateway', 'node scripts/cluster-migrate.mjs', 'npm run -s agent:init', 'node scripts/accounts.mjs status', 'uninitialized)', 'up -d --wait --force-recreate node-a node-b node-c caddy', 'bash deploy/enable-service.sh', 'bash deploy/cluster-ready.sh'];
   let previous = -1;
   for (const step of steps) {
     const index = setup.indexOf(step);
@@ -127,10 +127,27 @@ test('static: 远程账号命令独立使用 SSH TTY、白名单名称并仅接�
   assert.doesNotMatch(remote, /docker compose run[^\n]*-T[^\n]*(?:auth:init|user:)/);
 });
 
-test('static: every node mounts the shared gateway provider list read-only (deployment config, not user data)', () => {
-  const compose = fs.readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
+test('static: every node mounts the shared gateway directory so the one-shot generator can write', () => {
   for (const node of ['node-a', 'node-b', 'node-c']) {
-    const block = compose.split(`\n  ${node}:`)[1].split(/\n  [a-z]/)[0];
-    assert.match(block, /\.\/\.data\/gateway\/enabled-providers\.json:\$\{CONTAINER_APP_DIR\}\/\.data\/gateway\/enabled-providers\.json:ro/);
+    assert.ok(service(node).includes('"./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"'));
+    assert.doesNotMatch(service(node), /gateway\/enabled-providers\.json:/);
+  }
+});
+
+test('static: etcd health uses a dedicated user without shell; both deploy paths initialize before waiting', () => {
+  assert.ok(service('etcd').includes('test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]'));
+  assert.match(service('etcd-init'), /ETCD_HEALTH_PASSWORD: \$\{ETCD_HEALTH_PASSWORD:\?Set ETCD_HEALTH_PASSWORD\}/);
+  assert.match(service('etcd-init'), /etcd: \{ condition: service_started \}/);
+  assert.match(service('node-a'), /etcd: \{ condition: service_healthy \}/);
+  for (const name of ['node-b', 'node-c']) assert.match(service(name), /<<: \*node/);
+  assert.match(read('.env.example'), /^ETCD_HEALTH_PASSWORD=$/m);
+  assert.match(read('scripts/deploy-env.mjs'), /values.ETCD_HEALTH_PASSWORD = randomBytes\(24\).toString\('hex'\)/);
+  for (const file of ['deploy/server-setup.sh', 'README.md']) {
+    const source = read(file);
+    const start = source.indexOf('docker compose up -d etcd\n');
+    const init = source.indexOf('docker compose run --rm --no-deps -T etcd-init');
+    const wait = source.indexOf('docker compose up -d --wait');
+    assert.ok(start >= 0 && start < init && init < wait, file);
+    assert.ok(source.indexOf('docker compose stop node-a node-b node-c') < init, file);
   }
 });

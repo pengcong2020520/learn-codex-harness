@@ -68,6 +68,7 @@ services:
     environment:
       ETCD_ENDPOINT: http://etcd:2379
       ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:?Set ETCD_ROOT_PASSWORD}
+      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}
       ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
       ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
       ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
@@ -128,7 +129,7 @@ services:
     # Codex 历史记录的是绝对路径；换成 release/时间戳路径会导致旧会话无法恢复。
     volumes:
       - "./nodes/node-a/.data:${CONTAINER_APP_DIR}/.data"
-      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
       - "./nodes/node-a/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-a/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-a:${CONTAINER_APP_DIR}/backups"
@@ -147,7 +148,7 @@ services:
     <<: *node
     volumes:
       - "./nodes/node-b/.data:${CONTAINER_APP_DIR}/.data"
-      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
       - "./nodes/node-b/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-b/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-b:${CONTAINER_APP_DIR}/backups"
@@ -162,7 +163,7 @@ services:
     <<: *node
     volumes:
       - "./nodes/node-c/.data:${CONTAINER_APP_DIR}/.data"
-      - "./.data/gateway/enabled-providers.json:${CONTAINER_APP_DIR}/.data/gateway/enabled-providers.json:ro"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
       - "./nodes/node-c/.runs:${CONTAINER_APP_DIR}/.runs"
       - "./nodes/node-c/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-c:${CONTAINER_APP_DIR}/backups"
@@ -180,7 +181,7 @@ services:
     command: ["etcd", "--name=etcd", "--data-dir=/etcd-data", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd:2380", "--initial-cluster=etcd=http://etcd:2380"]
     volumes: ["etcd-data:/etcd-data"]
     healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "status"]
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]
       interval: 5s
       timeout: 3s
       retries: 10
