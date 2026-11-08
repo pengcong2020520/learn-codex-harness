@@ -2,6 +2,8 @@
 
 对应六个问题：③ 之前聊过什么 ⑥ 谁说了算
 
+[导论](../introduction.md) · [s16 → s17 增量](../CHANGES.md#s17) · [总架构图](../../app/web/public/course/assets/s17-architecture.svg)
+
 ## 要回答的问题
 
 一台机器放不下所有用户，怎样让每位用户去正确的机器，又让任意入口都能找到他？本章在 s16 协调面之上只增加 `sharding` 单元。保留 s14 的数值 uid、每用户进程与 CODEX_HOME，保留 s15 Hub 授权，保留成员租约、选举、任期、Watch 对账、自我隔离和重新加入。

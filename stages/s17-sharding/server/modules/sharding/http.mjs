@@ -197,7 +197,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
           if (!username?.trim()) throw new AppError('需要 username。', 400);
           const user = await service.app.accounts.store.byUsername(username);
           if (!user) throw new AppError('用户不存在。', 404);
-          const ids = new Set([runtime.nodeId, ...coordination.members.keys(), ...Object.values(runtime.cache.shards).map(s => s.primary).filter(Boolean)]);
+          const ids = new Set([runtime.nodeId, ...[...coordination.members.values()].map(member => member.nodeId), ...Object.values(runtime.cache.shards).map(s => s.primary).filter(Boolean)]);
           const nodes = await Promise.all([...ids].sort().map(async nodeId => {
             try { return nodeId === runtime.nodeId ? await runtime.routeStatus(user.id)
               : await runtime.call(nodeAddress(runtime, nodeId), '/internal/route', { userId: user.id }); }

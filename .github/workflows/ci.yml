@@ -38,6 +38,7 @@ jobs:
           - stages/s14-isolation
           - stages/s15-hub
           - stages/s16-coordination
+          - stages/s17-sharding
           - app
     defaults:
       run:

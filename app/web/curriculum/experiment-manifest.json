@@ -1160,6 +1160,90 @@
           "offlineOrIntegration": "offline"
         }
       ]
+    },
+    {
+      "id": "s17-routing",
+      "title": "槽策略与范围策略",
+      "mode": "offline",
+      "question": "用户 ID 如何决定分片？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^strategy:",
+        "tests/sharding.test.mjs"
+      ],
+      "observations": [
+        "观察实际 Node 测试输出中的成功与失败断言。"
+      ],
+      "why": "SHA-256 % 64 与十六进制首字节范围做对照，override 先于策略。",
+      "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+      "catalogId": "strategies",
+      "stage": "s17-sharding",
+      "command": "npm run lesson -- strategies",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "stale-route",
+          "title": "revision 落后与一次重试",
+          "mode": "offline",
+          "question": "错误缓存如何恢复？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^route:",
+            "tests/sharding.test.mjs"
+          ],
+          "observations": [
+            "观察实际 Node 测试输出中的成功与失败断言。"
+          ],
+          "why": "主核对归属和 revision，409 后整表刷新，只重试一次；SSE 不改序号。",
+          "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+          "catalogId": "stale-route",
+          "stage": "s17-sharding",
+          "command": "npm run lesson -- stale-route",
+          "offlineOrIntegration": "offline"
+        }
+      ]
+    },
+    {
+      "id": "s17-fencing",
+      "title": "SH001 与节点隔离",
+      "mode": "offline",
+      "question": "不是 owner 的节点能写吗？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^fence:",
+        "tests/sharding.test.mjs"
+      ],
+      "observations": [
+        "观察实际 Node 测试输出中的成功与失败断言。"
+      ],
+      "why": "事务局部 node/epoch 供 SQL 触发器核对；刷新仍自认为主时隔离。",
+      "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+      "catalogId": "shard-fence",
+      "stage": "s17-sharding",
+      "command": "npm run lesson -- shard-fence",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": []
+    },
+    {
+      "id": "s17-move",
+      "title": "暂停、拷贝、切换、恢复",
+      "mode": "offline",
+      "question": "失败后哪个节点继续服务？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^move:",
+        "tests/sharding.test.mjs"
+      ],
+      "observations": [
+        "观察实际 Node 测试输出中的成功与失败断言。"
+      ],
+      "why": "先暂停并 drain；拷贝成功才切换，失败回滚；回滚不确认则保持暂停。",
+      "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+      "catalogId": "move",
+      "stage": "s17-sharding",
+      "command": "npm run lesson -- move",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": []
     }
   ]
 }

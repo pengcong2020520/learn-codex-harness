@@ -27,7 +27,7 @@ async function fixture(t) {
   client.set('/codex/slots', JSON.stringify(defaultSlots()));
   for (const [i, suffix] of ['a','b','c'].entries()) {
     client.set('/codex/shards/' + i, JSON.stringify({ primary: 'node-' + suffix, epoch: i + 1 }));
-    members.set('node-' + suffix, { nodeId: 'node-' + suffix, address: `http://node-${suffix}` });
+    members.set('/codex/members/node-' + suffix, { nodeId: 'node-' + suffix, address: `http://node-${suffix}` });
   }
   client.set('/codex/overrides/' + user, '"0"');
   const row = { user_id: user, shard_id: '0', paused: false };
@@ -79,6 +79,8 @@ test('route diagnosis: admin only, each node cache/paused/PG/types; no refresh a
   nodes[2].cache.overrides[user] = 2; // legacy numeric JSON, preserved in diagnostics
   const result = await api(0, '/cluster/route?username=dave');
   assert.equal(result.status, 200); assert.equal(result.body.nodes.length, 3);
+  assert.deepEqual(result.body.nodes.map(node => node.nodeId), ['node-a', 'node-b', 'node-c']);
+  assert.ok(result.body.nodes.every(node => !node.error), 'etcd member keys must resolve to member nodeId');
   const [a,b,c] = result.body.nodes;
   assert.equal(a.routeOf.shardId, '0'); assert.equal(a.pg.shard_id, '0'); assert.equal(a.canDispatch, false);
   assert.equal(b.localPaused, true); assert.equal(c.overrideType, 'number'); assert.equal(c.override, 2);
@@ -90,7 +92,7 @@ test('route diagnosis: admin only, each node cache/paused/PG/types; no refresh a
   assert.equal((await api(0, '/cluster/route?username=dave', {})).status, 405);
   const denied = await request(nodes[1].handler, '/internal/route', { method: 'POST', body: JSON.stringify({ userId: user }) });
   assert.equal(denied.status, 403);
-  nodes[0].runtime.coordination.members.delete('node-c');
+  nodes[0].runtime.coordination.members.delete('/codex/members/node-c');
   const partial = await api(0, '/cluster/route?username=dave');
   assert.equal(partial.status, 200); assert.equal(partial.body.nodes[2].error.code, 'SHARD_UNAVAILABLE');
 });

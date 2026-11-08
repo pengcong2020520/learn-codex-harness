@@ -1967,5 +1967,92 @@
       "任期隔离"
     ],
     "source": "stages/s16-coordination/README.md#核心概念"
+  },
+  {
+    "term": "分片键",
+    "aka": [
+      "shard key"
+    ],
+    "stage": "s17",
+    "short": "决定数据落在哪个分片的字段；本课程用用户 ID，不用消息 ID。",
+    "detail": "s14 起每个用户一个 Codex 进程与 CODEX_HOME，原生历史、状态库与记忆都在里面；按消息或会话分片会把同一用户的数据散到多台机器，Codex 看不到完整历史。",
+    "related": [
+      "哈希槽",
+      "分片归属表"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "哈希槽",
+    "aka": [
+      "slots",
+      "范围策略"
+    ],
+    "stage": "s17",
+    "short": "用户 ID 稳定哈希到 64 个槽，槽再归属到分片；另有按 ID 前缀范围分配的策略作对照。",
+    "detail": "策略只决定“用户 → 分片”，与“分片 → 节点”分开；迁移单个用户用 override 覆盖策略结果。",
+    "related": [
+      "分片键",
+      "分片归属表"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "分片归属表",
+    "aka": [
+      "shard map",
+      "override"
+    ],
+    "stage": "s17",
+    "short": "记录每个分片的主节点与 epoch、槽到分片的映射、单个用户的例外；只由 control 经任期事务写入 etcd。",
+    "detail": "各节点启动时整表读取并 Watch 增量，另有定时对账；请求按本地缓存路由。数据库里的 user_shards 与 shard_owners 与它同步，供 SH001 触发器核对。",
+    "related": [
+      "哈希槽",
+      "STALE_ROUTE",
+      "SH001"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "STALE_ROUTE",
+    "aka": [
+      "409",
+      "路由表版本"
+    ],
+    "stage": "s17",
+    "short": "转发时带上本地路由表 revision；目标节点发现自己不是主或版本落后返回 409，转发方刷新缓存后只重试一次。",
+    "detail": "请求可以从任意节点进入：本节点是用户所在分片的主就处理，否则转发给主节点，SSE 做流式代理。分片主节点不在线返回 503。",
+    "related": [
+      "分片归属表"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "SH001",
+    "aka": [
+      "按分片隔离"
+    ],
+    "stage": "s17",
+    "short": "数据库触发器按“行属于哪个用户 → 用户在哪个分片 → 分片现在归不归本节点、epoch 对不对”核对每次写入，不符以 SH001 拒绝。",
+    "detail": "写入在事务里带 app.node 与 app.shard_epoch；路由缓存过期的节点也写不进别人分片的数据。代码把别的分片写错节点是编程错误，测试中暴露，不会让节点误隔离。",
+    "related": [
+      "分片归属表",
+      "任期隔离"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "用户迁移",
+    "aka": [
+      "cluster move"
+    ],
+    "stage": "s17",
+    "short": "把一个用户从一个分片搬到另一个：暂停派发 → 等执行中轮次结束 → 拷贝目录 → 切换路由 → 恢复派发，失败回滚。",
+    "detail": "CODEX_HOME 以用户 uid 打包并跳过 Codex 的运行时临时目录 tmp/，工作区以服务身份打包；导入先暂存在目标同级目录、校验后整体改名发布。迁移后会话在新节点接着聊，旧节点的写入被 SH001 拒绝。",
+    "related": [
+      "SH001",
+      "分片归属表"
+    ],
+    "source": "stages/s17-sharding/README.md#核心概念"
   }
 ]

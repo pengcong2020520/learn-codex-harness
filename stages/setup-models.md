@@ -96,7 +96,7 @@ app 使用相同脚本，把上述前缀目录换成 `app`。s11 与 app 同时�
 ## 检查配置与启动
 
 ```bash
-npm run setup:model -- --check            # 只读，默认 s00–s16 与 app
+npm run setup:model -- --check            # 只读，默认 s00–s17 与 app
 npm run setup:model -- --check --stage s05
 npm run doctor                            # 默认全部，不调用模型
 npm run doctor -- --stage s01 --handshake

@@ -171,7 +171,8 @@ export class MessageService {
       ? await runOwner(job.userId, () => this.permissionHub.withUser(job.userId, resolve))
       : resolve();
     const step = stepOf(workflow, job.step || 0);
-    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? userWorkspace(this.config.agent.descriptorWorkspace || this.config.agent.runtime.workspaceDir, job.userId) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+    // Per-user runtime paths are already scoped; only shared runtimes need users/<id>.
+    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? (this.config.agent.runtime.ownerId === job.userId ? this.config.agent.runtime.workspaceDir : userWorkspace(this.config.agent.workspacePath || this.config.agent.runtime.workspaceDir, job.userId)) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
     if (step.checks.length && !checksPassed(step.checks, checks)) return { status: "needs-review", checks };
     if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
     return { status: "completed", checks };

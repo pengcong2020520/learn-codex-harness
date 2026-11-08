@@ -100,6 +100,12 @@
       "dir": "stages/s16-coordination",
       "name": "协调面",
       "focus": "成员租约、control 选举与任期隔离"
+    },
+    {
+      "id": "s17",
+      "dir": "stages/s17-sharding",
+      "name": "分片与路由",
+      "focus": "用户归属、路由缓存、分片隔离与手动迁移"
     }
   ],
   "lessons": [
@@ -8625,6 +8631,646 @@
             "offlineOrIntegration": "offline"
           }
         ]
+      }
+    },
+    {
+      "id": "s17-routing",
+      "title": "用户先落分片，请求再找主节点",
+      "principle": "shardOf 决定用户属于哪个分片；override 优先，归属缓存决定转发目标，409 后只刷新重试一次。",
+      "problem": "同一用户从不同节点进入，怎样仍然续接同一份原生历史？",
+      "change": {
+        "before": "成员租约和 control 已有共同依据。",
+        "added": "槽与范围策略、用户 override、整前缀路由缓存及带 revision 的转发。",
+        "kept": "用户身份、Hub 授权和 Codex 原生会话继续复用。"
+      },
+      "concepts": [
+        {
+          "term": "shardOf",
+          "meaning": "只计算用户分片，不决定主节点；默认 SHA-256 前 32 位取模 64。"
+        },
+        {
+          "term": "override",
+          "meaning": "明确指定用户分片，优先于槽与范围策略。"
+        },
+        {
+          "term": "revision",
+          "meaning": "etcd 快照与 Watch 的版本；接收节点必须是主且本地版本不落后于请求。"
+        }
+      ],
+      "mechanism": "slots 将 64 个槽按 slot % 3 分给三个分片；range 用 UUID 首字节分为 00–54、55–a9、aa–ff。routeOf 先查 override，再查策略与 shards。入口认证后用本地缓存转发；目标核对归属和 revision，409 STALE_ROUTE 使入口整表刷新并只重试一次。未知主或主离线返回 503。",
+      "design": {
+        "decision": "分片键用用户 UUID，将策略、分片归属与入口路由分开。",
+        "reason": "用户的 SQLite、JSONL 和记忆在自己的 CODEX_HOME，不能把不同消息任意分配到不同磁盘。",
+        "alternative": "逐消息轮询无法自动共享用户原生历史；每次请求都读 etcd 增加控制存储依赖。",
+        "cost": "本地缓存存在滞后窗口；策略不能靠改环境变量迁移已有数据，节点离线也没有自动接管。"
+      },
+      "source": {
+        "file": "stages/s17-sharding/server/modules/sharding/strategy.mjs",
+        "needle": "export const SLOT_COUNT = 64;",
+        "before": 0,
+        "after": 10,
+        "explanation": "两种 shardOf 都返回分片 ID；slots 与 range 是不同策略。",
+        "start": 3,
+        "anchor": 3,
+        "code": "export const SLOT_COUNT = 64;\nexport const defaultSlots = () => Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) => [n, SHARDS[n % 3]]));\nexport const slotOf = id => createHash('sha256').update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;\nexport const strategies = {\n  slots: { shardOf: (userId, map) => map.slots[slotOf(userId)] },\n  range: { shardOf(userId) {\n    const prefix = String(userId).replaceAll('-', '').slice(0, 2);\n    if (!/^[a-f0-9]{2}$/i.test(prefix)) throw new Error('范围策略需要十六进制用户 ID。');\n    const n = parseInt(prefix, 16);\n    return n < 0x55 ? '0' : n < 0xaa ? '1' : '2';\n  } },",
+        "hash": "84901b8222e736ac0ec76ee2b5a2772936018d23eacece47c156ae3cb55710e8"
+      },
+      "sources": [
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/cache.mjs",
+          "needle": "  routeOf(userId) {",
+          "before": 0,
+          "after": 8,
+          "explanation": "override 优先；旧数字 override 统一转换为文本分片 ID。",
+          "start": 67,
+          "anchor": 67,
+          "code": "  routeOf(userId) {\n    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.\n    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.\n    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);\n    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;\n    const owner = this.shards[shardId];\n    return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };\n  }\n  async close() { this.closed = true; clearInterval(this.timer); clearTimeout(this.retry); await this.watcher?.cancel(); }",
+          "hash": "76899c578297a8a44d4e96229c34b8c00b7f14a8949ffaa999b2c7a03111b770"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/routing.mjs",
+          "needle": "export function validateRoute(cache, userId, nodeId, revision) {",
+          "before": 0,
+          "after": 20,
+          "explanation": "主节点核验版本；只有 STALE_ROUTE 允许整表刷新后重试一次。",
+          "start": 16,
+          "anchor": 16,
+          "code": "export function validateRoute(cache, userId, nodeId, revision) {\n  if (!/^\\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) < BigInt(revision)) throw staleRoute();\n}\nexport async function routedRequest({ cache, userId, nodeId, members, local, remote }) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    const route = cache.routeOf(userId), address = targetOf(route, members);\n    try {\n      const result = route.primary === nodeId ? await local(route) : await remote(address, route);\n      if (result?.status === 409 && result.headers?.get('x-cluster-error') === 'STALE_ROUTE') {\n        await result.body?.cancel(); throw staleRoute();\n      }\n      return result;\n    } catch (error) {\n      if (error.code !== 'STALE_ROUTE' || attempt === 1) throw error;\n      await cache.refresh();\n    }\n  }\n}\nconst hop = new Set(['host','connection','keep-alive','transfer-encoding','proxy-authenticate','proxy-authorization','te','trailer','upgrade','x-node-key','x-route-revision','x-route-user']);\nexport function forwardHeaders(headers, key, route, userId) {\n  const result = Object.fromEntries(Object.entries(headers).filter(([k]) => !hop.has(k.toLowerCase())));",
+          "hash": "1467fce477176937fc57593d9bbd161adcd6d7985a36da7fc2625502c1e5c94e"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "非主入口转发到用户主节点",
+          "steps": [
+            {
+              "title": "认证请求",
+              "actor": "入口节点",
+              "event": "教学模拟 · Bearer",
+              "explain": "先确认真实用户 ID。",
+              "state": {
+                "入口": "非主节点",
+                "路由": "未读取"
+              },
+              "lines": []
+            },
+            {
+              "title": "定位主节点",
+              "actor": "入口节点",
+              "event": "教学模拟 · routeOf",
+              "explain": "override 或策略得到分片，shards 得到主。",
+              "state": {
+                "入口": "非主节点",
+                "路由": "主节点已定位"
+              },
+              "lines": []
+            },
+            {
+              "title": "核对并处理",
+              "actor": "用户主节点",
+              "event": "教学模拟 · validateRoute",
+              "explain": "归属和 revision 通过后执行。",
+              "state": {
+                "入口": "代理返回",
+                "路由": "核验通过"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "旧归属引发 409 后刷新一次",
+          "steps": [
+            {
+              "title": "命中旧缓存",
+              "actor": "入口节点",
+              "event": "教学模拟 · routeOf",
+              "explain": "用户已经移走，入口尚未收到 Watch。",
+              "state": {
+                "缓存": "旧归属",
+                "重试": "0"
+              },
+              "lines": []
+            },
+            {
+              "title": "拒绝旧路由",
+              "actor": "旧主节点",
+              "event": "教学模拟 · STALE_ROUTE",
+              "explain": "自己已经不是主，返回 409。",
+              "state": {
+                "缓存": "旧归属",
+                "响应": "409 STALE_ROUTE"
+              },
+              "lines": []
+            },
+            {
+              "title": "刷新快照",
+              "actor": "入口节点",
+              "event": "教学模拟 · refresh",
+              "explain": "整读 etcd 后重新 routeOf。",
+              "state": {
+                "缓存": "新归属",
+                "重试": "1"
+              },
+              "lines": []
+            },
+            {
+              "title": "新主处理",
+              "actor": "新主节点",
+              "event": "教学模拟 · validateRoute",
+              "explain": "重试仍失败则返回错误，不无限循环。",
+              "state": {
+                "缓存": "新归属",
+                "响应": "200"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "收到 409 STALE_ROUTE 后应该怎样处理？",
+        "options": [
+          "整表刷新路由，最多再试一次",
+          "绕过主节点校验直接执行",
+          "无限重试直到成功"
+        ],
+        "answer": 0,
+        "explanation": "一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。"
+      },
+      "stage": "s17-sharding",
+      "ownership": {
+        "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+        "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+      },
+      "reference": {
+        "session": "s17 设计与源码长文",
+        "url": "/course/handbook.html#module-s17",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。",
+        "command": "npm run lesson -- strategies",
+        "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+        "observe": [
+          "观察实际 Node 测试输出中的成功与失败断言。"
+        ],
+        "relatedExperiments": [
+          {
+            "id": "stale-route",
+            "title": "revision 落后与一次重试",
+            "mode": "offline",
+            "question": "错误缓存如何恢复？",
+            "args": [
+              "--test",
+              "--test-name-pattern=^route:",
+              "tests/sharding.test.mjs"
+            ],
+            "observations": [
+              "观察实际 Node 测试输出中的成功与失败断言。"
+            ],
+            "why": "主核对归属和 revision，409 后整表刷新，只重试一次；SSE 不改序号。",
+            "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+            "catalogId": "stale-route",
+            "stage": "s17-sharding",
+            "command": "npm run lesson -- stale-route",
+            "offlineOrIntegration": "offline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s17-fencing",
+      "title": "能接收请求，不代表能写这个用户",
+      "principle": "canDispatch/admit 检查租约、主归属与暂停；数据库再以 owner、节点角色和 epoch 拒绝错误写入。",
+      "problem": "缓存判断正确但迁移已经切换，旧节点的在途 SQL 还能提交吗？",
+      "change": {
+        "before": "control 任期保护协调元数据写入。",
+        "added": "按用户分片的准入、事务局部 node/epoch 与 SH001 行触发器。",
+        "kept": "PG 保存任务事实，Redis 只唤醒；每用户 uid 和资源授权继续生效。"
+      },
+      "concepts": [
+        {
+          "term": "canDispatch / admit",
+          "meaning": "本地归属与暂停通过后，还查 PG 的 paused 和 shard_id。"
+        },
+        {
+          "term": "SH001",
+          "meaning": "数据库行归属、节点 SQL 角色或 epoch 不匹配时拒写。"
+        },
+        {
+          "term": "FOR SHARE",
+          "meaning": "事务锁住用户与分片两条映射，到提交才释放，阻止切换越过旧事务。"
+        }
+      ],
+      "mechanism": "owns 要求有效 lease 且缓存 primary 为本节点。canDispatch 再核对本地暂停、PG paused 与 shard_id；admit 不通过返回不可用。业务事务设置 app.node 和 app.shard_epoch，check_shard 同时锁定两张映射并核对真实 SQL 角色。UPDATE 对 OLD 和 NEW 都校验。SH001 刷新后若原先自认为主且仍是主或刷新失败则隔离；确认用户已移走则保留其他分片服务。",
+      "design": {
+        "decision": "入口准入和数据库行触发器分别守住派发与落库。",
+        "reason": "HTTP 检查无法覆盖在途事务和后台 worker；缓存也可能落后。",
+        "alternative": "只比较客户端传来的 node 字段会被伪造；只在入口判断无法拦住迟到 SQL。",
+        "cost": "映射锁让切换等待旧事务；SQL 不保护文件和外部工具副作用，仍需停写与核对。"
+      },
+      "source": {
+        "file": "stages/s17-sharding/server/modules/sharding/runtime.mjs",
+        "needle": "  async canDispatch(userId) {",
+        "before": 0,
+        "after": 5,
+        "explanation": "准入同时比较本地缓存和持久化映射，paused 时拒绝新派发。",
+        "start": 7,
+        "anchor": 7,
+        "code": "  async canDispatch(userId) {\n    if (!this.owns(userId) || this.paused.has(userId)) return false;\n    const row = (await this.pool.query('SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1', [userId])).rows[0];\n    return row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;\n  }\n  async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable('用户正在迁移、归属尚未初始化或本节点不是分片主节点。'); }",
+        "hash": "8b44746a044a00ed3823949de978d6076cb472654f46e5e3fcfaec125a623c57"
+      },
+      "sources": [
+        {
+          "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
+          "needle": "CREATE FUNCTION agent_data.check_shard(owner uuid) RETURNS void",
+          "before": 0,
+          "after": 12,
+          "explanation": "两张映射持锁到事务结束；真实 SQL 角色与 app.node 也必须一致。",
+          "start": 37,
+          "anchor": 37,
+          "code": "CREATE FUNCTION agent_data.check_shard(owner uuid) RETURNS void\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nDECLARE actual record; supplied text := current_setting('app.node',true);\nBEGIN\n -- Lock BOTH mappings until commit: migration cannot overtake an old owner's transaction.\n SELECT s.node_id,s.epoch INTO actual FROM user_shards u JOIN shard_owners s USING(shard_id)\n WHERE u.user_id=owner FOR SHARE OF u,s;\n IF actual IS NULL OR actual.node_id IS DISTINCT FROM supplied OR\n    actual.epoch::text IS DISTINCT FROM nullif(current_setting('app.shard_epoch',true),'') OR\n    current_user <> 'agent_' || replace(supplied,'-','_') THEN\n  RAISE EXCEPTION 'missing, foreign or stale shard owner' USING ERRCODE='SH001';\n END IF;\nEND $$;",
+          "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
+          "needle": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger",
+          "before": 0,
+          "after": 10,
+          "explanation": "修改 owner 前后的两行归属都要检查。",
+          "start": 50,
+          "anchor": 50,
+          "code": "CREATE FUNCTION agent_data.require_shard_owner() RETURNS trigger\nLANGUAGE plpgsql SET search_path=pg_catalog,agent_data AS $$\nBEGIN\n IF current_setting('app.maintenance',true)='on' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper) THEN\n  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\n END IF;\n IF TG_OP<>'INSERT' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(OLD))); END IF;\n IF TG_OP<>'DELETE' THEN PERFORM agent_data.check_shard(agent_data.row_owner(TG_TABLE_NAME,to_jsonb(NEW))); END IF;\n IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;\nEND $$;\n-- Node identities are SQL roles, not an unchecked caller-supplied app.node.",
+          "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/fence.mjs",
+          "needle": "export async function shardFailure(error, generation, origin, statement) {",
+          "before": 0,
+          "after": 18,
+          "explanation": "拒写依据实际被拒行的 owner 诊断；刷新结果决定是否隔离。",
+          "start": 7,
+          "anchor": 7,
+          "code": "export async function shardFailure(error, generation, origin, statement) {\n  if (error.code !== 'SH001' || error.shardDiagnostic) return;\n  // The rejected ROW is authoritative. Requester identity alone cannot identify its shard.\n  const row = rowFenceDetail(error), owner = row.ownerId;\n  let before, after, refreshFailed = false;\n  try { before = owner && generation.routes?.routeOf(owner); } catch {}\n  try { await generation.routes?.refresh(); after = owner && generation.routes?.routeOf(owner); }\n  catch { refreshFailed = true; }\n  const believedPrimary = before?.primary === generation.nodeId;\n  const isolate = believedPrimary && (refreshFailed || after?.primary === generation.nodeId);\n  error.shardDiagnostic = { ownerId: owner || null, believedPrimary, refreshFailed, isolate };\n  logFailure(error, generation, origin, statement, 'SH001', {\n    classification: isolate ? 'stale-primary' : believedPrimary ? 'ownership-moved' : owner ? 'wrong-shard-write' : 'unknown-row-owner',\n    rowRouteBefore: before || null, rowRouteAfter: after || null, ...error.shardDiagnostic,\n  });\n  if (isolate) generation.isolate?.(refreshFailed ? 'shard-refresh-failed' : 'database-stale-shard');\n}\nexport async function setShard(client, generation) {\n  generation.assert();",
+          "hash": "91b1d4071e3e5e7608d621da4ef5f35b9679cf182159229b6af00a48e36553eb"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/fence.mjs",
+          "needle": "export async function setShard(client, generation) {",
+          "before": 0,
+          "after": 5,
+          "explanation": "使用事务局部 set_config 参数化设置节点和 epoch。",
+          "start": 24,
+          "anchor": 24,
+          "code": "export async function setShard(client, generation) {\n  generation.assert();\n  const user = shardUser(), route = user && generation.routes.routeOf(user);\n  await client.query(\"SELECT set_config('app.node',$1,true),set_config('app.shard_epoch',$2,true)\",\n    [generation.nodeId, route ? String(route.epoch ?? '') : '']);\n}",
+          "hash": "91b1d4071e3e5e7608d621da4ef5f35b9679cf182159229b6af00a48e36553eb"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/data/migrations/016-sharding.sql",
+          "needle": "DO $$ DECLARE t record; BEGIN",
+          "before": 0,
+          "after": 11,
+          "explanation": "业务表挂接逐行 shard_owner_guard；全局表使用独立节点校验，映射表保留 control 任期保护。",
+          "start": 74,
+          "anchor": 74,
+          "code": "DO $$ DECLARE t record; BEGIN\n FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='agent_data'\n  AND tablename NOT IN ('migrations','cluster_term','shard_owners','user_shards') LOOP\n  EXECUTE format('DROP TRIGGER IF EXISTS cluster_term_guard ON agent_data.%I',t.tablename);\n  IF t.tablename IN ('users','auth_sessions','agent_versions','plans','imports') THEN\n   EXECUTE format('CREATE TRIGGER global_node_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_global_node()',t.tablename);\n  ELSE\n   EXECUTE format('CREATE TRIGGER shard_owner_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH ROW EXECUTE FUNCTION agent_data.require_shard_owner()',t.tablename);\n  END IF;\n END LOOP;\nEND $$;\n",
+          "hash": "06334a5d7665c209c092f43078b01865f0b8bd8ac13085d783e782d984f6dda6"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "主节点通过准入并提交",
+          "steps": [
+            {
+              "title": "核对派发",
+              "actor": "主节点",
+              "event": "教学模拟 · canDispatch",
+              "explain": "租约有效，主归属一致，未暂停。",
+              "state": {
+                "准入": "通过",
+                "事务": "未开始"
+              },
+              "lines": []
+            },
+            {
+              "title": "写入身份",
+              "actor": "业务连接",
+              "event": "教学模拟 · setShard",
+              "explain": "事务携带节点和用户分片 epoch。",
+              "state": {
+                "准入": "通过",
+                "事务": "待校验"
+              },
+              "lines": []
+            },
+            {
+              "title": "锁行提交",
+              "actor": "PostgreSQL",
+              "event": "教学模拟 · check_shard",
+              "explain": "节点角色与两张映射一致，允许提交。",
+              "state": {
+                "准入": "通过",
+                "事务": "已提交"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "SQL 拒写与路由复核",
+          "steps": [
+            {
+              "title": "提交旧归属",
+              "actor": "旧主节点",
+              "event": "教学模拟 · SQL",
+              "explain": "用户映射已切换，仍携带旧归属。",
+              "state": {
+                "写入": "待核对",
+                "节点": "旧主"
+              },
+              "lines": []
+            },
+            {
+              "title": "拒绝写入",
+              "actor": "PostgreSQL",
+              "event": "教学模拟 · SH001",
+              "explain": "行触发器发现节点不匹配。",
+              "state": {
+                "写入": "SH001",
+                "节点": "待复核"
+              },
+              "lines": []
+            },
+            {
+              "title": "刷新归属",
+              "actor": "旧主节点",
+              "event": "教学模拟 · shardFailure",
+              "explain": "确认用户已移到别处，此用户请求失败。",
+              "state": {
+                "写入": "拒绝",
+                "节点": "其余分片继续服务"
+              },
+              "lines": []
+            },
+            {
+              "title": "处理持续分歧",
+              "actor": "诊断分支",
+              "event": "教学模拟 · isolate",
+              "explain": "若原先认为自己是主，刷新后仍如此或刷新失败则隔离。",
+              "state": {
+                "写入": "拒绝",
+                "节点": "持续分歧时隔离"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "只在 HTTP 入口核对主归属，足以阻止旧节点写库吗？",
+        "options": [
+          "足够，缓存永远一致",
+          "不够，SQL 还要核对 owner、节点角色与 epoch",
+          "只检查用户名称即可"
+        ],
+        "answer": 1,
+        "explanation": "迁移和后台任务存在并发窗口，数据库写入时必须再次校验。"
+      },
+      "stage": "s17-sharding",
+      "ownership": {
+        "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+        "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+      },
+      "reference": {
+        "session": "s17 设计与源码长文",
+        "url": "/course/handbook.html#module-s17",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。",
+        "command": "npm run lesson -- shard-fence",
+        "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+        "observe": [
+          "观察实际 Node 测试输出中的成功与失败断言。"
+        ],
+        "relatedExperiments": []
+      }
+    },
+    {
+      "id": "s17-move",
+      "title": "先停写，再搬历史与切换归属",
+      "principle": "暂停、等待在途轮次、拷贝、切换 override 与 PG、恢复，全部通过后新主续聊。",
+      "problem": "用户搬到另一个节点，怎样避免两个磁盘副本同时接着执行？",
+      "change": {
+        "before": "用户固定留在原主节点，节点磁盘互不共享。",
+        "added": "admin 手动迁移、持久暂停、按身份复制和不确定失败处理。",
+        "kept": "用户 UUID、数值 uid、原生 Thread 历史及 Hub 授权保持相同。"
+      },
+      "concepts": [
+        {
+          "term": "moveUser",
+          "meaning": "控制节点持单用户锁，依次暂停、drain、copy、switchUser、resume。"
+        },
+        {
+          "term": "tar / uid",
+          "meaning": "CODEX_HOME 由用户 uid 导出，workspace 用服务身份导出并保留数值属主。"
+        },
+        {
+          "term": "paused",
+          "meaning": "PG 持久暂停是失败时的保护状态；无法确认补偿时保持暂停。"
+        }
+      ],
+      "mechanism": "control 先持久化 paused=true，源节点停止新派发并等待轮次、HTTP、索引、媒体和进程引用结束，再关闭用户进程。HTTP 流式 tar 复制 home 与 workspace，home 跳过顶层 tmp/；校验条目后暂存并发布，关联 blob 与 BM25 一并搬运。switchUser 更新 PG 映射并 guardedPut override，刷新两端后解除暂停。失败确认回滚才恢复源；恢复提交回复丢失时保留目标归属并重新暂停，不能盲目启用旧副本。",
+      "design": {
+        "decision": "复制完成前保持源归属，恢复前让两端刷新；失败时宁可继续暂停。",
+        "reason": "原生 SQLite 和 JSONL 在节点磁盘，PG 会话索引无法凭空恢复历史。",
+        "alternative": "先改路由再拷贝会把请求送到不完整目标；拷贝期间继续写会造成两份不同历史。",
+        "cost": "迁移需要源和目标在线、固定绝对部署目录及相同 uid 映射；PG 与 etcd 无跨库原子提交，存在需人工核对的暂停窗口。"
+      },
+      "source": {
+        "file": "stages/s17-sharding/server/modules/sharding/move.mjs",
+        "needle": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {",
+        "before": 0,
+        "after": 33,
+        "explanation": "切换只发生在 copy 成功后；恢复提交结果不确定时不复活旧磁盘。",
+        "start": 4,
+        "anchor": 4,
+        "code": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {\n  if (!SHARDS.includes(shardId)) throw new Error('分片必须是 0、1、2。');\n  const source = cache.routeOf(userId), target = cache.shards[shardId];\n  if (!target?.primary) throw unavailable('目标分片无主节点。');\n  if (source.shardId === shardId) {\n    if (await control.isPaused?.(userId)) { await resume(source.primary, userId); await control.pause(userId, false); return { resumed: true, shardId }; }\n    return { unchanged: true };\n  }\n  let switched = false, paused = false, releaseStarted = false;\n  try {\n    await control.pause(userId, true); paused = true;\n    await pause(source.primary, userId);\n    await drain(source.primary, userId);\n    await copy(source.primary, target.primary, userId);\n    await control.switchUser(userId, shardId); switched = true;\n    await resume(target.primary, userId);\n    await resume(source.primary, userId);\n    releaseStarted = true;\n    await control.pause(userId, false);\n    return { userId, from: source.shardId, shardId };\n  } catch (error) {\n    if (releaseStarted) {\n      // A lost resume COMMIT reply can mean the target already dispatched. Never revive the old copy.\n      error.rollbackFailed = true;\n      await control.pause(userId, true).catch(() => {});\n      throw error;\n    }\n    try {\n      if (switched) await control.switchUser(userId, source.shardId);\n      if (paused && !error.rollbackFailed) { await resume(source.primary, userId); await control.pause(userId, false); }\n    } catch { error.rollbackFailed = true; }\n    // Uncertain rollback stays paused. A new control must never automatically resume an incomplete copy.\n    throw error;\n  }",
+        "hash": "446959bf8382325b7c7223f7cdcaaff06e0562e7b1672555f6a0af7714b6f34f"
+      },
+      "sources": [
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/transfer.mjs",
+          "needle": "export function exportTree(root, record, kind) {",
+          "before": 0,
+          "after": 10,
+          "explanation": "home 以用户 uid，workspace 以服务身份执行导出。",
+          "start": 19,
+          "anchor": 19,
+          "code": "export function exportTree(root, record, kind) {\n  const directory = transferPath(root, record, kind); assertRealPath(directory);\n  const identity = kind === 'home' ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };\n  const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory, kind, String(record.uid)], {\n    ...identity, cwd: '/', env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore','pipe','pipe'],\n  });\n  const stderr = stderrCollector(); child.stderr.on('data', chunk => stderr.append(chunk));\n  const done = new Promise((resolve, reject) => {\n    child.once('error', error => reject(subprocessFailure(error, { kind, phase: 'export', stderr: stderr.text })));\n    child.once('close', (code, signal) => code === 0 ? resolve() : reject(subprocessFailure(new Error('用户目录 tar 导出失败。'),\n      { kind, phase: 'export', stderr: stderr.text, exitCode: code, signal })));",
+          "hash": "69a9418a0c29f5503436419b1f17aab7f6a11fe7fba2b95c064a830fd5e3cb18"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/transfer-worker.mjs",
+          "needle": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();",
+          "before": 0,
+          "after": 15,
+          "explanation": "仅跳过 CODEX_HOME 顶层 tmp；其余链接、特殊文件和不合法属主被拒。",
+          "start": 9,
+          "anchor": 9,
+          "code": "const skipTop = process.argv[3] === 'home' ? new Set(['tmp']) : new Set();\nfunction inspect(target, top = false) {\n  const s = fs.lstatSync(target);\n  if (s.isSymbolicLink() || (!s.isDirectory() && !s.isFile()) || (s.isFile() && s.nlink !== 1)) throw new Error('迁移拒绝链接和特殊文件。');\n  if (!(kind === 'workspace' ? [0, uid] : [uid]).includes(s.uid) || ![uid, 1000].includes(s.gid)) throw new Error('迁移属主不匹配。');\n  if (s.isDirectory()) for (const name of fs.readdirSync(target)) {\n    if (top && skipTop.has(name)) continue;\n    if (name === '..' || /[\\x00-\\x1f\\x7f\\\\]/.test(name)) throw new Error('迁移文件名含控制字符。');\n    inspect(path.join(target, name));\n  }\n}\ntry {\n  inspect(root, true);\n  const child = spawn('tar', ['--create','--numeric-owner','--format=posix','--file=-',...[...skipTop].map(name => `--exclude=./${name}`),'--directory',root,'.'], { stdio: ['ignore','inherit','inherit'] });\n  child.once('error', e => { console.error(e.message); process.exitCode = 1; });\n  child.once('exit', code => { process.exitCode = code ?? 1; });",
+          "hash": "11379654cfc7de616fa9a9af97025d6f8120cca34b55d9c13a268b720462544b"
+        },
+        {
+          "file": "stages/s17-sharding/server/modules/sharding/control.mjs",
+          "needle": "  async switchUser(userId, shardId) {",
+          "before": 0,
+          "after": 13,
+          "explanation": "PG 映射与 etcd override 按控制任期更新，但不构成跨库原子事务。",
+          "start": 65,
+          "anchor": 65,
+          "code": "  async switchUser(userId, shardId) {\n    await this.cache.refresh();\n    const old = this.cache.overrides[userId];\n    const previousShard = this.cache.routeOf(userId).shardId;\n    try {\n      await this.locked(async db => {\n        await db.query('UPDATE agent_data.user_shards SET shard_id=$2 WHERE user_id=$1', [userId, shardId]);\n        // guardedPut accepts wire strings verbatim; RouteCache decodes JSON.\n        await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, JSON.stringify(shardId));\n      });\n      await this.cache.refresh();\n    } catch (error) {\n      // An explicit previous-shard override is equivalent to an absent override and guardedPut is fenced.\n      try {",
+          "hash": "4ce29e1c941334642283912d7e12ed51bb49e3055cb702d01ce12f1683632052"
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "normal",
+          "name": "搬完后在新节点续聊",
+          "steps": [
+            {
+              "title": "暂停并等待",
+              "actor": "control / 源节点",
+              "event": "教学模拟 · pause / drain",
+              "explain": "停新派发，等执行中工作结束并关闭用户进程。",
+              "state": {
+                "归属": "源节点",
+                "派发": "暂停"
+              },
+              "lines": []
+            },
+            {
+              "title": "复制数据",
+              "actor": "源→目标",
+              "event": "教学模拟 · copy",
+              "explain": "home 按用户 uid，workspace 按服务身份；跳过 home/tmp。",
+              "state": {
+                "归属": "源节点",
+                "数据": "目标已校验"
+              },
+              "lines": []
+            },
+            {
+              "title": "切换映射",
+              "actor": "control",
+              "event": "教学模拟 · switchUser",
+              "explain": "override 和 PG 映射切换，刷新两端。",
+              "state": {
+                "归属": "目标节点",
+                "派发": "仍暂停"
+              },
+              "lines": []
+            },
+            {
+              "title": "恢复续聊",
+              "actor": "目标节点",
+              "event": "教学模拟 · resume",
+              "explain": "解除暂停后用同一用户历史续接 Thread。",
+              "state": {
+                "归属": "目标节点",
+                "派发": "已恢复"
+              },
+              "lines": []
+            }
+          ]
+        },
+        {
+          "id": "failure",
+          "name": "复制失败与恢复提交不确定",
+          "steps": [
+            {
+              "title": "复制失败",
+              "actor": "目标节点",
+              "event": "教学模拟 · copy",
+              "explain": "未通过校验，不切换归属。",
+              "state": {
+                "失败点": "copy",
+                "归属": "源节点"
+              },
+              "lines": []
+            },
+            {
+              "title": "确认补偿",
+              "actor": "control",
+              "event": "教学模拟 · rollback",
+              "explain": "确认源归属后才恢复；不确认则继续暂停。",
+              "state": {
+                "失败点": "copy",
+                "派发": "确认后恢复源"
+              },
+              "lines": []
+            },
+            {
+              "title": "另一失败窗口",
+              "actor": "control",
+              "event": "教学模拟 · COMMIT",
+              "explain": "如果是解除暂停的提交回复丢失，目标可能已经开始执行。",
+              "state": {
+                "失败点": "resume COMMIT",
+                "归属": "目标节点"
+              },
+              "lines": []
+            },
+            {
+              "title": "重新暂停",
+              "actor": "control",
+              "event": "教学模拟 · pause",
+              "explain": "保留目标归属，要求 admin 核对并重试。",
+              "state": {
+                "失败点": "resume COMMIT",
+                "派发": "保持暂停"
+              },
+              "lines": []
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "question": "解除暂停的 COMMIT 回复丢失，可以立即恢复旧磁盘吗？",
+        "options": [
+          "可以，旧副本还在",
+          "可以，同时让两边服务",
+          "不可以，重新暂停并保留目标归属，核对后重试"
+        ],
+        "answer": 2,
+        "explanation": "目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。"
+      },
+      "stage": "s17-sharding",
+      "ownership": {
+        "codex": "维护用户的 Thread、Turn 与原生历史，执行已授权的工具循环。",
+        "product": "按用户定位主节点，检查入场与数据库归属；在停写边界复制数据并切换路由。"
+      },
+      "reference": {
+        "session": "s17 设计与源码长文",
+        "url": "/course/handbook.html#module-s17",
+        "adaptation": "依据本阶段 README、design.md 与源码编写。推演为固定教学模拟；真实 SQL、etcd 传播和 Linux uid 另行验收。",
+        "label": "本章设计依据"
+      },
+      "experiment": {
+        "action": "在 stages/s17-sharding 执行本节离线实验，核对断言与退出码。",
+        "command": "npm run lesson -- move",
+        "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+        "observe": [
+          "观察实际 Node 测试输出中的成功与失败断言。"
+        ],
+        "relatedExperiments": []
       }
     }
   ]

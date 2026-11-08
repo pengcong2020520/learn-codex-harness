@@ -1,0 +1,230 @@
+[
+  {
+    "id": "s17-route-retry",
+    "title": "非主入口：缓存转发、409 与一次刷新",
+    "question": "路由缓存过期后，怎样找到新的用户主节点？",
+    "file": "stages/s17-sharding/server/modules/sharding/routing.mjs",
+    "start": 16,
+    "end": 36,
+    "expect": "export function validateRoute(cache, userId, nodeId, revision) {",
+    "notes": {},
+    "actors": [
+      [
+        "client",
+        "客户端"
+      ],
+      [
+        "entry",
+        "入口节点"
+      ],
+      [
+        "old",
+        "旧主节点"
+      ],
+      [
+        "etcd",
+        "etcd"
+      ],
+      [
+        "new",
+        "新主节点"
+      ]
+    ],
+    "state0": {
+      "缓存": "旧归属",
+      "重试": "0",
+      "响应": "等待"
+    },
+    "steps": [
+      {
+        "flow": [
+          "client",
+          "entry",
+          "提交 Bearer"
+        ],
+        "say": "教学模拟：请求从非主节点进入，入口先认证用户。",
+        "state": {}
+      },
+      {
+        "flow": [
+          "entry",
+          "old",
+          "转发 routeOf"
+        ],
+        "say": "按本地缓存携带用户与 revision，保留原 Bearer。",
+        "state": {
+          "缓存": "旧归属"
+        }
+      },
+      {
+        "flow": [
+          "old",
+          "entry",
+          "返回 STALE_ROUTE"
+        ],
+        "say": "当前节点已不是主，或接收节点 revision 落后请求，返回 409。",
+        "state": {
+          "响应": "409 STALE_ROUTE"
+        }
+      },
+      {
+        "flow": [
+          "entry",
+          "etcd",
+          "刷新 snapshot"
+        ],
+        "say": "入口整表重读，重新计算目标；接收节点也依赖 Watch 或对账赶上。",
+        "state": {
+          "缓存": "新归属"
+        }
+      },
+      {
+        "flow": [
+          "entry",
+          "new",
+          "重试 validateRoute"
+        ],
+        "say": "只允许一次重试；新主核对归属、revision 与准入。",
+        "state": {
+          "重试": "1"
+        }
+      },
+      {
+        "flow": [
+          "new",
+          "client",
+          "透传 SSE"
+        ],
+        "say": "经入口流式返回，保持背压、断开传播与 Last-Event-ID。",
+        "state": {
+          "响应": "200"
+        }
+      }
+    ],
+    "takeaway": "409 只允许刷新后再试一次；若目标仍落后则返回错误。主离线为 503，不自动切换到别的磁盘。"
+  },
+  {
+    "id": "s17-user-move",
+    "title": "迁移：等待旧轮次，拷贝历史，再切换",
+    "question": "怎样让用户在新节点续聊而不产生双写？",
+    "file": "stages/s17-sharding/server/modules/sharding/move.mjs",
+    "start": 4,
+    "end": 37,
+    "expect": "export async function moveUser({ userId, shardId, control, cache, pause, drain, copy, resume }) {",
+    "notes": {},
+    "actors": [
+      [
+        "admin",
+        "admin"
+      ],
+      [
+        "control",
+        "control"
+      ],
+      [
+        "source",
+        "源节点"
+      ],
+      [
+        "target",
+        "目标节点"
+      ],
+      [
+        "meta",
+        "PG / etcd"
+      ]
+    ],
+    "state0": {
+      "派发": "源节点",
+      "归属": "源分片",
+      "数据": "源副本"
+    },
+    "steps": [
+      {
+        "flow": [
+          "admin",
+          "control",
+          "发起 moveUser"
+        ],
+        "say": "教学模拟：admin 指定 username 与目标 shardId，control 持单用户锁。",
+        "state": {}
+      },
+      {
+        "flow": [
+          "control",
+          "meta",
+          "持久化 paused"
+        ],
+        "say": "先写 paused=true，再关闭源节点的新入场与派发。",
+        "state": {
+          "派发": "暂停"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "source",
+          "等待 drain"
+        ],
+        "say": "等待执行中轮次、索引、媒体、HTTP 与用户进程引用结束，关闭进程与 SSE。",
+        "state": {}
+      },
+      {
+        "flow": [
+          "source",
+          "target",
+          "拷贝 CODEX_HOME"
+        ],
+        "say": "用户 uid 导出原生历史，跳过顶层 tmp/ 临时辅助文件。",
+        "state": {
+          "数据": "home 已复制"
+        }
+      },
+      {
+        "flow": [
+          "source",
+          "target",
+          "拷贝 workspace"
+        ],
+        "say": "服务身份读取用户工作区，保留数值 uid/gid；校验 tar、暂存发布并搬运关联 blob/BM25。",
+        "state": {
+          "数据": "目标已校验"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "meta",
+          "切换 override"
+        ],
+        "say": "更新 PG user_shards，按任期 guardedPut 发布 override，再提交；不是跨库原子事务。",
+        "state": {
+          "归属": "目标分片"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "target",
+          "刷新 resume"
+        ],
+        "say": "两端刷新缓存并解除本地暂停，最后持久化 paused=false。",
+        "state": {
+          "派发": "目标节点"
+        }
+      },
+      {
+        "flow": [
+          "admin",
+          "target",
+          "续接 Thread"
+        ],
+        "say": "任意入口的新请求路由到新主，使用同一用户原生历史继续对话。",
+        "state": {
+          "数据": "新节点续聊"
+        }
+      }
+    ],
+    "takeaway": "copy 未完成不切换；回滚不确定保持暂停。恢复提交回复丢失时保留目标归属，避免旧副本复活。"
+  }
+]

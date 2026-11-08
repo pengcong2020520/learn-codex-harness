@@ -352,3 +352,24 @@ test("资源规则列出可提议的 workflow；没有允许 propose_task 时不
   fs.writeFileSync(file, JSON.stringify(value));
   assert.doesNotMatch(new AgentDefinition(root).instructions, /propose_task/);
 });
+
+
+test("per-user workflow checks use the existing workspace without nesting users again", async t => {
+  const root = tempRoot(t), owner = '11111111-1111-4111-8111-111111111111';
+  const workspaceDir = path.join(root, 'workspace/users', owner);
+  fs.mkdirSync(path.join(workspaceDir, 'outputs'), { recursive: true });
+  fs.writeFileSync(path.join(workspaceDir, 'outputs/report.md'), '报告');
+  const workflows = defineWorkflows({ ...base, workflows: [report, { id: 'knowledge-maintain' }] });
+  const service = Object.create(MessageService.prototype);
+  service.resolve = ({ id, params }) => workflows.resolve(id, params);
+  service.config = { agent: { runtime: { ownerId: owner, workspaceDir, isolated: true }, outputs: { formats: ['md'] }, workflows } };
+  for (const [workflow, params, evidence] of [
+    ['report', null, { artifacts: { r: { locator: 'outputs/report.md', format: 'md', sources: 1 } } }],
+    ['knowledge-maintain', { kbId: 'general' }, { revisions: { r: { kbId: 'general', slug: 'p', effective: true } } }],
+  ]) {
+    const outcome = await service.checkOutcome({ userId: owner, workflow, params }, { status: 'completed', ...evidence });
+    assert.equal(outcome.status, 'completed');
+    assert.ok(outcome.checks.every(check => check.passed));
+    assert.equal(fs.existsSync(path.join(workspaceDir, 'users')), false);
+  }
+});

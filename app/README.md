@@ -10,9 +10,9 @@
 
 运行要求 Node.js ≥ 24；npm 依赖锁定 `@openai/codex` 0.154.0，无需全局安装 Codex。Codex 只认 Responses API；默认经本机**模型网关**（Bifrost）接模型，Kimi、DeepSeek、智谱 GLM、OpenAI、Claude、Gemini、Grok，以及 Hugging Face 推理服务上的开源模型，填了密钥就能用，网关负责协议转换和失败时改用备用模型，见 [模型网关](docs/model-gateway.md)。
 
-## 十七个阶段的教学与 Web 工作台
+## 十八个阶段的教学与 Web 工作台
 
-在本目录运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [Agent 工作台](http://127.0.0.1:4320/)。课程无需模型服务；工作台可切换 s00–s16 十七个阶段和当前项目（s11 内核）；s00–s02 提供 SDK / CLI 说明，s03–s11 连接已启动的对应服务。机制课程已发布 s01–s16 共 45 节，s00 的课程入口保留阶段并显示缺课空态；s12、s13、s14、s15、s16 提供独立部署说明，不连接实时服务。完整操作与边界见 [web/README.md](web/README.md)。
+在本目录运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [Agent 工作台](http://127.0.0.1:4320/)。课程无需模型服务；工作台可切换 s00–s17 十八个阶段和当前项目（s11 内核）；s00–s02 提供 SDK / CLI 说明，s03–s11 连接已启动的对应服务。机制课程已发布 s01–s17 共 48 节，s00 的课程入口保留阶段并显示缺课空态；s12、s13、s14、s15、s16、s17 提供独立部署说明，不连接实时服务。完整操作与边界见 [web/README.md](web/README.md)。
 
 两个可复制场景见 [examples](examples/README.md)。配置选择、会话兼容、工具身份接口及冒烟模板见 [脚手架升级说明](docs/harness-upgrade.md)。
 

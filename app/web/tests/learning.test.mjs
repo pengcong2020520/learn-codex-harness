@@ -1,3 +1,4 @@
+import {stageIds} from './stage-fixture.mjs';
 import {stageCountLabel} from './stage-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,9 +58,9 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 
-test('工作台按真实阶段选课：s00–s16 与 project，课程缺失时显示空态',options,async t=>{
+test('工作台按真实阶段选课：s00–s17 与 project，课程缺失时显示空态',options,async t=>{
  const {url,b}=await setup(t);
- for(const target of [...Array.from({length:14},(_,num)=>`s${String(num).padStart(2,'0')}`),'project']){
+ for(const target of [...stageIds,'project']){
   const hash=target==='project'?'s11':target;
   const stages=curriculum.lessons.some(l=>l.stage.startsWith(hash))?[hash]:[];
   await b.open(`${url}/app/index.html?stage=${target}`);

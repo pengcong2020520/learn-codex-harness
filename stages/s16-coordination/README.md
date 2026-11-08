@@ -166,4 +166,4 @@ PostgreSQL 迁移 015 为 agent_data 下除 migrations、cluster_term 外的所�
 
 租约决定成员存活，Election 决定 control，create revision 隔离旧任期。Caddy 只向完成恢复的 control 转发，热备保留协调能力和接任资格。
 
-下一章：s17 分片与路由。
+下一章：[s17 分片与路由](../s17-sharding/README.md)。

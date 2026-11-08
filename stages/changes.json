@@ -575,6 +575,36 @@
           "015-cluster-term.sql"
         ]
       }
+    },
+    {
+      "id": "s17",
+      "dir": "s17-sharding",
+      "title": "分片与路由：让用户找到自己的主节点",
+      "summary": "按用户分片，缓存定位后转发；数据库校验 owner 与 epoch，手动迁移先暂停再切换。",
+      "previous": "s16-coordination",
+      "modules": [
+        {
+          "layer": "分片与路由",
+          "name": "用户分片",
+          "desc": "归属缓存、路由与手动迁移"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /cluster/route",
+          "POST /cluster/move"
+        ],
+        "env": [
+          "AGENT_NODE_KEY",
+          "AGENT_SHARD_STRATEGY",
+          "ETCD_HEALTH_PASSWORD"
+        ],
+        "migrations": [
+          "016-sharding.sql",
+          "017-shard-diagnostics.sql"
+        ]
+      }
     }
   ]
 }
