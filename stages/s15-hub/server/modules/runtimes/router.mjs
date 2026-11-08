@@ -13,13 +13,17 @@ export class RuntimeRouter extends EventEmitter {
   constructor(pool, { isolated = false } = {}) { super(); this.pool = pool; this.isolated = isolated; }
   current() { return this.pool.current(requireIdentity().userId); }
   withOwner(owner, operation) { return runOwner(owner, () => this.pool.withOwner(owner, operation)); }
-  async request(method, params) {
+  async request(method, params, { onSent } = {}) {
     const owner = requireIdentity().userId;
     if (params?.threadId && this.ownerOf) {
       const recorded = await this.ownerOf(params.threadId);
       can({ id: owner }, 'use', { type: 'personal', owner_id: recorded });
     }
-    return this.pool.withOwner(owner, value => value.rpc.request(method, params));
+    return this.pool.withOwner(owner, value => {
+      if (value.rpc.closing) throw busyError();
+      // 只有原生连接实际写出请求才标记 sent；owner 校验、租约和 closing 都是发送前检查。
+      return value.rpc.request(method, params, { onSent });
+    });
   }
   attach(value, owner) {
     value.rpc.on('notification', message => {

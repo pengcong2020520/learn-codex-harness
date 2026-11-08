@@ -104,7 +104,7 @@ export class PostgresJobs extends Repository {
       );
     });
   }
-  async patch(id, fields, expected) {
+  async patch(id, fields, expected, { restoreUnsent = false } = {}) {
     const mapping = { selectedModel: "selected_model", modelSource: "model_source", status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note" };
     // checks 是数组：显式序列化，避免驱动把它当成 PostgreSQL 数组。
     const entries = Object.entries(fields).filter(([key]) => mapping[key])
@@ -114,7 +114,9 @@ export class PostgresJobs extends Repository {
       if (fields.status === "queued") {
         const current = (await this.query(`SELECT ${columns} FROM agent_data.tasks t WHERE ${owned} AND t.id=$3`, [id], client)).rows[0];
         if (!current || (expected && !expected.includes(current.status))) return false;
-        if (current.status !== 'queued') await this.queueCapacity(client, current.threadId);
+        // 未发出的 starting/steering 是已受理任务的回退，不是新增排队；满额不能把它变成待核对。
+        const restoring = restoreUnsent && ['starting', 'steering'].includes(current.status);
+        if (current.status !== 'queued' && !restoring) await this.queueCapacity(client, current.threadId);
       }
       const values = [
         id,

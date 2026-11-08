@@ -4,13 +4,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
+import { AsyncResource } from 'node:async_hooks';
+import { RuntimePool } from '../server/modules/runtimes/pool.mjs';
+import { RuntimeRouter } from '../server/modules/runtimes/router.mjs';
+import { SessionService } from '../server/modules/sessions/index.mjs';
+import { ExecutionBoundary } from '../server/modules/agents/boundary.mjs';
+import { FakeRpc, until } from './helpers.mjs';
 import { hubFixture } from './hub-fixture.mjs';
 import { Resources } from '../server/modules/data/resources.mjs';
 import { PermissionGate } from '../server/modules/permissions/index.mjs';
 import { KnowledgeService } from '../server/modules/knowledge/index.mjs';
 import { knowledgeBinding, prepareKnowledgeDirectories } from '../server/modules/knowledge/directories.mjs';
 import { effectiveKnowledgeMounts } from '../server/modules/knowledge/mounts.mjs';
-import { currentIdentity } from '../server/modules/accounts/context.mjs';
+import { currentIdentity, runOwner } from '../server/modules/accounts/context.mjs';
 import { defineWorkflows } from '../server/modules/workflows/index.mjs';
 import { MessageService } from '../server/modules/messages/index.mjs';
 import { TestJobs } from './jobs-fixture.mjs';
@@ -208,4 +214,70 @@ test('新建目录复用 init 实现，mkdir 前父目录被替换则回滚新�
   assert.equal(f.state.knowledge.some(r => r.id === 'race'), false);
   assert.deepEqual(fs.readdirSync(outside), []);
   assert.throws(() => prepareKnowledgeDirectories(base, { race: knowledgeBinding('race') }), e => e.status === 409);
+});
+
+test('isolated 派发：pro 用户新建库→导入→后台维护→独立 I/O 通知→wiki-effective', async t => {
+  const bob = '22222222-2222-4222-8222-222222222222';
+  const f = fixture(t), io = new AsyncResource('codex-stdio'), errors = [], probes = [];
+  t.after(() => io.emitDestroy());
+  f.state.users.find(u => u.username === 'bob').id = bob;
+  f.state.knowledge[0].owner_id = bob;
+  fs.mkdirSync(path.join(f.root, 'workspace/users', bob));
+  await f.as('alice', () => f.hub.assign('bob', 'pro'));
+  const runtime = { workspaceDir: path.join(f.root, 'workspace/users', bob) };
+  Object.assign(f.agent, { execution: {}, instructions: '', runtime, descriptor: { hash: 'test' },
+    workflows: defineWorkflows(f.agent.definition.agent), assertCompatible() {}, async bind() {},
+    input(text) { return [{ type: 'text', text, text_elements: [] }]; } });
+  const native = new FakeRpc();
+  // Native stdio callbacks originate at connection startup, outside every request lease.
+  native.notify = (method, params) => io.runInAsyncScope(() => {
+    try { native.emit('notification', { method, params }); }
+    catch (error) { errors.push(error.stack); native.emit('fatal', error); }
+  });
+  let starts = 0, closes = 0, messages;
+  const pool = new RuntimePool({ create: async () => {
+    starts++;
+    const value = { rpc: native, runtime, agent: f.agent, close: async () => { closes++; } };
+    router.attach(value, bob); return value;
+  }, onLost: (owner, error) => messages.failOwner(owner, error) });
+  const router = new RuntimeRouter(pool, { isolated: true });
+  const config = { root: f.root, agent: f.agent, launch: { timeoutMs: 3000 }, memory: {} };
+  const hub = { publish() {} }, repository = { conversation: async () => ({ hub_knowledge: [] }), query: async () => {}, recordArtifacts: async () => {} };
+  const sessions = new SessionService({ rpc: router, config, runtime, hub, repository, redact: String,
+    permissionHub: f.hub, boundary: new ExecutionBoundary(), beforeTurn: async () => {
+      probes.push([currentIdentity().userId, Boolean(pool.current(bob))]);
+      assert.equal(sessions.userRuntime(), runtime);
+    } });
+  config.agent = router.agent(f.agent); f.gate.agent = config.agent;
+  router.sessions = sessions;
+  router.on('notification', ({ method, params }) => {
+    if (method === 'turn/started') f.gate.started(params.threadId, params.turn.id);
+    if (method === 'turn/completed') f.gate.end(params.threadId, params.turn.id);
+  });
+  const store = new TestJobs();
+  messages = new MessageService({ rpc: router, sessions, store, config, hub, gate: f.gate, permissionHub: f.hub });
+  t.after(async () => { await messages.close(); sessions.close(); await pool.close(); });
+  const as = operation => router.withOwner(bob, () => f.as(bob, operation));
+  await as(() => f.service.create({ kbId: 'bob-notes', title: 'Bob notes' }));
+  await as(() => f.service.importSource({ kbId: 'bob-notes', name: 'source.md', content: '# source' }));
+  const session = await as(() => sessions.create());
+  messages.queue = { close: async () => {} };
+  await as(() => messages.submit({ threadId: session.id, clientMessageId: 'isolated-maintain', text: '维护知识库',
+    workflow: 'knowledge-maintain', params: { kbId: 'bob-notes' } }));
+  runOwner('carol', () => messages.schedule(session.id));
+  await until(() => store.get('isolated-maintain').status !== 'queued');
+  await messages.drain;
+  assert.equal(store.get('isolated-maintain').status, 'running', JSON.stringify({ job: store.get('isolated-maintain'), errors, probes }));
+  const turn = native.threads.get(session.id).turns.at(-1);
+  const item = { id: 'revision', type: 'dynamicToolCall', tool: 'kb_submit_revision', status: 'completed',
+    result: { content: [{ type: 'text', text: JSON.stringify({ effective: true, kbId: 'bob-notes', slug: 'page', versionId: 'v1' }) }] } };
+  native.notify('item/completed', { threadId: session.id, turnId: turn.id, item });
+  native.finish(session.id);
+  await until(() => store.get('isolated-maintain').status !== 'running');
+  const job = store.get('isolated-maintain');
+  assert.equal(job.status, 'completed', JSON.stringify({ job, errors }));
+  assert.deepEqual(job.checks.map(c => [c.id, c.passed]), [['wiki-effective', true]]);
+  assert.ok(probes.every(([owner, current]) => owner === bob && current));
+  assert.deepEqual(errors, []); assert.equal(starts, 1); assert.equal(closes, 0);
+  assert.equal(store.paused(session.id), false);
 });

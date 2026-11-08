@@ -19,6 +19,7 @@ export class MessageService {
     this.scheduled = new Set();
     this.timers = new Map();
     this.budgetTimers = new Map();
+    this.runtimeTimers = new Map();
     this.closed = false;
     this.failure = null;
     this.onCompleted = ({ threadId, turn }) => {
@@ -157,19 +158,23 @@ export class MessageService {
   async outcome(job, turn) {
     if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
     try {
-      const resolve = () => this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
-      // 完成通知只有 owner 身份，没有 Hub 快照；验收与派发一样，按持久化任务的 owner 重新加载权限。
-      const workflow = this.permissionHub
-        ? await runOwner(job.userId, () => this.permissionHub.withUser(job.userId, resolve))
-        : resolve();
-      const step = stepOf(workflow, job.step || 0);
-      const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? userWorkspace(this.config.agent.descriptorWorkspace || this.config.agent.runtime.workspaceDir, job.userId) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
-      if (step.checks.length && !checksPassed(step.checks, checks)) return { status: "needs-review", checks };
-      if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
-      return { status: "completed", checks };
+      const evaluate = () => this.checkOutcome(job, turn);
+      return await (job.userId && this.rpc.withOwner ? this.rpc.withOwner(job.userId, evaluate) : evaluate());
     } catch (error) {
       return { status: "needs-review", checks: null, error: `Workflow 验收未完成：${error.message}` };
     }
+  }
+  async checkOutcome(job, turn) {
+    const resolve = () => this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+    // 完成通知只有 owner 身份，没有 Hub 快照；验收与派发一样，按持久化任务的 owner 重新加载权限。
+    const workflow = this.permissionHub
+      ? await runOwner(job.userId, () => this.permissionHub.withUser(job.userId, resolve))
+      : resolve();
+    const step = stepOf(workflow, job.step || 0);
+    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: job.userId && this.config.agent?.runtime?.workspaceDir ? userWorkspace(this.config.agent.descriptorWorkspace || this.config.agent.runtime.workspaceDir, job.userId) : this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+    if (step.checks.length && !checksPassed(step.checks, checks)) return { status: "needs-review", checks };
+    if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+    return { status: "completed", checks };
   }
   // 模型在任务中提议另一个 workflow：只校验并记录为 proposed，不排队、不授权。由工具调用，context 来自权限门。
   async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
@@ -234,12 +239,14 @@ export class MessageService {
         const jobs = await (this.store.allPending?.() || this.store.list(null, { history: false }));
         const threads = new Map(jobs.filter(job => job.status === "queued").map(job => [job.threadId, job.userId]));
         for (const [id, ownerId] of threads) {
+          if (this.runtimeTimers.has(id)) continue;
           const dispatch = () => this.serial(id, () => this.rpc.withOwner ? this.rpc.withOwner(ownerId, () => this.dispatch(id)) : this.dispatch(id));
           try { await (ownerId ? runOwner(ownerId, () => this.permissionHub ? this.permissionHub.withUser(ownerId, dispatch) : dispatch()) : dispatch()); }
           catch (error) {
             if (this.rpc.pool) {
               // 运行环境容量不足/单个用户启动失败不能停止其他 owner 的派发。
-              if (!['RUNTIME_BUSY', 'HUB_RESTART_PENDING'].includes(error.code)) await runOwner(ownerId, () => this.failOwner(ownerId, error));
+              if (this.runtimeBusy(error)) this.retryRuntime(id, error);
+              else await runOwner(ownerId, () => this.failOwner(ownerId, error));
             } else throw error;
           }
         }
@@ -252,7 +259,8 @@ export class MessageService {
     if (!this.sessions.sessions.has(threadId)) {
       try {
         await this.sessions.ensure(threadId);
-      } catch {
+      } catch (error) {
+        if (this.runtimeBusy(error)) { this.retryRuntime(threadId, error); return; }
         await this.store.pause(threadId);
         await this.publish(threadId);
         return;
@@ -292,12 +300,12 @@ export class MessageService {
     this.budgetTimers.delete(threadId);
     if (this.permissionHub) {
       try { await this.sessions.beforeTurn?.(); }
-      catch (error) { if (error.code === 'HUB_RESTART_PENDING') return; throw error; }
+      catch (error) { if (this.runtimeBusy(error)) { this.retryRuntime(threadId, error); return; } throw error; }
     }
     if (!this.permissionHub && !(await this.store.patch(job.id, { status: "starting", selectedModel: null, modelSource: null }, ["queued"])))
       return;
     await this.publish(threadId);
-    let sent = false;
+    let sent = false, gateStarted = false;
     try {
       const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
       const step = stepOf(workflow, job.step || 0);
@@ -315,7 +323,7 @@ export class MessageService {
       await this.sessions.atBoundary(async () => {
         if (this.closed || this.stopping || this.failure) {
           const error = new Error("服务已关闭或连接失效。");
-          // 关闭时请求还没发出，不能写成明确失败，否则会盖掉待核对。
+          // 请求还没发出；关闭期间保留排队，重启后可安全派发。
           if (this.stopping || this.closed) error.uncertain = true;
           throw error;
         }
@@ -351,26 +359,38 @@ export class MessageService {
         await this.store.patch(job.id, { selectedModel: model, modelSource });
         await this.publish(threadId);
         this.gate?.start(job, workflow.grants, step.writes);
-        sent = true;
+        gateStarted = true;
         this.sessions.prepareUsage(threadId, { model, taskId: job.id });
+        if (!this.rpc.pool) sent = true;
         const result = await this.rpc.request("turn/start", {
           threadId,
           clientUserMessageId: job.id,
           input: prepared,
           ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),
-        });
+        }, { onSent: () => { sent = true; } });
         const turn = this.sessions.recordTurn(threadId, result.turn);
         await this.bind(job.id, result.turn.id);
         this.sessions.publish(threadId, turn);
       });
     } catch (error) {
-      // 只结束本任务自己开启的权限上下文：gate.start 成功后 sent 才为真；start 被拒（该会话已有运行中的任务）时不能结束别人的。
-      if (sent) this.gate?.end(threadId);
-      if (error.code !== 'HUB_RESTART_PENDING' || sent) await this.executionError(job, error, sent);
+      // 只结束本任务自己开启的权限上下文；取得权限与发出 RPC 是两个边界。
+      if (gateStarted) this.gate?.end(threadId);
+      await this.executionError(job, error, sent);
     } finally {
       this.sessions.finishUsageStart(threadId);
     }
     await this.publish(threadId);
+  }
+  runtimeBusy(error) { return ['RUNTIME_BUSY', 'HUB_RESTART_PENDING'].includes(error.code); }
+  retryRuntime(threadId, error) {
+    if (this.runtimeTimers.has(threadId) || this.closed || this.stopping || this.failure) return;
+    const seconds = Number(error.retryAfter);
+    const timer = setTimeout(() => {
+      this.runtimeTimers.delete(threadId);
+      if (!this.closed && !this.stopping && !this.failure) this.schedule(threadId);
+    }, (Number.isFinite(seconds) && seconds > 0 ? seconds : 10) * 1000);
+    timer.unref();
+    this.runtimeTimers.set(threadId, timer);
   }
   retryBudget(threadId, budget) {
     if (this.budgetTimers.has(threadId) || this.closed || this.stopping || this.failure) return;
@@ -394,13 +414,13 @@ export class MessageService {
       const original = (await this.store.list(job.threadId)).find(item => item.turnId === job.targetTurnId && item.selectedModel);
       await this.store.patch(job.id, { selectedModel: original?.selectedModel || this.sessions.snapshot(job.threadId).model,
         modelSource: "沿用当前轮次" });
-      sent = true;
+      if (!this.rpc.pool) sent = true;
       const result = await this.rpc.request("turn/steer", {
         threadId: job.threadId,
         expectedTurnId: job.targetTurnId,
         clientUserMessageId: job.id,
         input,
-      });
+      }, { onSent: () => { sent = true; } });
       await this.bind(job.id, result.turnId);
     } catch (error) {
       if (
@@ -421,10 +441,16 @@ export class MessageService {
   }
   // steer 失败也走这里：追加消息沿用正在运行轮次的权限上下文，这里不结束它，否则该轮后续的工具调用都会被拒。
   async executionError(job, error, sent) {
+    if (!sent && (this.runtimeBusy(error) || this.closed || this.stopping)) {
+      // 先阻止重复唤醒，再回到 queued（PG patch 会发布 outbox）。未发送的任务可安全重试。
+      this.retryRuntime(job.threadId, error);
+      await this.store.patch(job.id, { status: 'queued', error: null, selectedModel: null, modelSource: null }, ['queued', 'starting', 'steering'], { restoreUnsent: true });
+      return;
+    }
     const knownRejection = Number.isInteger(error.code);
     await this.store.patch(job.id, {
       status:
-        error.uncertain || (sent && !knownRejection) ? "unconfirmed" : "failed",
+        sent && (error.uncertain || !knownRejection) ? "unconfirmed" : "failed",
       error: error.message,
     });
     await this.store.pause(job.threadId);
@@ -564,6 +590,8 @@ export class MessageService {
     this.closed = true;
     await this.queue?.close();
     for (const timer of this.timers.values()) clearTimeout(timer);
+    for (const timer of this.runtimeTimers.values()) clearTimeout(timer);
+    this.runtimeTimers.clear();
     for (const timer of this.budgetTimers.values()) clearTimeout(timer);
     this.budgetTimers.clear();
     this.sessions.off("turnCompleted", this.onCompleted);

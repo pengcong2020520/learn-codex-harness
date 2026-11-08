@@ -93,8 +93,9 @@ export class FakeRpc extends EventEmitter {
     this.notify("item/completed", { threadId, turnId: turn.id, item });
     this.notify("turn/completed", { threadId, turn: structuredClone(turn) });
   }
-  async request(method, params = {}) {
+  async request(method, params = {}, { onSent } = {}) {
     this.calls.push({ method, params });
+    onSent?.();
     if (method === "thread/memoryMode/set") return {};
     if (method === "thread/start") {
       const thread = { id: `thread-${this.threads.size + 1}`, cwd: params.cwd, turns: [] };

@@ -51,7 +51,10 @@ export class PermissionGate {
   started(threadId, turnId) {
     const run = this.runs.get(threadId);
     if (run && !run.turnId && typeof turnId === 'string' && turnId) {
-      run.turnId = turnId; run.context = this.issue({ ...run.context, turnId });
+      // 原生通知没有运行环境租约；沿用 start 时已绑定的 Agent，不能再读用户 Agent 代理。
+      const context = Object.freeze({ ...run.context, turnId });
+      this.#contexts.add(context);
+      run.turnId = turnId; run.context = context;
     }
   }
   forTurn(threadId, turnId) {

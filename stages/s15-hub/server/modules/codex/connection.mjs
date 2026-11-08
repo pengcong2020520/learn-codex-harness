@@ -92,7 +92,7 @@ export class CodexConnection extends EventEmitter {
     this.child.stdin.write(JSON.stringify(message) + "\n");
   }
 
-  request(method, params) {
+  request(method, params, { onSent } = {}) {
     if (this.failure || this.closing) return Promise.reject(this.failure || new Error("Codex 连接已关闭。"));
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
@@ -102,7 +102,7 @@ export class CodexConnection extends EventEmitter {
         this.fail(error);
       }, this.launch.timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      try { this.send({ id, method, ...(params === undefined ? {} : { params }) }); }
+      try { this.send({ id, method, ...(params === undefined ? {} : { params }) }); onSent?.(); }
       catch (error) { this.fail(error); }
     });
   }

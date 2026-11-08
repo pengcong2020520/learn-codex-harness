@@ -161,7 +161,7 @@ test("服务重启保留排队项，未确认执行不自动重发", async t => 
   assert.equal((await restored.snapshot(r.session.id)).paused, true);
 });
 
-test("关闭期间尚未发出的 starting 任务记为待核对并暂停会话", async t => {
+test("关闭期间尚未发出的 starting 任务回到 queued，不暂停会话", async t => {
   const r = await rig(t);
   let release;
   const hold = new Promise(resolve => { release = resolve; });
@@ -175,10 +175,10 @@ test("关闭期间尚未发出的 starting 任务记为待核对并暂停会话"
   r.messages.stopping = true;
   release();
   await pending;
-  await until(() => r.messages.job("shutdown").status === "unconfirmed");
-  assert.equal(r.messages.job("shutdown").status, "unconfirmed");
-  assert.equal(r.messages.job("shutdown").error, "服务已关闭或连接失效。");
-  assert.equal((await r.messages.snapshot(r.session.id)).paused, true);
+  await until(() => r.messages.job("shutdown").status === "queued");
+  assert.equal(r.messages.job("shutdown").status, "queued");
+  assert.equal(r.messages.job("shutdown").error, null);
+  assert.equal((await r.messages.snapshot(r.session.id)).paused, false);
   assert.equal(r.rpc.calls.filter(call => call.method === "turn/start").length, 0);
 });
 

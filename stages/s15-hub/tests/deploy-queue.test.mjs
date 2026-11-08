@@ -49,3 +49,23 @@ test('queue: 工作流下一步满额时等待确认，不停止执行器', asyn
   assert.equal(writes[0].status, 'waiting'); assert.equal(writes[0].step, 0);
   assert.equal(r.messages.failure, null);
 });
+
+test('queue: 未发送任务回退不受新任务满额门禁影响，下一步/确认仍受门禁', async () => {
+  let status = 'starting', checked = 0, wakes = 0;
+  const client = { release() {}, async query(sql) {
+    if (sql.startsWith('SELECT')) return { rows: [{ status, threadId: 'thread' }] };
+    if (sql.startsWith('UPDATE')) return { rowCount: 1, rows: [{ thread_id: 'thread', status: 'queued' }] };
+    if (sql.includes('INSERT INTO agent_data.outbox')) wakes++;
+    return { rows: [] };
+  } };
+  const jobs = new PostgresJobs({ connect: async () => client }, { instanceId: 'test', ownerId: 'owner' });
+  jobs.queueCapacity = async () => { checked++; throw Object.assign(new Error('full'), { code: 'QUEUE_FULL' }); };
+  for (status of ['starting', 'steering', 'queued']) {
+    assert.equal(await jobs.patch('task', { status: 'queued', error: null }, ['queued', 'starting', 'steering'], { restoreUnsent: true }), true);
+  }
+  assert.equal(checked, 0); assert.equal(wakes, 3);
+  for (status of ['running', 'waiting', 'proposed'])
+    await assert.rejects(jobs.patch('task', { status: 'queued' }, [status], { restoreUnsent: true }), e => e.code === 'QUEUE_FULL');
+  status = 'starting';
+  await assert.rejects(jobs.patch('task', { status: 'queued' }, ['starting']), e => e.code === 'QUEUE_FULL');
+});

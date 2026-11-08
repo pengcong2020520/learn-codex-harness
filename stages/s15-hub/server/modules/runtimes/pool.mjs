@@ -88,7 +88,7 @@ export class RuntimePool extends EventEmitter {
     });
     try {
       const value = await entry.ready;
-      if (entry.state !== 'ready') throw new AppError('运行环境已关闭，请核对任务。', 503);
+      if (entry.state !== 'ready') throw busyError();
       return await this.context.run(entry, () => operation(value));
     } finally {
       entry.refs--; entry.lastUsed = this.now();
