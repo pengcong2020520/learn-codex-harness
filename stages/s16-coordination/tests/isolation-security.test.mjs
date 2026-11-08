@@ -146,11 +146,12 @@ test('sweep/idleTimer: 单 owner 查询失败记录日志并继续其他 owner�
   listenFailure(new Error('LISTEN disconnected')); assert.equal(failed, 1);
 });
 
-for (const route of ['sweep', 'disable', 'close', 'crash']) test(`pool ${route}: close 挂起满 10 秒后同 uid SIGKILL，完成发送才释放名额`, async t => {
+for (const route of ['sweep', 'disable', 'close', 'crash']) test(`pool ${route}: close 挂起满 10 秒后同 uid SIGKILL，确认进程退出才释放名额`, async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let now = 0, sendDone, closes = 0; const signals = [];
+  const child = Object.assign(new EventEmitter(), { pid: 123 });
   const pool = new RuntimePool({ now: () => now, create: async () => ({
-    rpc: Object.assign(new EventEmitter(), { child: { pid: 123 }, launch: { env: { PATH: '/bin', DATABASE_URL: 'secret' } } }),
+    rpc: Object.assign(new EventEmitter(), { child, launch: { env: { PATH: '/bin', DATABASE_URL: 'secret' } } }),
     runtime: { isolated: true, uid: 10001, gid: 10001, codexHome: '/home/owner' },
     close: () => { closes++; return new Promise(() => {}); },
   }), signalProcess: (...args) => { signals.push(args); return new Promise(resolve => { sendDone = resolve; }); } });
@@ -161,7 +162,8 @@ for (const route of ['sweep', 'disable', 'close', 'crash']) test(`pool ${route}:
   t.mock.timers.tick(1); await tick();
   assert.equal(signals.length, 1); assert.deepEqual(signals[0].slice(0, 2), [123, 'SIGKILL']);
   assert.equal(signals[0][2].uid, 10001); assert.equal(signals[0][2].gid, 10001); assert.equal(signals[0][2].env.DATABASE_URL, undefined);
-  assert.equal(pool.entries.size, 1); sendDone(); await pending;
+  assert.equal(pool.entries.size, 1); sendDone(); await tick();
+  assert.equal(pool.entries.size, 1); child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); await pending;
   assert.equal(pool.entries.size, 0); assert.equal(closes, 1); await pool.close();
 });
 
@@ -173,19 +175,20 @@ test('userSpawn: 不传 groups，依赖 Node/libuv setgroups(0) 清空补充组'
 
 test('pool: 启动超时后晚到的连接 close 挂起也在 10 秒强杀并释放名额', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  let publish; const signals = [];
+  let publish; const signals = []; const child = Object.assign(new EventEmitter(), { pid: 123 });
   const pool = new RuntimePool({ create: () => new Promise(resolve => { publish = resolve; }),
     signalProcess: async (...args) => { signals.push(args); } });
   const pending = pool.withOwner('owner', () => assert.fail('超时不能继续请求'));
   const rejected = assert.rejects(pending, error => error.code === 'RUNTIME_START_TIMEOUT');
   await tick(); t.mock.timers.tick(30000); await rejected;
   assert.equal(pool.entries.size, 1);
-  publish({ rpc: Object.assign(new EventEmitter(), { child: { pid: 123 } }),
+  publish({ rpc: Object.assign(new EventEmitter(), { child }),
     runtime: { isolated: true, uid: 10001, gid: 10001, codexHome: '/home/owner' }, close: () => new Promise(() => {}) });
   await tick(); t.mock.timers.tick(9999); await tick();
   assert.equal(pool.entries.size, 1); assert.equal(signals.length, 0);
   t.mock.timers.tick(1); await tick();
-  assert.equal(signals[0][1], 'SIGKILL'); assert.equal(pool.entries.size, 0); await pool.close();
+  assert.equal(signals[0][1], 'SIGKILL'); assert.equal(pool.entries.size, 1);
+  child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); await tick(); assert.equal(pool.entries.size, 0); await pool.close();
 });
 
 test('secureTree: fstat 拒绝被替换的特殊文件，并在校验/修改失败后关闭 fd', t => {

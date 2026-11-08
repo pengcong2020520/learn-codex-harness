@@ -1,3 +1,4 @@
+import { maintenanceConnection } from './write.mjs';
 import { Pool } from "pg";
 import fs from "node:fs";
 import path from "node:path";
@@ -41,13 +42,14 @@ export function identity(root, { create = true } = {}) {
   return value;
 }
 
-export async function openDatabase(url) {
+export async function openDatabase(url, { maintenance } = {}) {
   if (!url)
     throw new Error(
       "缺少 DATABASE_URL。请配置 PostgreSQL 后运行 npm run data:migrate；不会回退到 JSON 存储。",
     );
   const pool = new Pool({
     connectionString: url,
+    ...(maintenance === undefined ? {} : { options: `-c app.maintenance=${maintenance ? 'on' : 'off'}` }),
     max: 6,
     connectionTimeoutMillis: 3000,
     query_timeout: 12000,
@@ -57,7 +59,12 @@ export async function openDatabase(url) {
   });
   pool.on("error", () => {}); // Requests/worker heartbeat surface failures without printing connection secrets.
   try {
-    await pool.query("SELECT 1");
+    const { rows } = await pool.query("SELECT current_setting('app.maintenance', true) AS maintenance");
+    if (rows[0].maintenance === 'on') {
+      maintenanceConnection(pool);
+      // Covers existing and future clients, including explicit transaction() clients.
+      pool.on('acquire', maintenanceConnection);
+    }
     return pool;
   } catch {
     await pool.end();
@@ -65,7 +72,7 @@ export async function openDatabase(url) {
   }
 }
 
-const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql', 'migrations/014-user-knowledge.sql'].map((name, index) => {
+const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql', 'migrations/014-user-knowledge.sql', 'migrations/015-cluster-term.sql'].map((name, index) => {
   const sql = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
   return { version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex') };
 });
@@ -74,6 +81,7 @@ function compatible(rows) {
 }
 export async function migrate(pool) {
   await transaction(pool, async client => {
+    await client.query("SET LOCAL app.maintenance = 'on'");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('agent_data_migration'))");
     await client.query('CREATE SCHEMA IF NOT EXISTS agent_data; CREATE TABLE IF NOT EXISTS agent_data.migrations(version integer PRIMARY KEY, checksum text NOT NULL)');
     const { rows } = await client.query('SELECT * FROM agent_data.migrations ORDER BY version');

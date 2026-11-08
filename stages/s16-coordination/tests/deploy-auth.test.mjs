@@ -18,7 +18,7 @@ function fixture(t) {
   executable('docker', `echo "docker $*" >> "$CALLS"
 case "$*" in
  *'node scripts/accounts.mjs status') echo "\${ACCOUNT_STATUS:-uninitialized}"; exit "\${STATUS_EXIT:-0}" ;;
- *'npm run auth:init') exit "\${INIT_EXIT:-0}" ;;
+ *'node scripts/maintenance.mjs accounts init') exit "\${INIT_EXIT:-0}" ;;
  *'node deploy/ready.mjs') echo '{"status":"ready"}' ;;
 esac`);
   const calls = path.join(root, 'calls');
@@ -58,7 +58,7 @@ test('remote auth-init：保留 TTY；成功及重复初始化启动 agent，其
   const f = fixture(t);
   for (const code of [0, 3, 1, 130]) {
     const result = f.run('remote.sh', ['auth-init'], { INIT_EXIT: String(code) });
-    assert.match(result.calls, /ssh -t fixture-host .*docker compose run --rm --no-deps node-a npm run auth:init/);
+    assert.match(result.calls, /ssh -t fixture-host .*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts init/);
     if (code === 0 || code === 3) {
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.calls, /docker compose up -d --wait node-a node-b node-c/);
@@ -75,7 +75,7 @@ test('remote user：转发四个子命令，拒绝非法名称和额外参数，
     const args = ['user', '--', command, ...(command === 'list' ? [] : ['bob_1.test-name'])];
     const result = f.run('remote.sh', args);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.calls, new RegExp(`ssh -t fixture-host .*npm run user:${command}`));
+    assert.match(result.calls, new RegExp(`ssh -t fixture-host .*node scripts/maintenance.mjs accounts ${command}`));
   }
   for (const name of ['', 'Alice', 'two words', "bob'; echo injected", '$(id)', 'a'.repeat(65)]) {
     const result = f.run('remote.sh', ['user', '--', 'add', name]);

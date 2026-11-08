@@ -6,21 +6,22 @@ import net from "node:net";
 import { spawn, execFileSync } from "node:child_process";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-data-integration-"));
 const port = () =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const s = net.createServer();
+    s.once("error", reject);
     s.listen(0, "127.0.0.1", () => {
       const n = s.address().port;
       s.close(() => resolve(n));
     });
   });
-const pgPort = await port(),
-  redisPort = await port();
+let pgPort, redisPort;
 let pgStarted = false,
   redis,
   tests, chroma;
 const withRag = process.argv.includes("--rag");
 let chromaUrl;
 try {
+  pgPort = await port(); redisPort = await port();
   execFileSync(
     "initdb",
     [
@@ -101,10 +102,11 @@ try {
       await new Promise(resolve => setTimeout(resolve, 250));
     }
   }
-  tests = spawn(process.execPath, process.argv.includes("--real-smoke") ? ["scripts/real-smoke.mjs"] : ["--test", "--test-concurrency=1", "tests/data.integration.mjs", "tests/knowledge.integration.mjs", "tests/hub-share.integration.mjs"], {
+  tests = spawn(process.execPath, process.argv.includes("--real-smoke") ? ["scripts/real-smoke.mjs"] : ["--import=./tests/fixtures/trace-ct001.mjs", "--test", "--test-concurrency=1", "tests/data.integration.mjs", "tests/knowledge.integration.mjs", "tests/hub-share.integration.mjs", "tests/coordination-pg.integration.mjs"], {
     stdio: "inherit",
     env: {
       ...process.env,
+      PGOPTIONS: "-c app.maintenance=on",
       CHROMA_TEST_URL: chromaUrl || "",
       DATA_TEST_DATABASE_URL: `postgresql://agent_test@127.0.0.1:${pgPort}/postgres`,
       DATA_TEST_REDIS_URL: `redis://127.0.0.1:${redisPort}`,

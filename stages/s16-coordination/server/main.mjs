@@ -52,8 +52,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     let media;
     const data = await dataFactory(config, { onLost: error => { databaseFailure = error; void messages?.fail(error); void engine?.close(); void media?.close(); } });
     lifecycle.defer(() => data.close());
-    const markUnconfirmed = generation ? trackDispatch(data.jobs, data.rawPool, data.scope.instanceId) : null;
-    if (generation) lifecycle.defer(() => !generation.active && markUnconfirmed().catch(() => {}));
+    const markUnconfirmed = generation ? trackDispatch(data.jobs, data.pool, data.scope.instanceId) : null;
+    // After term loss, only the next control may recover unfinished work.
     const accounts = data.accounts || new Accounts(new AccountStore(data.pool, data.scope.instanceId));
     if (!data.accounts) lifecycle.defer(await guardStartup(accounts.store, config.authMemorySetting));
     const usage = new UsageService({ pool: data.pool, scope: data.scope, registry: config.registry, budget: config.budget });
@@ -184,16 +184,22 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       void media?.close().catch(() => {});
     };
     return { http, stopDispatch, config, agent, runtime, rpc, runtimes, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, usage, accounts, permissionHub, url, close: gracefulShutdown({
+      ...(generation ? { coordinated: true } : {}),
       stopDispatch,
       markUnconfirmed: async () => {
-        if (generation) { generation.active = false; await markUnconfirmed().catch(() => safeLog("数据库暂不可用；下任 control 启动时按 s08 恢复待核对。")); }
+        if (generation) {
+          try { await markUnconfirmed(); }
+          catch { safeLog('任期已失效或数据库不可用；下任 control 启动时恢复待核对。'); }
+          finally { generation.active = false; }
+        }
         else await messages.fail(new Error("服务正在关闭，执行结果待核对。"));
       },
       close: () => lifecycle.close(),
     }) };
   } catch (error) {
-    await lifecycle.close().catch(() => {});
-    throw new Error(redact(error.message));
+    let cleanupFailed = false;
+    await lifecycle.close().catch(() => { cleanupFailed = true; });
+    throw Object.assign(new Error(redact(error.message)), { cleanupFailed });
   }
 }
 

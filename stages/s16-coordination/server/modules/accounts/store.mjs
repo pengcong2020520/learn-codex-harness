@@ -1,8 +1,9 @@
+import { businessQuery } from '../data/write.mjs';
 import { transaction } from '../data/database.mjs';
 
 export class AccountStore {
   constructor(pool, instanceId) { Object.assign(this, { pool, instanceId }); }
-  query(sql, values = [], client = this.pool) { return client.query(sql, [this.instanceId, ...values]); }
+  query(sql, values = [], client = this.pool) { return businessQuery(client, sql, [this.instanceId, ...values]); }
   async byUsername(username) {
     return (await this.query('SELECT * FROM agent_data.users WHERE instance_id=$1 AND username=$2', [username])).rows[0];
   }

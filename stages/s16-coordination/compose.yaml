@@ -27,7 +27,9 @@ services:
     <<: *runtime
     image: redis:7.4
     mem_limit: ${REDIS_MEMORY_LIMIT:-128m}
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
     volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -59,6 +61,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  etcd-init:
+    image: codex-harness-s16:current
+    restart: on-failure
+    command: ["node", "scripts/etcd-init.mjs"]
+    environment:
+      ETCD_ENDPOINT: http://etcd:2379
+      ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:?Set ETCD_ROOT_PASSWORD}
+      ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
+      ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
+    depends_on:
+      etcd: { condition: service_started }
   node-a: &node
     <<: *runtime
     build:
@@ -77,13 +91,15 @@ services:
     environment: &node-env
       AGENT_NODE_ID: node-a
       ETCD_ENDPOINT: http://etcd:2379
+      ETCD_USERNAME: node-a
+      ETCD_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
       AGENT_DEPLOYED: "true"
       AGENT_LISTEN_HOST: 0.0.0.0
       AGENT_PORT: "4340"
       AGENT_GATEWAY_URL: http://gateway:8080/v1
       AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
       DATABASE_URL: postgresql://agent_node_a:${AGENT_NODE_A_DB_PASSWORD:?Set AGENT_NODE_A_DB_PASSWORD}@postgres:5432/agent_s16
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
       CODEX_MODEL_CATALOG_ENABLED: "true"
       CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}
       AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
@@ -105,7 +121,7 @@ services:
       AGENT_BUDGET_TIMEZONE: ${AGENT_BUDGET_TIMEZONE:-}
       AGENT_BUDGET_DOWNGRADE_AT: ${AGENT_BUDGET_DOWNGRADE_AT:-}
       AGENT_BUDGET_DOWNGRADE_SCENE: ${AGENT_BUDGET_DOWNGRADE_SCENE:-fast}
-    # 三个节点挂同一组目录：只有单机模拟成立。多机没有共享磁盘，s18 用副本解决。
+    # 三个节点挂同一组目录：只用于单机模拟，s17/s18 改为每节点独立磁盘。
     # CONTAINER_APP_DIR 与宿主部署目录相同且保持不变。
     # Codex 历史记录的是绝对路径；换成 release/时间戳路径会导致旧会话无法恢复。
     volumes:
@@ -118,6 +134,7 @@ services:
       redis: { condition: service_healthy }
       gateway: { condition: service_healthy }
       etcd: { condition: service_healthy }
+      etcd-init: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "deploy/ready.mjs", "--alive"]
       interval: 5s
@@ -128,6 +145,8 @@ services:
     environment:
       <<: *node-env
       AGENT_NODE_ID: node-b
+      ETCD_USERNAME: node-b
+      ETCD_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
       AGENT_PORT: "4341"
       DATABASE_URL: postgresql://agent_node_b:${AGENT_NODE_B_DB_PASSWORD:?Set AGENT_NODE_B_DB_PASSWORD}@postgres:5432/agent_s16
   node-c:
@@ -135,6 +154,8 @@ services:
     environment:
       <<: *node-env
       AGENT_NODE_ID: node-c
+      ETCD_USERNAME: node-c
+      ETCD_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
       AGENT_PORT: "4342"
       DATABASE_URL: postgresql://agent_node_c:${AGENT_NODE_C_DB_PASSWORD:?Set AGENT_NODE_C_DB_PASSWORD}@postgres:5432/agent_s16
   etcd:
@@ -144,7 +165,7 @@ services:
     command: ["etcd", "--name=etcd", "--data-dir=/etcd-data", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd:2380", "--initial-cluster=etcd=http://etcd:2380"]
     volumes: ["etcd-data:/etcd-data"]
     healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "status"]
       interval: 5s
       timeout: 3s
       retries: 10

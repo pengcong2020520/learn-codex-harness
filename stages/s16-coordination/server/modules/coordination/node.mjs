@@ -7,7 +7,8 @@ import { AgentDefinition } from '../agents/index.mjs';
 import { RUNTIME_LIMIT } from '../runtimes/pool.mjs';
 import { startAgentServer } from '../../main.mjs';
 import { connectEtcd } from './etcd.mjs';
-import { Coordination, TTL } from './index.mjs';
+import { Coordination } from './index.mjs';
+import { Rejoin } from './rejoin.mjs';
 import { ActiveService, clusterStatus } from './service.mjs';
 
 export function nodeHandler(coordination, service) {
@@ -35,7 +36,7 @@ export function nodeHandler(coordination, service) {
 export async function startCoordinatedServer({ config = loadServerConfig(), env = loadEnvironment(config.root), connect = connectEtcd,
   start = options => startAgentServer(options), log = console.log } = {}) {
   const nodeId = env.AGENT_NODE_ID;
-  const adapter = await connect(env.ETCD_ENDPOINT || 'http://etcd:2379');
+  const adapter = await connect(env.ETCD_ENDPOINT || 'http://etcd:2379', { username: env.ETCD_USERNAME || nodeId, password: env.ETCD_PASSWORD });
   const agent = new AgentDefinition(config.root, config.agentFile);
   const coordination = new Coordination({ ...adapter, nodeId, address: `http://${nodeId}:${config.port}`,
     revision: revision(config.root), agentHash: createHash('sha256').update(fs.readFileSync(agent.file)).update(agent.instructions).digest('hex'), capacity: RUNTIME_LIMIT });
@@ -46,9 +47,10 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
   const info = () => {
     dirty = true;
     if (!coordination.isController() || update) return;
+    const epoch = coordination.generation;
     update = (async () => {
-      while (dirty && coordination.isController()) { dirty = false; await coordination.writeInfo(); }
-    })().catch(() => coordination.isolate('info-write-failed')).finally(() => {
+      while (epoch === coordination.generation && dirty && coordination.isController()) { dirty = false; await coordination.writeInfo(); }
+    })().catch(() => { if (epoch === coordination.generation) coordination.isolate('info-write-failed'); }).finally(() => {
       update = null;
       if (dirty && coordination.isController()) info();
     });
@@ -61,11 +63,13 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
       observing = true;
       void coordination.status().catch(() => {}).finally(() => { observing = false; });
     }
-  }, TTL * 1000 / 3);
+  }, 5000);
   timer.unref();
+  const rejoin = new Rejoin(coordination, service);
   let closing;
   const close = () => closing ||= (async () => {
     clearInterval(timer);
+    await rejoin.close();
     // Shut down the old process pool before resign allows the next control to use shared files.
     await service.stop();
     try { await coordination.close(); }

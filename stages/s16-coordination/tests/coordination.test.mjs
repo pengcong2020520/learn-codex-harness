@@ -27,12 +27,12 @@ test('lease: TTL 10 grant + member metadata, expiration deletes registration and
   assert.equal(c.members.size, 0); assert.equal(lost, true); assert.equal(c.isController(), false);
   assert.ok(c.events.some(e => e.type === 'member-left'));
 });
-test('watch: starts at snapshot revision + 1; etcd3 transport reconnect replays without snapshot', async t => {
+test('watch: starts at snapshot revision + 1; etcd3 transport reconnect replaces cache with full snapshot', async t => {
   const { c, client } = await fixture(t); const w = c.watcher;
   assert.equal(w.revision, String(BigInt(c.memberRevision) + 1n));
   w.disconnect(); client.set(MEMBERS + 'node-b', JSON.stringify({ nodeId: 'node-b' }), '2');
-  assert.equal(c.members.size, 1); w.reconnect(); assert.equal(c.members.size, 2);
-  assert.equal(client.operations.filter(op => op[0] === 'snapshot').length, 1);
+  assert.equal(c.members.size, 1); w.reconnect(); await flush(); assert.equal(c.members.size, 2);
+  assert.equal(client.operations.filter(op => op[0] === 'snapshot').length, 2);
   assert.equal(c.memberRevision, String(client.rev));
   w.emit('error', new Error('unrecoverable stream')); await flush();
   assert.equal(c.watcher.revision, String(client.rev + 1n));
@@ -102,7 +102,7 @@ test('service: lost during startup cannot publish readiness or resurrect old gen
 });
 test('isolation: /ready 503, HTTP not dispatched, pool and transaction refuse late results', async t => {
   const { c, elect, advance } = await fixture(t); let writes = 0, handled = 0, generation;
-  const raw = { query: async () => { writes++; }, connect: async () => raw };
+  const raw = { query: async () => { writes++; }, connect: async () => raw, release() {} };
   const service = new ActiveService(c, async g => { generation = g; return { http: { handle: async (_, res) => { handled++; res.writeHead(200); res.end('{}'); } }, stopDispatch() {}, close: async () => {} }; });
   await elect(); await service.chain;
   const pool = fencePool(raw, generation); const connection = await pool.connect(); await pool.query('UPDATE tasks');
@@ -111,7 +111,7 @@ test('isolation: /ready 503, HTTP not dispatched, pool and transaction refuse la
   advance(10001); res = response(); await nodeHandler(c, service)({ method: 'GET', url: '/ready', headers: {} }, res);
   assert.equal(res.status, 503); assert.equal(handled, 1);
   assert.throws(() => pool.query('UPDATE tasks SET result=1'), rejected); assert.throws(() => connection.query('COMMIT'), rejected);
-  assert.equal(writes, 1); await connection.query('ROLLBACK'); assert.equal(writes, 2); await service.chain;
+  assert.equal(writes, 4); await connection.query('ROLLBACK'); assert.equal(writes, 5); await service.chain;
 });
 test('recovery: old control marks only its dispatched task IDs, no global recovery after isolation', async () => {
   const queries = []; const jobs = { patch: async () => true }; const pool = { query: async (...args) => queries.push(args) };

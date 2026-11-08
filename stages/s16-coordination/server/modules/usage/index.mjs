@@ -1,3 +1,4 @@
+import { businessQuery } from '../data/write.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 import { budgetConfig } from './config.mjs';
 
@@ -66,7 +67,7 @@ export class UsageService {
         if (!eventKey || !this.rows.some(item => item.eventKey === eventKey)) this.rows.push({ ...row, eventKey });
         return;
       }
-      await this.pool.query(`INSERT INTO agent_data.usage(instance_id,owner_id,created_at,thread_id,turn_id,task_id,source,model,
+      await businessQuery(this.pool, `INSERT INTO agent_data.usage(instance_id,owner_id,created_at,thread_id,turn_id,task_id,source,model,
         input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens,total_tokens,units,currency,estimated_cost,event_key)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT(instance_id,owner_id,event_key) DO NOTHING`,
       [this.scope.instanceId, ownerId, new Date(createdAt), threadId, turnId, taskId, source, model,
@@ -84,7 +85,7 @@ export class UsageService {
     await this.pending;
     if (!this.pool) return this.rows.filter(row => row.createdAt >= start && row.createdAt < end)
       .map(row => ({ ...row, day: dayKey(row.createdAt, this.budget.timezone), estimatedCost: row.estimatedCost || 0 }));
-    return (await this.pool.query(`SELECT model,source,currency,to_char(created_at AT TIME ZONE $5,'YYYY-MM-DD') AS day,
+    return (await businessQuery(this.pool, `SELECT model,source,currency,to_char(created_at AT TIME ZONE $5,'YYYY-MM-DD') AS day,
       count(*)::float8 AS requests, sum(input_tokens)::float8 AS "inputTokens", sum(cached_input_tokens)::float8 AS "cachedInputTokens",
       sum(output_tokens)::float8 AS "outputTokens",sum(reasoning_output_tokens)::float8 AS "reasoningOutputTokens",
       sum(total_tokens)::float8 AS "totalTokens",sum(units) AS units,coalesce(sum(estimated_cost),0) AS "estimatedCost",

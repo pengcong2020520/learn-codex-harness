@@ -5,8 +5,8 @@ const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'ut
 const compose = read('compose.yaml');
 const service = name => compose.match(new RegExp(`^  ${name}:(?: &node)?\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:|^volumes:|$(?![\\s\\S]))`, 'm'))?.[1];
 
-test('static: 八服务、三节点共享卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
-  assert.deepEqual([...compose.split('services:\n')[1].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['postgres', 'redis', 'gateway', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy']);
+test('static: 八常驻服务加认证初始化、三节点共享卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
+  assert.deepEqual([...compose.split('services:\n')[1].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy']);
   assert.match(compose, /mem_limit: 128m/); assert.match(compose, /mem_limit: 64m/);
   assert.match(compose, /AGENT_MEMORY_LIMIT:-768m/);
   assert.deepEqual([...compose.matchAll(/ports: \["([^"]+)"\]/g)].map(m => m[1]), ['127.0.0.1:4334:80']);
@@ -117,8 +117,8 @@ test('static: 远程账号命令独立使用 SSH TTY、白名单名称并仅接�
   assert.match(remote, / auth-init\)/);
   assert.match(remote, / user\)/);
   assert.ok(remote.includes('^[a-z0-9_.-]{1,64}$'));
-  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps node-a npm run auth:init/);
-  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps node-a npm run user:/);
+  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts init/);
+  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts/);
   assert.match(remote, /code.*-eq 3/);
   assert.match(remote, /docker compose up -d --wait node-a node-b node-c.*bash deploy\/cluster-ready.sh/);
   assert.doesNotMatch(remote, /docker compose run[^\n]*-T[^\n]*(?:auth:init|user:)/);

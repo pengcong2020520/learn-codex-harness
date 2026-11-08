@@ -9,14 +9,15 @@ export class ActiveService {
       const activationId = this.activationId;
       this.chain = this.chain.then(() => this.activate(term, activationId)).catch(error => { this.log(error.message); coordination.isolate('activation-failed'); });
     });
-    coordination.on('lost', () => this.stop());
+    coordination.on('lost', () => { void this.stop().catch(error => this.log(error.message)); });
   }
   async activate(term, activationId) {
     const c = this.coordination;
     if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
     await c.confirm();
     if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
-    const generation = { active: true, term,
+    const generation = { active: true, term, log: this.log,
+      isolate: reason => { if (generation.active) c.isolate(reason); },
       assert: () => { if (!generation.active || !c.isController() || c.term() !== term) throw notController(); } };
     this.generation = generation;
     try {
@@ -28,17 +29,19 @@ export class ActiveService {
       generation.assert(); this.ready = true;
     } catch (error) {
       generation.active = false; this.ready = false;
-      await this.app?.close().catch(() => {}); this.app = null;
+      if (error.cleanupFailed) this.stopError = error;
+      await this.app?.close().catch(failure => { this.stopError = failure; }); this.app = null;
       throw error;
     }
   }
   isReady() { return this.ready && this.coordination.isController(); }
   stop() {
+    if (this.stopError) return Promise.reject(this.stopError);
     this.activationId++; this.ready = false;
     if (this.generation) this.generation.active = false;
     this.app?.stopDispatch();
     const app = this.app; this.app = null;
-    this.chain = this.chain.catch(() => {}).then(() => app?.close()).catch(error => this.log(error.message));
+    this.chain = this.chain.catch(() => {}).then(() => { if (this.stopError) throw this.stopError; return app?.close(); }).catch(error => { this.stopError = error; throw error; });
     return this.chain;
   }
 }

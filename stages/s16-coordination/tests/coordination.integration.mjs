@@ -9,14 +9,23 @@ async function until(predicate, milliseconds) {
   while (Date.now() < deadline) { if (await predicate()) return; await delay(50); }
   assert.fail(`condition not met within ${milliseconds} ms`);
 }
-test('真实 etcd：三成员、唯一 control、撤销同一 lease 后 ≤12s 接任、旧任期拒写', {
+test('真实 etcd：认证三成员、唯一 control、撤销同一 lease 后 ≤12s 接任、旧任期拒写', {
   skip: !endpoint && '未设置 ETCD_TEST_ENDPOINT；需要独立、空的真实 etcd，离线测试不能替代此验收。', timeout: 40000,
 }, async t => {
   const nodes = [];
   t.after(async () => { await Promise.allSettled(nodes.map(c => c.close())); });
   for (const [index, nodeId] of ['node-a', 'node-b', 'node-c'].entries()) {
-    const adapter = await connectEtcd(endpoint);
+    const password = process.env[`ETCD_TEST_NODE_${nodeId.at(-1).toUpperCase()}_PASSWORD`];
+    assert.ok(password, '需要 ETCD_TEST_NODE_A/B/C_PASSWORD，用户为 node-a/b/c');
+    const adapter = await connectEtcd(endpoint, { username: nodeId, password });
+    t.after(() => adapter.client.close());
+    await assert.rejects(adapter.client.put('/outside-codex/forbidden').value('no'), /permission denied/i);
     // Never delete someone else's cluster. This acceptance requires a dedicated etcd.
+    if (!index) {
+      const anonymous = await connectEtcd(endpoint);
+      try { await assert.rejects(anonymous.client.getAll().prefix('/codex/').exec(), /permission denied|authentication|user name is empty/i); }
+      finally { anonymous.client.close(); }
+    }
     if (!index) assert.equal((await adapter.client.getAll().prefix('/codex/').exec()).kvs.length, 0, '请使用空的独立测试 etcd');
     const c = new Coordination({ ...adapter, nodeId, address: `http://${nodeId}:${4340 + index}`, revision: 'integration', agentHash: 'integration', capacity: 4 });
     nodes.push(c); await c.join(); await c.watchMembers(); c.campaign();

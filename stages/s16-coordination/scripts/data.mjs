@@ -43,7 +43,7 @@ try {
   const isolated = isolationMode();
   prepareServiceDirectories(PROJECT_ROOT, isolated);
   if (command !== "check") release = acquireServerLock(PROJECT_ROOT);
-  pool = await openDatabase(env.DATABASE_URL);
+  pool = await openDatabase(env.DATABASE_URL, { maintenance: true });
   if (command === "migrate") {
     await migrate(pool);
     const scope = identity(PROJECT_ROOT);

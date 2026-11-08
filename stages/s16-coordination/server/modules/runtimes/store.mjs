@@ -1,3 +1,4 @@
+import { businessQuery } from '../data/write.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { transaction } from '../data/database.mjs';
@@ -7,26 +8,26 @@ import { prepareDirectories, migrateLegacyTree, uidHasProcesses } from './direct
 export class RuntimeStore {
   constructor(pool, instanceId, root) { Object.assign(this, { pool, instanceId, root }); }
   async assertEnabled(owner, client = this.pool) {
-    const { rows } = await client.query('SELECT disabled_at,username FROM agent_data.users WHERE instance_id=$1 AND id=$2', [this.instanceId, owner]);
+    const { rows } = await businessQuery(client, 'SELECT disabled_at,username FROM agent_data.users WHERE instance_id=$1 AND id=$2', [this.instanceId, owner]);
     if (!rows[0]?.username || rows[0].disabled_at) throw new AppError('账号不存在或已禁用。', 403, 'ACCOUNT_DISABLED');
   }
   async ensure(owner) {
     return transaction(this.pool, async client => {
       // 全库分配锁；多个实例也不能拿到相同 uid。事务失败不消耗编号。
-      await client.query("SELECT pg_advisory_xact_lock(hashtext('agent_user_runtime_uid'))");
+      await businessQuery(client, "SELECT pg_advisory_xact_lock(hashtext('agent_user_runtime_uid'))");
       await this.assertEnabled(owner, client);
-      const existing = await client.query('SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2', [this.instanceId, owner]);
+      const existing = await businessQuery(client, 'SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2', [this.instanceId, owner]);
       if (existing.rows[0]) return existing.rows[0];
-      const first = await client.query("SELECT id FROM agent_data.users WHERE instance_id=$1 AND role='admin' AND username IS NOT NULL ORDER BY created_at,id LIMIT 1", [this.instanceId]);
+      const first = await businessQuery(client, "SELECT id FROM agent_data.users WHERE instance_id=$1 AND role='admin' AND username IS NOT NULL ORDER BY created_at,id LIMIT 1", [this.instanceId]);
       const home = first.rows[0]?.id === owner ? path.join(this.root, '.data/codex') : path.join(this.root, '.data/users', owner, 'codex');
-      return (await client.query(`INSERT INTO agent_data.user_runtimes(instance_id,user_id,uid,codex_home)
+      return (await businessQuery(client, `INSERT INTO agent_data.user_runtimes(instance_id,user_id,uid,codex_home)
         SELECT $1,$2,COALESCE(MAX(uid)+1,10001),$3 FROM agent_data.user_runtimes RETURNING *`, [this.instanceId, owner, home])).rows[0];
     });
   }
   async migrateLegacy(record, options, { hasProcesses = uidHasProcesses, migrateTree = migrateLegacyTree } = {}) {
     if (!options.isolated || record.codex_home !== path.join(this.root, '.data/codex')) return;
     await transaction(this.pool, async client => {
-      const { rows } = await client.query('SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2 FOR UPDATE', [this.instanceId, record.user_id]);
+      const { rows } = await businessQuery(client, 'SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2 FOR UPDATE', [this.instanceId, record.user_id]);
       const current = rows[0];
       if (!current) throw new Error('运行环境映射不存在。');
       if (current.migrated_at) return;
@@ -35,11 +36,11 @@ export class RuntimeStore {
       fs.mkdirSync(current.codex_home, { recursive: true });
       migrateTree(current.codex_home, current.uid);
       prepareDirectories(this.root, current, options);
-      await client.query('UPDATE agent_data.user_runtimes SET migrated_at=now() WHERE instance_id=$1 AND user_id=$2', [this.instanceId, current.user_id]);
+      await businessQuery(client, 'UPDATE agent_data.user_runtimes SET migrated_at=now() WHERE instance_id=$1 AND user_id=$2', [this.instanceId, current.user_id]);
     });
   }
   async migrateDirectories(options) {
-    const { rows } = await this.pool.query(`SELECT id FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL AND disabled_at IS NULL
+    const { rows } = await businessQuery(this.pool, `SELECT id FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL AND disabled_at IS NULL
       ORDER BY (role='admin') DESC,created_at,id`, [this.instanceId]);
     for (const row of rows) {
       const record = await this.ensure(row.id);
@@ -58,7 +59,7 @@ export class RuntimeStore {
     };
     const ended = () => onError(new Error('账号禁用通知连接已断开，停止执行器。'));
     client.on('notification', notification); client.on('error', onError); client.on('end', ended);
-    try { await client.query('LISTEN agent_runtime_disabled'); }
+    try { await businessQuery(client, 'LISTEN agent_runtime_disabled'); }
     catch (error) { client.release(true); throw error; }
     return async () => {
       try { await client.query('UNLISTEN agent_runtime_disabled'); }

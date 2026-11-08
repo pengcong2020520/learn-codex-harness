@@ -26,7 +26,7 @@ export async function runAccounts(argv = process.argv.slice(2), { root = PROJECT
     const isolated = isolationMode({ log: () => {} });
     if (command !== 'status') prepareServiceDirectories(root, isolated);
     env ??= loadEnvironment();
-    pool = await connect(env.DATABASE_URL);
+    pool = await connect(env.DATABASE_URL, { maintenance: true });
     await verifySchema(pool);
     const legacy = identity(root, { create: command !== 'status' }), store = new AccountStore(pool, legacy.instanceId);
     if (command === 'init') {

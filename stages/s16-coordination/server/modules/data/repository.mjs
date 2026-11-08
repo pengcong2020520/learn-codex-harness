@@ -1,3 +1,4 @@
+import { businessQuery } from './write.mjs';
 import { can } from '../hub/policy.mjs';
 import { AppError } from "../../../shared/errors.mjs";
 import { transaction } from "./database.mjs";
@@ -8,9 +9,9 @@ export class Repository {
   }
   get ownerId() { return this.scope.ownerId; }
   // 仅实例级维护可用；业务查询必须走 query 的 owner 过滤。
-  systemQuery(sql, values = [], client = this.pool) { return client.query(sql, [this.instanceId, this.instanceId, ...values]); }
+  systemQuery(sql, values = [], client = this.pool) { return businessQuery(client, sql, [this.instanceId, this.instanceId, ...values]); }
   query(sql, values = [], client = this.pool) {
-    return client.query(sql, [this.instanceId, this.ownerId, ...values]);
+    return businessQuery(client, sql, [this.instanceId, this.ownerId, ...values]);
   }
   async initialize() {
     await this.query(

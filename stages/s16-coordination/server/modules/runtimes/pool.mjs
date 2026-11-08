@@ -52,6 +52,10 @@ export class RuntimePool extends EventEmitter {
             else child.kill('SIGKILL');
           }
         }
+        const child = value.rpc?.child;
+        if (child?.pid && child.exitCode == null && child.signalCode == null) {
+          await new Promise(resolve => child.once('exit', resolve));
+        }
       } finally { this.clearTimer(timer); }
     })();
     this.closingValues.set(value, closing);

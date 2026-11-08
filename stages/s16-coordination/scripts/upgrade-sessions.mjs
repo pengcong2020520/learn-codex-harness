@@ -49,7 +49,7 @@ try {
   const agent = new AgentDefinition(config.root, config.agentFile);
   async function descriptor(hash) {
     if (config.data.databaseUrl) {
-      pool ||= await openDatabase(config.data.databaseUrl);
+      pool ||= await openDatabase(config.data.databaseUrl, { maintenance: true });
       const scope = JSON.parse(
         fs.readFileSync(path.join(config.root, ".data/identity.json"), "utf8"),
       );

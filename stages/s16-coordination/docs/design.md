@@ -14,22 +14,22 @@ sequenceDiagram
     N->>E: lease.put(/codex/members/nodeId)
     E-->>N: 自动 KeepAlive 成功 / lost
     N->>E: getAll prefix，取得 revision R
-    N->>E: Watch 从 R+1（断线自动续读）
+    N->>E: Watch 从 R+1；每次重连整表重读；5 秒对账
     N->>E: Election.campaign(nodeId)，共享同一 lease
     E-->>N: elected
     N->>E: 读取选举键 create revision；事务确认
     N->>A: controller(term)
     A->>E: 再次确认任期
-    A->>B: 启动数据、恢复待核对和 queued、启动 worker
+    A->>B: 先推进 PG cluster_term，再恢复待核对和 queued、启动 worker
     A->>E: guardedPut 集群信息
     A-->>N: /ready 可返回 200
 ```
 
-成员快照记录地址、REVISION、Agent 定义与指令内容哈希、进程池容量 4、加入时间；lease ID 来自 etcd KV 元信息。TTL 用 etcd3 的 `leaseClient.leaseTimeToLive` 查询，不能用加入时间推测。Watch 使用公开 builder / watcher；传输重连由客户端维护续读 revision，压缩错误触发全前缀重读。
+成员快照记录地址、REVISION、Agent 定义与指令内容哈希、进程池容量 4、加入时间；lease ID 来自 etcd KV 元信息。TTL 用 etcd3 的 `leaseClient.leaseTimeToLive` 查询，不能用加入时间推测。Watch 使用公开 builder / watcher；每次建立或重连后整前缀重读替换缓存，5 秒对账修正成员和 control/任期；compact_revision 或压缩错误触发重建 Watch。坏 JSON 记录事件并忽略。
 
 etcd3 1.1.2 的 Election 默认建立自己的 lease，并添加 `election/` 命名空间。本章把公开 Namespace 接口适配到 `/codex/controller/`，让其 `lease()` 返回已经 grant 的成员 lease，再交给库的 Election。没有读取私有字段、修改库源码、实现 RPC 或自行决定选举结果。需通过真实 etcd 测试核对两个键的 lease ID 相同。
 
-任期只取选举键 `create_revision`，不用当前全局 revision 或时间戳。所有协调写事务均比较该键 `Create == term`，失败抛 409 `NOT_CONTROLLER`，并同步隔离。`cluster/info` 不绑定成员 lease，保留最近一次控制信息；`GET /cluster` 的实时 control 则通过 Election.leader 与该成员对应选举键查询，不把陈旧 info 当真。
+任期只取选举键 `create_revision`，不用当前全局 revision 或时间戳。所有协调写事务均比较该键 `Create == term`，失败抛 409 `NOT_CONTROLLER`，并同步隔离。`cluster/info` 不绑定成员 lease，保留最近一次控制信息；`GET /cluster` 的实时 control 则通过整读选举前缀并按 create_revision 取最早候选查询，不把陈旧 info 当真。
 
 ## 失权与接任
 
@@ -47,12 +47,15 @@ sequenceDiagram
     O->>P: s14 关闭流程，结束 worker 与进程池
     E-->>N: elected（新 create revision）
     N->>E: 任期事务确认
+    N->>D: 单调推进 cluster_term；失败则隔离
     N->>D: s08 recover：执行中待核对、queued 写 outbox
     N->>P: 恢复派发与 worker
     N-->>N: ready=200
+    P-->>O: 所有用户进程已退出
+    O->>E: 新 lease join、重建 Watch、campaign（失败 2–30 秒退避）
 ```
 
-`ActiveService` 的每代 generation 捕获任期，失权同步将其 active 清零。检查单调时钟可在长暂停恢复后、定时器还未运行时拒绝请求和回调；延迟 KeepAlive 成功不能重新激活该代。Query/COMMIT 门禁覆盖 PG Pool 与借出的 Client；ROLLBACK、UNLISTEN、连接释放仍可执行。隔离清理由 rawPool 进行唯一的例外写入：仅本代已派发任务 ID 且仍处于 starting/running/steering 时改为 unconfirmed。不能用旧 control 的全局 recover 把新 control 的任务错误标记。
+`ActiveService` 的每代 generation 捕获任期，失权同步将其 active 清零。检查单调时钟可在长暂停恢复后、定时器还未运行时拒绝请求和回调；延迟 KeepAlive 成功不能重新激活该代。Query/COMMIT 门禁覆盖 PG Pool 与借出的 Client；ROLLBACK、UNLISTEN、连接释放仍可执行。所有业务 SQL（含独立 pool.query）都在事务里 SET LOCAL app.term，触发器持有任期共享锁到提交；新 control 先推进任期再恢复。CT001 立即隔离。隔离清理使用捕获的旧任期，同样经过数据库触发器：仅本代已派发任务 ID 且仍处于 starting/running/steering 时改为 unconfirmed。若新任期已接手，旧代清理也会被拒，由新 control 的 s08 恢复负责标记。不能用旧 control 的全局 recover 把新 control 的任务错误标记。
 
 业务栈整体由当选事件启动，热备没有 PG 业务连接、Redis worker、用户进程与工作目录维护器。集群入口不使用本机 PID 锁或 PG 单执行器 advisory lock，因为容器 PID 不能跨节点判断，暂停旧主还会阻塞接任；事务内部的配额锁、uid 分配锁等原有机制保留。直接测试业务栈的单机入口仍保留原锁。
 
@@ -64,8 +67,8 @@ Caddy 入口 127.0.0.1:4334；三个后端分别为 node-a:4340、node-b:4341、
 
 `/cluster` 是 admin 接口，查询本身不启动用户进程。成员/选举事件最多 20 条，Watch 连断、快照、当选、隔离和选举观察均记录在内存。CLI 使用现有令牌存储和 HTTP 客户端，不直接访问 etcd。
 
-单机共享四个数据目录，绝对路径保持固定。PG、Redis、模型网关和 etcd 单实例是明确限制；多机磁盘、分片、复制和跨系统业务 fencing 不属于本章。
+单机共享四个数据目录，绝对路径保持固定。PG、Redis、模型网关和 etcd 单实例是明确限制；多机磁盘、分片、复制和跨系统原子事务不属于本章。docker pause 解冻后子进程仍可立即写共享卷；s17/s18 改为每节点独立磁盘。
 
 ## 验证
 
-`tests/coordination.test.mjs` 通过注入 etcd3 接口替身验证分支；替身的 elected 由测试显式发送，不运行候选排序算法。`tests/coordination.integration.mjs` 必须连接独立的空 etcd，验证三成员唯一 control、同 lease、撤销后 12 秒内接任以及旧任期真实事务拒绝。`npm test` 运行离线测试；Docker、PG、Redis、端口、Linux uid、真实 etcd 和模型验收需在外部执行，不能用替身结果代替。
+`tests/coordination.test.mjs` 通过注入 etcd3 接口替身验证分支；替身的 elected 由测试显式发送，不运行候选排序算法。`tests/coordination.integration.mjs` 必须连接独立的空 etcd，验证三成员唯一 control、同 lease、撤销后 12 秒内接任以及旧任期真实事务拒绝。`npm test` 运行离线测试；Docker、PG、Redis、端口、Linux uid、真实 etcd 和模型验收需在支持这些服务的环境执行，不能用替身结果代替。`npm run test:data` 包含 coordination-pg 集成测试，预期旧任期 CT001、节点运维绕过 42501，推进等待旧事务提交；认证 etcd 集成测试另要求 ETCD_TEST_NODE_A/B/C_PASSWORD，并验证前缀外写入被拒。

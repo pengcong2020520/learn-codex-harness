@@ -6,9 +6,10 @@ bash deploy/check.sh
 docker compose build node-a node-b node-c
 bash deploy/configure.sh
 docker compose up -d --wait postgres redis etcd gateway
+docker compose stop node-a node-b node-c
+docker compose run --rm --no-deps -T etcd-init
 # 网关在启动时读取配置；后续部署仍需加载刚生成的配置。
 docker compose up -d --wait --force-recreate gateway
-docker compose stop node-a node-b node-c
 docker compose run --rm --no-deps --user 0 -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/cluster-migrate.mjs
 docker compose run --rm --no-deps -T node-a npm run -s agent:init
 account_status=$(docker compose run --rm --no-deps -T node-a node scripts/accounts.mjs status)

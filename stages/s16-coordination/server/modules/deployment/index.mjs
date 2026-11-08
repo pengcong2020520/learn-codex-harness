@@ -71,12 +71,12 @@ export class RequestLimits {
 }
 
 // Stop dispatch synchronously, persist uncertain tasks, then tear down resources.
-export function gracefulShutdown({ stopDispatch, markUnconfirmed, close, exit = code => process.exit(code), timer = setTimeout, clear = clearTimeout }) {
+export function gracefulShutdown({ stopDispatch, markUnconfirmed, close, exit = code => process.exit(code), timer = setTimeout, clear = clearTimeout, coordinated = false }) {
   let pending;
   return () => pending ||= (async () => {
     stopDispatch();
-    const deadline = timer(() => exit(1), 30000);
+    const deadline = coordinated ? null : timer(() => exit(1), 30000);
     try { await markUnconfirmed(); await close(); }
-    finally { clear(deadline); }
+    finally { if (deadline) clear(deadline); }
   })();
 }

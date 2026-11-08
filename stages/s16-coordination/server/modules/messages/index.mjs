@@ -448,11 +448,12 @@ export class MessageService {
       return;
     }
     const knownRejection = Number.isInteger(error.code);
+    // Hub may reject prepareInput before queued→starting; preserve terminal outcomes from late callbacks.
     await this.store.patch(job.id, {
       status:
         sent && (error.uncertain || !knownRejection) ? "unconfirmed" : "failed",
       error: error.message,
-    });
+    }, sent ? ['starting', 'running', 'steering'] : ['queued', 'starting', 'running', 'steering']);
     await this.store.pause(job.threadId);
   }
   async patchOutcome(job, fields, expected) {

@@ -1,8 +1,9 @@
 // Only Namespace adaptation: Election, Campaign, Lease and all wire operations are etcd3.
-// etcd3 1.1.2 has no shared-lease option on election(). No private fields are accessed.
-export async function connectEtcd(hosts) {
+// Pinned etcd3 1.1.2: Campaign calls namespace.lease -> grant -> put.
+// Campaign error/resign revokes this shared lease; automatic rejoin obtains a fresh one.
+export async function connectEtcd(hosts, auth) {
   const { Etcd3, Election } = await import('etcd3');
-  const client = new Etcd3({ hosts });
+  const client = new Etcd3({ hosts, ...(auth ? { auth } : {}) });
   return { client, electionFactory: lease => sharedLeaseElection(client, lease, Election) };
 }
 export function sharedLeaseElection(client, lease, Election) {

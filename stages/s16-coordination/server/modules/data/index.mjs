@@ -1,4 +1,4 @@
-import { fencePool } from '../coordination/fence.mjs';
+import { fencePool, advanceTerm } from '../coordination/fence.mjs';
 import { requestScope } from "../accounts/context.mjs";
 import path from "node:path";
 import fs from "node:fs";
@@ -14,11 +14,12 @@ import { RedisQueue } from "./queue.mjs";
 import { Resources } from "./resources.mjs";
 
 export async function openData(config, { onLost = () => {} } = {}) {
-  const rawPool = await openDatabase(config.data?.databaseUrl);
+  const rawPool = await openDatabase(config.data?.databaseUrl, config.generation ? { maintenance: false } : {});
   const pool = config.generation ? fencePool(rawPool, config.generation) : rawPool;
   let unlock, queue;
   try {
     await verifySchema(pool);
+    if (config.generation) await advanceTerm(rawPool, config.generation);
     const legacy = identity(config.root);
     await new Repository(pool, legacy).initialize();
     const scope = requestScope(legacy.instanceId),
@@ -42,7 +43,7 @@ export async function openData(config, { onLost = () => {} } = {}) {
     queue = new RedisQueue(config.data?.redisUrl, scope.instanceId, jobs);
     await queue.open();
     return {
-      pool, rawPool,
+      pool,
       scope,
       repository,
       jobs,

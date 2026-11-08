@@ -24,4 +24,4 @@
 
 外部执行 `npm run test:ports`、`npm run test:data`、`npm run test:runtimes:uid`、`npm run test:hub:uid`，以及独立空 etcd 上的 `ETCD_TEST_ENDPOINT=... npm run test:coordination`。实际 Compose 上运行 `npm run test:deploy:integration`；故障验收见 README 的 kill、pause/unpause、stop 与 network disconnect/connect。检查旧任期拒写、新主恢复 queued、执行中待核对、用户 uid 与 Hub 授权始终生效。
 
-跨机器的数据不共享。本章不实现多机卷、分片、复制、数据库 epoch，也不承诺进程在暂停恢复后一条机器指令都不会执行；协调隔离、应用本地门禁、进程关闭和工具副作用的证据需分开核对。
+跨机器的数据不共享。本章不实现多机卷、分片、复制或跨系统原子事务，也不承诺进程在暂停恢复后一条机器指令都不会执行；协调隔离、应用本地门禁、进程关闭和工具副作用的证据需分开核对。

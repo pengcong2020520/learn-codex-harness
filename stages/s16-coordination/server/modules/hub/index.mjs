@@ -1,3 +1,4 @@
+import { businessQuery } from '../data/write.mjs';
 import { knowledgeBinding } from '../knowledge/directories.mjs';
 import { validateKnowledgeBindings } from '../data/paths.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -16,7 +17,7 @@ export class Hub {
     Object.assign(this, { pool, instanceId, usage, catalog, systemSkills });
     this.context = new AsyncLocalStorage();
   }
-  query(sql, values = [], client = this.pool) { return client.query(sql, [this.instanceId, ...values]); }
+  query(sql, values = [], client = this.pool) { return businessQuery(client, sql, [this.instanceId, ...values]); }
   async user(id = currentIdentity()?.userId, client = this.pool, allowDisabled = false) {
     const row = (await this.query(`SELECT u.id,u.username,u.role,u.disabled_at,u.plan_id,row_to_json(p) AS plan
       FROM agent_data.users u JOIN agent_data.plans p ON p.id=u.plan_id WHERE u.instance_id=$1 AND u.id=$2`, [id], client)).rows[0];
