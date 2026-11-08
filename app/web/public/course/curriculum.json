@@ -4873,12 +4873,12 @@
         "file": "stages/s10-skill-workflow/server/modules/messages/index.mjs",
         "needle": "  outcome(job, turn) {",
         "before": 0,
-        "after": 9,
-        "explanation": "138–147 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。141 行解析失败时回退 completed/checks:null，不能说所有 completed 都证明验收通过。确认与取消见 167–199 行，输入和权限范围见 241–273 行。",
+        "after": 10,
+        "explanation": "138–148 行展示本步结果的优先级：非 completed 或 append 直接返回；正常解析后先 checks，再确认点，再最终完成。每项声明必须有 passed===true 的结果；解析、选步骤或执行检查抛错时返回 needs-review/checks:null，并保存验收未完成的原因。确认与取消见 168–200 行，输入和权限范围见 242–274 行。",
         "start": 138,
         "anchor": 138,
-        "code": "  outcome(job, turn) {\n    if (turn?.status !== \"completed\" || job.mode === \"append\") return { status: turn?.status, checks: null };\n    let workflow;\n    try { workflow = this.resolve({ id: job.workflow || \"chat\", params: job.params ?? null }); } catch { return { status: \"completed\", checks: null }; }\n    const step = stepOf(workflow, job.step || 0);\n    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;\n    if (checks && !checks.every(check => check.passed)) return { status: \"needs-review\", checks };\n    if (step.index < step.total - 1) return step.confirm ? { status: \"waiting\", checks } : { status: \"queued\", step: step.index + 1, checks };\n    return { status: \"completed\", checks };\n  }",
-        "hash": "3be03f5c1242e26397d5e96c1112ab9bcea0fbea4f818dd90223762268e1e26d"
+        "code": "  outcome(job, turn) {\n    if (turn?.status !== \"completed\" || job.mode === \"append\") return { status: turn?.status, checks: null };\n    try {\n      const workflow = this.resolve({ id: job.workflow || \"chat\", params: job.params ?? null });\n      const step = stepOf(workflow, job.step || 0);\n      const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;\n      if (!checksPassed(step.checks, checks)) return { status: \"needs-review\", checks };\n      if (step.index < step.total - 1) return step.confirm ? { status: \"waiting\", checks } : { status: \"queued\", step: step.index + 1, checks };\n      return { status: \"completed\", checks };\n    } catch (error) { return { status: \"needs-review\", checks: null, error: \"Workflow 验收未完成：\" + (error?.message || String(error)) }; }\n  }",
+        "hash": "9244ed7ad6d8afe1e2fb0075bf81d106379ba2d04338fa5e6bccf6e98ff1aae6"
       },
       "scenarios": [
         {
@@ -5060,10 +5060,10 @@
         "before": 0,
         "after": 18,
         "explanation": "167–185 行先校验输入和归属，proposed 分支核对授权，再条件更新并唤醒调度。用户身份来自 http/index.mjs:149 的 gate.run，不是 confirm 自行生成；propose 的只记录分支在 149–164 行，工具缺身份拒绝在 tools/tasks.mjs:4–6。",
-        "start": 167,
-        "anchor": 167,
+        "start": 168,
+        "anchor": 168,
         "code": "  async confirm({ threadId, taskId, text, ...rest }) {\n    if (Object.keys(rest).length) throw new AppError(\"确认只接受 threadId、taskId 与 text。\", 400);\n    requireId(threadId, \"会话 ID\"); requireId(taskId, \"任务 ID\");\n    const note = text == null || text === \"\" ? null : requireText(text);\n    await this.sessions.ensure(threadId);\n    return this.serial(threadId, async () => {\n      const job = await this.job(taskId);\n      if (!job || job.threadId !== threadId) throw new AppError(\"任务不属于该会话。\", 404);\n      if (job.status === \"proposed\") {\n        const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });\n        if (workflow.grants.length) this.gate?.authorize(workflow.grants);\n      }\n      const fields = job.status === \"proposed\" ? { status: \"queued\", note } : { status: \"queued\", step: (job.step || 0) + 1, note };\n      if (!(await this.store.patch(taskId, fields, [\"waiting\", \"proposed\"])))\n        throw new AppError(\"只有等待确认的任务可以继续。\", 409);\n      await this.publish(threadId);\n      await this.wake(threadId);\n      return this.publicJob(await this.job(taskId));\n    });",
-        "hash": "3be03f5c1242e26397d5e96c1112ab9bcea0fbea4f818dd90223762268e1e26d"
+        "hash": "9244ed7ad6d8afe1e2fb0075bf81d106379ba2d04338fa5e6bccf6e98ff1aae6"
       },
       "scenarios": [
         {
@@ -5438,10 +5438,10 @@
         "before": 2,
         "after": 20,
         "explanation": "窗口完整呈现选择优先级、降级判断、能力路由、effort 校验、任务记录与 turn/start 参数。逐候选失败原因在 gateway/router.mjs 的 unmet/pick；硬预算检查在本文件更前面，不能把具体模型的降级豁免误当成预算豁免。",
-        "start": 284,
-        "anchor": 286,
+        "start": 285,
+        "anchor": 287,
         "code": "        // 优先级：步骤 > 任务 > 默认；预算只替换场景或默认选择，能力要求继续生效。\n        const router = this.config.launch.router;\n        let selection = step.model || job.model || null;\n        let modelSource = step.model ? \"步骤指定\" : job.model ? \"任务指定\" : \"默认路由\";\n        if (router && budget?.downgraded && !selection?.includes(\"/\")) {\n          selection = budget.downgradeScene;\n          modelSource = \"预算降级\";\n        }\n        if (selection) modelSource += `：${selection.includes(\"/\") ? \"\" : \"场景 \"}${selection}`;\n        const chosen = router?.resolve({ model: selection, needs: step.needs });\n        if (chosen) validateEffort(chosen, step.effort);\n        const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || \"unknown\";\n        await this.store.patch(job.id, { selectedModel: model, modelSource });\n        await this.publish(threadId);\n        this.gate?.start(job, workflow.grants, step.writes);\n        sent = true;\n        this.sessions.prepareUsage(threadId, { model, taskId: job.id });\n        const result = await this.rpc.request(\"turn/start\", {\n          threadId,\n          clientUserMessageId: job.id,\n          input: prepared,\n          ...(router ? { model, effort: step.effort || chosen.spec.defaultReasoningLevel || null } : {}),\n        });",
-        "hash": "8ae6706ad364aa05f84a2d68202b62c939b0e88c8050d0c6711cad15c4a6d259"
+        "hash": "8011c4868f4cfbd1b1618ae4e3623fdb20b937165b2a1a2e4ec8c1d927907233"
       },
       "scenarios": [
         {
@@ -5632,10 +5632,10 @@
         "before": 3,
         "after": 9,
         "explanation": "窗口从空闲和待执行任务检查开始，预算超限分支在 queued → starting 的条件更新之前直接返回。前面的活动 append 分支不在窗口内；累计去重与 last 记账见 usage/index.mjs:76–81，复查定时器见本文件 retryBudget。",
-        "start": 245,
-        "anchor": 248,
+        "start": 246,
+        "anchor": 249,
         "code": "    if (active || all.some((j) => executing.includes(j.status))) return;\n    const job = pending.find((j) => j.mode === \"append\") || pending[0];\n    if (!job) return;\n    const budget = await this.usage?.budgetStatus();\n    if (budget?.exceeded) {\n      this.retryBudget(threadId, budget);\n      await this.publish(threadId);\n      return;\n    }\n    clearTimeout(this.budgetTimers.get(threadId));\n    this.budgetTimers.delete(threadId);\n    if (!(await this.store.patch(job.id, { status: \"starting\", selectedModel: null, modelSource: null }, [\"queued\"])))\n      return;",
-        "hash": "8ae6706ad364aa05f84a2d68202b62c939b0e88c8050d0c6711cad15c4a6d259"
+        "hash": "8011c4868f4cfbd1b1618ae4e3623fdb20b937165b2a1a2e4ec8c1d927907233"
       },
       "scenarios": [
         {
@@ -6025,10 +6025,10 @@
           "before": 0,
           "after": 1,
           "explanation": "新轮次派发在活动会话数达到上限时停止，任务保留 queued。",
-          "start": 254,
-          "anchor": 254,
+          "start": 255,
+          "anchor": 255,
           "code": "    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;\n    if (running.size >= maxConcurrentTurns) return;",
-          "hash": "11852638d4c1ef3459119a588d29286ea7e739232faab4d9e390806c76c92f96"
+          "hash": "50a9d3c2b149a156ce4228d9da06e453abc8fc5800cdc244c0f259054734ce62"
         }
       ],
       "scenarios": [

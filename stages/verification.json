@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-08T01:34:10.538Z",
+  "verifiedAt": "2026-11-08T05:42:25.806Z",
   "modelProvider": "local simulated Responses",
   "embeddingProvider": null,
   "semanticQualityVerified": false,
@@ -117,35 +117,35 @@
       "directory": "s10-skill-workflow",
       "command": "npm test",
       "passed": true,
-      "tests": 195,
+      "tests": 201,
       "skipped": 0
     },
     {
       "directory": "s11-model-gateway",
       "command": "npm test",
       "passed": true,
-      "tests": 262,
+      "tests": 268,
       "skipped": 0
     },
     {
       "directory": "s12-deploy",
       "command": "npm test",
       "passed": true,
-      "tests": 283,
+      "tests": 289,
       "skipped": 0
     },
     {
       "directory": "s13-auth",
       "command": "npm test",
       "passed": true,
-      "tests": 316,
+      "tests": 322,
       "skipped": 0
     },
     {
       "directory": "s14-isolation",
       "command": "npm test",
       "passed": true,
-      "tests": 336,
+      "tests": 342,
       "skipped": 0
     }
   ]

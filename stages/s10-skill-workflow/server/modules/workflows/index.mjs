@@ -118,3 +118,10 @@ export function runChecks(checks, turn, { workspaceDir, formats = [] } = {}) {
     return result(id, effective.length > 0, effective.length ? effective.map(r => `${r.kbId}/${r.slug}`).join("、") : "本轮没有生效的 Wiki 修订。");
   });
 }
+
+// 每项声明都必须有明确通过的结果；没有声明则无需验收。
+export function checksPassed(declared, results) {
+  if (!declared.length) return true;
+  return Array.isArray(results) && declared.every(id => results.some(result => result?.id === id && result.passed === true))
+    && results.every(result => result?.passed === true);
+}

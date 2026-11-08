@@ -70,8 +70,8 @@
 <table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后的行为</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued，等待执行名额。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>新入队操作返回 429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>超频返回 429 RATE_LIMITED 与 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>满额返回 429 SSE_FULL，Retry-After 为 5 秒。</td></tr></tbody></table>
 <p>任务创建、用户确认和 Workflow 再排队都会进入同一个数据库容量门禁。仓储在事务里先获取实例级 advisory lock，再检查全局和本会话 queued 数量。检查与写入共享事务边界，避免两个并发请求都看到“还剩一个位置”，最后同时入队。等待确认和提议没有算入 queued 容量；确认进入队列时才需要重新过门禁。</p>
 <p>调度器全局串行扫描，按 tasks.sequence 查找可执行任务，并保留已有的会话内追加优先语义。跨会话的活动轮次达到默认 2 个时，不继续开启新轮次。已有活动 Turn 的追加走 steer，不额外占用新轮次名额。暂停会话和预算不足的任务不阻塞其他可执行会话，因此这里不承诺一个阻塞所有会话的严格总 FIFO。</p>
-<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 254–255 行</span>
-<pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="254" data-end="255">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 255–256 行</span>
+<pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="255" data-end="256">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
     if (running.size &gt;= maxConcurrentTurns) return;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">running 统计当前占用执行名额的会话；达到上限直接停止这次新轮次派发。</p><p class="tl">任务仍在持久队列中，后续扫描可以在容量释放后继续；这个 return 没有把任务标为失败。</p></div></div></div>
 <p>Workflow 自动进入下一步时若队列已满，会停在等待确认，容量释放后由用户确认继续，不能绕过门禁超额排队。执行器仍依赖 PostgreSQL 独占锁，这里的并发限制针对服务派发的对话轮次，不限制 Codex 内部工具并行。看到多个工具活动，不能直接推断轮次上限失效。</p>

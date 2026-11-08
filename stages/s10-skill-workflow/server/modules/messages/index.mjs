@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
 import { executing, terminal } from "../data/jobs.mjs";
-import { runChecks, stepOf } from "../workflows/index.mjs";
+import { checksPassed, runChecks, stepOf } from "../workflows/index.mjs";
 
 const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]), steps: null });
 
@@ -137,13 +137,14 @@ export class MessageService {
   // 否则直接排队进入下一步；最后一步 → completed。
   outcome(job, turn) {
     if (turn?.status !== "completed" || job.mode === "append") return { status: turn?.status, checks: null };
-    let workflow;
-    try { workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }); } catch { return { status: "completed", checks: null }; }
-    const step = stepOf(workflow, job.step || 0);
-    const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
-    if (checks && !checks.every(check => check.passed)) return { status: "needs-review", checks };
-    if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
-    return { status: "completed", checks };
+    try {
+      const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+      const step = stepOf(workflow, job.step || 0);
+      const checks = step.checks.length ? runChecks(step.checks, turn, { workspaceDir: this.config.agent?.runtime?.workspaceDir, formats: this.config.agent?.outputs?.formats }) : null;
+      if (!checksPassed(step.checks, checks)) return { status: "needs-review", checks };
+      if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
+      return { status: "completed", checks };
+    } catch (error) { return { status: "needs-review", checks: null, error: "Workflow 验收未完成：" + (error?.message || String(error)) }; }
   }
   // 模型在任务中提议另一个 workflow：只校验并记录为 proposed，不排队、不授权。由工具调用，context 来自权限门。
   async propose(context, { workflow: id, params = null, text, reason, ...rest }) {
@@ -325,11 +326,11 @@ export class MessageService {
       turn = this.sessions.getTurn(job.threadId, turnId);
     const ended = terminal.includes(turn?.status);
     if (ended) await this.sessions.persistTurn?.(job.threadId, turn);
-    const { status, checks, step: next } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
+    const { status, checks, step: next, error } = ended ? this.outcome(job, turn) : { status: "running", checks: null };
     if (
       !(await this.store.patch(
         id,
-        { turnId, status, error: turn?.error || null, ...(checks ? { checks } : {}), ...(next !== undefined ? { step: next } : {}) },
+        { turnId, status, error: error || turn?.error || null, ...(checks ? { checks } : {}), ...(next !== undefined ? { step: next } : {}) },
         executing,
       ))
     )
@@ -363,10 +364,10 @@ export class MessageService {
     await this.sessions.persistTurn?.(threadId, turn);
     for (const job of await this.store.list(threadId))
       if (job.turnId === turn.id && executing.includes(job.status)) {
-        const { status, checks, step } = this.outcome(job, turn);
+        const { status, checks, step, error } = this.outcome(job, turn);
         await this.store.patch(
           job.id,
-          { status, error: turn.error || null, ...(checks ? { checks } : {}), ...(step !== undefined ? { step } : {}) },
+          { status, error: error || turn.error || null, ...(checks ? { checks } : {}), ...(step !== undefined ? { step } : {}) },
           executing,
         );
       }

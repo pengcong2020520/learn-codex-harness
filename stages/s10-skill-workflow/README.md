@@ -129,7 +129,7 @@ npm run lesson -- s10-steps     # 停在确认点时普通对话照常执行
 **一步结束后只看结果决定去向**（[`messages/index.mjs`](server/modules/messages/index.mjs)）。验收不通过记为 `needs-review`；还有下一步时，要么停在 `waiting` 等确认，要么直接排队：
 
 ```javascript
-if (checks && !checks.every(check => check.passed)) return { status: "needs-review", checks };
+if (!checksPassed(step.checks, checks)) return { status: "needs-review", checks };
 if (step.index < step.total - 1) return step.confirm ? { status: "waiting", checks } : { status: "queued", step: step.index + 1, checks };
 return { status: "completed", checks };
 ```
