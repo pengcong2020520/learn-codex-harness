@@ -74,7 +74,9 @@ function restoreOwners(stage, entries) {
 export async function importTree(root, record, kind, input, beforePublish = async () => {}) {
   const target = transferPath(root, record, kind);
   const parent = path.join(root, '.data/transfers'); fs.mkdirSync(parent, { recursive: true, mode: 0o700 }); assertRealPath(parent);
-  const id = randomUUID(), archive = path.join(parent, id + '.tar'), stage = path.join(parent, id);
+  // Stage next to the destination: .data and workspace are separate bind mounts, and rename() cannot cross mounts (EXDEV).
+  const id = randomUUID(), archive = path.join(parent, id + '.tar'), stage = path.join(path.dirname(target), '.move-' + id);
+  assertRealPath(path.dirname(target));
   fs.mkdirSync(stage, { mode: 0o700 });
   try {
     await pipeline(input, fs.createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
@@ -93,5 +95,5 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
     try { fs.renameSync(stage, target); } catch (error) { fs.renameSync(previous, target); throw error; }
     // Previous copy is deliberately retained for operator recovery; no automatic destructive cleanup.
     return { copied: kind };
-  } finally { fs.rmSync(archive, { force: true }); }
+  } finally { fs.rmSync(archive, { force: true }); fs.rmSync(stage, { recursive: true, force: true }); }
 }
