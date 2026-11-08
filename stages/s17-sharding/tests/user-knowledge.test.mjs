@@ -281,3 +281,48 @@ test('isolated 派发：pro 用户新建库→导入→后台维护→独立 I/O
   assert.deepEqual(errors, []); assert.equal(starts, 1); assert.equal(closes, 0);
   assert.equal(store.paused(session.id), false);
 });
+
+
+test('配置型 general 首次导入：元数据已存在、owner 源目录缺失也能登记；外人不建目录', async t => {
+  const f = fixture(t), target = path.join(f.root, 'workspace/users/bob/inputs/general');
+  f.agent.definition.agent.knowledge = [{ kbId: 'general', mode: 'wiki', actions: ['read','update','index'] }];
+  f.agent.definition.bindings.knowledgeBases = { general: { sourceRoot: 'inputs/general', wikiRoot: 'research/general/wiki' } };
+  assert.equal(fs.existsSync(target), false);
+  await assert.rejects(f.as('dave', () => f.service.importSource({ kbId: 'general', name: 'tea.md', content: '茶叶' })), { status: 404 });
+  assert.equal(fs.existsSync(target), false);
+  await f.as('bob', () => f.service.importSource({ kbId: 'general', name: 'tea.md', content: '茶叶' }));
+  assert.equal(fs.readFileSync(path.join(target, 'tea.md'), 'utf8'), '茶叶');
+  await assert.rejects(f.as('bob', () => f.service.importSource({ kbId: 'general', name: 'tea.md', content: '禁止覆盖' })), { status: 409 });
+  assert.equal(fs.readFileSync(path.join(target, 'tea.md'), 'utf8'), '茶叶');
+});
+
+test('跨分片资源 RPC：isolated=true 且 owner 节点没有请求者运行环境，仍按请求者授权读取', async t => {
+  const { attachKnowledge } = await import('../server/modules/sharding/knowledge.mjs');
+  const { shardUser } = await import('../server/modules/sharding/fence.mjs');
+  const f = fixture(t);
+  f.agent.definition.agent.knowledge = [{ kbId: 'general', mode: 'wiki', actions: ['read','update','index'] }];
+  f.agent.definition.bindings.knowledgeBases = { general: { sourceRoot: 'inputs/general', wikiRoot: 'research/general/wiki' } };
+  await f.as('bob', () => f.service.importSource({ kbId: 'general', name: 'tea.md', content: '茶叶' }));
+  await f.as('bob', () => f.hub.grantKnowledge('general', 'carol'));
+  const pool = new RuntimePool({ create: () => assert.fail('资源 RPC 不能启动请求者运行环境') });
+  const router = new RuntimeRouter(pool, { isolated: true });
+  f.gate.agent = router.agent(f.agent);
+  f.service.resources.readById = async () => assert.fail('not used');
+  let reads = 0;
+  f.service.read = async () => {
+    f.gate.check('read', { kbId: 'general' });
+    assert.equal(currentIdentity().userId, 'carol'); assert.equal(shardUser(), 'bob'); reads++;
+    return { content: fs.readFileSync(path.join(f.root, 'workspace/users/bob/inputs/general/tea.md'), 'utf8') };
+  };
+  const runtime = { nodeId: 'node-c', cache: { revision: '1', routeOf: () => ({ primary: 'node-c', revision: '1' }) },
+    coordination: { members: new Map() }, admit: async owner => assert.equal(owner, 'bob') };
+  attachKnowledge({ knowledge: f.service, resources: f.service.resources, permissionHub: f.hub, gate: f.gate }, runtime);
+  const read = requester => runtime.readKnowledge({ action: 'read', args: { kbId: 'general', slug: 'tea' }, requester, revision: '1' });
+  assert.equal((await read('carol')).content, '茶叶');
+  await assert.rejects(read('dave'), { status: 404 });
+  await runOwner('bob', () => f.hub.withUser('bob', () => f.hub.revoke('knowledge', 'general', 'carol')));
+  await assert.rejects(read('carol'), { status: 404 });
+  assert.equal(reads, 1); assert.equal(pool.entries.size, 0);
+  // No general fallback: personal operations still require the actual user's runtime.
+  await runOwner('carol', () => assert.throws(() => f.gate.user(), { code: 'RUNTIME_BUSY' }));
+});

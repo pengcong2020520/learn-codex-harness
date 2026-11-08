@@ -1,3 +1,4 @@
+import { logFailure } from '../data/diagnostics.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -29,7 +30,7 @@ async function ownerForRequest(app, request, identity, body) {
   const match = url.pathname.match(/^\/hub\/(knowledge|skills)\/([^/]+)/);
   let type, id;
   if (match) { type = match[1] === 'knowledge' ? 'knowledge_bases' : 'hub_skills'; id = decodeURIComponent(match[2]); }
-  if (request.method !== 'GET' && url.pathname.startsWith('/knowledge')) {
+  if (request.method !== 'GET' && url.pathname.startsWith('/knowledge') && url.pathname !== '/knowledge/search') {
     type = 'knowledge_bases'; id = url.pathname.match(/^\/knowledge\/([^/]+)$/)?.[1];
     if (request.method === 'POST' && body?.length) { try { id = JSON.parse(body).kbId; } catch {} }
   }
@@ -220,6 +221,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
         if (result) await streamResponse(result, response);
       } finally { response.off('close', close); }
     } catch (error) {
+      if (!error.status || error.status >= 500) logFailure(error, service.app?.config?.generation || { nodeId: runtime.nodeId }, error, '', 'HTTP');
       if (!response.headersSent) json(error.status || 503, { error: { code: error.code || 'UNAVAILABLE', message: error.status ? error.message : '节点操作失败，请查看服务日志。' } });
       else response.destroy();
     }

@@ -24,6 +24,7 @@ export class Resources extends Repository {
     if (fs.lstatSync(blobDir).isSymbolicLink())
       throw new Error("正文存储目录不能是链接。");
   }
+  ownerWorkspace(owner) { return this.files.workspaceFor?.(owner) || path.join(path.dirname(this.files.workspace), owner); }
   async locked(operation) {
     return transaction(this.pool, async (client) => {
       await client.query(
@@ -460,9 +461,9 @@ export class Resources extends Repository {
     this.authorize(row);
     const record = (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [row.owner_id])).rows[0];
     if (!record) throw new AppError('来源运行环境尚未初始化。', 409);
-    const base = path.dirname(this.files.workspace);
-    const target = path.join(base, row.owner_id, row.locator);
-    if (!target.startsWith(path.join(base, row.owner_id) + path.sep)) throw new AppError('来源路径无效。', 404);
+    const base = this.ownerWorkspace(row.owner_id);
+    const target = path.join(base, row.locator);
+    if (!target.startsWith(base + path.sep)) throw new AppError('来源路径无效。', 404);
     const data = await readAsUser(record.uid, target, { maxBytes: 256 * 1024, isolated: process.getuid?.() === 0 });
     const version = (await this.query('SELECT revision FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [row.current_version])).rows[0];
     if (!version || hash(data) !== version.revision) throw new AppError('共享来源已变化，请所有者重新登记版本。', 409, 'SOURCE_STALE');

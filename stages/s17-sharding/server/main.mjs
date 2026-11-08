@@ -1,3 +1,4 @@
+import { logFailure } from './modules/data/diagnostics.mjs';
 import { attachKnowledge } from './modules/sharding/knowledge.mjs';
 import { trackDispatch } from './modules/coordination/fence.mjs';
 import { Hub } from './modules/hub/index.mjs';
@@ -70,9 +71,9 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const runtime = await prepareRun(config.launch, config.root, { workspaceDir: agent.workspacePath, instructions: agent.instructions });
     lifecycle.defer(() => finishRun(runtime.runDir));
     agent.configure(config, runtime);
-    const localFiles = (data.scope ? createUserFileTools : createFileTools)(config.root, { workspaceDir: runtime.workspaceDir, sources: agent.sources,
-      outputs: agent.outputs, assertCurrent: () => { generation?.assert(); agent.assertCurrent(); } });
     const baseAgent = agent;
+    const localFiles = (data.scope ? createUserFileTools : createFileTools)(config.root, { workspaceDir: runtime.workspaceDir, sources: agent.sources,
+      outputs: agent.outputs, assertCurrent: () => { generation?.assert(); baseAgent.assertCurrent(); } });
     const permissionHub = data.pool ? new Hub({ pool: data.pool, instanceId: data.scope.instanceId, usage,
       systemSkills: () => baseAgent.skills,
       catalog: () => [
@@ -170,7 +171,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     safeLog("缓存维护已启用：启动时及每小时检查；保留最近 5 次运行和 7 天内记录，不清理使用中的目录。");
 
     // 4. HTTP 按登录令牌验证用户；服务发现只发布地址。
-    const http = createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage, permissionHub });
+    const http = createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage, permissionHub, log: safeLog });
     lifecycle.defer(() => http.close());
     const url = externalHttp ? `http://${config.host}:${config.port}` : await http.listen();
     if (!externalHttp) publishConnection(config.root, { url }, lifecycle);
@@ -193,7 +194,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       markUnconfirmed: async () => {
         if (generation) {
           try { await markUnconfirmed(); }
-          catch { safeLog('任期已失效或数据库不可用；下任 control 启动时恢复待核对。'); }
+          catch (error) { logFailure(error, { ...generation, log: safeLog }, error, '', 'shutdown-recovery'); }
           finally { generation.active = false; }
         }
         else await messages.fail(new Error("服务正在关闭，执行结果待核对。"));
@@ -201,9 +202,10 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       close: () => lifecycle.close(),
     }) };
   } catch (error) {
+    logFailure(error, { ...generation, log: safeLog }, error, '', 'startup');
     let cleanupFailed = false;
     await lifecycle.close().catch(() => { cleanupFailed = true; });
-    throw Object.assign(new Error(redact(error.message)), { cleanupFailed });
+    throw Object.assign(new Error(redact(error.message)), { cleanupFailed, code: error.code, databaseDiagnostic: error.databaseDiagnostic });
   }
 }
 

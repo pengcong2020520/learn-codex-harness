@@ -102,7 +102,7 @@ try {
       await new Promise(resolve => setTimeout(resolve, 250));
     }
   }
-  tests = spawn(process.execPath, process.argv.includes("--real-smoke") ? ["scripts/real-smoke.mjs"] : ["--import=./tests/fixtures/trace-ct001.mjs", "--test", "--test-concurrency=1", "tests/data.integration.mjs", "tests/knowledge.integration.mjs", "tests/hub-share.integration.mjs", "tests/coordination-pg.integration.mjs", "tests/sharding-pg.integration.mjs", "tests/sharding-hub-pg.integration.mjs"], {
+  tests = spawn(process.execPath, process.argv.includes("--real-smoke") ? ["scripts/real-smoke.mjs"] : ["--import=./tests/fixtures/trace-ct001.mjs", "--test", "--test-concurrency=1", "tests/data.integration.mjs", "tests/knowledge.integration.mjs", "tests/hub-share.integration.mjs", "tests/coordination-pg.integration.mjs", "tests/sharding-pg.integration.mjs", "tests/sharding-hub-pg.integration.mjs", "tests/sharding-knowledge-pg.integration.mjs"], {
     stdio: "inherit",
     env: {
       ...process.env,

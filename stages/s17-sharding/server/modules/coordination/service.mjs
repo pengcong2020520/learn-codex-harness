@@ -1,3 +1,4 @@
+import { logFailure } from '../data/diagnostics.mjs';
 import { notController } from './index.mjs';
 
 // Each service generation captures one term. A later election cannot revive old callbacks.
@@ -7,7 +8,7 @@ export class ActiveService {
     this.chain = Promise.resolve(); this.ready = false; this.activationId = 0;
     coordination.on('controller', term => {
       const activationId = this.activationId;
-      this.chain = this.chain.then(() => this.activate(term, activationId)).catch(error => { this.log(error.message); coordination.isolate('activation-failed'); });
+      this.chain = this.chain.then(() => this.activate(term, activationId)).catch(error => { logFailure(error, this.generation || { nodeId: coordination.nodeId, term, log: this.log }, error, '', 'activation'); coordination.isolate('activation-failed'); });
     });
     coordination.on('lost', () => { void this.stop().catch(error => this.log(error.message)); });
   }
@@ -16,7 +17,7 @@ export class ActiveService {
     if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
     await c.confirm();
     if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
-    const generation = { active: true, term, log: this.log,
+    const generation = { active: true, nodeId: c.nodeId, term, log: this.log,
       isolate: reason => { if (generation.active) c.isolate(reason); },
       assert: () => { if (!generation.active || !c.isController() || c.term() !== term) throw notController(); } };
     this.generation = generation;

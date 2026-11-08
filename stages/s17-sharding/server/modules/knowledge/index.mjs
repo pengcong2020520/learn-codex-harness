@@ -74,7 +74,7 @@ export class KnowledgeService extends Repository {
   async ownerFiles(owner, client) {
     const record = (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [owner], client)).rows[0];
     if (!record) throw new AppError('所有者运行环境尚未初始化。', 409);
-    return { uid: record.uid, workspace: path.join(path.dirname(this.resources.files.workspace), owner) };
+    return { uid: record.uid, workspace: this.resources.ownerWorkspace?.(owner) || path.join(path.dirname(this.resources.files.workspace), owner) };
   }
   async create(body) {
     this.gate.current();
@@ -127,7 +127,7 @@ export class KnowledgeService extends Repository {
       throw new AppError('请选择非空 .md/.txt 文本，文件名不能含路径，大小不超过 256 KiB。', 400);
     resourcePath(kb.source_root);
     const base = this.gate.permissionHub
-      ? path.join(path.dirname(this.resources.files.workspace), kb.owner_id)
+      ? (this.resources.ownerWorkspace?.(kb.owner_id) || path.join(path.dirname(this.resources.files.workspace), kb.owner_id))
       : this.resources.files.workspace;
     const ownerRuntime = this.gate.permissionHub ? (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [kb.owner_id])).rows[0] : null;
     if (this.gate.permissionHub && !ownerRuntime) throw new AppError('所有者运行环境尚未初始化。', 409);
@@ -135,6 +135,12 @@ export class KnowledgeService extends Repository {
     this.gate.check('read', { path: relative });
     // Human ingestion remains separate from agent write_file (sources are read-only).
     this.gate.current();
+    this.sharding?.assertPrimary(kb.owner_id);
+    if (this.gate.permissionHub && !kb.user_created) {
+      const bindings = { [kb.id]: { sourceRoot: kb.source_root, wikiRoot: kb.wiki_root } };
+      if (process.getuid?.() === 0) await userFileOperation(ownerRuntime.uid, 'knowledge-create', { workspace: base, bindings, exclusive: false });
+      else prepareKnowledgeDirectories(base, bindings);
+    }
     createSourceFile(base, kb.source_root, name, content, ownerRuntime?.uid);
     try {
       const saved = this.gate.permissionHub

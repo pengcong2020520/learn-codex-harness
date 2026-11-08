@@ -77,7 +77,10 @@ test('CT001 记录发送位置、当前任期与调用栈；仍认为是 control
     return true;
   });
   assert.equal(order.length, 2);
-  assert.match(order[0], /任期过期或漏传任期.*term=42.*UPDATE agent_data.tasks/);
+  const diagnostic = JSON.parse(order[0].slice('[CT001] '.length));
+  assert.equal(diagnostic.sqlstate, 'CT001'); assert.equal(diagnostic.term, '42');
+  assert.equal(diagnostic.operation, 'UPDATE'); assert.equal(diagnostic.table, 'tasks');
+  assert.equal(diagnostic.diagnostic, '任期过期或漏传任期');
   assert.equal(order[1], 'isolated');
 });
 

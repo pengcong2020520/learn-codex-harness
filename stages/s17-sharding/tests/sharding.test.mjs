@@ -78,9 +78,9 @@ test('route: SSE carries Last-Event-ID, node key and revision, streams unchanged
 });
 test('fence: SH001 refreshes before isolation; a moved user does not isolate a healthy former primary',async()=>{
   const calls=[];const g={nodeId:'node-a',routes:{refresh:async()=>calls.push('refresh'),routeOf:()=>({primary:'node-a'})},isolate:()=>calls.push('isolate'),log:()=>calls.push('log')};
-  await runOwner(user,()=>shardFailure({code:'SH001'},g,new Error(),'UPDATE'));
+  await runOwner(user,()=>shardFailure({code:'SH001',detail:JSON.stringify({ownerId:user})},g,new Error(),'UPDATE'));
   assert.deepEqual(calls,['refresh','log','isolate']);calls.length=0;g.routes.routeOf=()=>({primary:'node-b'});
-  await runOwner(user,()=>shardFailure({code:'SH001'},g,new Error(),'UPDATE'));assert.deepEqual(calls,['refresh']);
+  await runOwner(user,()=>shardFailure({code:'SH001',detail:JSON.stringify({ownerId:user})},g,new Error(),'UPDATE'));assert.deepEqual(calls,['refresh','log']);
 });
 test('fence: business transactions SET LOCAL node and shard epoch, no control term required',async()=>{
   const calls=[];const client={query:async(...args)=>{calls.push(args);return {rows:[]};},release(){}};

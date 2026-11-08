@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openDatabase, migrate, transaction } from '../server/modules/data/database.mjs';
+import { fencePool } from '../server/modules/data/write.mjs';
+import { runOwner } from '../server/modules/accounts/context.mjs';
 import { provisionNodeRoles } from '../scripts/cluster-migrate.mjs';
 const url = process.env.DATA_TEST_DATABASE_URL;
 test('真实 PG：SH001 拒绝非 owner、过期 epoch、角色伪装和迁移后的旧主；切换等待旧事务', {skip:!url,timeout:30000}, async t=>{
@@ -23,6 +25,23 @@ test('真实 PG：SH001 拒绝非 owner、过期 epoch、角色伪装和迁移�
   await assert.rejects(write(a,'node-a',4,insert,[instance,user,'stale']),{code:'SH001'});
   await assert.rejects(write(b,'node-a',5,insert,[instance,user,'spoof']),{code:'SH001'});
   await assert.rejects(a.query('UPDATE agent_data.preferences SET value=\'missing\' WHERE instance_id=$1',[instance]),{code:'SH001'});
+  const isolated = [], logs = [];
+  const routes = { refresh: async () => {}, routeOf: id => id === user
+    ? { primary: 'node-a', shardId: '0', epoch: 5 } : { primary: 'node-b', shardId: '1', epoch: 9 } };
+  const fenced = fencePool(a, { nodeId: 'node-a', routes, assert() {}, log: line => logs.push(line), isolate: reason => isolated.push(reason) });
+  await runOwner(user, () => assert.rejects(fenced.query(insert, [instance, other, 'wrong-row']), error => {
+    assert.equal(error.code, 'SH001'); assert.equal(error.table, 'preferences');
+    const row = JSON.parse(error.detail);
+    assert.equal(row.ownerId, other); assert.equal(row.nodeId, 'node-a'); assert.equal(row.primary, 'node-b');
+    assert.equal(row.suppliedEpoch, '5'); assert.equal(row.epoch, '9');
+    assert.equal(error.databaseDiagnostic.classification, 'wrong-shard-write'); return true;
+  }));
+  assert.deepEqual(isolated, [], 'a foreign row is a programming error, not a stale local primary');
+  assert.match(logs[0], /sharding-pg.integration.mjs/);
+  const stale = fencePool(b, { nodeId: 'node-b', routes: { refresh: async () => {}, routeOf: () => ({ primary: 'node-b', shardId: '1', epoch: 8 }) },
+    assert() {}, log: line => logs.push(line), isolate: reason => isolated.push(reason) });
+  await runOwner(other, () => assert.rejects(stale.query(insert, [instance, other, 'stale-primary']), { code: 'SH001' }));
+  assert.deepEqual(isolated, ['database-stale-shard']);
   // Related rows resolve owner through conversation, rather than expecting an owner_id column on tasks.
   await write(a,'node-a',5,'INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,\'t\',$2,\'/tmp\')',[instance,user]);
   const task="INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,status,created_at) VALUES($1,'j','t','hello','enqueue','queued',1)";

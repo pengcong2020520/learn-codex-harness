@@ -8,6 +8,7 @@ export function attachKnowledge(app, runtime) {
   if (!knowledge) return;
   const originals = Object.fromEntries(['read','search','pages'].map(m => [m, knowledge[m].bind(knowledge)]));
   const resourceRead = resources.readById.bind(resources);
+  const resourceScope = operation => gate.forResource ? gate.forResource(operation) : operation();
   const authorize = async (action, args) => {
     if (!actions.has(action)) throw new Error('内部知识接口只读。');
     if (action === 'resource') {
@@ -27,13 +28,13 @@ export function attachKnowledge(app, runtime) {
     } finally { runtime.inflight.set(owner, runtime.inflight.get(owner) - 1); }
   };
   runtime.readKnowledge = async ({ action, args, requester, revision }) => {
-    return runOwner(requester, () => hub.withUser(requester, () => gate.run(gate.operator(requester), async () => {
+    return resourceScope(() => runOwner(requester, () => hub.withUser(requester, () => gate.run(gate.operator(requester), async () => {
       // Second fresh Hub snapshot at the owner, before touching its disk.
       const owner = await authorize(action, args);
       validateRoute(runtime.cache, owner, runtime.nodeId, revision);
       await runtime.admit(owner);
       return local(action, args, owner);
-    })));
+    }))));
   };
   const dispatch = async (action, args) => {
     const owner = await authorize(action, args); // First Hub decision on the grantee's primary.
@@ -56,6 +57,6 @@ export function attachKnowledge(app, runtime) {
         return result;
       } });
   };
-  for (const action of ['read','search','pages']) knowledge[action] = args => dispatch(action, action === 'pages' ? { kbId: args } : args);
-  resources.readById = (id, options) => dispatch('resource', { id, options });
+  for (const action of ['read','search','pages']) knowledge[action] = args => resourceScope(() => dispatch(action, action === 'pages' ? { kbId: args } : args));
+  resources.readById = (id, options) => resourceScope(() => dispatch('resource', { id, options }));
 }

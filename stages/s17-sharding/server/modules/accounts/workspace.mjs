@@ -39,7 +39,10 @@ export function createUserFileTools(root, options) {
   return Object.defineProperties(Object.fromEntries(['check', 'check_binary', 'list_files', 'read_file', 'write_file', 'read_binary', 'write_binary'].map(name => [name, (...args) => {
     try { return files()[name](...args); }
     catch (error) { if (error.code === 'ENOENT') throw new AppError('资源不存在。', 404, 'NOT_FOUND'); throw error; }
-  }])), { workspace: { get: workspace, enumerable: true } });
+  }])), { workspace: { get: workspace, enumerable: true }, workspaceFor: { value: owner => {
+    if (!/^[a-f0-9-]{36}$/.test(owner || '')) throw new Error('无效 owner。');
+    return path.join(options.workspaceDir, 'users', owner);
+  } } });
 }
 // 事务提交前移动；中途失败可以再次执行，已移动的目录不会覆盖。
 function emptyTree(target) {

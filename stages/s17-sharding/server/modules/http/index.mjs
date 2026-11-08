@@ -1,3 +1,4 @@
+import { logFailure } from '../data/diagnostics.mjs';
 import { shardUser } from '../sharding/fence.mjs';
 import { hubRoute } from '../hub/routes.mjs';
 import { RequestLimits, createReadiness, revision } from "../deployment/index.mjs";
@@ -25,7 +26,7 @@ async function readBody(request) {
 }
 
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
-export function createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, permissionHub, usage = sessions.usage, readiness }) {
+export function createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, permissionHub, usage = sessions.usage, readiness, log = console.error }) {
   const limits = new RequestLimits(config.deployment);
   const ready = readiness || createReadiness({ config, data, messages, tools });
   const version = revision(config.root);
@@ -185,11 +186,22 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       };
       return await runIdentity(identity, () => {
         const operation = () => gate && !pathname.startsWith('/hub') && pathname !== '/me/plan' && !pathname.startsWith('/auth/') ? gate.run(gate.user(), dispatch) : dispatch();
-        const dispatchUser = () => sessions.rpc?.pool && (!config.sharding || !shardUser() || shardUser() === identity.userId) && !pathname.startsWith('/auth/') && !pathname.startsWith('/hub') && pathname !== '/me/plan'
-          ? sessions.rpc.pool.withOwner(identity.userId, operation) : operation();
-        return permissionHub ? permissionHub.withUser(identity.userId, dispatchUser) : dispatchUser();
+        const resourceOnly = config.sharding && (['/knowledge/search', '/knowledge/read', '/knowledge/pages', '/resources/read'].includes(pathname) ||
+          (shardUser() && shardUser() !== identity.userId));
+        const dispatchUser = () => {
+          if (resourceOnly && gate?.forResource) return gate.forResource(operation);
+          if (sessions.rpc?.pool && !pathname.startsWith('/auth/') && !pathname.startsWith('/hub') && pathname !== '/me/plan')
+            return sessions.rpc.pool.withOwner(identity.userId, operation);
+          return operation();
+        };
+        const work = () => permissionHub ? permissionHub.withUser(identity.userId, dispatchUser) : dispatchUser();
+        return Promise.resolve().then(work).catch(error => {
+          if (!error.status || error.status >= 500) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
+          throw error;
+        });
       });
     } catch (error) {
+      if ((!error.status || error.status >= 500) && !error.databaseDiagnostic) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
       if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
       if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR" } });
       else response.end();

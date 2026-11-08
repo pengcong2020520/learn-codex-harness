@@ -30,6 +30,7 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
   const cache = await new RouteCache(adapter.client, env.AGENT_SHARD_STRATEGY || 'slots').open();
   const runtime = new ShardRuntime({ nodeId, cache, coordination, key: env.AGENT_NODE_KEY });
   const control = new ShardControl(coordination, cache, pool);
+  control.log = log;
   const service = new ShardedService(coordination, generation => start({ config: { ...config, sharding: runtime }, generation, externalHttp: true, log }), runtime, log);
   const handler = createShardedHandler(coordination, service, runtime, control);
   const server = createServer((req, res) => { void handler(req, res).catch(() => res.destroy()); });

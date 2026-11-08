@@ -11,7 +11,12 @@ const denied = () => { throw new AppError('未授权的资源、动作或执行�
 export class PermissionGate {
   #contexts = new WeakSet();
   #storage = new AsyncLocalStorage();
-  constructor({ scope, agent, permissionHub }) { Object.assign(this, { scope, agent, permissionHub }); this.runs = new Map(); }
+  #resourceAgent = new AsyncLocalStorage();
+  constructor({ scope, agent, permissionHub }) { Object.assign(this, { scope, agent, permissionHub }); this.runs = new Map(); this.serviceAgent = agent; }
+  get agent() { return this.#resourceAgent.getStore() || this.runtimeAgent; }
+  set agent(value) { this.runtimeAgent = value; }
+  // Explicit resource RPC scope: caller identity and fresh Hub grants remain unchanged.
+  forResource(operation) { return this.#resourceAgent.run(this.serviceAgent, operation); }
   issue(fields) {
     const ownerId = fields.ownerId || fields.userId || this.scope.ownerId;
     const context = Object.freeze({ threadId: null, turnId: null, ...fields, userId: ownerId, ownerId, agentId: this.agent.definition.agent.id, policy: fields.policy || this.permissionHub?.context.getStore() });

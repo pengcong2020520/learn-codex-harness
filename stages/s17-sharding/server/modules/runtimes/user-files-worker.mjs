@@ -13,7 +13,7 @@ try {
     switch (task.operation) {
       case 'knowledge-create': {
         const { prepareKnowledgeDirectories } = await import('../knowledge/directories.mjs');
-        value = prepareKnowledgeDirectories(task.workspace, task.bindings, { exclusive: true }); break;
+        value = prepareKnowledgeDirectories(task.workspace, task.bindings, { exclusive: task.exclusive !== false }); break;
       }
       case 'knowledge-delete': {
         const { removeKnowledgeDirectories } = await import('../knowledge/directories.mjs');

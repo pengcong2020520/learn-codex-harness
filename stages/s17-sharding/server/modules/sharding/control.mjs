@@ -1,3 +1,4 @@
+import { logFailure, diagnosticClient } from '../data/diagnostics.mjs';
 import { SHARDS, defaultSlots } from './strategy.mjs';
 import { transaction } from '../data/database.mjs';
 import { SHARD_PREFIX, OVERRIDE_PREFIX } from './cache.mjs';
@@ -6,7 +7,10 @@ export class ShardControl {
   async locked(operation) {
     const c = this.coordination; c.assertController(); const term = c.term();
     await c.confirm();
-    return transaction(this.pool, async db => {
+    return transaction(this.pool, async connection => {
+      const db = diagnosticClient(connection, { nodeId: c.nodeId, term, routes: this.cache, log: this.log }, error => {
+        if (error.code === 'CT001') c.isolate('database-stale-term');
+      });
       await db.query('SELECT agent_data.advance_cluster_term($1::bigint)', [term]);
       await db.query("SELECT set_config('app.term',$1,true)", [String(term)]);
       await db.query('SELECT agent_data.locked_cluster_term()');
@@ -14,7 +18,11 @@ export class ShardControl {
       await c.confirm();
       if (c.term() !== term) throw new Error('control changed');
       return result;
-    }).catch(error => { if (error.code === 'CT001') c.isolate('database-stale-term'); throw error; });
+    }).catch(error => {
+      if (!error.databaseDiagnostic) logFailure(error, { nodeId: c.nodeId, term, routes: this.cache, log: this.log }, error, '', 'control');
+      if (error.code === 'CT001') c.isolate('database-stale-term');
+      throw error;
+    });
   }
   reconcile() {
     return this.pending ||= this.place().finally(() => { this.pending = null; });

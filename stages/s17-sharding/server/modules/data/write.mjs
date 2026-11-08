@@ -1,3 +1,4 @@
+import { connectionError, logFailure } from './diagnostics.mjs';
 import { setShard, shardFailure } from '../sharding/fence.mjs';
 import { Pool, Client } from 'pg';
 
@@ -25,7 +26,7 @@ export function termFailure(error, generation, origin, statement) {
   try { generation.assert(); } catch { current = false; }
   const diagnostic = current ? '任期过期或漏传任期' : '任期已失效';
   error.termDiagnostic = { diagnostic, term: generation.term, stack: origin.stack, statement };
-  try { (generation.log || console.error)(`[CT001] ${diagnostic}; term=${generation.term}; ${statement}\n${origin.stack}`); }
+  try { logFailure(error, generation, origin, statement, 'CT001', { diagnostic }); }
   catch { /* Logging must not replace CT001 or prevent isolation. */ }
   finally { generation.isolate?.('database-stale-term'); }
 }
@@ -34,6 +35,20 @@ export function termFailure(error, generation, origin, statement) {
 // Explicit transactions retain one client and one term through COMMIT.
 export function fencePool(pool, generation) {
   const clients = new WeakMap();
+  const report = async (error, origin, statement) => {
+    // Record every driver failure, including SQL errors returned as HTTP 500.
+    if (!['CT001', 'SH001'].includes(error.code)) logFailure(error, generation, origin, statement);
+    termFailure(error, generation, origin, statement);
+    await shardFailure(error, generation, origin, statement);
+    if (connectionError(error) && !error.connectionIsolated) {
+      error.connectionIsolated = true; generation.isolate?.('database-connection-lost');
+    }
+  };
+  pool.on?.('error', error => { void report(error, new Error('PG idle connection'), ''); });
+  const checkout = async origin => {
+    try { return await pool.connect(); }
+    catch (error) { await report(error, origin, ''); throw error; }
+  };
   const setTerm = client => {
     assertTerm(generation);
     if (generation.routes) return setShard(client, generation);
@@ -41,13 +56,15 @@ export function fencePool(pool, generation) {
   };
   const wrap = target => {
     if (clients.has(target)) return clients.get(target).proxy;
-    let inTransaction = false;
+    let inTransaction = false, latestOrigin = new Error('PG checked out connection'), latestStatement = '';
+    target.on?.('error', error => { void report(error, latestOrigin, latestStatement); });
     const query = (args, origin = new Error('业务 SQL 调用栈')) => {
       const text = typeof args[0] === 'string' ? args[0] : args[0]?.text || '';
+      latestOrigin = origin; latestStatement = text;
       const statement = text.replace(/^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, '');
       const cleanup = /^(ROLLBACK|UNLISTEN)\b/i.test(statement);
       if (!cleanup) assertTerm(generation);
-      const failure = async error => { await shardFailure(error, generation, origin, text); termFailure(error, generation, origin, text); throw error; };
+      const failure = async error => { if (!error.databaseDiagnostic) await report(error, origin, text); throw error; };
       return (async () => {
         if (/^SET\s+(?:(?:LOCAL|SESSION)\s+)?TRANSACTION\b/i.test(statement))
           throw Object.assign(new Error('编程错误：隔离包装已在 BEGIN 后设置事务上下文，禁止 SET TRANSACTION；请使用 transaction(pool, fn, { isolation, readOnly })，在同一条 BEGIN 中声明事务特性。'), { code: 'TRANSACTION_OPTIONS_REQUIRED' });
@@ -67,7 +84,7 @@ export function fencePool(pool, generation) {
           generation.assert();
           await target.query('COMMIT'); return result;
         } catch (error) {
-          termFailure(error, generation, origin, text); // Isolate before rollback/network cleanup.
+          await report(error, origin, text); // Record and close admission before rollback/network cleanup.
           await target.query('ROLLBACK').catch(() => {}); throw error;
         }
       })().catch(failure);
@@ -81,12 +98,12 @@ export function fencePool(pool, generation) {
     clients.set(target, { proxy, query }); return proxy;
   };
   const fenced = new Proxy(pool, { get(object, key) {
-    if (key === 'connect') return async () => { assertTerm(generation); return wrap(await object.connect()); };
+    if (key === 'connect') return async () => { assertTerm(generation); return wrap(await checkout(new Error('PG checkout'))); };
     if (key === 'query') return (...args) => {
       assertTerm(generation);
       const origin = new Error('业务 SQL 调用栈');
       return (async () => {
-        const client = await object.connect();
+        const client = await checkout(origin);
         try { wrap(client); return await clients.get(client).query(args, origin); } finally { client.release(); }
       })();
     };
