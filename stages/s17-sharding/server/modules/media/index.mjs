@@ -20,6 +20,7 @@ export class MediaService {
     Object.assign(this, { router, endpoint, store, files, usage, gate, agent, fetchImpl, now, intervalMs, timeoutMs, redact, log });
     this.controller = new AbortController();
     this.submitting = new Set();
+    this.pollingOwners = new Map();
   }
   available(purpose) {
     if (!this.endpoint || !this.router || !this.store) return false;
@@ -155,10 +156,21 @@ export class MediaService {
       } else await this.fail(job, error.message);
     }
   }
+  async waitOwner(userId) { await this.pollingOwners.get(userId); }
   tick() {
     if (this.running || this.controller.signal.aborted) return this.running;
-    this.running = (async () => { for (const job of await this.store.pending()) { if (this.controller.signal.aborted) break; if (this.sharding && !this.sharding.owns(job.ownerId)) continue; await (job.ownerId ? runOwner(job.ownerId, () => this.withOwner ? this.withOwner(job.ownerId, () => this.poll(job)) : this.poll(job)) : this.poll(job)); } })()
-      .finally(() => { this.running = null; });
+    this.running = (async () => {
+      for (const job of await this.store.pending()) {
+        if (this.controller.signal.aborted) break;
+        // Register before asynchronous admission, so drain also waits for an in-flight PG check.
+        const pending = (async () => {
+          if (this.sharding && !await this.sharding.canDispatch(job.ownerId)) return;
+          await (job.ownerId ? runOwner(job.ownerId, () => this.withOwner ? this.withOwner(job.ownerId, () => this.poll(job)) : this.poll(job)) : this.poll(job));
+        })();
+        this.pollingOwners.set(job.ownerId, pending);
+        try { await pending; } finally { this.pollingOwners.delete(job.ownerId); }
+      }
+    })().finally(() => { this.running = null; });
     return this.running;
   }
   open() {

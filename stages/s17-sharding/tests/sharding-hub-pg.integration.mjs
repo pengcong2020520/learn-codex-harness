@@ -1,3 +1,4 @@
+import { nodeAuth, authHeaders } from './fixtures/node-auth.mjs';
 // Real PG node roles, Redis, application services, HTTP forwarding and Codex.
 // Only membership/routes and model responses are fixtures; no database or Hub doubles.
 import test from 'node:test';
@@ -50,7 +51,7 @@ test('真实 PG 集群：Hub 快照、HTTP 登录→建会话→消息 completed
     const cache = { revision: '1', refresh: async () => {}, routeOf: user =>
       ({ shardId: null, primary: null, epoch: null, ...placements.get(user), revision: '1' }) };
     const coordination = { members, checkLease: () => true };
-    const runtime = new ShardRuntime({ nodeId, cache, coordination, key: 'sharding-hub-integration-node-key' });
+    const runtime = new ShardRuntime({ nodeId, cache, coordination, ...nodeAuth(nodeId) });
     const generation = { active: true, nodeId, routes: cache, assert() {
       assert.ok(this.active, 'node generation is active');
     }, isolate: reason => assert.fail('unexpected shard isolation: ' + reason) };

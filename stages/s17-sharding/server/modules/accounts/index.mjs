@@ -37,7 +37,7 @@ export class Accounts {
     if (!row || row.disabled_at || row.revoked_at || now >= +new Date(row.expires_at)
       || now - +new Date(row.created_at) >= ABSOLUTE_MS || now - +new Date(row.last_seen_at) >= IDLE_MS) throw unauthorized();
     if (now - +new Date(row.last_seen_at) >= TOUCH_MS) await this.store.touch(row.session_id, new Date(now));
-    return { userId: row.id, role: row.role, authSessionId: row.session_id, user: publicUser(row) };
+    return { userId: row.id, role: row.role, authSessionId: row.session_id, authorization, user: publicUser(row) };
   }
   async logout(identity) { await this.store.revokeAll(identity.userId); }
 }

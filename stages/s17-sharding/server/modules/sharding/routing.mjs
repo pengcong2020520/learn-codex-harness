@@ -1,12 +1,18 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { AppError } from '../../../shared/errors.mjs';
 export const staleRoute = () => new AppError('路由表过期，请刷新。', 409, 'STALE_ROUTE');
 export const unavailable = reason => new AppError(reason, 503, 'SHARD_UNAVAILABLE');
-export function authenticateNode(headers, key) {
-  const incoming = Buffer.from(String(headers['x-node-key'] || '')), expected = Buffer.from(key || '');
-  if (expected.length < 24 || incoming.length !== expected.length || !timingSafeEqual(incoming, expected)) throw new AppError('节点认证失败。', 403, 'NODE_AUTH');
+export const nodeKeyHash = key => createHash('sha256').update(key).digest('hex');
+export const nodeHeaders = runtime => ({ 'x-node-id': runtime.nodeId, 'x-node-key': runtime.key });
+export function authenticateNode(headers, keyHashes) {
+  const nodeId = headers['x-node-id'], key = headers['x-node-key'];
+  const expected = keyHashes?.[nodeId];
+  if (!['node-a','node-b','node-c'].includes(nodeId) || typeof key !== 'string' || key.length < 24 ||
+      !/^[a-f0-9]{64}$/.test(expected || '') || !timingSafeEqual(Buffer.from(nodeKeyHash(key)), Buffer.from(expected)))
+    throw new AppError('节点认证失败。', 403, 'NODE_AUTH');
+  return nodeId;
 }
 export function targetOf(route, members) {
   const member = [...members.values()].find(m => m.nodeId === route.primary);
@@ -31,10 +37,10 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     }
   }
 }
-const hop = new Set(['host','connection','keep-alive','transfer-encoding','proxy-authenticate','proxy-authorization','te','trailer','upgrade','x-node-key','x-route-revision','x-route-user']);
+const hop = new Set(['host','connection','keep-alive','transfer-encoding','proxy-authenticate','proxy-authorization','te','trailer','upgrade','x-node-key','x-node-id','x-route-revision','x-route-user']);
 export function forwardHeaders(headers, key, route, userId) {
   const result = Object.fromEntries(Object.entries(headers).filter(([k]) => !hop.has(k.toLowerCase())));
-  result['x-node-key'] = key; result['x-route-revision'] = route.revision; result['x-route-user'] = userId;
+  Object.assign(result, nodeHeaders(key)); result['x-route-revision'] = route.revision; result['x-route-user'] = userId;
   return result;
 }
 export async function bufferBody(request) {

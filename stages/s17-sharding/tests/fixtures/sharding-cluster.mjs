@@ -1,3 +1,4 @@
+import { nodeAuth, authHeaders } from './node-auth.mjs';
 // Shared s17 cluster boot: real node SQL roles, shard fencing and external HTTP.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -26,7 +27,7 @@ export function scriptedCoordination({ client, nodeId, members, term, isolations
 
 export async function startClusterNode({ root, nodeRoot, databaseUrl, redisUrl, password, provider, cache, coordination, term, logs, isolations, server }) {
   const nodeId = coordination.nodeId, suffix = nodeId.slice(-1);
-  const runtime = new ShardRuntime({ nodeId, cache, coordination, key: 'move-uid-test-internal-node-key' });
+  const runtime = new ShardRuntime({ nodeId, cache, coordination, ...nodeAuth(nodeId) });
   const generation = { active: true, nodeId, routes: cache, term, assert() { assert.ok(this.active && coordination.checkLease()); },
     log: line => logs.push(line), isolate: reason => { isolations.push({ nodeId, reason }); generation.active = false; } };
   const url = new URL(databaseUrl); url.username = 'agent_node_' + suffix; url.password = password;

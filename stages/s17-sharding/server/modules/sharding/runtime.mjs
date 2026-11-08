@@ -1,13 +1,24 @@
+import { IDLE_MS } from '../accounts/index.mjs';
 import { runOwner } from '../accounts/context.mjs';
 import { unavailable } from './routing.mjs';
 export class ShardRuntime {
-  constructor({ nodeId, cache, coordination, key }) { Object.assign(this, { nodeId, cache, coordination, key }); this.paused = new Set(); }
+  #authorizations = new Map();
+  rememberAuthorization(identity, authorization) {
+    // Only called after global account authentication; never persist tokens in jobs or metadata.
+    for (const [userId, entry] of this.#authorizations) if (entry.until <= Date.now()) this.#authorizations.delete(userId);
+    this.#authorizations.set(identity.userId, { authorization, until: Date.now() + IDLE_MS });
+  }
+  authorizationFor(userId) {
+    const entry = this.#authorizations.get(userId);
+    return entry?.until > Date.now() ? entry.authorization : undefined;
+  }
+  constructor({ nodeId, cache, coordination, key, keyHashes }) { Object.assign(this, { nodeId, cache, coordination, key, keyHashes }); this.paused = new Set(); }
   owns(userId) { return this.coordination.checkLease() && this.cache.routeOf(userId).primary === this.nodeId; }
   assertPrimary(userId) { if (!this.owns(userId)) throw unavailable('本节点不再是用户主节点。'); }
   async canDispatch(userId) {
     if (!this.owns(userId) || this.paused.has(userId)) return false;
     const row = (await this.pool.query('SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1', [userId])).rows[0];
-    return row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;
+    return this.owns(userId) && !this.paused.has(userId) && row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;
   }
   async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable('用户正在迁移、归属尚未初始化或本节点不是分片主节点。'); }
   async routeStatus(userId) {

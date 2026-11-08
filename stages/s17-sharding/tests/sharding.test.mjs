@@ -12,7 +12,7 @@ import { shardFailure } from '../server/modules/sharding/fence.mjs';
 import { fencePool } from '../server/modules/data/write.mjs';
 import { moveUser } from '../server/modules/sharding/move.mjs';
 import { attachKnowledge } from '../server/modules/sharding/knowledge.mjs';
-import { runOwner } from '../server/modules/accounts/context.mjs';
+import { runIdentity, runOwner } from '../server/modules/accounts/context.mjs';
 import { validateTarListing } from '../server/modules/sharding/transfer.mjs';
 import { shardStatus } from '../server/modules/sharding/http.mjs';
 import { FakeClient, flush } from './fixtures/coordination-client.mjs';
@@ -69,11 +69,11 @@ test('route: unavailable shard returns 503 with reason and never retries another
 });
 test('route: SSE carries Last-Event-ID, node key and revision, streams unchanged with no deadline',async()=>{
   const route={revision:'9223372036854775806'}; let options;
-  const upstream=await forwardHttp({method:'GET',url:'/events?threadId=t',headers:{'last-event-id':'primary:17',authorization:'Bearer token','x-node-key':'spoof'}},'http://node-b:4341',route,user,'k'.repeat(32),null,{fetcher:async(url,opt)=>{options=opt;return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('id: primary:18\ndata: {}\n\n'));c.close();}}),{headers:{'content-type':'text/event-stream'}});}});
+  const upstream=await forwardHttp({method:'GET',url:'/events?threadId=t',headers:{'last-event-id':'primary:17',authorization:'Bearer token','x-node-key':'spoof'}},'http://node-b:4341',route,user,{nodeId:'node-a',key:'k'.repeat(32)},null,{fetcher:async(url,opt)=>{options=opt;return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('id: primary:18\ndata: {}\n\n'));c.close();}}),{headers:{'content-type':'text/event-stream'}});}});
   assert.equal(options.signal,undefined);assert.equal(options.headers['last-event-id'],'primary:17');assert.equal(options.headers['x-route-revision'],route.revision);assert.equal(options.headers['x-node-key'],'k'.repeat(32));
   let text='';const out=new Writable({write(c,e,done){text+=c;done();}});out.writeHead=(status,headers)=>{assert.equal(status,200);assert.match(headers['content-type'],/event-stream/);};
   await streamResponse(upstream,out);assert.equal(text,'id: primary:18\ndata: {}\n\n');
-  await forwardHttp({method:'POST',url:'/messages',headers:{}},'http://node-b',route,user,'k'.repeat(32),Buffer.from('{}'),{fetcher:async(url,opt)=>{assert.ok(opt.signal instanceof AbortSignal);assert.equal(opt.redirect,'error');return new Response('{}');}});
+  await forwardHttp({method:'POST',url:'/messages',headers:{}},'http://node-b',route,user,{nodeId:'node-a',key:'k'.repeat(32)},Buffer.from('{}'),{fetcher:async(url,opt)=>{assert.ok(opt.signal instanceof AbortSignal);assert.equal(opt.redirect,'error');return new Response('{}');}});
   assert.throws(()=>authenticateNode({'x-node-key':'bad'},'k'.repeat(32)),{code:'NODE_AUTH'});
 });
 test('fence: SH001 refreshes before isolation; a moved user does not isolate a healthy former primary',async()=>{
@@ -100,24 +100,15 @@ test('control: only control places unowned shards, synchronizes SQL and never fa
 function moveFixture(failAt) {
   const steps=[];let shard='0';const cache={routeOf:()=>({primary:'node-a',shardId:shard}),shards:{'1':{primary:'node-b'}}};
   const step=async name=>{steps.push(name);if(name===failAt)throw new Error('injected '+name);};
-  const options={userId:user,shardId:'1',cache,control:{pause:async(u,v)=>step(v?'pause-db':'resume-db'),switchUser:async(u,s)=>{await step('switch-'+s);shard=s;}},pause:()=>step('pause-source'),drain:()=>step('drain'),copy:()=>step('copy'),resume:node=>step('resume-'+node)};
+  const op={id:user,user_id:user,from_shard:'0',to_shard:'1',source_node:'node-a',target_node:'node-b'};
+  const options={userId:user,shardId:'1',cache,control:{isPaused:async()=>false,beginMove:async()=>{await step('pause-db');return op;},advanceMove:async(id,from,to)=>step(to),finishMove:()=>step('resume-db'),failMove:()=>step('failed-paused'),switchUser:async(u,s)=>{await step('switch-'+s);shard=s;}},pause:()=>step('pause-source'),drain:()=>step('drain'),copy:()=>step('copy'),resume:node=>step('resume-'+node)};
   return {steps,options,shard:()=>shard};
 }
-test('move: pause → drain → copy → switch → resume; failure before/after switch rolls back',async()=>{
-  const f=moveFixture();await moveUser(f.options);assert.deepEqual(f.steps,['pause-db','pause-source','drain','copy','switch-1','resume-node-b','resume-node-a','resume-db']);
+test('move: operation transitions bracket copy and switch; any uncertain failure remains paused',async()=>{
+  const f=moveFixture();await moveUser(f.options);assert.deepEqual(f.steps,['pause-db','pause-source','drain','copying','copy','copied','switch-1','resume-node-b','resume-node-a','resume-db']);
   for (const failure of ['copy','switch-1','resume-node-b']) {
-    const f=moveFixture(failure);await assert.rejects(moveUser(f.options));assert.equal(f.shard(),'0');assert.equal(f.steps.at(-1),'resume-db');
+    const f=moveFixture(failure);await assert.rejects(moveUser(f.options));assert.equal(f.steps.at(-1),'failed-paused');assert.ok(!f.steps.includes('resume-db'));assert.ok(!f.steps.includes('switch-0'));
   }
-});
-test('move: control rolls override back if the PostgreSQL commit fails',async t=>{
-  const {client,c}=await cache(t);client.set('/codex/overrides/'+user,'"0"');let commits=0;
-  const db={query:async q=>{if(q==='COMMIT'&&!commits++)throw new Error('commit failed');return {rows:[]};},release(){}};
-  const ctl=new ShardControl({assertController(){},term:()=> '10',confirm:async()=>{},guardedPut:async(k,v)=>client.set(k,typeof v === 'string' ? v : JSON.stringify(v))},c,{connect:async()=>db});
-  await assert.rejects(ctl.switchUser(user,'1'));assert.equal(c.overrides[user],'0');
-});
-test('move: failed rollback stays paused instead of starting both copies',async()=>{
-  const f=moveFixture('resume-node-b');f.options.control.switchUser=async(u,s)=>{f.steps.push('switch-'+s);if(s==='0')throw new Error('lost control');};
-  await assert.rejects(moveUser(f.options),e=>e.rollbackFailed);assert.ok(!f.steps.includes('resume-db'));
 });
 test('move: tar checks numeric ownership, rejects links/traversal and foreign uid',()=>{
   const good='-rw------- 10001/10001 20 2026-01-01 00:00 ./history.jsonl\n';validateTarListing(good,10001);
@@ -126,10 +117,10 @@ test('move: tar checks numeric ownership, rejects links/traversal and foreign ui
 test('knowledge: grantee and owner both authorize; revoked grant at owner denies and no content is read',async()=>{
   const checks=[],owner='bb000000-0000-4000-8000-000000000001';let granted=true,reads=0;
   const runtimeFor=nodeId=>({nodeId,cache:{revision:'9',routeOf:()=>({primary:'node-b',shardId:'1',revision:'9'})},coordination:{members},admit:async()=>{}});
-  const appFor=side=>({knowledge:{kb:async()=>{checks.push(side);if(side==='owner'&&!granted)throw new (class extends Error{status=404;})();return {owner_id:owner};},read:async()=>{reads++;return {content:'one copy'};},search:async()=>{},pages:async()=>{}},resources:{readById:async()=>{}},permissionHub:{withUser:async(u,fn)=>fn()},gate:{operator:u=>u,run:async(c,fn)=>fn()}});
-  const a=runtimeFor('node-a'),b=runtimeFor('node-b'),appA=appFor('grantee'),appB=appFor('owner');attachKnowledge(appA,a);attachKnowledge(appB,b);a.call=async(address,p,body)=>b.readKnowledge(body);
-  assert.equal((await runOwner(user,()=>appA.knowledge.read({kbId:'k',slug:'s'}))).content,'one copy');assert.deepEqual(checks,['grantee','owner']);
-  granted=false;await assert.rejects(runOwner(user,()=>appA.knowledge.read({kbId:'k',slug:'s'})),e=>e.status===404);assert.equal(reads,1);
+  const appFor=side=>({accounts:{authenticate:async token=>{assert.equal(token,'Bearer end-user');return {userId:user,authorization:token};}},knowledge:{kb:async()=>{checks.push(side);if(side==='owner'&&!granted)throw new (class extends Error{status=404;})();return {owner_id:owner};},read:async()=>{reads++;return {content:'one copy'};},search:async()=>{},pages:async()=>{}},resources:{readById:async()=>{}},permissionHub:{withUser:async(u,fn)=>fn()},gate:{operator:u=>u,run:async(c,fn)=>fn()}});
+  const a=runtimeFor('node-a'),b=runtimeFor('node-b'),appA=appFor('grantee'),appB=appFor('owner');attachKnowledge(appA,a);attachKnowledge(appB,b);a.call=async(address,p,body,token)=>{assert.equal(Object.hasOwn(body,'requester'),false);return b.readKnowledge(body,token);};
+  assert.equal((await runIdentity({userId:user,authorization:'Bearer end-user'},()=>appA.knowledge.read({kbId:'k',slug:'s'}))).content,'one copy');assert.deepEqual(checks,['grantee','owner']);
+  granted=false;await assert.rejects(runIdentity({userId:user,authorization:'Bearer end-user'},()=>appA.knowledge.read({kbId:'k',slug:'s'})),e=>e.status===404);assert.equal(reads,1);
 });
 test('service: every member may be ready; lost lease stops generation and rejoin uses new generation',async()=>{
   const c=new EventEmitter();Object.assign(c,{nodeId:'node-b',generation:1,alive:true,checkLease(){return this.alive;},isolate(){this.alive=false;this.emit('lost');}});
@@ -150,6 +141,6 @@ test('route: absolute-form incoming URL cannot send node credentials outside the
   await forwardHttp({method:'GET',url:'http://example.com/events',headers:{}},'http://node-b:4341',{revision:'1'},user,'k'.repeat(32),null,{fetcher:async(url)=>{assert.equal(url.origin,'http://node-b:4341');return new Response();}});
 });
 test('move: uncertain resume commit never revives the old disk after target may have dispatched',async()=>{
-  const f=moveFixture('resume-db');await assert.rejects(moveUser(f.options),e=>e.rollbackFailed);
-  assert.equal(f.shard(),'1');assert.equal(f.steps.at(-1),'pause-db');assert.ok(!f.steps.includes('switch-0'));
+  const f=moveFixture('resume-db');await assert.rejects(moveUser(f.options));
+  assert.equal(f.shard(),'1');assert.equal(f.steps.at(-1),'failed-paused');assert.ok(!f.steps.includes('switch-0'));
 });

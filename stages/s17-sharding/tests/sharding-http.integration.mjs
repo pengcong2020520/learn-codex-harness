@@ -1,3 +1,4 @@
+import { nodeAuth, authHeaders } from './fixtures/node-auth.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -11,7 +12,7 @@ test('真实 HTTP：任意节点登录、POST 代理、STALE_ROUTE 一次重试�
   const addresses=[];
   for(const [n,nodeId] of ['node-a','node-b'].entries()){
     const coordination={members,checkLease:()=>true};
-    const runtime={nodeId,key:'integration-node-key-123456789',cache:caches[n],coordination,admit:async()=>{}};
+    const runtime={nodeId,...nodeAuth(nodeId),cache:caches[n],coordination,admit:async()=>{}};
     const app={data:{pool:{query:async()=>({rows:[{exists:1}]})}},accounts:{authenticate:async authorization=>{if(authorization!=='Bearer test')throw Object.assign(new Error('unauthorized'),{status:401});return {userId:user,role:'user'};}},http:{handle:async(req,res)=>{
       if(req.url==='/auth/login'){res.writeHead(200);res.end('{"login":true}');return;}
       if(req.url==='/events'){

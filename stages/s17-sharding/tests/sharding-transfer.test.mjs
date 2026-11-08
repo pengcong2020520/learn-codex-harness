@@ -1,3 +1,4 @@
+import { nodeAuth, authHeaders } from './fixtures/node-auth.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateTarListing, transferPath } from '../server/modules/sharding/transfer.mjs';
@@ -61,9 +62,9 @@ test('迁移 HTTP 错误仅日志含子进程摘要，客户端不含 stderr/路
     { kind: 'workspace', phase: 'extract', stderr: 'tar: /private/archive: Cannot open: Permission denied\nSECRET CONTENT' });
   const generation = { nodeId: 'node-b', log: line => logs.push(line) };
   const app = { config: { generation }, data: { pool: { query: async () => { throw failure; } } } };
-  const runtime = { nodeId: 'node-b', key: 'test-internal-node-key-long-enough' };
+  const runtime = { ...nodeAuth('node-b') };
   const handler = createShardedHandler({}, { app, isReady: () => true }, runtime, {});
-  const request = Object.assign(Readable.from([]), { url: `/internal/transfer?user=${user}&kind=workspace`, method: 'PUT', headers: { 'x-node-key': runtime.key } });
+  const request = Object.assign(Readable.from([]), { url: `/internal/transfer?operationId=${user}&user=${user}&kind=workspace`, method: 'PUT', headers: authHeaders('node-a') });
   const response = { writeHead(status) { this.status = status; }, end(body) { this.body = body; } };
   await handler(request, response);
   assert.equal(response.status, 503);

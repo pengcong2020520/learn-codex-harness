@@ -1,5 +1,7 @@
 import { signalUserProcess } from '../codex/launch.mjs';
 import fs from 'node:fs';
+import { Transform } from 'node:stream';
+import { AppError } from '../../../shared/errors.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -9,6 +11,26 @@ import { pipeline } from 'node:stream/promises';
 import { prepareDirectories, assertRealPath, runtimeHome } from '../runtimes/directories.mjs';
 import { stderrCollector, subprocessFailure } from './transfer-diagnostics.mjs';
 const exec = promisify(execFile);
+export const MAX_TRANSFER_BYTES = 1024 ** 3;
+export function transferLimit(env = process.env) {
+  const value = env.AGENT_TRANSFER_MAX_BYTES === undefined ? MAX_TRANSFER_BYTES : Number(env.AGENT_TRANSFER_MAX_BYTES);
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_TRANSFER_BYTES) throw new AppError('AGENT_TRANSFER_MAX_BYTES 只能下调且必须为正整数。', 503);
+  return value;
+}
+export function assertTransferSpace(directory, limit, statfs = fs.statfsSync) {
+  // Inspect the nearest existing ancestor before creating destination directories/files.
+  while (!fs.existsSync(directory)) directory = path.dirname(directory);
+  const stat = statfs(directory, { bigint: true });
+  if (BigInt(stat.bavail) * BigInt(stat.bsize) < 2n * BigInt(limit)) throw new AppError('目标卷可用空间不足两倍传输上限。', 507);
+}
+export function limitTransfer(limit = transferLimit()) {
+  let bytes = 0;
+  return new Transform({ transform(chunk, encoding, callback) {
+    bytes += chunk.length;
+    callback(bytes > limit ? new AppError('迁移内容超过接收上限。', 413) : null, bytes > limit ? undefined : chunk);
+  } });
+}
+export const restoredMode = (mode, directory) => mode & (directory ? 0o2777 : 0o777);
 export function transferPath(root, record, kind) {
   if (!/^[a-f0-9-]{36}$/.test(record.user_id) || !Number.isInteger(record.uid) || record.uid < 10001) throw new Error('无效运行环境。');
   const home = runtimeHome(root, record);
@@ -44,7 +66,7 @@ export function validateTarListing(text, uid, kind = 'home') {
   for (const line of lines) {
     // GNU tar -tv --numeric-owner --quoting-style=escape. Reject link/device types and escaped/control names.
     const match = /^([-d])[rwxStTs-]{9}\s+(\d+)\/(\d+)\s+\d+\s+\d{4}-\d{2}-\d{2}\s+[\d:]+\s+(\.\/.*)$/.exec(line);
-    if (!match || !(kind === 'workspace' ? [0, uid] : [uid]).includes(Number(match[2])) || ![uid, 1000].includes(Number(match[3])) || /[\\\x00-\x1f\x7f]/.test(match[4]) || match[4].split('/').includes('..')) throw new Error('不安全的 tar 条目或数值属主。');
+    if (!match || /[sS]/.test(line[3]) || !(kind === 'workspace' ? [0, uid] : [uid]).includes(Number(match[2])) || ![uid, 1000].includes(Number(match[3])) || /[\\\x00-\x1f\x7f]/.test(match[4]) || match[4].split('/').includes('..')) throw new Error('不安全的 tar 条目或数值属主。');
     const name = path.posix.normalize(match[4]);
     const key = name.replace(/\/$/, '') || '.';
     if (entries.has(key)) throw new Error('重复 tar 条目。');
@@ -66,13 +88,16 @@ function restoreOwners(stage, entries) {
     visited++;
     if (stat.isDirectory()) for (const child of fs.readdirSync(target)) visit(path.join(target, child), name === '.' ? child : `${name}/${child}`);
     fs.chownSync(target, entry.uid, entry.gid);
-    fs.chmodSync(target, stat.mode & 0o7777); // chown may clear permission bits.
+    fs.chmodSync(target, restoredMode(stat.mode, stat.isDirectory())); // chown may clear permission bits.
   };
   visit(stage, '.');
   if (visited !== entries.size) throw new Error('解包条目缺失。');
 }
 export async function importTree(root, record, kind, input, beforePublish = async () => {}) {
   const target = transferPath(root, record, kind);
+  const limit = transferLimit();
+  assertTransferSpace(path.dirname(target), limit);
+  assertTransferSpace(path.join(root, '.data/transfers'), limit);
   const parent = path.join(root, '.data/transfers'); fs.mkdirSync(parent, { recursive: true, mode: 0o700 }); assertRealPath(parent);
   // Stage next to the destination: .data and workspace are separate bind mounts, and rename() cannot cross mounts (EXDEV).
   const id = randomUUID(), archive = path.join(parent, id + '.tar'), stage = path.join(path.dirname(target), '.move-' + id);
@@ -81,7 +106,7 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
   assertRealPath(path.dirname(target));
   fs.mkdirSync(stage, { mode: 0o700 });
   try {
-    await pipeline(input, fs.createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
+    await pipeline(input, limitTransfer(limit), fs.createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
     const { stdout, stderr } = await tar(kind, 'list', ['--list','--verbose','--numeric-owner','--quoting-style=escape','--file',archive]);
     let entries;
     try { entries = validateTarListing(stdout, record.uid, kind); }

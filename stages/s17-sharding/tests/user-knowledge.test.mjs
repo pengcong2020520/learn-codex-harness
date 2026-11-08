@@ -316,8 +316,8 @@ test('跨分片资源 RPC：isolated=true 且 owner 节点没有请求者运行�
   };
   const runtime = { nodeId: 'node-c', cache: { revision: '1', routeOf: () => ({ primary: 'node-c', revision: '1' }) },
     coordination: { members: new Map() }, admit: async owner => assert.equal(owner, 'bob') };
-  attachKnowledge({ knowledge: f.service, resources: f.service.resources, permissionHub: f.hub, gate: f.gate }, runtime);
-  const read = requester => runtime.readKnowledge({ action: 'read', args: { kbId: 'general', slug: 'tea' }, requester, revision: '1' });
+  attachKnowledge({ accounts: { authenticate: async token => ({ userId: token.slice(7) }) }, knowledge: f.service, resources: f.service.resources, permissionHub: f.hub, gate: f.gate }, runtime);
+  const read = requester => runtime.readKnowledge({ action: 'read', args: { kbId: 'general', slug: 'tea' }, revision: '1' }, 'Bearer ' + requester);
   assert.equal((await read('carol')).content, '茶叶');
   await assert.rejects(read('dave'), { status: 404 });
   await runOwner('bob', () => f.hub.withUser('bob', () => f.hub.revoke('knowledge', 'general', 'carol')));
@@ -325,4 +325,100 @@ test('跨分片资源 RPC：isolated=true 且 owner 节点没有请求者运行�
   assert.equal(reads, 1); assert.equal(pool.entries.size, 0);
   // No general fallback: personal operations still require the actual user's runtime.
   await runOwner('carol', () => assert.throws(() => f.gate.user(), { code: 'RUNTIME_BUSY' }));
+});
+
+test('跨分片 HTTP：真实 Accounts 与 Hub 经任意入口认证、授权、拒绝写入和撤销，无请求者运行环境', async t => {
+  const { Readable, Writable } = await import('node:stream');
+  const { Accounts } = await import('../server/modules/accounts/index.mjs');
+  const { tokenHash } = await import('../server/modules/accounts/password.mjs');
+  const { attachKnowledge } = await import('../server/modules/sharding/knowledge.mjs');
+  const { createShardedHandler } = await import('../server/modules/sharding/http.mjs');
+  const { ShardRuntime } = await import('../server/modules/sharding/runtime.mjs');
+  const { shardUser } = await import('../server/modules/sharding/fence.mjs');
+  const { createHttpService } = await import('../server/modules/http/index.mjs');
+  const { authHeaders, nodeAuth } = await import('./fixtures/node-auth.mjs');
+  const f = fixture(t), logs = [], nodes = new Map(), members = new Map();
+  f.agent.definition.agent.knowledge = [{ kbId: 'general', mode: 'wiki', actions: ['read','update','index'] }];
+  f.agent.definition.bindings.knowledgeBases = { general: { sourceRoot: 'inputs/general', wikiRoot: 'research/general/wiki' } };
+  await f.as('bob', () => f.service.importSource({ kbId: 'general', name: 'tea.md', content: '茶叶' }));
+  await f.as('bob', () => f.hub.grantKnowledge('general', 'carol'));
+  const runtimePool = new RuntimePool({ create: () => assert.fail('read-only HTTP cannot create a runtime') });
+  f.gate.agent = new RuntimeRouter(runtimePool, { isolated: true }).agent(f.agent);
+  const now = Date.now(), tokens = { carol: 'c'.repeat(43), dave: 'd'.repeat(43) };
+  const sessions = new Map(Object.entries(tokens).map(([id, token]) => [tokenHash(token), {
+    ...f.state.users.find(u => u.id === id), session_id: id, created_at: now, last_seen_at: now, expires_at: now + 600000,
+  }]));
+  const accounts = new Accounts({ session: async hash => sessions.get(hash), touch: () => assert.fail('fresh session') }, { now: () => now });
+  const routeOf = user => ({ shardId: user === 'bob' ? '2' : '0', primary: user === 'bob' ? 'node-c' : 'node-a', epoch: 1, revision: '1' });
+  let reads = 0;
+  for (const nodeId of ['node-a', 'node-c']) {
+    const cache = { revision: '1', routeOf, refresh: async () => {} }, coordination = { members, checkLease: () => true };
+    const runtime = new ShardRuntime({ nodeId, cache, coordination, ...nodeAuth(nodeId) });
+    const pool = { query: async (sql, args) => {
+      if (sql.startsWith('SELECT paused')) return { rows: [{ paused: false, shard_id: routeOf(args[0]).shardId }] };
+      if (sql.startsWith('SELECT owner_id')) return { rows: [{ owner_id: 'bob' }] };
+      if (sql.startsWith('SELECT 1')) return { rows: [{}] };
+      assert.fail(sql);
+    } };
+    runtime.pool = pool;
+    const knowledge = Object.create(f.service);
+    knowledge.query = (sql, args) => sql.startsWith('SELECT effective_mode') ? { rows: [{ effective_mode: 'wiki' }] } : f.service.query(sql, args);
+    knowledge.read = async () => {
+      f.gate.check('read', { kbId: 'general' });
+      assert.equal(currentIdentity().userId, 'carol'); assert.equal(shardUser(), 'bob');
+      assert.equal(nodeId, 'node-c'); reads++;
+      return { content: fs.readFileSync(path.join(f.root, 'workspace/users/bob/inputs/general/tea.md'), 'utf8') };
+    };
+    const read = knowledge.read;
+    knowledge.search = async () => ({ hits: [await read()] });
+    const app = { accounts, knowledge, resources: { ...f.service.resources, readById: () => assert.fail('not used') },
+      permissionHub: f.hub, gate: f.gate, data: { pool, scope: { instanceId: 'test' } },
+      config: { root: f.root, sharding: runtime }, sessions: { rpc: { pool: runtimePool } }, redact: JSON.stringify, log: line => logs.push(line) };
+    attachKnowledge(app, runtime);
+    app.http = createHttpService(app);
+    t.after(() => app.http.close());
+    nodes.set(nodeId, createShardedHandler(coordination, { app, isReady: () => true }, runtime, {}));
+    members.set(nodeId, { nodeId, address: `http://${nodeId}` });
+  }
+  // Real handlers, forwardHttp and internal client; only socket transport is replaced.
+  const request = async (node, pathname, { method = 'POST', headers = {}, body } = {}) => {
+    const req = Object.assign(Readable.from(body ? [Buffer.from(body)] : []), { url: pathname, method, headers });
+    const chunks = [], res = new Writable({ write(chunk, encoding, done) { chunks.push(chunk); done(); } });
+    let status, responseHeaders;
+    res.writeHead = (code, value) => { status = code; responseHeaders = value; res.headersSent = true; };
+    res.flushHeaders = () => {};
+    await nodes.get(node)(req, res);
+    return new Response(Buffer.concat(chunks), { status, headers: responseHeaders });
+  };
+  t.mock.method(globalThis, 'fetch', (input, options) => {
+    const url = new URL(input);
+    if (url.pathname === '/internal/knowledge') {
+      assert.equal(options.headers.authorization, `Bearer ${tokens.carol}`);
+      assert.equal(Object.hasOwn(JSON.parse(options.body), 'requester'), false);
+    }
+    return request(url.hostname, url.pathname + url.search, options);
+  });
+  const api = (node, user, pathname = '/knowledge/search') => request(node, pathname, {
+    headers: { authorization: `Bearer ${tokens[user]}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ kbId: 'general', query: '茶叶', name: 'forbidden.md', content: 'forbidden' }),
+  });
+  for (const node of nodes.keys()) {
+    const result = await api(node, 'carol'); assert.equal(result.status, 200);
+    assert.equal((await result.json()).hits[0].content, '茶叶');
+    assert.equal((await api(node, 'dave')).status, 404);
+    assert.equal((await api(node, 'carol', '/knowledge/source')).status, 403);
+  }
+  assert.equal(reads, 2);
+  const internalBody = { action: 'search', args: { kbId: 'general', query: '茶叶' }, revision: '1' };
+  const internal = (body, authorization) => request('node-c', '/internal/knowledge', {
+    headers: { ...authHeaders('node-a'), 'content-type': 'application/json', ...(authorization ? { authorization } : {}) }, body: JSON.stringify(body),
+  });
+  assert.equal((await internal(internalBody)).status, 401);
+  assert.equal((await internal({ ...internalBody, requester: 'bob' }, `Bearer ${tokens.carol}`)).status, 403);
+  await runOwner('bob', () => f.hub.withUser('bob', () => f.hub.revoke('knowledge', 'general', 'carol')));
+  for (const node of nodes.keys()) assert.equal((await api(node, 'carol')).status, 404);
+  assert.equal((await internal(internalBody, `Bearer ${tokens.carol}`)).status, 404, 'owner takes a fresh grant snapshot');
+  sessions.get(tokenHash(tokens.carol)).revoked_at = now;
+  assert.equal((await internal(internalBody, `Bearer ${tokens.carol}`)).status, 401);
+  assert.equal(reads, 2); assert.equal(runtimePool.entries.size, 0); assert.deepEqual(logs, []);
 });

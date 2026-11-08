@@ -1,12 +1,16 @@
 // stdout is piped directly into SSH; never print this output or enable shell tracing.
 import fs from 'node:fs';
 import { parseEnv } from 'node:util';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 const env = parseEnv(fs.readFileSync(new URL('../.env', import.meta.url), 'utf8'));
 const template = parseEnv(fs.readFileSync(new URL('../.env.example', import.meta.url), 'utf8'));
 const allowed = Object.keys(template);
 const values = Object.fromEntries(allowed.filter(key => key in env).map(key => [key, env[key]]));
-values.AGENT_NODE_KEY = randomBytes(32).toString('hex');
+for (const node of ['A','B','C']) {
+  const key = randomBytes(32).toString('hex');
+  values[`AGENT_NODE_KEY_${node}`] = key;
+  values[`AGENT_NODE_KEY_${node}_HASH`] = createHash('sha256').update(key).digest('hex');
+}
 values.AGENT_DB_PASSWORD = randomBytes(24).toString('hex');
 for (const node of ['A','B','C']) values[`AGENT_NODE_${node}_DB_PASSWORD`] = randomBytes(24).toString('hex');
 values.REDIS_PASSWORD = randomBytes(24).toString('hex');

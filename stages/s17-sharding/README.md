@@ -22,9 +22,9 @@
 
 **数据库隔离按分片。** `user_shards` 将用户映射到分片，`shard_owners` 保存节点和 epoch。每个业务事务设置 `SET LOCAL app.node`、`app.shard_epoch`（代码用事务局部 `set_config(..., true)` 参数化），行触发器从 owner/user 或关联会话、知识库、资源追溯到用户，核对节点角色、owner 与 epoch，否则 **SH001**。同时锁住两张映射表的对应行到提交，迁移不能越过旧事务。收到 SH001 先刷新；刷新后仍认为自己是主就记录调用栈并自我隔离。`cluster_term` 继续保护 control 的元数据写入。全局表规则见 [design.md](docs/design.md)。
 
-**共享知识库只有一份。** 被授权者的主节点先按 s15 Hub 判断，再带节点密钥向所有者主节点发内部只读请求。所有者主节点重新读取授权表并判断，最后读自己磁盘上的内容。撤销授权即使发生在两次判断之间也不会放行；未授权者看到 404。
+**共享知识库只有一份。** 被授权者的主节点先按 s15 Hub 判断，再带节点身份、密钥和终端用户 Authorization 向所有者主节点发内部只读请求。所有者主节点重新认证用户令牌、读取授权表并判断，最后读自己磁盘上的内容。撤销授权即使发生在两次判断之间也不会放行；未授权者看到 404。
 
-**手动迁移要经过停写边界。** admin 执行 `npm run cluster -- move <username> <shardId>`，请求交给 control：持久化暂停 → 源节点停止新派发 → 等执行中的轮次、索引和媒体任务结束 → 关闭用户进程 → 内部 HTTP 流式 tar 复制 CODEX_HOME 与 `workspace/users/<id>`，保留数值 uid/gid → 搬运关联正文和本地索引 → control 切换 override 与 `user_shards` → 刷新并恢复派发。源副本暂留供失败回退，不参与服务。失败恢复旧 override；无法确认回滚时保持暂停，修复控制面后再执行 move 核对。没有 SSH 数据传输或后台复制。
+**手动迁移要经过停写边界。** admin 执行 `npm run cluster -- move <username> <shardId>`，请求交给 control：持久化暂停 → 源节点停止新派发 → 等执行中的轮次、索引和已开始的媒体轮询结束 → 关闭用户进程 → 内部 HTTP 流式 tar 复制 CODEX_HOME 与 `workspace/users/<id>`，保留数值 uid/gid → 搬运关联正文和本地索引 → control 事务提交 `user_shards` 与操作单 switched，再发布 override → 刷新并恢复派发。源副本暂留供失败回退，不参与服务。失败将操作单标为 failed 并保持暂停；保留磁盘与已提交的 PG 归属，运维核对副本和操作单后恢复，不自动回退或重放失败操作。没有 SSH 数据传输或后台复制。
 
 ## 分工
 
@@ -158,10 +158,14 @@ export function validateRoute(cache, userId, nodeId, revision) {
 
 ## 限制
 
+- 节点使用独立的 `AGENT_NODE_KEY_A/B/C`（`init-env` 生成）；每个运行容器只有自己的明文密钥和三个节点的 SHA-256 验证哈希。内部请求以 `x-node-id` 和该节点密钥确定调用节点；迁移六个接口还必须提供 30 分钟有效的 `move_operations` 操作单，校验 control/源/目标角色、用户、接收节点和步骤状态。节点仍共享业务数据库与控制面信任，不能把被攻陷的节点当作隔离租户；这仍是教学级部署，没有 mTLS，内部 HTTP 不提供传输加密，须限制在可信网络。
+- 全局账号表对节点只开放 `UPDATE(plan_id)`，不授予建号、改用户名/角色/密码或禁用权限；`auth:init` 与 CLI `user:add/passwd/disable` 使用 maintenance 运维连接。`auth_sessions` 仅允许 INSERT 和 UPDATE(last_seen_at, revoked_at)，无 DELETE；`agent_versions` 允许 INSERT，不允许修改或删除。已有安装通过 018 迁移收紧权限，部署仍需执行节点角色 provision。
+- 跨分片知识读取携带终端用户 Authorization；所有者节点通过全局账号/会话表重新认证，再取新的 Hub 权限快照。同一节点后续工具调用只复用内存中该用户最近已认证的终端令牌，不写入任务、磁盘或操作单；节点重启或迁移后须先收到新的已认证请求，缺令牌时拒绝跨分片读取。请求正文中的 requester 一律拒绝；无有效终端令牌、会话撤销或用户禁用均不能以节点密钥代替授权。
+
 - 节点坏了，其分片不可用；本章无副本、复制位点、自动接管或自动再平衡。
 - PostgreSQL、Redis、模型网关仍为单实例；教学 etcd 也是单节点，控制存储存在单点。control 进程可重新选举，这不能消除单节点 etcd 的故障点。etcd 不可用时超过 TTL 会停止服务；生产升级见 [production.md](docs/production.md)。
-- etcd 与 PG 没有跨库原子提交。control 持有 PG 任期锁，更新映射后发布 etcd 再提交 SQL；映射锁阻止越过切换的旧写入。中间故障保持用户暂停，control 对账并由 admin 重试迁移。不要把此流程称为分布式原子事务。
-- 手动迁移要求源和目标在线、同一固定绝对 APP_DIR、同一数值 uid 映射。tar 拒绝链接、设备文件、路径穿越和不匹配属主；一次目录拷贝超过 30 秒会失败并保留源。迁移不是损坏磁盘恢复工具。
+- etcd 与 PG 没有跨库原子提交。control 持有 PG 任期锁，先提交映射与操作单 switched，再发布 etcd override；映射锁阻止越过切换的旧写入。etcd 发布失败会报警、将操作单标为 failed 并保持暂停，不把旧副本恢复为主。对账仅采纳有 switched/resumed 操作单的目标 override；无操作单、未复制完成或 failed 的 override 会被记录并忽略。不要把此流程称为分布式原子事务。
+- 手动迁移要求源和目标在线、同一固定绝对 APP_DIR、同一数值 uid 映射。tar 拒绝链接、设备文件、路径穿越、不匹配属主和 setuid；普通文件清除全部特殊权限位，目录只保留 setgid。tar、正文和索引的单次接收上限为 1 GiB，`AGENT_TRANSFER_MAX_BYTES` 只可下调；超限中止并删除临时文件，写入前目标卷须有至少两倍上限的可用空间，否则返回 507；一次目录拷贝超过 30 秒会失败并保留源。迁移不是损坏磁盘恢复工具。
 - SSE 序号在当前主节点进程内连续；迁移或重启之后新事件代次让客户端回到快照，不承诺跨主节点的永久全局序号。
 - s16 使用的 etcd3 **1.1.2** Election 共享 lease 适配依赖固定版本内部调用顺序；升级必须重跑认证集成测试。依赖与 s16 完全一致，未增加库。
 

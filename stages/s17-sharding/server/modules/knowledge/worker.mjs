@@ -13,15 +13,24 @@ export class KnowledgeWorker {
   get queueKey() { return this.key + (this.service.sharding ? ':' + currentIdentity().userId : ''); }
   async recoverOwner() {
     const s = this.service;
+    if (s.sharding) return transaction(s.pool, async client => {
+      const row = (await client.query('SELECT paused FROM agent_data.user_shards WHERE user_id=$1 FOR SHARE', [currentIdentity().userId])).rows[0];
+      if (!row || row.paused || !await s.sharding.canDispatch(currentIdentity().userId)) return;
+      return this.recoverRows(client);
+    });
+    return this.recoverRows();
+  }
+  async recoverRows(client) {
+    const s = this.service;
     // Staging indexes are disposable. A crash never advances the effective pointer.
-    const orphaned = (await this.query(`SELECT manifest FROM agent_data.knowledge_indexes WHERE instance_id=$1 AND state='building' AND $2::uuid IS NOT NULL`)).rows;
+    const orphaned = (await this.query(`SELECT manifest FROM agent_data.knowledge_indexes WHERE instance_id=$1 AND state='building' AND $2::uuid IS NOT NULL`, [], client)).rows;
     for (const row of orphaned) await s.rag.discard(row.manifest).catch(() => {});
-    await this.query(`UPDATE agent_data.knowledge_indexes SET state='failed',error='构建中断，请重新提交。' WHERE instance_id=$1 AND state='building' AND $2::uuid IS NOT NULL`);
-    await this.query(`UPDATE agent_data.knowledge_jobs SET state='failed',error='构建中断，请重新提交。' WHERE instance_id=$1 AND state='running' AND $2::uuid IS NOT NULL`);
+    await this.query(`UPDATE agent_data.knowledge_indexes SET state='failed',error='构建中断，请重新提交。' WHERE instance_id=$1 AND state='building' AND $2::uuid IS NOT NULL`, [], client);
+    await this.query(`UPDATE agent_data.knowledge_jobs SET state='failed',error='构建中断，请重新提交。' WHERE instance_id=$1 AND state='running' AND $2::uuid IS NOT NULL`, [], client);
     
   }
   async open() {
-    if (this.service.sharding) await this.service.sharding.eachOwner(() => this.recoverOwner(), { includePaused: true });
+    if (this.service.sharding) await this.service.sharding.eachOwner(() => this.recoverOwner());
     else await this.recoverOwner();
     this.timer = setInterval(() => this.tick(), 1000); this.timer.unref(); this.tick(); return this;
   }

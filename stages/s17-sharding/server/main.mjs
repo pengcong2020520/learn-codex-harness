@@ -89,7 +89,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const resources = data.resources?.({ files: localFiles, sources: agent.sources, outputs: agent.outputs, gate });
     const rag = gate ? await createRag(config.rag, path.join(config.root, '.data/knowledge/bm25'), usage) : null;
     const knowledge = gate ? await runOwner(identity(config.root).ownerId, () => new KnowledgeService(data.pool, data.scope, { agent, gate, resources, rag, redact, sharding: config.sharding }).open()) : null;
-    if (config.sharding) attachKnowledge({ knowledge, resources, permissionHub, gate }, config.sharding);
+    if (config.sharding) attachKnowledge({ accounts, knowledge, resources, permissionHub, gate }, config.sharding);
     if (knowledge) agent.knowledgeModes = knowledge.modes;
     const files = resources ? { get workspace() { return localFiles.workspace; },
       ...Object.fromEntries(['list_files','read_file','write_file'].map(name => [name, async args => {
@@ -188,7 +188,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       void knowledge?.worker?.close().catch(() => {});
       void media?.close().catch(() => {});
     };
-    return { http, stopDispatch, config, agent, runtime, rpc, runtimes, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, usage, accounts, permissionHub, url, close: gracefulShutdown({
+    return { media, http, stopDispatch, config, agent, runtime, rpc, runtimes, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, usage, accounts, permissionHub, url, close: gracefulShutdown({
       ...(generation ? { coordinated: true } : {}),
       stopDispatch,
       markUnconfirmed: async () => {

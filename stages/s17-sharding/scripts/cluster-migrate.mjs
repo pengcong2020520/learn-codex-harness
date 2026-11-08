@@ -16,6 +16,11 @@ export async function provisionNodeRoles(pool, passwords, database = 'agent_s17'
     await pool.query(`GRANT CONNECT ON DATABASE ${database} TO ${role}`);
     await pool.query(`GRANT USAGE ON SCHEMA agent_data TO ${role}`);
     await pool.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA agent_data TO ${role}`);
+    await pool.query(`REVOKE INSERT, UPDATE, DELETE ON agent_data.users, agent_data.auth_sessions, agent_data.agent_versions, agent_data.plans, agent_data.imports FROM ${role}`);
+    // plan:assign is the only runtime account mutation. Account administration uses maintenance.
+    await pool.query(`GRANT UPDATE(plan_id) ON agent_data.users TO ${role}`);
+    await pool.query(`GRANT INSERT, UPDATE(last_seen_at, revoked_at) ON agent_data.auth_sessions TO ${role}`);
+    await pool.query(`GRANT INSERT ON agent_data.agent_versions TO ${role}`);
     await pool.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA agent_data TO ${role}`);
     await pool.query(`REVOKE INSERT, UPDATE, DELETE ON agent_data.migrations FROM ${role}`);
     await pool.query(`REVOKE INSERT, UPDATE, DELETE ON agent_data.cluster_term FROM ${role}`);

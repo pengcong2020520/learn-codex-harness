@@ -10,7 +10,7 @@ export function requireIdentity() {
 }
 export function runIdentity(identity, operation) {
   if (!identity?.userId) throw new Error('缺少可信 owner。');
-  return storage.run(Object.freeze({ userId: identity.userId, role: identity.role, authSessionId: identity.authSessionId }), operation);
+  return storage.run(Object.freeze({ userId: identity.userId, role: identity.role, authSessionId: identity.authSessionId, authorization: identity.authorization }), operation);
 }
 // 后台调用者必须从持久化任务/会话记录传 owner，不继承触发调度的请求身份。
 export const runOwner = (ownerId, operation) => runIdentity({ userId: ownerId }, operation);

@@ -14,6 +14,7 @@ export class Repository {
     return businessQuery(client, sql, [this.instanceId, this.ownerId, ...values]);
   }
   async initialize() {
+    if ((await this.query('SELECT 1 FROM agent_data.users WHERE instance_id=$1 AND id=$2')).rows.length) return;
     await this.query(
       "INSERT INTO agent_data.users(instance_id,id,name) VALUES($1,$2,'local-owner') ON CONFLICT DO NOTHING",
     );

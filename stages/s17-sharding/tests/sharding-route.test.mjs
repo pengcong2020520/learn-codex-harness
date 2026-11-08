@@ -1,3 +1,4 @@
+import { nodeAuth, authHeaders } from './fixtures/node-auth.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
@@ -31,18 +32,37 @@ async function fixture(t) {
   }
   client.set('/codex/overrides/' + user, '"0"');
   const row = { user_id: user, shard_id: '0', paused: false };
+  let operation, inTransaction = false, transactionTerm, termLocked = false;
   const db = { release() {}, async query(sql, args) {
-    if (sql.startsWith('UPDATE agent_data.user_shards SET paused')) { row.paused = args[1]; steps.push('pg-paused-' + args[1]); }
+    if (sql === 'BEGIN') { inTransaction = true; transactionTerm = undefined; termLocked = false; }
+    if (sql.includes("set_config('app.term'")) { assert.ok(inTransaction); transactionTerm = args[0]; }
+    if (sql === 'SELECT agent_data.locked_cluster_term()') { assert.equal(transactionTerm, '10'); termLocked = true; }
+    if (/^(INSERT INTO|UPDATE) agent_data.move_operations/.test(sql)) {
+      assert.ok(inTransaction && termLocked, 'operation writes must hold the control term transaction');
+      steps.push('operation-' + (sql.startsWith('INSERT') ? 'paused' : args[2]));
+    }
+    if (sql === 'COMMIT' || sql === 'ROLLBACK') { inTransaction = false; transactionTerm = undefined; termLocked = false; }
+    if (sql.startsWith('UPDATE agent_data.user_shards SET paused')) { row.paused = sql.includes('paused=true') ? true : sql.includes('paused=false') ? false : args[1]; steps.push('pg-paused-' + row.paused); }
     if (sql.startsWith('UPDATE agent_data.user_shards SET shard_id')) { row.shard_id = args[1]; steps.push('pg-shard-' + args[1]); }
+    if (sql.startsWith('INSERT INTO agent_data.move_operations')) {
+      operation = { id: args[0], user_id: args[1], from_shard: args[2], to_shard: args[3], control_node: args[4], source_node: args[5], target_node: args[6], state: 'paused' }; return { rows: [operation] };
+    }
+    if (sql.startsWith('UPDATE agent_data.move_operations SET state=$3')) { assert.equal(operation.state, args[1]); operation.state = args[2]; return { rows: [operation] }; }
+    if (sql.startsWith('SELECT * FROM agent_data.move_operations')) return { rows: operation ? [operation] : [] };
+    if (sql.startsWith('SELECT u.*')) return { rows: [{ ...row, node_id: 'node-a' }] };
+    if (sql.startsWith('SELECT node_id')) return { rows: [{ node_id: 'node-b' }] };
     if (sql === 'COMMIT') steps.push('commit');
     return { rows: sql.includes('pg_try_advisory_lock') ? [{ locked: true }] : [{ ...row }] };
   } };
-  const pool = { ...db, connect: async () => db };
+  const pool = { query: (sql, args) => {
+    assert.doesNotMatch(sql, /^(INSERT INTO|UPDATE|DELETE FROM) agent_data.move_operations/, 'nodes only read operation orders');
+    return db.query(sql, args);
+  }, connect: async () => db };
   for (const suffix of ['a','b','c']) {
     const nodeId = 'node-' + suffix, cache = await new RouteCache(client).open();
     t.after(() => cache.close()); clearInterval(cache.timer);
     const coordination = scriptedCoordination({ client, nodeId, members, term: '10', isolations: [] });
-    const runtime = new ShardRuntime({ nodeId, cache, coordination, key }); runtime.pool = pool;
+    const runtime = new ShardRuntime({ nodeId, cache, coordination, ...nodeAuth(nodeId) }); runtime.pool = pool;
     const control = new ShardControl(coordination, cache, pool);
     const app = { data: { pool }, accounts: {
       authenticate: async token => ({ userId: user, role: token === 'Bearer admin' ? 'admin' : 'user' }),
@@ -117,6 +137,7 @@ test('three nodes: production override bytes, delayed Watches, resume snapshot a
   assert.equal(nodes[2].cache.routeOf(user).shardId, '1');
   assert.ok(steps.indexOf('boundary-node-a') < steps.indexOf('pg-shard-1'));
   assert.ok(steps.indexOf('pg-shard-1') < steps.indexOf('pg-paused-false'));
+  assert.deepEqual(steps.filter(step => step.startsWith('operation-')), ['operation-paused', 'operation-copying', 'operation-copied', 'operation-switched', 'operation-resumed']);
   t.diagnostic(JSON.stringify({ before: before.body, after: after.body, response }));
 });
 
@@ -139,7 +160,8 @@ test('legacy numeric override: snapshot and Watch keep strict PG equality and ov
 });
 
 test('internal pause: migrating runOwner enters boundary, awaits it before closing streams, restores caller identity', { timeout: 5000 }, async t => {
-  const { nodes, row, steps } = await fixture(t); row.paused = true;
+  const { nodes, row, steps } = await fixture(t);
+  const operation = await nodes[0].control.beginMove(user, '1'); steps.length = 0;
   let release, entered;
   const boundary = new Promise(resolve => { entered = resolve; });
   nodes[0].app.sessions.atBoundary = async operation => {
@@ -149,7 +171,7 @@ test('internal pause: migrating runOwner enters boundary, awaits it before closi
   };
   const adminId = '00000000-0000-4000-8000-000000000001';
   await runIdentity({ userId: adminId, role: 'admin' }, async () => {
-    const pending = request(nodes[0].handler, '/internal/pause', { method: 'POST', headers: { 'x-node-key': key }, body: JSON.stringify({ userId: user }) });
+    const pending = request(nodes[0].handler, '/internal/pause', { method: 'POST', headers: authHeaders('node-a'), body: JSON.stringify({ userId: user, operationId: operation.id }) });
     await boundary;
     assert.equal(nodes[0].runtime.paused.has(user), true); assert.equal(await nodes[0].runtime.canDispatch(user), false);
     assert.deepEqual(steps, []); release();

@@ -41,7 +41,8 @@ test('真实 Linux uid/tar：home 私有历史与 tmp、服务 workspace、数�
   const workspace = path.join(dirs[0].workspaceDir, 'history.txt');
   fs.writeFileSync(workspace, '完整历史与记忆', { mode: 0o660 }); fs.chownSync(workspace, 0, 1000); fs.chmodSync(workspace, 0o660);
   const userFile = path.join(dirs[0].workspaceDir, 'user.txt');
-  fs.writeFileSync(userFile, 'user workspace', { mode: 0o660 }); fs.chownSync(userFile, uid, 1000); fs.chmodSync(userFile, 0o660);
+  fs.writeFileSync(userFile, 'user workspace', { mode: 0o660 }); fs.chownSync(userFile, uid, 1000); fs.chmodSync(userFile, 0o3660);
+  const groupDir = path.join(dirs[0].workspaceDir, 'group'); fs.mkdirSync(groupDir); fs.chownSync(groupDir, 0, 1000); fs.chmodSync(groupDir, 0o3770);
   for (const kind of ['home', 'workspace']) {
     const transfer = exportTree(roots[0], record, kind);
     try { await importTree(roots[1], record, kind, transfer.stream); await transfer.done; }
@@ -57,6 +58,23 @@ test('真实 Linux uid/tar：home 私有历史与 tmp、服务 workspace、数�
     assert.equal(fs.readFileSync(target, 'utf8'), content);
     assert.deepEqual([stat.uid, stat.gid, stat.mode & 0o777], [owner, 1000, 0o660]);
   }
+  assert.equal(fs.statSync(path.join(dirs[1].workspaceDir, 'user.txt')).mode & 0o7000, 0);
+  assert.equal(fs.statSync(path.join(dirs[1].workspaceDir, 'group')).mode & 0o7777, 0o2770);
+  const suid = path.join(dirs[0].workspaceDir, 'suid'); fs.writeFileSync(suid, 'not executable'); fs.chownSync(suid, 0, 1000); fs.chmodSync(suid, 0o4660);
+  const forbidden = exportTree(roots[0], record, 'workspace');
+  try { await assert.rejects(importTree(roots[1], record, 'workspace', forbidden.stream), error => error.subprocessDiagnostic.phase === 'validate'); await forbidden.done; }
+  finally { await forbidden.stop(); fs.unlinkSync(suid); }
+  const oldLimit = process.env.AGENT_TRANSFER_MAX_BYTES; process.env.AGENT_TRANSFER_MAX_BYTES = '32';
+  try {
+    const input = Readable.from([Buffer.alloc(32), Buffer.alloc(1)]);
+    await assert.rejects(importTree(roots[1], record, 'workspace', input), { status: 413 });
+    assert.equal(input.destroyed, true);
+    assert.deepEqual(fs.readdirSync(path.join(roots[1], '.data/transfers')), []);
+    assert.equal(fs.readdirSync(path.dirname(dirs[1].workspaceDir)).some(name => name.startsWith('.move-')), false);
+  } finally { if (oldLimit === undefined) delete process.env.AGENT_TRANSFER_MAX_BYTES; else process.env.AGENT_TRANSFER_MAX_BYTES = oldLimit; }
+  t.mock.method(fs, 'statfsSync', () => ({ bavail: 0n, bsize: 4096n }));
+  await assert.rejects(importTree(roots[1], record, 'workspace', Readable.from([])), { status: 507 });
+  t.mock.restoreAll();
   for (const [kind, dir] of [['home', dirs[0].codexHome], ['workspace', dirs[0].workspaceDir]]) {
     const link = path.join(dir, 'forbidden-link'); fs.symlinkSync('/etc/passwd', link);
     const transfer = exportTree(roots[0], record, kind); transfer.stream.resume();

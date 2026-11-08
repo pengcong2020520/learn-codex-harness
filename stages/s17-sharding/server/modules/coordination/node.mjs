@@ -11,6 +11,7 @@ import { Coordination } from './index.mjs';
 import { Rejoin } from './rejoin.mjs';
 import { ShardedService } from '../sharding/service.mjs';
 import { RouteCache } from '../sharding/cache.mjs';
+import { nodeKeyHash } from '../sharding/routing.mjs';
 import { ShardRuntime } from '../sharding/runtime.mjs';
 import { ShardControl } from '../sharding/control.mjs';
 import { createShardedHandler } from '../sharding/http.mjs';
@@ -26,9 +27,11 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
   const coordination = new Coordination({ ...adapter, nodeId, address: `http://${nodeId}:${config.port}`,
     revision: revision(config.root), agentHash: createHash('sha256').update(fs.readFileSync(agent.file)).update(agent.instructions).digest('hex'), capacity: RUNTIME_LIMIT });
   if (!env.AGENT_NODE_KEY || env.AGENT_NODE_KEY.length < 24) throw new Error('AGENT_NODE_KEY 至少 24 位。');
+  const keyHashes = Object.fromEntries(['A','B','C'].map(n => ['node-' + n.toLowerCase(), env[`AGENT_NODE_KEY_${n}_HASH`]]));
+  if (Object.values(keyHashes).some(h => !/^[a-f0-9]{64}$/.test(h || '')) || keyHashes[nodeId] !== nodeKeyHash(env.AGENT_NODE_KEY)) throw new Error('节点密钥哈希缺失或不匹配。');
   const pool = await openDatabase(config.data.databaseUrl, { maintenance: false });
   const cache = await new RouteCache(adapter.client, env.AGENT_SHARD_STRATEGY || 'slots').open();
-  const runtime = new ShardRuntime({ nodeId, cache, coordination, key: env.AGENT_NODE_KEY });
+  const runtime = new ShardRuntime({ nodeId, cache, coordination, key: env.AGENT_NODE_KEY, keyHashes });
   const control = new ShardControl(coordination, cache, pool);
   control.log = log;
   const service = new ShardedService(coordination, generation => start({ config: { ...config, sharding: runtime }, generation, externalHttp: true, log }), runtime, log);

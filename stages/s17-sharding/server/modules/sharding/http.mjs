@@ -5,9 +5,11 @@ import { Readable, Transform } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
-import { runIdentity, runOwner } from '../accounts/context.mjs';
+import { runOwner } from '../accounts/context.mjs';
 import { withShardUser } from './fence.mjs';
-import { authenticateNode, validateRoute, routedRequest, forwardHttp, bufferBody, streamResponse, targetOf, unavailable } from './routing.mjs';
+import { authorizeMove } from './operations.mjs';
+import { transferLimit, assertTransferSpace, limitTransfer } from './transfer.mjs';
+import { authenticateNode, nodeHeaders, validateRoute, routedRequest, forwardHttp, bufferBody, streamResponse, targetOf, unavailable } from './routing.mjs';
 import { moveUser } from './move.mjs';
 import { exportTree, importTree } from './transfer.mjs';
 import { prepareDirectories } from '../runtimes/directories.mjs';
@@ -15,9 +17,9 @@ import { RuntimeStore } from '../runtimes/store.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 
 export function installInternalClient(runtime) {
-  runtime.call = async (address, pathname, body) => {
+  runtime.call = async (address, pathname, body, authorization) => {
     const response = await fetch(new URL(pathname, address), { method: 'POST', redirect: 'error',
-      headers: { 'content-type': 'application/json', 'x-node-key': runtime.key }, body: JSON.stringify(body), signal: ['/internal/move','/internal/copy'].includes(pathname) ? undefined : AbortSignal.timeout(30000) });
+      headers: { 'content-type': 'application/json', ...nodeHeaders(runtime), ...(authorization ? { authorization } : {}) }, body: JSON.stringify(body), signal: ['/internal/move','/internal/copy'].includes(pathname) ? undefined : AbortSignal.timeout(30000) });
     const value = await response.json();
     if (!response.ok) throw new AppError(value.error?.message || '节点调用失败。', response.status, value.error?.code);
     return value;
@@ -72,24 +74,26 @@ export function createShardedHandler(coordination, service, runtime, control) {
     if (!row?.paused) throw new AppError('迁移要求先持久化暂停用户。', 409);
   };
   async function internal(req, res, pathname, json) {
-    authenticateNode(req.headers, runtime.key);
+    const caller = authenticateNode(req.headers, runtime.keyHashes);
     if (pathname === '/internal/revision') return json(200, { revision: runtime.cache.revision });
     const url = new URL(req.url, 'http://localhost');
     const app = service.app;
     if (pathname === '/internal/transfer' && req.method === 'PUT') {
       const userId = url.searchParams.get('user'), kind = url.searchParams.get('kind');
+      const check = () => authorizeMove(app.data.pool, { operationId: url.searchParams.get('operationId'), userId, caller, receiver: runtime.nodeId, step: 'transfer' });
+      await check();
       await paused(userId);
       if (runtime.owns(userId)) throw new AppError('不能覆盖仍在负责的用户目录。', 409);
       const record = await recordFor(userId);
       if (!record) throw new AppError('源运行环境映射缺失。', 409);
       return json(200, await exclusive(runtime.transfers, userId, () => importTree(app.config.root, record, kind, req, async () => {
-        app.config.generation?.assert(); await paused(userId);
+        app.config.generation?.assert(); await check(); await paused(userId);
         if (runtime.owns(userId)) throw new AppError('目标已开始负责用户，拒绝迟到目录。', 409);
       })));
     }
     const body = await parse(req);
     if (pathname === '/internal/route') return json(200, await runtime.routeStatus(body.userId));
-    if (pathname === '/internal/knowledge') return json(200, await runtime.readKnowledge(body));
+    if (pathname === '/internal/knowledge') return json(200, await runtime.readKnowledge(body, req.headers.authorization));
     if (pathname === '/internal/ensure-user') { await control.ensureUser(body.userId); return json(200, { assigned: true }); }
     if (pathname === '/internal/move') {
       // Reauthenticate admin at control; possession of a node key is not an admin credential.
@@ -98,12 +102,14 @@ export function createShardedHandler(coordination, service, runtime, control) {
       return json(200, await executeMove(body.username, body.shardId));
     }
     if (!['/internal/pause','/internal/drain','/internal/copy','/internal/resume'].includes(pathname)) throw new AppError('内部接口不存在。', 404);
-    const { userId } = body;
+    const { userId, operationId } = body;
+    const checkOperation = () => authorizeMove(app.data.pool, { operationId, userId, caller, receiver: runtime.nodeId, step: pathname.slice('/internal/'.length), target: body.target });
+    const operation = await checkOperation();
     await paused(userId);
     if (pathname === '/internal/resume') {
       await runtime.copies.get(userId)?.catch(() => {});
       await runtime.transfers.get(userId)?.catch(() => {});
-      await runtime.cache.refresh(); runtime.paused.delete(userId); return json(200, { resumed: true });
+      await runtime.cache.refresh(); await checkOperation(); runtime.paused.delete(userId); return json(200, { resumed: true });
     }
     if (!runtime.owns(userId)) throw unavailable('源节点已不是用户主节点。');
     if (pathname === '/internal/pause') {
@@ -115,9 +121,10 @@ export function createShardedHandler(coordination, service, runtime, control) {
     }
     if (!runtime.paused.has(userId)) throw new AppError('源节点尚未暂停。', 409);
     if (pathname === '/internal/drain') {
+      await app.media?.waitOwner?.(userId);
       await app.runtimes.waitSkills?.(userId);
       await app.usage.pending;
-      const busy = (await app.data.pool.query(`SELECT EXISTS(SELECT 1 FROM agent_data.tasks t JOIN agent_data.conversations c ON c.instance_id=t.instance_id AND c.id=t.thread_id WHERE c.instance_id=$1 AND c.owner_id=$2 AND t.status IN ('starting','running','steering')) OR EXISTS(SELECT 1 FROM agent_data.media_jobs WHERE instance_id=$1 AND owner_id=$2 AND status NOT IN ('completed','failed')) OR EXISTS(SELECT 1 FROM agent_data.knowledge_jobs j JOIN agent_data.knowledge_bases k ON k.instance_id=j.instance_id AND k.id=j.kb_id WHERE j.instance_id=$1 AND k.owner_id=$2 AND j.state='running') AS busy`, [app.data.scope.instanceId, userId])).rows[0].busy;
+      const busy = (await app.data.pool.query(`SELECT EXISTS(SELECT 1 FROM agent_data.tasks t JOIN agent_data.conversations c ON c.instance_id=t.instance_id AND c.id=t.thread_id WHERE c.instance_id=$1 AND c.owner_id=$2 AND t.status IN ('starting','running','steering')) OR EXISTS(SELECT 1 FROM agent_data.knowledge_jobs j JOIN agent_data.knowledge_bases k ON k.instance_id=j.instance_id AND k.id=j.kb_id WHERE j.instance_id=$1 AND k.owner_id=$2 AND j.state='running') AS busy`, [app.data.scope.instanceId, userId])).rows[0].busy;
       const entry = app.runtimes.pool.entries.get(userId);
       if (busy || entry?.refs || runtime.inflight?.get(userId)) return json(200, { drained: false });
       if (entry) await app.runtimes.pool.remove(entry);
@@ -131,12 +138,12 @@ export function createShardedHandler(coordination, service, runtime, control) {
     }
     if (pathname === '/internal/copy') {
       return json(200, await exclusive(runtime.copies, userId, async () => {
-      const record = await recordFor(userId), address = nodeAddress(runtime, body.target);
+      const record = await recordFor(userId), address = nodeAddress(runtime, operation.target_node);
       for (const kind of ['home','workspace']) {
         app.config.generation?.assert();
         const tar = exportTree(app.config.root, record, kind);
         try {
-        const response = await fetch(new URL(`/internal/transfer?user=${userId}&kind=${kind}`, address), { method: 'PUT', headers: { 'x-node-key': runtime.key }, body: tar.stream, duplex: 'half', redirect: 'error', signal: AbortSignal.timeout(30000) });
+        const response = await fetch(new URL(`/internal/transfer?operationId=${operationId}&user=${userId}&kind=${kind}`, address), { method: 'PUT', headers: { ...nodeHeaders(runtime) }, body: tar.stream, duplex: 'half', redirect: 'error', signal: AbortSignal.timeout(30000) });
         await tar.done;
         if (!response.ok) throw new Error('目标节点拒绝用户目录。');
         await response.arrayBuffer();
@@ -145,7 +152,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
           await tar.stop(); await tar.done; throw error;
         } finally { await tar.stop(); }
       }
-      await copyContent(app, runtime, userId, address);
+      await copyContent(app, runtime, userId, address, operationId);
       return { copied: true };
       }));
     }
@@ -162,12 +169,12 @@ export function createShardedHandler(coordination, service, runtime, control) {
       if (!rows[0].locked) throw new AppError('此用户正在迁移。', 409);
       try {
         return await moveUser({ userId: user.id, shardId, control, cache: runtime.cache,
-          pause: (node, userId) => runtime.call(nodeAddress(runtime, node), '/internal/pause', { userId }),
-          drain: async (node, userId) => {
-            while (!(await runtime.call(nodeAddress(runtime, node), '/internal/drain', { userId })).drained) { coordination.assertController(); await delay(200); }
+          pause: (node, userId, operationId) => runtime.call(nodeAddress(runtime, node), '/internal/pause', { userId, operationId }),
+          drain: async (node, userId, operationId) => {
+            while (!(await runtime.call(nodeAddress(runtime, node), '/internal/drain', { userId, operationId })).drained) { coordination.assertController(); await delay(200); }
           },
-          copy: (source, target, userId) => runtime.call(nodeAddress(runtime, source), '/internal/copy', { target, userId }),
-          resume: (node, userId) => runtime.call(nodeAddress(runtime, node), '/internal/resume', { userId }),
+          copy: (source, target, userId, operationId) => runtime.call(nodeAddress(runtime, source), '/internal/copy', { target, userId, operationId }),
+          resume: (node, userId, operationId) => runtime.call(nodeAddress(runtime, node), '/internal/resume', { userId, operationId }),
         });
       } finally { await db.query('SELECT pg_advisory_unlock(hashtextextended($1,17))', [user.id]); }
     } finally { db.release(); }
@@ -180,14 +187,19 @@ export function createShardedHandler(coordination, service, runtime, control) {
       if (!service.isReady()) throw unavailable('节点未就绪或成员租约失效。');
       if (pathname === '/ready') return service.app.http.handle(request, response);
       if (pathname === '/internal/content') {
-        authenticateNode(request.headers, runtime.key);
+        const caller = authenticateNode(request.headers, runtime.keyHashes);
+        if (request.method !== 'PUT') throw new AppError('需要 PUT。', 405);
+        const q = new URL(request.url, 'http://localhost').searchParams;
+        const check = () => authorizeMove(service.app.data.pool, { operationId: q.get('operationId'), userId: q.get('user'), caller, receiver: runtime.nodeId, step: 'content' });
+        await check();
         const userId = new URL(request.url, 'http://localhost').searchParams.get('user');
-        return await exclusive(runtime.transfers, userId, () => receiveContent(service.app, request, json, paused));
+        return await exclusive(runtime.transfers, userId, () => receiveContent(service.app, request, json, async id => { await check(); await paused(id); }));
       }
       if (pathname.startsWith('/internal/')) return await internal(request, response, pathname, json);
       if (request.headers.origin !== undefined) throw new AppError('CLI only', 403);
       if (pathname === '/auth/login') return service.app.http.handle(request, response);
       const identity = await service.app.accounts.authenticate(request.headers.authorization);
+      runtime.rememberAuthorization?.(identity, request.headers.authorization);
       if (pathname === '/cluster' || pathname === '/cluster/move' || pathname === '/cluster/route') {
         if (identity.role !== 'admin') throw new AppError('需要 admin。', 403);
         if (pathname === '/cluster') return json(200, await shardStatus(coordination, runtime.cache, service.app, runtime));
@@ -221,7 +233,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       }
       const forwarded = request.headers['x-node-key'] !== undefined;
       if (forwarded) {
-        authenticateNode(request.headers, runtime.key);
+        authenticateNode(request.headers, runtime.keyHashes);
         if (request.headers['x-route-user'] !== owner) throw new AppError('转发用户不匹配。', 403);
         validateRoute(runtime.cache, owner, runtime.nodeId, request.headers['x-route-revision']);
       }
@@ -236,7 +248,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       const abort = new AbortController(); const close = () => abort.abort(); response.once('close', close);
       try {
         const result = await routedRequest({ cache: runtime.cache, userId: owner, nodeId: runtime.nodeId, members: coordination.members, local,
-          remote: (address, route) => forwardHttp(request, address, route, owner, runtime.key, body, { signal: abort.signal }) });
+          remote: (address, route) => forwardHttp(request, address, route, owner, runtime, body, { signal: abort.signal }) });
         if (result) await streamResponse(result, response);
       } finally { response.off('close', close); }
     } catch (error) {
@@ -257,11 +269,11 @@ function contentPath(root, kind, file) {
   if (!(kind === 'blob' ? /^[a-f0-9]{64}\.(txt|bin)$/ : /^[a-f0-9-]{36}\.json$/).test(file)) throw new Error('无效内容文件。');
   return path.join(root, kind === 'blob' ? '.data/files/objects' : '.data/knowledge/bm25', file);
 }
-async function copyContent(app, runtime, userId, address) {
+async function copyContent(app, runtime, userId, address, operationId) {
   for (const { file, kind } of await contentFiles(app, userId)) {
     const target = contentPath(app.config.root, kind, file), stat = fs.lstatSync(target);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('不安全的内容文件。');
-    const response = await fetch(new URL(`/internal/content?user=${userId}&kind=${kind}&file=${file}`, address), { method:'PUT', headers: { 'x-node-key': runtime.key }, body:fs.createReadStream(target), duplex:'half', redirect:'error', signal:AbortSignal.timeout(30000) });
+    const response = await fetch(new URL(`/internal/content?operationId=${operationId}&user=${userId}&kind=${kind}&file=${file}`, address), { method:'PUT', headers: { ...nodeHeaders(runtime) }, body:fs.createReadStream(target), duplex:'half', redirect:'error', signal:AbortSignal.timeout(30000) });
     if (!response.ok) throw new Error('内容文件迁移失败。'); await response.arrayBuffer();
   }
 }
@@ -271,11 +283,13 @@ async function receiveContent(app, req, json, paused) {
   const entry = (await contentFiles(app, q.get('user'))).find(r => r.file === q.get('file') && r.kind === q.get('kind'));
   if (!entry) throw new AppError('未授权的用户内容。',403);
   const target = contentPath(app.config.root,q.get('kind'),q.get('file'));
+  const limit = transferLimit();
+  assertTransferSpace(path.dirname(target), limit);
   fs.mkdirSync(path.dirname(target), { recursive:true, mode:0o700 });
   const temp = target + '.moving';
   const hash = createHash('sha256');
   try {
-    await pipeline(req, new Transform({ transform(chunk, encoding, callback) { hash.update(chunk); callback(null, chunk); } }), fs.createWriteStream(temp, { flags:'wx',mode:0o600 }));
+    await pipeline(req, limitTransfer(limit), new Transform({ transform(chunk, encoding, callback) { hash.update(chunk); callback(null, chunk); } }), fs.createWriteStream(temp, { flags:'wx',mode:0o600 }));
     if (hash.digest('hex') !== entry.digest) throw new Error('迁移内容校验失败。');
     app.config.generation?.assert(); await paused(q.get('user'));
     fs.renameSync(temp,target);

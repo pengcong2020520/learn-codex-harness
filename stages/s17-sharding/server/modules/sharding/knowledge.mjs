@@ -1,11 +1,12 @@
-import { currentIdentity, runOwner } from '../accounts/context.mjs';
+import { currentIdentity, runIdentity } from '../accounts/context.mjs';
 import { routedRequest, validateRoute } from './routing.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 import { withShardUser } from './fence.mjs';
 const actions = new Set(['read','search','pages','resource']);
 export function attachKnowledge(app, runtime) {
-  const { knowledge, resources, permissionHub: hub, gate } = app;
+  const { accounts, knowledge, resources, permissionHub: hub, gate } = app;
   if (!knowledge) return;
+  if (typeof accounts?.authenticate !== 'function') throw new Error('分片知识读取缺少账号认证服务。');
   const originals = Object.fromEntries(['read','search','pages'].map(m => [m, knowledge[m].bind(knowledge)]));
   const resourceRead = resources.readById.bind(resources);
   const resourceScope = operation => gate.forResource ? gate.forResource(operation) : operation();
@@ -27,8 +28,11 @@ export function attachKnowledge(app, runtime) {
       });
     } finally { runtime.inflight.set(owner, runtime.inflight.get(owner) - 1); }
   };
-  runtime.readKnowledge = async ({ action, args, requester, revision }) => {
-    return resourceScope(() => runOwner(requester, () => hub.withUser(requester, () => gate.run(gate.operator(requester), async () => {
+  runtime.readKnowledge = async (body, authorization) => {
+    if (Object.hasOwn(body, 'requester')) throw new AppError('不接受自报 requester。', 403);
+    const { action, args, revision } = body;
+    const identity = await accounts.authenticate(authorization), requester = identity.userId;
+    return resourceScope(() => runIdentity(identity, () => hub.withUser(requester, () => gate.run(gate.operator(requester), async () => {
       // Second fresh Hub snapshot at the owner, before touching its disk.
       const owner = await authorize(action, args);
       validateRoute(runtime.cache, owner, runtime.nodeId, revision);
@@ -53,7 +57,7 @@ export function attachKnowledge(app, runtime) {
     return routedRequest({ cache: runtime.cache, userId: owner, nodeId: runtime.nodeId, members: runtime.coordination.members,
       local: () => local(action, args, owner),
       remote: async (address, route) => {
-        const result = await runtime.call(address, '/internal/knowledge', { action, args, requester, revision: route.revision });
+        const result = await runtime.call(address, '/internal/knowledge', { action, args, revision: route.revision }, currentIdentity()?.authorization || runtime.authorizationFor?.(requester));
         return result;
       } });
   };

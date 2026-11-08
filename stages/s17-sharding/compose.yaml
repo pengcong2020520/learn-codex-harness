@@ -90,7 +90,11 @@ services:
     init: true
     mem_limit: ${AGENT_MEMORY_LIMIT:-768m}
     environment: &node-env
-      AGENT_NODE_KEY: ${AGENT_NODE_KEY:?Set AGENT_NODE_KEY}
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_A:?Set AGENT_NODE_KEY_A}
+      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:?Set AGENT_NODE_KEY_A_HASH}
+      AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:?Set AGENT_NODE_KEY_B_HASH}
+      AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:?Set AGENT_NODE_KEY_C_HASH}
+      AGENT_TRANSFER_MAX_BYTES: ${AGENT_TRANSFER_MAX_BYTES:-1073741824}
       AGENT_SHARD_STRATEGY: ${AGENT_SHARD_STRATEGY:-slots}
       AGENT_NODE_ID: node-a
       ETCD_ENDPOINT: http://etcd:2379
@@ -154,6 +158,7 @@ services:
       - "./backups/node-b:${CONTAINER_APP_DIR}/backups"
     environment:
       <<: *node-env
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_B:?Set AGENT_NODE_KEY_B}
       AGENT_NODE_ID: node-b
       ETCD_USERNAME: node-b
       ETCD_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
@@ -169,6 +174,7 @@ services:
       - "./backups/node-c:${CONTAINER_APP_DIR}/backups"
     environment:
       <<: *node-env
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_C:?Set AGENT_NODE_KEY_C}
       AGENT_NODE_ID: node-c
       ETCD_USERNAME: node-c
       ETCD_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
