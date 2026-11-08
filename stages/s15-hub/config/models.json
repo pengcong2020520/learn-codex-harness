@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "routes": {
+    "chat": ["kimi/kimi-k2.7-code", "deepseek/deepseek-flash", "zhipu/glm-5.3-flash"],
+    "embedding": ["ollama/qwen3-embedding:0.6b"],
+    "image": ["byteplus/doubao-seedream-5-0-flash-260915", "byteplus/doubao-seedream-5-0-pro-260628"],
+    "video": ["byteplus/doubao-seedance-2-0-mini-260615", "byteplus/doubao-seedance-2-0-fast-260128"]
+  },
+  "scenes": {
+    "fast": ["deepseek/deepseek-flash", "zhipu/glm-5.3-flash", "kimi/kimi-k2.7-code", "byteplus/doubao-seedream-5-0-flash-260915", "byteplus/doubao-seedance-2-0-mini-260615"],
+    "strong": ["deepseek/deepseek-v4-pro", "kimi/kimi-k2.7-code", "zhipu/glm-5.3", "byteplus/doubao-seedream-5-0-pro-260628", "byteplus/doubao-seedance-2-0-fast-260128"]
+  },
+  "providers": {
+    "byteplus": { "type": "byteplus", "baseUrl": "https://ark.cn-beijing.volces.com", "keyEnv": "ARK_API_KEY" },
+    "kimi": { "type": "openai", "baseUrl": "https://api.moonshot.cn", "keyEnv": "KIMI_API_KEY", "note": "Kimi 国内站。国内站与国际站账号不通用：国际站（platform.moonshot.ai）的密钥把 baseUrl 改成 https://api.moonshot.ai" },
+    "deepseek": { "type": "deepseek", "keyEnv": "DEEPSEEK_API_KEY" },
+    "openai": { "type": "openai", "keyEnv": "OPENAI_API_KEY" },
+    "anthropic": { "type": "anthropic", "keyEnv": "ANTHROPIC_API_KEY" },
+    "gemini": { "type": "gemini", "keyEnv": "GEMINI_API_KEY" },
+    "xai": { "type": "xai", "keyEnv": "XAI_API_KEY" },
+    "zhipu": { "type": "anthropic", "baseUrl": "https://open.bigmodel.cn/api/anthropic", "keyEnv": "ZHIPU_API_KEY", "note": "智谱国内站。没有 OpenAI 新接口（/responses 返回 404），走它的 Claude 格式接口；国际站 Z.ai 把 baseUrl 改成 https://api.z.ai/api/anthropic" },
+    "hf": { "type": "openai", "baseUrl": "https://router.huggingface.co", "keyEnv": "HUGGINGFACE_API_KEY", "note": "Hugging Face 推理服务：一个令牌调用多家算力商托管的开源模型，按用量从 HF 账户扣费（免费账户额度很少）。有 OpenAI 新接口，原样转发。令牌只需“推理”权限。" },
+    "ollama": { "type": "ollama", "baseUrlEnv": "OLLAMA_BASE_URL", "note": "本地部署的 Ollama（compose 里的 ollama 服务，地址 http://ollama:11434），不需要密钥；填了 OLLAMA_BASE_URL 才启用。" }
+  },
+  "models": {
+    "byteplus/doubao-seedream-5-0-flash-260915": { "purposes": ["image"] },
+    "byteplus/doubao-seedream-5-0-pro-260628": { "purposes": ["image"] },
+    "byteplus/doubao-seedance-2-0-mini-260615": { "purposes": ["video"] },
+    "byteplus/doubao-seedance-2-0-fast-260128": { "purposes": ["video"] },
+
+    "kimi/kimi-k2.7-code": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.7 Code", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["deepseek/deepseek-flash"], "verified": "2026-11-02" },
+    "kimi/kimi-k2.6": { "purposes": ["chat"], "nativeTools": ["web_search"], "displayName": "Kimi K2.6", "contextWindow": 262144, "inputModalities": ["text", "image"], "supportVerbosity": true, "defaultVerbosity": "low", "verified": "2026-11-02" },
+    "deepseek/deepseek-flash": { "purposes": ["chat"], "displayName": "DeepSeek Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"], "reasoningLevels": ["low", "high", "max"], "defaultReasoningLevel": "high", "supportsImageDetailOriginal": true, "supportVerbosity": true, "defaultVerbosity": "low", "fallbacks": ["kimi/kimi-k2.7-code"], "verified": "2026-10-31" },
+    "deepseek/deepseek-v4-pro": { "purposes": ["chat"], "displayName": "DeepSeek V4 Pro", "contextWindow": 1048576, "inputModalities": ["text", "image"], "fallbacks": ["deepseek/deepseek-flash"] },
+    "zhipu/glm-5.3": { "purposes": ["chat"], "displayName": "GLM-5.3", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text"], "fallbacks": ["zhipu/glm-5.3-flash"] },
+    "zhipu/glm-5.3-flash": { "purposes": ["chat"], "displayName": "GLM-5.3 Flash", "contextWindow": 1000000, "maxOutputTokens": 65536, "inputModalities": ["text", "image"] },
+    "hf/deepseek-ai/DeepSeek-V4.1-Flash": { "purposes": ["chat"], "displayName": "DeepSeek V4.1 Flash（HF）", "contextWindow": 1048576, "inputModalities": ["text"] },
+    "hf/zai-org/GLM-5.3-Flash": { "purposes": ["chat"], "displayName": "GLM-5.3 Flash（HF）", "contextWindow": 1000000, "inputModalities": ["text", "image"] },
+    "hf/MiniMaxAI/MiniMax-M3.1-Flash": { "purposes": ["chat"], "displayName": "MiniMax M3.1 Flash（HF）", "contextWindow": 1000000, "inputModalities": ["text"] },
+    "openai/gpt-6.1-terra": { "purposes": ["chat"], "displayName": "GPT-6.1 Terra", "contextWindow": 1050000, "inputModalities": ["text", "image"] },
+    "anthropic/claude-sonnet-5-5": { "purposes": ["chat"], "displayName": "Claude Sonnet 5.5", "contextWindow": 1000000, "maxOutputTokens": 64000, "inputModalities": ["text", "image"] },
+    "gemini/gemini-3-flash-preview": { "purposes": ["chat"], "displayName": "Gemini 3 Flash", "contextWindow": 1048576, "inputModalities": ["text", "image"] },
+    "xai/grok-4.7": { "purposes": ["chat"], "displayName": "Grok 4.7", "contextWindow": 500000, "inputModalities": ["text", "image"] },
+    "ollama/qwen3-embedding:0.6b": { "purposes": ["embedding"], "displayName": "Qwen3 Embedding 0.6B（本地）", "contextWindow": 32768, "dimensions": 1024, "note": "中英文向量，模型文件约 639MB；npm run ollama:pull 下载" }
+  }
+}

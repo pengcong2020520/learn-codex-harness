@@ -1,0 +1,22 @@
+{
+  "stage": 14,
+  "name": "用户运行环境",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    "node_modules",
+    ".data",
+    ".runs",
+    "workspace (runtime root only)",
+    ".env",
+    "backups"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "保留版本化 examples/*/workspace。",
+    "只增加 runtimes 单元；不增加依赖。",
+    "每用户独立 Codex 进程与系统 uid，服务按可信 owner 路由。"
+  ]
+}
