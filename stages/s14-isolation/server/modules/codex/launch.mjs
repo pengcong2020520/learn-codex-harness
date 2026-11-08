@@ -203,6 +203,7 @@ export function userEnvironment(environment, home) {
   }
   return { ...env, CODEX_HOME: home, CODEX_SQLITE_HOME: home, HOME: home };
 }
+// 不传 groups：Node/libuv 在指定 uid/gid 时执行 setgroups(0)，清空继承的补充组。
 export function userSpawn(executable, args, { uid, gid, isolated }) {
   return {
     command: '/bin/sh',

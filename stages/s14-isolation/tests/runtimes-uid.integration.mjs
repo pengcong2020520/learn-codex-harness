@@ -64,7 +64,7 @@ test('Linux uid: 最小 capabilities、私有组、跨用户不可读、2770、u
       fs.writeFileSync('umask-file','fixture'); fs.mkdirSync('umask-dir');
       fs.mkdirSync(process.env.CODEX_HOME+'/memories',{mode:0o700});
       fs.writeFileSync(process.env.CODEX_HOME+'/memories/memory_summary.md','private-summary',{mode:0o600});
-      console.log(JSON.stringify({uid:process.getuid(),gid:process.getgid(),groups:process.getgroups(),env:process.env,
+      console.log(JSON.stringify({uid:process.getuid(),gid:process.getgid(),groups:process.getgroups(),status:fs.readFileSync('/proc/self/status','utf8'),env:process.env,
         own:fs.readFileSync(process.env.CODEX_HOME+'/marker','utf8'),cross,
         fileMode:fs.statSync('umask-file').mode&0o777,dirMode:fs.statSync('umask-dir').mode&0o7777}));`;
     const launch = userSpawn(process.execPath, ['-e', code, path.join(paths[1 - index].codexHome, 'marker')], { isolated: true, uid: 10001 + index, gid: 10001 + index });
@@ -74,10 +74,12 @@ test('Linux uid: 最小 capabilities、私有组、跨用户不可读、2770、u
     assert.equal(child.status, 0, child.stderr || child.error?.message);
     const result = JSON.parse(child.stdout);
     assert.equal(result.uid, 10001 + index); assert.equal(result.gid, 10001 + index); assert.ok(!result.groups.includes(1000));
+    const groups = result.status.split('\n').find(line => line.startsWith('Groups:')).slice(7).trim().split(/\s+/).filter(Boolean).map(Number);
+    assert.ok(!groups.includes(1000)); assert.ok(groups.every(group => group === 10001 + index));
     assert.equal(result.own, owner); assert.equal(result.cross, 'EACCES'); assert.equal(result.fileMode, 0o660); assert.equal(result.dirMode, 0o2770);
     for (const key of ['DATABASE_URL', 'REDIS_URL', 'OPENAI_API_KEY', 'NODE_OPTIONS']) assert.equal(result.env[key], undefined);
     assert.equal(result.env.HOME, paths[index].codexHome);
-    const memory = new MemoryService({ config: { root, codexHome: paths[index].codexHome }, redact: String }); memory.effective = { enabled: true };
+    const memory = new MemoryService({ config: { root, codexHome: paths[index].codexHome, runtimeUid: 10001 + index }, redact: String }); memory.effective = { enabled: true };
     assert.equal(memory.summary().text, 'private-summary');
   }
   console.log('PASS：uid/gid 10001、10002；无共享补充组；跨用户 EACCES；目录 2770；umask 与白名单生效。');

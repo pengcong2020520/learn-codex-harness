@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { currentIdentity, requireIdentity, runOwner } from '../accounts/context.mjs';
+import { busyError } from './pool.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 
 export function assertToolOwner(connectionOwner, task, session) {
@@ -8,7 +9,7 @@ export function assertToolOwner(connectionOwner, task, session) {
 }
 // 保留既有 RPC 接口，身份只能来自认证上下文或持久化记录；没有默认 admin 回退。
 export class RuntimeRouter extends EventEmitter {
-  constructor(pool) { super(); this.pool = pool; }
+  constructor(pool, { isolated = false } = {}) { super(); this.pool = pool; this.isolated = isolated; }
   current() { return this.pool.current(requireIdentity().userId); }
   withOwner(owner, operation) { return runOwner(owner, () => this.pool.withOwner(owner, operation)); }
   async request(method, params) {
@@ -33,7 +34,9 @@ export class RuntimeRouter extends EventEmitter {
     const router = this;
     return new Proxy(base, { get(target, key) {
       const owner = currentIdentity()?.userId;
-      const agent = (owner && router.pool.current(owner)?.agent) || target;
+      const current = owner && router.pool.current(owner)?.agent;
+      if (!current && router.isolated) throw busyError();
+      const agent = current || target;
       const value = Reflect.get(agent, key);
       return typeof value === 'function' ? value.bind(agent) : value;
     } });

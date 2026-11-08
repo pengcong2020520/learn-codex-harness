@@ -97,8 +97,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const runtimes = createRuntimes({ config, data, agent, tools, cli, redact, log: safeLog, isolated });
     const rpc = runtimes.rpc;
     engine = rpc;
-    agent = runtimes.agent; config.agent = agent; tools.agent = agent;
-    if (gate) gate.agent = agent;
+    const baseAgent = agent; // 服务启动与全局工具刷新显式使用配置 Agent。
     await tools.open();
     const hub = new EventHub({ warn: safeLog });
     const sessions = new SessionService({ rpc, config, runtime, hub, redact, tools, boundary, usage, repository: data.repository,
@@ -108,6 +107,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const memory = runtimes.memory;
     // 协议、Skill、记忆核验在首次用户请求中完成，启动服务不预占用户进程。
     for (const warning of agent.warnings) safeLog(warning);
+    agent = runtimes.agent; config.agent = agent;
+    if (gate) gate.agent = agent;
     safeLog(`记忆配置：${config.memory.enabled ? "已开启" : "关闭"}（每用户独立，已开启不代表已生成）。`);
     // 启用门禁时使用 dynamicTools；按正在执行的 Thread / Turn 绑定可信权限上下文。
     if (gate) rpc.on('notification', message => {
@@ -125,6 +126,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     }
     messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs, queue: data.queue, gate, usage });
     runtimes.attach({ sessions, messages });
+    // 单 owner 的 isBusy 查询失败由池记录并跳过；LISTEN 连接断开仍需全局停止。
     lifecycle.defer(await runtimes.open(error => { safeLog(error.message); void messages.fail(error); }));
     lifecycle.defer(async () => {
       await messages.fail(new Error('服务正在关闭，执行结果待核对。'));
@@ -149,7 +151,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
 
     // 5. 就绪；客户端退出不触发这里的服务关闭。
     safeLog(`网络模式：${tools.registry.networkMode === "proxy-debug" ? "本地调试，信任 HTTPS 域名的代理 Fake-IP 映射；生产部署请设置 NODE_ENV=production" : "严格公网地址检查"}`);
-    safeLog(`Agent 服务已就绪：${url}\nAgent：${agent.definition.agent.id}\n模型：${config.launch.model || "Codex 默认"}${config.launch.gateway ? "（经本机模型网关）" : ""}\n联网搜索：${config.launch.webSearch === "live" ? "开启（模型自带）" : "关闭"}\n资料目录：${runtime.workspaceDir}\n工具：允许范围已核验；数据层运行使用原生动态工具 + 任务门禁\n工具目录：config/tools/（空闲边界更新；权限契约变化后需新建会话）\n协议日志：${runtime.runDir}/protocol.jsonl\n另开终端运行 npm run chat；此终端 Ctrl+C 停止服务。`);
+    safeLog(`Agent 服务已就绪：${url}\nAgent：${baseAgent.definition.agent.id}\n模型：${config.launch.model || "Codex 默认"}${config.launch.gateway ? "（经本机模型网关）" : ""}\n联网搜索：${config.launch.webSearch === "live" ? "开启（模型自带）" : "关闭"}\n资料目录：${runtime.workspaceDir}\n工具：允许范围已核验；数据层运行使用原生动态工具 + 任务门禁\n工具目录：config/tools/（空闲边界更新；权限契约变化后需新建会话）\n协议日志：${runtime.runDir}/protocol.jsonl\n另开终端运行 npm run chat；此终端 Ctrl+C 停止服务。`);
     return { config, agent, runtime, rpc, runtimes, sessions, messages, hub, tools, memory, maintenance, data, resources, gate, knowledge, usage, accounts, url, close: gracefulShutdown({
       stopDispatch: () => { messages.stopping = true; },
       markUnconfirmed: () => messages.fail(new Error("服务正在关闭，执行结果待核对。")),

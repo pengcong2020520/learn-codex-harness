@@ -55,7 +55,7 @@
     "test:ports": "node scripts/test-offline.mjs --ports",
     "accept:auth": "node scripts/accept-auth.mjs",
     "test:runtimes:pg": "node --test tests/runtimes-pg.integration.mjs",
-    "test:runtimes:uid": "node --test tests/runtimes-uid.integration.mjs",
+    "test:runtimes:uid": "node --test tests/uid.integration.mjs tests/runtimes-uid.integration.mjs",
     "test:runtimes:server": "node --test tests/runtimes-server.integration.mjs"
   },
   "dependencies": {

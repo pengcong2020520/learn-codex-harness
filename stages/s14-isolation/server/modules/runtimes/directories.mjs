@@ -42,27 +42,33 @@ export function prepareDirectories(root, record, { isolated, workspace = path.jo
   return paths;
 }
 // 只在进程尚未启动、目录树无并发写入时迁移/修复权限，不改写原生内容。
-// 威胁是顺着链接 chown/chmod 到树外文件：lstat 后跳过软链接（不进入）及特殊文件，
-// 仅修改确认的普通文件/目录。硬链接共享 inode，修改权限会影响原文件，仍须拒绝。
-export function secureTree(root, uid, isolated) {
+// lstat 只用于避免打开特殊文件；安全判断与权限修改都绑定到 O_NOFOLLOW 打开的 fd。
+// 目录 fd 在遍历期间保持打开；子项仍按目录所在路径访问，父目录被替换的残余竞态尚未消除。
+function walkTree(root, update) {
   assertRealPath(root);
-  const entries = [];
   const walk = target => {
     const info = fs.lstatSync(target);
     if (info.isSymbolicLink() || (!info.isDirectory() && !info.isFile())) return;
-    if (info.isFile() && info.nlink > 1) throw new Error('运行环境拒绝硬链接文件。');
-    entries.push([target, info.isDirectory()]);
-    // 已有 Codex 子目录可能显式采用 0700；FOWNER 允许先修复目录以继续检查。
-    if (info.isDirectory()) {
-      if (isolated) { fs.chownSync(target, info.uid, 1000); fs.chmodSync(target, 0o2770); }
-      for (const name of fs.readdirSync(target)) walk(path.join(target, name));
-    }
+    let fd;
+    try {
+      fd = fs.openSync(target, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW |
+        (info.isDirectory() ? fs.constants.O_DIRECTORY : 0) | fs.constants.O_NONBLOCK);
+    } catch (error) { if (error.code === 'ELOOP') return; throw error; }
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isDirectory() && !stat.isFile()) return;
+      if (stat.isFile() && stat.nlink > 1) throw new Error('运行环境拒绝硬链接文件。');
+      update(fd, stat);
+      if (stat.isDirectory()) for (const name of fs.readdirSync(target)) walk(path.join(target, name));
+    } finally { fs.closeSync(fd); }
   };
   walk(root);
-  for (const [target, isDir] of entries) {
-    if (isolated) fs.chownSync(target, uid, 1000);
-    fs.chmodSync(target, isDir ? 0o2770 : 0o660);
-  }
+}
+export function secureTree(root, uid, isolated) {
+  walkTree(root, (fd, stat) => {
+    if (isolated) fs.fchownSync(fd, uid, 1000);
+    fs.fchmodSync(fd, stat.isDirectory() ? 0o2770 : 0o660);
+  });
 }
 
 // 容器根进程没有 DAC_OVERRIDE；启动前接管服务自己的旧文件，随后才读身份和锁。
@@ -82,12 +88,8 @@ export function prepareServiceDirectories(root, isolated) {
 // 停服备份/恢复时修复可读权限，保留每个文件原来的 uid（不把多个用户归为同一 uid）。
 export function repairRuntimeAccess(root) {
   if (process.getuid?.() !== 0) return;
-  assertRealPath(root);
-  const walk = target => {
-    const stat = fs.lstatSync(target);
-    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()) || (stat.isFile() && stat.nlink !== 1)) throw new Error('运行环境备份拒绝链接或特殊文件。');
-    fs.chownSync(target, stat.uid, 1000); fs.chmodSync(target, stat.isDirectory() ? 0o2770 : 0o660);
-    if (stat.isDirectory()) for (const name of fs.readdirSync(target)) walk(path.join(target, name));
-  };
-  walk(root);
+  walkTree(root, (fd, stat) => {
+    fs.fchownSync(fd, stat.uid, 1000);
+    fs.fchmodSync(fd, stat.isDirectory() ? 0o2770 : 0o660);
+  });
 }

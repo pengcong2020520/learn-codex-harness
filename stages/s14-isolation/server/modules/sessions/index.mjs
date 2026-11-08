@@ -1,3 +1,4 @@
+import { busyError } from "../runtimes/pool.mjs";
 import { currentIdentity, runOwner } from "../accounts/context.mjs";
 import { UsageService } from "../usage/index.mjs";
 import { EventEmitter } from "node:events";
@@ -52,7 +53,12 @@ export class SessionService extends EventEmitter {
     }, { allowBusy: true });
   }
 
-  userRuntime() { return this.rpc.pool ? this.rpc.current()?.runtime || this.runtime : this.runtime; }
+  userRuntime() {
+    if (!this.rpc.pool) return this.runtime;
+    const runtime = this.rpc.current()?.runtime;
+    if (!runtime && this.rpc.isolated) throw busyError();
+    return runtime || this.runtime;
+  }
   atBoundary(operation, options) {
     const run = () => this.boundary ? this.boundary.run(operation, options) : operation();
     return this.rpc.pool ? this.rpc.pool.withOwner(currentIdentity().userId, run) : run();

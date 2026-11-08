@@ -7,7 +7,7 @@ const SUMMARY_LIMIT = 64 * 1024;
 const FILES = ["memory_summary.md", "MEMORY.md", "raw_memories.md"];
 
 // 固定文件白名单；不允许客户端传路径，不跟随链接，不扫描个人 CODEX_HOME。
-function readArtifact(root, name, content = false, codexHome) {
+function readArtifact(root, name, content = false, codexHome, uid = process.getuid?.()) {
   let file = codexHome || root;
   try {
     if (codexHome) assertRealPath(codexHome);
@@ -15,17 +15,21 @@ function readArtifact(root, name, content = false, codexHome) {
       file = path.join(file, part);
       const stat = fs.lstatSync(file);
       if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("记忆目录不是独立真实目录。");
-      if (codexHome && process.getuid?.() === 0) { fs.chownSync(file, stat.uid, 1000); fs.chmodSync(file, 0o2770); }
-    }
-    if (codexHome && process.getuid?.() === 0) {
-      const artifact = path.join(file, name), stat = fs.lstatSync(artifact);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('记忆产物不是独立普通文件。');
-      fs.chownSync(artifact, stat.uid, 1000); fs.chmodSync(artifact, 0o660);
+      if (codexHome) {
+        const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_DIRECTORY | fs.constants.O_NONBLOCK);
+        try {
+          const opened = fs.fstatSync(fd);
+          if (!opened.isDirectory() || opened.uid !== uid) throw new Error("记忆目录属主不匹配。");
+          if (process.getuid?.() === 0) { fs.fchownSync(fd, uid, 1000); fs.fchmodSync(fd, 0o2770); }
+        } finally { fs.closeSync(fd); }
+      }
     }
     const fd = fs.openSync(path.join(file, name), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     try {
       const stat = fs.fstatSync(fd);
       if (!stat.isFile() || stat.nlink !== 1) throw new Error("记忆产物不是独立普通文件。");
+      if (stat.uid !== uid) throw new Error("记忆产物属主不匹配。");
+      if (codexHome && process.getuid?.() === 0) { fs.fchownSync(fd, uid, 1000); fs.fchmodSync(fd, 0o660); }
       const result = { exists: true, bytes: stat.size, updatedAt: stat.mtime.toISOString() };
       if (content) {
         const buffer = Buffer.alloc(SUMMARY_LIMIT + 1);
@@ -59,7 +63,7 @@ export class MemoryService {
 
   snapshot() {
     if (!this.effective) throw new AppError("尚未核验 Codex 记忆配置。", 503);
-    const artifacts = Object.fromEntries(FILES.map(name => [name, this.effective.enabled ? readArtifact(this.config.root, name, false, this.config.codexHome) : { exists: false, bytes: 0, updatedAt: null }]));
+    const artifacts = Object.fromEntries(FILES.map(name => [name, this.effective.enabled ? readArtifact(this.config.root, name, false, this.config.codexHome, this.config.runtimeUid) : { exists: false, bytes: 0, updatedAt: null }]));
     return {
       configured: this.config.memory, effective: this.effective,
       directory: this.config.codexHome ? path.relative(this.config.root, path.join(this.config.codexHome, "memories")) : ".data/codex/memories", artifacts,
@@ -73,7 +77,7 @@ export class MemoryService {
 
   summary() {
     if (!this.effective?.enabled) return { exists: false, bytes: 0, updatedAt: null, text: "", note: "原生记忆已关闭。" };
-    const result = readArtifact(this.config.root, "memory_summary.md", true, this.config.codexHome);
+    const result = readArtifact(this.config.root, "memory_summary.md", true, this.config.codexHome, this.config.runtimeUid);
     return { ...result, text: this.redact(result.text || ""), note: "这是生成的记忆摘要，不是全部会话历史；不存在摘要不直接代表错误。" };
   }
 

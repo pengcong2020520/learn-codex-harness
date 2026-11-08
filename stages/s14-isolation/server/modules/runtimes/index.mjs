@@ -13,6 +13,7 @@ import { RunMaintenance } from '../maintenance/index.mjs';
 export function createRuntimes({ config, data, agent, tools, cli, redact, log, isolated = isolationMode({ log }), store = data.runtimeStore || new RuntimeStore(data.pool, data.scope.instanceId, config.root), connection = options => new CodexConnection(options) }) {
   let sessions, messages, router;
   const pool = new RuntimePool({
+    log,
     assertEnabled: owner => store.assertEnabled(owner),
     isBusy: async owner => {
       if ([...(sessions?.sessions.values() || [])].some(session => session.ownerId === owner && session.activeTurnId)) return true;
@@ -30,13 +31,16 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, i
       // 所有可变 Skill 状态、原生路径和记忆核验结果属于这个运行环境。
       const userAgent = Object.create(agent);
       userAgent.runtime = runtime; userAgent.descriptorWorkspace = agent.workspacePath;
-      const userConfig = { ...config, launch, codexHome: paths.codexHome, agent: userAgent };
+      const userConfig = { ...config, launch, codexHome: paths.codexHome, runtimeUid: isolated ? record.uid : process.getuid?.(), agent: userAgent };
       const rpc = connection({ launch, runtime, redact, cli, log });
       const memory = new MemoryService({ rpc, config: userConfig, sessions, redact });
       const maintenance = new RunMaintenance({ root: config.root, runtime, sessions, runsDir: paths.runsDir, log });
       let closed;
-      const close = () => closed ||= (async () => { await rpc.close(); await maintenance.close(); finishRun(runtime.runDir); })();
-      const abort = () => { void close(); };
+      const value = { rpc, runtime, agent: userAgent, memory, maintenance,
+        close: () => closed ||= (async () => { await rpc.close(); await maintenance.close(); finishRun(runtime.runDir); })() };
+      // 启动中 abort/核验失败也必须走同一关闭期限，不能因 close 挂起永占名额。
+      const close = () => pool.closeValue(value);
+      const abort = () => { void close().catch(error => pool.emit('error', error)); };
       signal.addEventListener('abort', abort, { once: true });
       try {
         signal.throwIfAborted();
@@ -56,7 +60,6 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, i
         if (tools.serial) await tools.serial(verify); else await verify();
         await store.assertEnabled(owner);
         signal.throwIfAborted();
-        const value = { rpc, runtime, agent: userAgent, memory, close, maintenance };
         rpc.toolHandler = async (params, context) => {
           signal.throwIfAborted();
           await store.assertEnabled(owner);
@@ -76,7 +79,7 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, i
       } catch (error) { await close(); throw error; }
     },
   });
-  router = new RuntimeRouter(pool);
+  router = new RuntimeRouter(pool, { isolated });
   return {
     pool, rpc: router, store,
     agent: router.agent(agent),
@@ -94,6 +97,7 @@ export function createRuntimes({ config, data, agent, tools, cli, redact, log, i
     },
     async open(onError) {
       pool.on('error', onError);
+      // LISTEN 断开会失去账号禁用通知，仍须触发全局故障路径。
       const unlisten = await store.listen(owner => pool.disable(owner), onError);
       pool.startSweeper();
       return async () => { await pool.close(); await unlisten(); };

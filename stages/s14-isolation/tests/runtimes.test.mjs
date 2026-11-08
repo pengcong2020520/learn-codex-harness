@@ -77,7 +77,7 @@ test('crash: 只移除崩溃用户，其他连接继续使用，下次请求重�
 });
 test('disable: 立即关闭进程并标记该用户；启动中的用户也不能成为可用', async t => {
   const f = fixture(t); await f.get(A); await f.get(B);
-  const disabling = f.pool.disable(B); assert.ok(f.closed.includes(B)); await disabling;
+  const disabling = f.pool.disable(B); await tick(); assert.ok(f.closed.includes(B)); await disabling;
   assert.deepEqual(f.lost, [B]); assert.ok(f.pool.entries.has(A));
   await assert.rejects(() => f.get(B), error => error.code === 'ACCOUNT_DISABLED');
   const pendingStart = deferred();
@@ -163,11 +163,11 @@ function temporary(t) {
 }
 test('directories: 三个用户边界 2770；幂等；拒绝中间与根目录链接、硬链接', t => {
   const root = temporary(t), record = { user_id: B, uid: 10002, codex_home: path.join(root, '.data/users', B, 'codex') };
-  const modes = [], chmod = fs.chmodSync;
-  t.mock.method(fs, 'chmodSync', (target, mode) => { modes.push([target, mode]); return chmod(target, mode); });
+  const modes = [], chmod = fs.fchmodSync;
+  t.mock.method(fs, 'fchmodSync', (fd, mode) => { modes.push([fs.fstatSync(fd).ino, mode]); return chmod(fd, mode); });
   const paths = prepareDirectories(root, record, { isolated: false });
   for (const target of Object.values(paths)) {
-    assert.ok(modes.some(([file, mode]) => file === target && mode === 0o2770));
+    assert.ok(modes.some(([file, mode]) => file === fs.statSync(target).ino && mode === 0o2770));
     assert.equal(fs.statSync(target).mode & 0o777, 0o770);
     // macOS 非特权文件系统可能清除 setgid；Linux 容器验收检查完整 2770 与 uid/gid。
   }
@@ -192,14 +192,15 @@ test('secureTree: 跳过 Codex arg0/auth 软链接，树外目标属主与模式
     fs.symlinkSync(path.join(outside, 'missing'), path.join(home, 'dangling'));
     const metadata = target => { const { uid, gid, mode } = fs.lstatSync(target); return { uid, gid, mode }; };
     const targets = [outside, binary, auth], before = targets.map(metadata);
-    const changed = [], chmod = fs.chmodSync;
+    const changed = [], chmod = fs.fchmodSync, opened = new Map(), open = fs.openSync;
+    t.mock.method(fs, 'openSync', (target, flags) => { const fd = open(target, flags); opened.set(fd, target); return fd; });
     const checkTarget = target => {
       assert.ok(!fs.lstatSync(target).isSymbolicLink(), `不能修改软链接：${target}`);
       assert.ok(target === home || target.startsWith(home + path.sep), `不能修改树外目标：${target}`);
     };
     // 非 root 离线测试记录 chown 调用，真实执行 chmod；Linux uid 集成测试验证属主迁移。
-    t.mock.method(fs, 'chownSync', target => { checkTarget(target); changed.push(target); });
-    t.mock.method(fs, 'chmodSync', (target, mode) => { checkTarget(target); return chmod(target, mode); });
+    t.mock.method(fs, 'fchownSync', fd => { const target = opened.get(fd); checkTarget(target); changed.push(target); });
+    t.mock.method(fs, 'fchmodSync', (fd, mode) => { checkTarget(opened.get(fd)); return chmod(fd, mode); });
     const native = path.join(home, 'native'); fs.writeFileSync(native, 'session', { mode: 0o600 });
     secureTree(home, 10002, isolated);
     secureTree(home, 10002, isolated); // Codex 留下这些链接后再次启动仍成功。
@@ -213,7 +214,7 @@ test('secureTree: 跳过 Codex arg0/auth 软链接，树外目标属主与模式
 });
 test('secureTree: 跳过 socket、FIFO 与设备，不修改权限', t => {
   const root = temporary(t), special = path.join(root, 'special'); fs.writeFileSync(special, '', { mode: 0o600 });
-  const lstat = fs.lstatSync, chmod = fs.chmodSync, before = lstat(special);
+  const lstat = fs.lstatSync, chmod = fs.fchmodSync, before = lstat(special);
   let type;
   // 离线沙箱禁止 socket listen；仅替换 lstat 类型，真实 socket 另见 Linux uid 集成测试。
   t.mock.method(fs, 'lstatSync', target => {
@@ -221,8 +222,8 @@ test('secureTree: 跳过 socket、FIFO 与设备，不修改权限', t => {
     if (target === special) info.mode = (info.mode & ~fs.constants.S_IFMT) | type;
     return info;
   });
-  t.mock.method(fs, 'chownSync', target => { assert.notEqual(target, special); });
-  t.mock.method(fs, 'chmodSync', (target, mode) => { assert.notEqual(target, special); return chmod(target, mode); });
+  t.mock.method(fs, 'fchownSync', fd => { assert.notEqual(fs.fstatSync(fd).ino, before.ino); });
+  t.mock.method(fs, 'fchmodSync', (fd, mode) => { assert.notEqual(fs.fstatSync(fd).ino, before.ino); return chmod(fd, mode); });
   for (type of [fs.constants.S_IFSOCK, fs.constants.S_IFIFO, fs.constants.S_IFCHR, fs.constants.S_IFBLK]) {
     for (const isolated of [false, true]) secureTree(root, 10002, isolated);
   }
@@ -234,7 +235,7 @@ test('secureTree: 拒绝树外文件的硬链接，原文件属主与模式不�
   fs.mkdirSync(home); fs.writeFileSync(original, 'external', { mode: 0o600 });
   fs.linkSync(original, path.join(home, 'hard'));
   const before = fs.statSync(original);
-  t.mock.method(fs, 'chownSync', target => { assert.notEqual(target, path.join(home, 'hard')); });
+  t.mock.method(fs, 'fchownSync', fd => { assert.notEqual(fs.fstatSync(fd).ino, before.ino); });
   for (const isolated of [false, true]) assert.throws(() => secureTree(home, 10002, isolated), /硬链接/);
   const after = fs.statSync(original);
   assert.deepEqual([after.uid, after.gid, after.mode], [before.uid, before.gid, before.mode]);

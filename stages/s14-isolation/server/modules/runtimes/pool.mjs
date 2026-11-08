@@ -1,18 +1,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { EventEmitter } from 'node:events';
 import { AppError } from '../../../shared/errors.mjs';
+import { signalUserProcess, userEnvironment } from '../codex/launch.mjs';
 
 export const RUNTIME_LIMIT = 4;
 export const IDLE_MS = 10 * 60 * 1000;
 export const START_TIMEOUT_MS = 30 * 1000;
+export const CLOSE_TIMEOUT_MS = 10 * 1000;
 export const busyError = () => Object.assign(new AppError('用户运行环境繁忙，请稍后重试。', 503, 'RUNTIME_BUSY'), { retryAfter: 10 });
 
 // admission 只保护名额与租约；启动在锁外进行，不阻塞其他用户。
 export class RuntimePool extends EventEmitter {
   constructor({ create, isBusy = async () => false, assertEnabled = async () => {}, onLost = async () => {}, onRemoved = () => {}, now = Date.now,
-    setTimer = setTimeout, clearTimer = clearTimeout }) {
+    setTimer = setTimeout, clearTimer = clearTimeout, log = console.warn, signalProcess = signalUserProcess }) {
     super();
-    Object.assign(this, { create, isBusy, assertEnabled, onLost, onRemoved, now, setTimer, clearTimer });
+    Object.assign(this, { create, isBusy, assertEnabled, onLost, onRemoved, now, setTimer, clearTimer, log, signalProcess });
+    this.closingValues = new WeakMap();
     this.entries = new Map(); this.context = new AsyncLocalStorage(); this.chain = Promise.resolve(); this.disabled = new Set();
   }
   serial(operation) {
@@ -22,7 +25,38 @@ export class RuntimePool extends EventEmitter {
     const entry = this.context.getStore();
     return entry && entry.owner === owner && entry.state === 'ready' ? entry.value : null;
   }
-  async idle(entry) { return entry.state === 'ready' && !entry.refs && !await this.isBusy(entry.owner); }
+  async idle(entry) {
+    if (entry.state !== 'ready' || entry.refs) return false;
+    try { return !await this.isBusy(entry.owner); }
+    catch (error) {
+      this.log(`运行环境 ${entry.owner} 忙碌查询失败，本轮跳过回收：${error.message}`);
+      return false;
+    }
+  }
+  closeValue(value) {
+    if (this.closingValues.has(value)) return this.closingValues.get(value);
+    const closing = (async () => {
+      let timer;
+      try {
+        const timeout = new Promise(resolve => { timer = this.setTimer(() => resolve(true), CLOSE_TIMEOUT_MS); });
+        // close 抛错也应强杀；所有入口共享同一次清理和超时。
+        const stopped = Promise.resolve().then(() => value.close()).then(() => false, error => {
+          this.log(`运行环境关闭失败：${error.message}`); return true;
+        });
+        if (await Promise.race([stopped, timeout])) {
+          const child = value.rpc.child;
+          if (child?.pid && child.exitCode == null && child.signalCode == null) {
+            if (value.runtime?.isolated) await this.signalProcess(child.pid, 'SIGKILL', {
+              ...value.runtime, env: userEnvironment(value.rpc.launch?.env || {}, value.runtime.codexHome),
+            });
+            else child.kill('SIGKILL');
+          }
+        }
+      } finally { this.clearTimer(timer); }
+    })();
+    this.closingValues.set(value, closing);
+    return closing;
+  }
   async withOwner(owner, operation) {
     if (!owner) throw new Error('运行环境缺少可信 owner。');
     const nested = this.context.getStore();
@@ -85,7 +119,7 @@ export class RuntimePool extends EventEmitter {
       entry.state = 'closing';
       entry.controller.abort(error);
       // 请求在期限到达时失败；尚未完成的清理仍占名额，绝不能短暂超过 4 个进程。
-      entry.cleanup = creating.then(value => value.close(), () => {});
+      entry.cleanup = creating.then(value => this.closeValue(value), () => {});
       void entry.cleanup.then(() => {
         if (!entry.removing && this.entries.get(entry.owner) === entry) this.entries.delete(entry.owner);
       }).catch(error => this.emit('error', error));
@@ -99,8 +133,8 @@ export class RuntimePool extends EventEmitter {
     entry.controller.abort(error || new Error('运行环境已回收。'));
     entry.removing = (async () => {
       // 先停止进程与工具；确认任务状态后才释放名额，防止迟到通知与新进程交叉。
-      if (entry.value) await entry.value.close();
-      else await entry.creating?.then(value => value.close(), () => {});
+      if (entry.value) await this.closeValue(entry.value);
+      else await entry.creating?.then(value => this.closeValue(value), () => {});
       if (error) await this.onLost(entry.owner, error);
       await this.onRemoved(entry.owner);
       if (this.entries.get(entry.owner) === entry) this.entries.delete(entry.owner);
@@ -113,7 +147,7 @@ export class RuntimePool extends EventEmitter {
     const entry = this.entries.get(owner);
     // 不等待 admission：立即中止启动/进程；持久化在串行链上收尾。
     entry?.controller.abort(new Error('账号已禁用，执行结果待核对。'));
-    if (entry?.value) void entry.value.close();
+    if (entry?.value) void this.closeValue(entry.value).catch(error => this.emit('error', error));
     return this.serial(() => entry ? this.remove(entry, new Error('账号已禁用，执行结果待核对。')) : this.onLost(owner, new Error('账号已禁用。')));
   }
   sweep() {
@@ -130,7 +164,10 @@ export class RuntimePool extends EventEmitter {
   }
   close() {
     this.closed = true; clearInterval(this.timer);
-    for (const entry of this.entries.values()) { entry.controller.abort(new Error('服务正在关闭。')); void entry.value?.close(); }
+    for (const entry of this.entries.values()) {
+      entry.controller.abort(new Error('服务正在关闭。'));
+      if (entry.value) void this.closeValue(entry.value).catch(error => this.emit('error', error));
+    }
     return this.serial(async () => { for (const entry of this.entries.values()) await this.remove(entry); });
   }
 }
