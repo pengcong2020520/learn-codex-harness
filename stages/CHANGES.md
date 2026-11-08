@@ -191,3 +191,17 @@
 **新增接口**：`POST /knowledge`、`GET /hub`、`GET /me/plan`、`POST /hub/skills`、`POST /hub/plans/assign`
 
 **新增数据迁移**：`013-hub.sql`、`014-user-knowledge.sql`
+
+<a id="s16"></a>
+
+## s16：协调面：租约、选举与任期隔离
+
+相比 [s15-hub](s15-hub/)：节点是否存活变成租约是否过期；新 control 推进数据库任期后恢复，旧任期拒写。
+
+**新增模块**：集群协调（协调面，租约、选举与任期隔离）
+
+**新增接口**：`GET /cluster`
+
+**新增环境变量**：`AGENT_NODE_ID`、`ETCD_ENDPOINT`、`AGENT_NODE_A_DB_PASSWORD`、`AGENT_NODE_B_DB_PASSWORD`、`AGENT_NODE_C_DB_PASSWORD`、`REDIS_PASSWORD`、`ETCD_ROOT_PASSWORD`、`ETCD_NODE_A_PASSWORD`、`ETCD_NODE_B_PASSWORD`、`ETCD_NODE_C_PASSWORD`
+
+**新增数据迁移**：`015-cluster-term.sql`

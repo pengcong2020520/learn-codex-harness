@@ -540,6 +540,41 @@
           "014-user-knowledge.sql"
         ]
       }
+    },
+    {
+      "id": "s16",
+      "dir": "s16-coordination",
+      "title": "协调面：租约、选举与任期隔离",
+      "summary": "节点是否存活变成租约是否过期；新 control 推进数据库任期后恢复，旧任期拒写。",
+      "previous": "s15-hub",
+      "modules": [
+        {
+          "layer": "协调面",
+          "name": "集群协调",
+          "desc": "租约、选举与任期隔离"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "GET /cluster"
+        ],
+        "env": [
+          "AGENT_NODE_ID",
+          "ETCD_ENDPOINT",
+          "AGENT_NODE_A_DB_PASSWORD",
+          "AGENT_NODE_B_DB_PASSWORD",
+          "AGENT_NODE_C_DB_PASSWORD",
+          "REDIS_PASSWORD",
+          "ETCD_ROOT_PASSWORD",
+          "ETCD_NODE_A_PASSWORD",
+          "ETCD_NODE_B_PASSWORD",
+          "ETCD_NODE_C_PASSWORD"
+        ],
+        "migrations": [
+          "015-cluster-term.sql"
+        ]
+      }
     }
   ]
 }

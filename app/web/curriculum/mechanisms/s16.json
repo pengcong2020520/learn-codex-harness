@@ -1,0 +1,229 @@
+[
+  {
+    "id": "s16-takeover",
+    "title": "control 被 kill：租约到期后接任与恢复",
+    "question": "新 control 什么时候才允许 Caddy 转发？",
+    "file": "stages/s16-coordination/server/modules/coordination/index.mjs",
+    "start": 174,
+    "end": 202,
+    "expect": "  async elected(campaign, epoch) {",
+    "notes": {},
+    "actors": [
+      [
+        "old",
+        "旧 control"
+      ],
+      [
+        "etcd",
+        "etcd / Election"
+      ],
+      [
+        "new",
+        "新 control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "entry",
+        "Caddy / 客户端"
+      ]
+    ],
+    "state0": {
+      "租约": "旧 lease 有效",
+      "control": "旧节点",
+      "PG 任期": "旧值",
+      "入口": "旧节点 ready"
+    },
+    "steps": [
+      {
+        "flow": [
+          "old",
+          "old",
+          "终止 control"
+        ],
+        "say": "教学模拟：kill 不走正常 revoke；重启策略可能启动新进程，不能把它当成旧任期恢复。",
+        "state": {
+          "入口": "等待切换"
+        }
+      },
+      {
+        "flow": [
+          "etcd",
+          "old",
+          "过期 lease"
+        ],
+        "say": "约 TTL 10 秒后 etcd 删除绑定的成员与选举键。",
+        "state": {
+          "租约": "旧 lease 过期",
+          "control": "待接任"
+        }
+      },
+      {
+        "flow": [
+          "etcd",
+          "new",
+          "通知 elected"
+        ],
+        "say": "新候选读取选举键 create revision，核对 lease 并事务确认。",
+        "state": {
+          "control": "新节点，未就绪"
+        },
+        "lines": [
+          174,
+          185
+        ]
+      },
+      {
+        "flow": [
+          "new",
+          "pg",
+          "推进 cluster_term"
+        ],
+        "say": "必须先推进 PG 任期；锁等待或推进失败期间不开放流量。",
+        "state": {
+          "PG 任期": "新值",
+          "入口": "503"
+        }
+      },
+      {
+        "flow": [
+          "new",
+          "pg",
+          "核对 recover"
+        ],
+        "say": "执行中的任务标为 unconfirmed；queued 经持久 outbox 唤醒，不自动重发不确定任务。",
+        "state": {
+          "control": "新节点恢复中"
+        }
+      },
+      {
+        "flow": [
+          "entry",
+          "new",
+          "探测 /ready"
+        ],
+        "say": "业务恢复与依赖检查通过后，Caddy 才转发。",
+        "state": {
+          "control": "新节点已恢复",
+          "入口": "新节点 ready"
+        }
+      }
+    ],
+    "takeaway": "当选不等于就绪。先确认 etcd 任期，再推进 PG 任期和恢复；TTL 不是整个系统恢复时间的上限。"
+  },
+  {
+    "id": "s16-stale-control",
+    "title": "旧 control 假死醒来：CT001 拒写与新租约重入",
+    "question": "新 control 已推进任期，旧 SQL 为什么不能继续提交？",
+    "file": "stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql",
+    "start": 37,
+    "end": 49,
+    "expect": "  supplied := current_setting('app.term', true);",
+    "notes": {},
+    "actors": [
+      [
+        "old",
+        "旧 control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ],
+      [
+        "service",
+        "ActiveService / 进程池"
+      ],
+      [
+        "etcd",
+        "etcd"
+      ]
+    ],
+    "state0": {
+      "旧代": "暂停",
+      "写入": "未尝试",
+      "入口": "503",
+      "租约": "已过期"
+    },
+    "steps": [
+      {
+        "flow": [
+          "old",
+          "old",
+          "恢复 control"
+        ],
+        "say": "教学模拟：新 control 已推进 PG 任期。入口通常先由单调时钟拦截；这里展示到达数据库的旧 SQL 保护。",
+        "state": {
+          "旧代": "醒来，旧 term"
+        }
+      },
+      {
+        "flow": [
+          "old",
+          "pg",
+          "提交 app.term"
+        ],
+        "say": "旧写入携带旧任期，触发器取得当前任期的共享锁。",
+        "state": {
+          "写入": "检查旧任期"
+        },
+        "lines": [
+          37,
+          39
+        ]
+      },
+      {
+        "flow": [
+          "pg",
+          "old",
+          "拒绝 CT001"
+        ],
+        "say": "缺失或旧任期不等于 cluster_term，不执行本次业务写入。",
+        "state": {
+          "写入": "CT001"
+        },
+        "lines": [
+          40,
+          42
+        ]
+      },
+      {
+        "flow": [
+          "old",
+          "service",
+          "隔离 termFailure"
+        ],
+        "say": "同步使旧 generation 失效，关闭入口和派发，再清理本代任务与进程。",
+        "state": {
+          "旧代": "隔离",
+          "入口": "503"
+        }
+      },
+      {
+        "flow": [
+          "service",
+          "old",
+          "完成 stop"
+        ],
+        "say": "确认旧用户进程退出；关闭失败则保持隔离，不能创建新进程池。",
+        "state": {
+          "旧代": "已关闭"
+        }
+      },
+      {
+        "flow": [
+          "old",
+          "etcd",
+          "重新 join"
+        ],
+        "say": "用新 lease 注册、重建 Watch、campaign；失败指数退避。",
+        "state": {
+          "租约": "新 lease",
+          "旧代": "失效，新代热备"
+        }
+      }
+    ],
+    "takeaway": "CT001 是 PG 任期拒写；etcd guardedPut 失败为 NOT_CONTROLLER。重新加入不等于当选，恢复完成前仍不就绪；共享卷与外部副作用不受 SQL 触发器保护。"
+  }
+]

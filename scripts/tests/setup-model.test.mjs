@@ -435,16 +435,16 @@ test("A 默认仅 s01–s10；链接共用同一本机文件，未改 s00/s11/ap
   assert.equal(f.calls.length, 11);
 });
 
-test("C 默认只写 s11/s12/s13/s14/s15/app，各生成网关 Key，保留业务配置", async t => {
+test("C 默认只写 s11/s12/s13/s14/s15/s16/app，各生成网关 Key，保留业务配置", async t => {
   const f = fixture(t);
   const count = Object.values(JSON.parse(fs.readFileSync(path.join(f.root, "app/config/models.json"))).providers).filter(item => item.keyEnv).length;
   f.answers.push("C", "", secret, ...Array(count - 1).fill(""), "", "");
   assert.equal(await setup([], f), 0);
   for (const stage of f.all) {
-    if (["s11", "s12", "s13", "s14", "s15", "app"].includes(stage.id)) {
+    if (["s11", "s12", "s13", "s14", "s15", "s16", "app"].includes(stage.id)) {
       const values = envFor(stage).values;
       assert.match(values.AGENT_GATEWAY_KEY, /^sk-bf-[a-f0-9]{64}$/);
-      if (["s12", "s13", "s14", "s15"].includes(stage.id)) {
+      if (["s12", "s13", "s14", "s15", "s16"].includes(stage.id)) {
         assert.ok(Object.hasOwn(values, "AGENT_DB_PASSWORD"));
         assert.ok(Object.hasOwn(values, "CONTAINER_APP_DIR"));
         assert.equal(values.DATABASE_URL, undefined); // 由独立 Compose 注入。
@@ -466,7 +466,7 @@ test("状态目录为符号链接时不写入、也不跨目录 unlink", t => {
 });
 
 test("s12 启动说明指向独立部署与 SSH 隧道", () => {
-  const stage = stages(ROOT).find(stage => ["s12", "s13", "s14", "s15"].includes(stage.id));
+  const stage = stages(ROOT).find(stage => ["s12", "s13", "s14", "s15", "s16"].includes(stage.id));
   const commands = startCommands(stage).join("\n");
   assert.match(commands, /s12-deploy\/README\.md/);
   assert.match(commands, /remote\.sh tunnel/);
@@ -500,6 +500,16 @@ test('s15 是网关独立部署，排除 link-login，启动说明要求登录',
  assert.ok(!loginStages(all).includes(stage));
  const commands=startCommands(stage).join('\n');
  assert.match(commands,/s15-hub\/README\.md/);
+ assert.match(commands,/remote\.sh tunnel/);
+ assert.match(commands,/npm run login/);
+ assert.doesNotMatch(commands,/npm .*run server/);
+});
+test('s16 是网关独立部署，排除 link-login，启动说明要求登录',()=>{
+ const all=stages(ROOT),stage=all.find(stage=>stage.id==='s16');
+ assert.equal(classify({AGENT_GATEWAY_KEY:secret},true,stage).kind,'gateway');
+ assert.ok(!loginStages(all).includes(stage));
+ const commands=startCommands(stage).join('\n');
+ assert.match(commands,/s16-coordination\/README\.md/);
  assert.match(commands,/remote\.sh tunnel/);
  assert.match(commands,/npm run login/);
  assert.doesNotMatch(commands,/npm .*run server/);

@@ -1,3 +1,4 @@
+import {stageCountLabel} from './stage-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWorkbench} from '../server.mjs';
@@ -56,7 +57,7 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 
-test('工作台按真实阶段选课：s00–s15 与 project，课程缺失时显示空态',options,async t=>{
+test('工作台按真实阶段选课：s00–s16 与 project，课程缺失时显示空态',options,async t=>{
  const {url,b}=await setup(t);
  for(const target of [...Array.from({length:14},(_,num)=>`s${String(num).padStart(2,'0')}`),'project']){
   const hash=target==='project'?'s11':target;
@@ -77,7 +78,7 @@ test('2：s05/s06 实验链接点击后打开同阶段真实工作台',options,a
   await b.run(`${helpers}await until(()=>$('.learn-title'));$('[data-view="experiment"]').click();`);
   await b.clickNavigate('.learn-live-link');
   const actual=await b.run(`${helpers}await until(()=>$('.stage.active')?.dataset.stage===${JSON.stringify(id)});return {stage:$('.stage.active')?.dataset.stage,tab:$('.tab.active')?.dataset.tab,title:document.title};`);
-  assert.equal(actual.stage,id);assert.equal(actual.tab,'chat');assert.match(actual.title,/十六个阶段/);
+  assert.equal(actual.stage,id);assert.equal(actual.tab,'chat');assert.match(actual.title,new RegExp(stageCountLabel));
  }
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });

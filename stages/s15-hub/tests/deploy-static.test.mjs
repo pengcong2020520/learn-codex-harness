@@ -57,7 +57,7 @@ test('docs: Hub 教学标题、五个离线实验、两幅泳道与三段真实�
   for (const heading of ['要回答的问题', '核心概念', '分工', '跑起来看看', '关键代码', '限制', '小结']) {
     const index = chapter.indexOf(`## ${heading}\n`); assert.ok(index > previous, heading); previous = index;
   }
-  assert.match(chapter, /下一章：s16 多主机调度/);
+  assert.match(chapter, /下一章：\[s16 协调面\]/);
   const design = read('docs/design.md');
   assert.equal([...design.matchAll(/```mermaid/g)].length, 2);
   const sources = ['server/modules/hub/policy.mjs', 'server/modules/sessions/index.mjs', 'server/modules/messages/index.mjs'].map(read).join('\n');
