@@ -40,15 +40,17 @@ Election 决定谁是 control。任期等于该节点选举键的 create revisio
 ```bash
 cd stages/s16-coordination
 cp .env.example .env
-# 填数据库、etcd root/三个节点、Redis、网关密码与模型配置。
+# 填数据库、etcd root/health/三个节点、Redis、网关密码与模型配置。
 # 服务器 remote.sh init-env 会随机生成这些密码并写服务器 .env（0600）。
 # CONTAINER_APP_DIR 必须等于固定部署绝对路径。
 npm ci
 # 本机：先填三个节点独立数据库密码，再准备数据；服务器可直接用 remote.sh。
 docker compose build node-a node-b node-c
 bash deploy/configure.sh
-docker compose up -d --wait postgres redis etcd gateway
+docker compose up -d etcd
+docker compose stop node-a node-b node-c
 docker compose run --rm --no-deps -T etcd-init
+docker compose up -d --wait etcd postgres redis gateway
 docker compose run --rm --no-deps --user 0 -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/cluster-migrate.mjs
 docker compose run --rm --no-deps node-a npm run agent:init
 # 首次初始化，交互输入 admin 用户名与密码：
@@ -61,6 +63,10 @@ npm run cluster -- status
 ```
 
 入口仅发布 `127.0.0.1:4334`，节点内部端口是 `4340–4342`，不占宿主 4330/4331。数据库 `agent_s16`，Compose 项目及 systemd 单元 `codex-harness-s16`，服务器目录 `APP_DIR=/opt/s16-coordination`，示例域名 `example.com`。CLI 经 Caddy 登录和查询；热备直连 `/ready` 返回 503，`/health` 返回 200。容器健康检查采用 `/health`，因此 `compose --wait` 不会把热备当故障；入口健康检查仍采用 `/ready`。
+
+etcd 使用独立的 `health` 用户和同名角色，**只能读取精确的 `health` 键**，不能写入，也不能读取 `/codex/` 或其他键。`init-env` 随机生成 `ETCD_HEALTH_PASSWORD`，Compose 将其直接代入 `etcdctl --user health:… endpoint health`，不依赖镜像内的 shell。先启动 etcd（不等待健康），再运行 `etcd-init`，最后等待 etcd 和其余服务健康；初始化遇到连接失败会重试，最多 60 秒，并支持已有用户、角色及已开启认证的数据卷。
+
+已有服务器升级时，保留 `.env` 中原有的 root、节点、数据库等密码，只补充随机的 `ETCD_HEALTH_PASSWORD`（例如用 `openssl rand -hex 24` 生成后写入 `.env`）。不要重新生成整份 `.env`。按上述流程或 `remote.sh deploy` 重新部署后，初始化脚本使用原 root 凭据补建 health 用户和角色，随后健康检查通过；数据卷无需删除，认证无需关闭。
 
 `cluster status` 中的 `control.nodeId` 告诉你下一条命令该填写哪个节点。以下用 node-a 示意，每次故障前重新查询当前 control。
 

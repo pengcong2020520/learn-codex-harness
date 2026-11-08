@@ -10,6 +10,7 @@ values.AGENT_DB_PASSWORD = randomBytes(24).toString('hex');
 for (const node of ['A','B','C']) values[`AGENT_NODE_${node}_DB_PASSWORD`] = randomBytes(24).toString('hex');
 values.REDIS_PASSWORD = randomBytes(24).toString('hex');
 values.ETCD_ROOT_PASSWORD = randomBytes(24).toString('hex');
+values.ETCD_HEALTH_PASSWORD = randomBytes(24).toString('hex');
 for (const node of ['A','B','C']) values[`ETCD_NODE_${node}_PASSWORD`] = randomBytes(24).toString('hex');
 values.AGENT_GATEWAY_KEY = `sk-bf-${randomBytes(24).toString('hex')}`;
 values.CONTAINER_APP_DIR = process.argv[2];
