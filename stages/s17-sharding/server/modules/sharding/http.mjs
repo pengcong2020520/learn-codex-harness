@@ -107,7 +107,8 @@ export function createShardedHandler(coordination, service, runtime, control) {
     if (!runtime.owns(userId)) throw unavailable('源节点已不是用户主节点。');
     if (pathname === '/internal/pause') {
       runtime.paused.add(userId);
-      await app.sessions.atBoundary(async () => {}); // waits for any queued->starting admission already in progress
+      // Internal node request: no user identity in context, so run as the migrating user.
+      await runOwner(userId, () => app.sessions.atBoundary(async () => {})); // waits for any queued->starting admission already in progress
       app.http.closeUserStreams?.(userId);
       return json(200, { paused: true });
     }
