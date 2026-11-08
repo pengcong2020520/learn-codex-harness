@@ -10,6 +10,17 @@ export class ShardRuntime {
     return row && !row.paused && row.shard_id === this.cache.routeOf(userId).shardId;
   }
   async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable('用户正在迁移、归属尚未初始化或本节点不是分片主节点。'); }
+  async routeStatus(userId) {
+    const pg = (await this.pool.query('SELECT user_id,shard_id,paused FROM agent_data.user_shards WHERE user_id=$1', [userId])).rows[0] ?? null;
+    // Observe the current cache without refreshing: diagnostics must not hide Watch lag.
+    const routeOf = this.cache.routeOf(userId), override = this.cache.overrides[userId];
+    const leaseValid = Boolean(this.coordination.checkLease()), localPaused = this.paused.has(userId);
+    const owns = leaseValid && routeOf.primary === this.nodeId;
+    const shardMatches = Boolean(pg && pg.shard_id === routeOf.shardId);
+    return { nodeId: this.nodeId, routeOf, override: override ?? null, overrideType: typeof override,
+      routeShardIdType: typeof routeOf.shardId, pgShardIdType: pg ? typeof pg.shard_id : null,
+      localPaused, pg, leaseValid, owns, shardMatches, canDispatch: owns && !localPaused && Boolean(pg && !pg.paused) && shardMatches };
+  }
   async filter(rows, ownerKey) {
     const accepted = [];
     for (const row of rows) if (await this.canDispatch(row[ownerKey])) accepted.push(row);

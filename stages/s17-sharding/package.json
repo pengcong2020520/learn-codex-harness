@@ -63,7 +63,7 @@
     "test:hub:uid": "node --test tests/hub-uid.integration.mjs",
     "cluster": "node client/cluster.mjs",
     "test:coordination": "node --test tests/coordination.integration.mjs",
-    "test:sharding:etcd": "node --test --test-concurrency=1 tests/sharding-etcd.integration.mjs"
+    "test:sharding:etcd": "node --test --test-concurrency=1 tests/sharding-etcd.integration.mjs tests/sharding-route-etcd.integration.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

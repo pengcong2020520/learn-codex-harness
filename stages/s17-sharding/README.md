@@ -109,11 +109,17 @@ npm run test:hub:uid
 ETCD_TEST_ENDPOINT=http://127.0.0.1:2379 \
 ETCD_TEST_NODE_A_PASSWORD="$TEST_NODE_A_PASSWORD" \
 ETCD_TEST_NODE_B_PASSWORD="$TEST_NODE_B_PASSWORD" \
-ETCD_TEST_NODE_C_PASSWORD="$TEST_NODE_C_PASSWORD" npm run test:sharding:etcd
+ETCD_TEST_NODE_C_PASSWORD="$TEST_NODE_C_PASSWORD" \
+DATA_TEST_DATABASE_URL="$TEST_DATABASE_URL" \
+DATA_TEST_REDIS_URL="$TEST_REDIS_URL" npm run test:sharding:etcd
 npm run test:coordination     # 同样需要上述 ETCD_TEST_*；使用空测试实例
 ```
 
 etcd 集成测试验证 `guardedPut` 的动态 control 权限、1 秒内 Watch、错误凭据及 `/codex/` 外 ACL 拒绝。节点均可参加选举，静态 etcd RBAC 无法表达“当前 elected”；它限定凭据的键空间，**应用写入口**实施任期检查。拥有节点密钥/数据库角色的节点属于可信服务端，不能将其发给最终用户。
+
+配置上述全部测试变量时，还会启动三个独立目录的节点，共用测试 PG/Redis 和带认证 etcd，经过固定转发到非目标 node-c 的 HTTP 入口迁移 dave，再立即请求 `/sessions`，要求 200。缺少变量时该用例明确跳过；测试 PG 的任期不能超前于测试 etcd 的选举 revision。入口由测试内置反向代理提供，无需安装 Caddy。
+
+运维可用 admin token 请求 `GET /cluster/route?username=dave`。响应按节点列出 `routeOf`、原始 `override` 及类型、`localPaused`、PG `user_shards` 行、`owns`、`shardMatches` 和 `canDispatch`；无法联系的节点单独返回 `error`。诊断不会刷新缓存，保留 Watch 延迟现场，各节点结果是独立采样。override 写入 JSON 字符串；旧的数字值仍可读取，路由统一为字符串分片 ID，以便与 PG 严格比较。
 
 远程操作：`DEPLOY_HOST=example.com bash deploy/remote.sh check|init-env|deploy|auth-init|status|tunnel`。服务器 deploy 自动核对并分发相同 identity，安装 `codex-harness-s17.service`。`bash deploy/backup.sh` 停三个节点、逐节点备份；`bash deploy/restore.sh <timestamp> --yes` 校验三份备份后恢复。下载保留 `backups/node-a|b|c` 层级。PG 恢复后还需核对 etcd override 与磁盘备份属于同一业务时点，不能把单个分片的旧磁盘直接接到新路由上。
 
@@ -129,7 +135,10 @@ export const slotOf = id => createHash('sha256').update(String(id)).digest().rea
 
 ```javascript
   routeOf(userId) {
-    const shardId = this.overrides[userId] ?? this.strategy.shardOf(userId, this);
+    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.
+    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.
+    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);
+    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;
     const owner = this.shards[shardId];
     return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };
   }

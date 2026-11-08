@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { strategy } from './strategy.mjs';
+import { strategy, SHARDS } from './strategy.mjs';
 import { compacted } from '../coordination/index.mjs';
 export const SHARD_PREFIX = '/codex/shards/';
 export const OVERRIDE_PREFIX = '/codex/overrides/';
@@ -65,7 +65,10 @@ export class RouteCache extends EventEmitter {
     catch { this.retry = setTimeout(() => { void this.reconnect(); }, 1000); this.retry.unref?.(); }
   }
   routeOf(userId) {
-    const shardId = this.overrides[userId] ?? this.strategy.shardOf(userId, this);
+    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.
+    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.
+    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);
+    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;
     const owner = this.shards[shardId];
     return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };
   }

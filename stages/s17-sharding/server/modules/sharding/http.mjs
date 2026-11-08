@@ -88,6 +88,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       })));
     }
     const body = await parse(req);
+    if (pathname === '/internal/route') return json(200, await runtime.routeStatus(body.userId));
     if (pathname === '/internal/knowledge') return json(200, await runtime.readKnowledge(body));
     if (pathname === '/internal/ensure-user') { await control.ensureUser(body.userId); return json(200, { assigned: true }); }
     if (pathname === '/internal/move') {
@@ -187,9 +188,23 @@ export function createShardedHandler(coordination, service, runtime, control) {
       if (request.headers.origin !== undefined) throw new AppError('CLI only', 403);
       if (pathname === '/auth/login') return service.app.http.handle(request, response);
       const identity = await service.app.accounts.authenticate(request.headers.authorization);
-      if (pathname === '/cluster' || pathname === '/cluster/move') {
+      if (pathname === '/cluster' || pathname === '/cluster/move' || pathname === '/cluster/route') {
         if (identity.role !== 'admin') throw new AppError('需要 admin。', 403);
         if (pathname === '/cluster') return json(200, await shardStatus(coordination, runtime.cache, service.app, runtime));
+        if (pathname === '/cluster/route') {
+          if (request.method !== 'GET') throw new AppError('需要 GET。', 405);
+          const username = new URL(request.url, 'http://localhost').searchParams.get('username');
+          if (!username?.trim()) throw new AppError('需要 username。', 400);
+          const user = await service.app.accounts.store.byUsername(username);
+          if (!user) throw new AppError('用户不存在。', 404);
+          const ids = new Set([runtime.nodeId, ...coordination.members.keys(), ...Object.values(runtime.cache.shards).map(s => s.primary).filter(Boolean)]);
+          const nodes = await Promise.all([...ids].sort().map(async nodeId => {
+            try { return nodeId === runtime.nodeId ? await runtime.routeStatus(user.id)
+              : await runtime.call(nodeAddress(runtime, nodeId), '/internal/route', { userId: user.id }); }
+            catch (error) { return { nodeId, error: { code: error.code || 'UNAVAILABLE', message: error.message } }; }
+          }));
+          return json(200, { username, userId: user.id, nodes });
+        }
         if (request.method !== 'POST') throw new AppError('需要 POST。', 405);
         const body = await parse(request);
         const result = coordination.isController() ? await executeMove(body.username, body.shardId)

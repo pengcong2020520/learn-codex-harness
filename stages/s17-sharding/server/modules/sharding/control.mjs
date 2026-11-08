@@ -69,7 +69,8 @@ export class ShardControl {
     try {
       await this.locked(async db => {
         await db.query('UPDATE agent_data.user_shards SET shard_id=$2 WHERE user_id=$1', [userId, shardId]);
-        await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, shardId);
+        // guardedPut accepts wire strings verbatim; RouteCache decodes JSON.
+        await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, JSON.stringify(shardId));
       });
       await this.cache.refresh();
     } catch (error) {
@@ -78,7 +79,7 @@ export class ShardControl {
         // COMMIT may have succeeded even when its response was lost: restore BOTH stores under a fresh term lock.
         await this.locked(async db => {
           await db.query('UPDATE agent_data.user_shards SET shard_id=$2 WHERE user_id=$1 AND paused=true', [userId, previousShard]);
-          await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, old ?? previousShard);
+          await this.coordination.guardedPut(OVERRIDE_PREFIX + userId, JSON.stringify(String(old ?? previousShard)));
         });
         await this.cache.refresh();
       }

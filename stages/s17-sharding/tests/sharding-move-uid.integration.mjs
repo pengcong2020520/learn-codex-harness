@@ -4,23 +4,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createServer } from 'node:http';
 import { spawnSync } from 'node:child_process';
-import { startAgentServer } from '../server/main.mjs';
-import { loadServerConfig } from '../server/modules/config/index.mjs';
 import { identity, migrate, openDatabase } from '../server/modules/data/database.mjs';
 import { AccountStore } from '../server/modules/accounts/store.mjs';
 import { initializeAccounts, addUser } from '../server/modules/accounts/admin.mjs';
 import { runOwner } from '../server/modules/accounts/context.mjs';
 import { readAsUser } from '../server/modules/runtimes/user-files.mjs';
-import { ShardRuntime } from '../server/modules/sharding/runtime.mjs';
-import { ShardControl } from '../server/modules/sharding/control.mjs';
 import { RouteCache } from '../server/modules/sharding/cache.mjs';
 import { defaultSlots } from '../server/modules/sharding/strategy.mjs';
-import { createShardedHandler } from '../server/modules/sharding/http.mjs';
 import { provisionNodeRoles } from '../scripts/cluster-migrate.mjs';
 import { cleanup, installToolFixture, tempRoot, until } from './helpers.mjs';
 import { answer, responsesFixture } from './responses-fixture.mjs';
+import { startClusterNode, scriptedCoordination } from './fixtures/sharding-cluster.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
 
 test('Linux 双节点完整迁移：私有 home/tmp、服务 workspace、续聊、停止旧主派发与 SH001', {
@@ -72,29 +67,9 @@ test('Linux 双节点完整迁移：私有 home/tmp、服务 workspace、续聊�
     // A test database may contain other logical deployments; membership covers this fixture only.
     const routeOf = cache.routeOf.bind(cache);
     cache.routeOf = userId => [owner.id, dave.id].includes(userId) ? routeOf(userId) : { shardId: null, primary: null, epoch: null, revision: cache.revision };
-    const coordination = { nodeId, members, checkLease: () => true, isController: () => index === 0,
-      assertController: () => assert.equal(index, 0), confirm: async () => {}, term: () => term,
-      guardedPut: async (key, value) => etcd.set(key, JSON.stringify(value)),
-      isolate: reason => isolations.push({ nodeId, reason }) };
-    const runtime = new ShardRuntime({ nodeId, cache, coordination, key: 'move-uid-test-internal-node-key' });
-    const generation = { active: true, nodeId, routes: cache, term, assert() { assert.ok(this.active); },
-      log: line => logs.push(line), isolate: reason => { isolations.push({ nodeId, reason }); generation.active = false; } };
-    const url = new URL(databaseUrl); url.username = 'agent_node_' + suffix; url.password = password;
-    url.searchParams.set('options', '-c app.maintenance=off');
-    const config = loadServerConfig(roots[index], { DATABASE_URL: url.href, REDIS_URL: redisUrl,
-      CODEX_API_KEY: 'local-fixture', CODEX_BASE_URL: provider.url, CODEX_MODEL: 'local-fixture-model',
-      CODEX_MODEL_CATALOG_ENABLED: 'true', CODEX_MODEL_CONTEXT_WINDOW: '128000', DEMO_TIMEOUT_MS: '30000' });
-    config.port = 0; config.sharding = runtime;
-    const app = await startAgentServer({ config, generation, externalHttp: true, log: line => logs.push(line) });
-    cleanup(root, () => app.close()); assert.equal(app.rpc.isolated, true);
-    const controlPool = await openDatabase(url.href, { maintenance: false }); cleanup(root, () => controlPool.end());
-    const control = new ShardControl(coordination, cache, controlPool); control.log = line => logs.push(line);
-    const handler = createShardedHandler(coordination, { app, isReady: () => generation.active }, runtime, control);
-    const server = createServer((req, res) => { void handler(req, res); });
-    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-    cleanup(root, () => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-    const address = `http://127.0.0.1:${server.address().port}`;
-    members.set(nodeId, { nodeId, address }); nodes.push({ app, runtime, generation, address });
+    const coordination = scriptedCoordination({ client: etcd, nodeId, members, term, isolations });
+    const node = await startClusterNode({ root, nodeRoot: roots[index], databaseUrl, redisUrl, password, provider, cache, coordination, term, logs, isolations });
+    assert.equal(node.app.rpc.isolated, true); nodes.push(node);
   }
   const api = async (index, route, body, expected, token) => {
     const response = await fetch(nodes[index].address + route, { method: body === undefined ? 'GET' : 'POST',

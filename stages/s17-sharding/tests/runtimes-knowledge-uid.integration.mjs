@@ -4,12 +4,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startAgentServer } from '../server/main.mjs';
-import { loadServerConfig } from '../server/modules/config/index.mjs';
 import { openDatabase, migrate, identity } from '../server/modules/data/database.mjs';
 import { AccountStore } from '../server/modules/accounts/store.mjs';
 import { initializeAccounts, addUser } from '../server/modules/accounts/admin.mjs';
 import { runOwner } from '../server/modules/accounts/context.mjs';
+import { provisionNodeRoles } from '../scripts/cluster-migrate.mjs';
+import { RouteCache } from '../server/modules/sharding/cache.mjs';
+import { defaultSlots } from '../server/modules/sharding/strategy.mjs';
+import { FakeClient } from './fixtures/coordination-client.mjs';
+import { startClusterNode, scriptedCoordination } from './fixtures/sharding-cluster.mjs';
 import { userSpawn } from '../server/modules/codex/launch.mjs';
 import { readAsUser } from '../server/modules/runtimes/user-files.mjs';
 import { installToolFixture, tempRoot, cleanup, until } from './helpers.mjs';
@@ -26,7 +29,7 @@ test('Linux isolated HTTP：bob(pro) 新建知识库→导入→knowledge-mainta
   const databaseUrl = process.env.DATA_TEST_DATABASE_URL, redisUrl = process.env.DATA_TEST_REDIS_URL;
   assert.ok(databaseUrl && redisUrl, '设置专用 DATA_TEST_DATABASE_URL 与 DATA_TEST_REDIS_URL；不可使用生产库。');
   const root = installToolFixture(tempRoot(t), { knowledge: true }); fs.chmodSync(root, 0o755);
-  const db = await openDatabase(databaseUrl); cleanup(root, () => db.end()); await migrate(db);
+  const db = await openDatabase(databaseUrl, { maintenance: true }); cleanup(root, () => db.end()); await migrate(db);
   const scope = identity(root), accounts = new AccountStore(db, scope.instanceId);
   await initializeAccounts(accounts, { ownerId: scope.ownerId, username: 'alice', password: 'fixture-password', workspace: path.join(root, 'workspace') });
   const bob = await addUser(accounts, { username: 'bob', password: 'fixture-password' });
@@ -59,17 +62,29 @@ test('Linux isolated HTTP：bob(pro) 新建知识库→导入→knowledge-mainta
     assert.equal(outputs.at(-1).effective, true);
     return answer('Wiki 已生成。');
   });
-  const config = loadServerConfig(root, { CODEX_API_KEY: 'local-test-only', CODEX_BASE_URL: provider.url,
-    CODEX_MODEL: 'local-test-model', CODEX_MODEL_CATALOG_ENABLED: 'true', CODEX_MODEL_CONTEXT_WINDOW: '128000',
-    DEMO_TIMEOUT_MS: '30000', DATABASE_URL: databaseUrl, REDIS_URL: redisUrl }); config.port = 0;
-  const logs = [], app = await startAgentServer({ config, log: line => logs.push(line) }); cleanup(root, () => app.close());
+  const password = 'fixture-password-for-node-roles';
+  await provisionNodeRoles(db, { a: password, b: password, c: password }, (await db.query('SELECT current_database() AS db')).rows[0].db);
+  await db.query(`INSERT INTO agent_data.shard_owners VALUES('0','node-a',17)
+    ON CONFLICT(shard_id) DO UPDATE SET node_id=EXCLUDED.node_id,epoch=EXCLUDED.epoch`);
+  await db.query("INSERT INTO agent_data.user_shards(user_id,shard_id) VALUES($1,'0'),($2,'0')", [scope.ownerId, bob.id]);
+  const term = String(BigInt((await db.query('SELECT term FROM agent_data.cluster_term WHERE id=1')).rows[0].term) + 1n);
+  const etcd = new FakeClient();
+  etcd.set('/codex/slots', JSON.stringify(defaultSlots()));
+  etcd.set('/codex/shards/0', JSON.stringify({ primary: 'node-a', epoch: 17 }));
+  for (const userId of [scope.ownerId, bob.id]) etcd.set('/codex/overrides/' + userId, '"0"');
+  const cache = await new RouteCache(etcd).open(); cleanup(root, () => cache.close());
+  const routeOf = cache.routeOf.bind(cache);
+  cache.routeOf = userId => [scope.ownerId, bob.id].includes(userId) ? routeOf(userId) : { shardId: null, primary: null, epoch: null, revision: cache.revision };
+  const logs = [], isolations = [], members = new Map();
+  const coordination = scriptedCoordination({ client: etcd, nodeId: 'node-a', members, term, isolations });
+  const { app, address } = await startClusterNode({ root, nodeRoot: root, databaseUrl, redisUrl, password, provider, cache, coordination, term, logs, isolations });
   assert.equal(app.rpc.isolated, true, '绝不能通过共享 Agent/运行环境回退掩盖问题');
-  const loginResponse = await fetch(app.url + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' },
+  const loginResponse = await fetch(address + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ username: 'bob', password: 'fixture-password' }) });
   assert.equal(loginResponse.status, 200);
   const login = await loginResponse.json(); assert.equal(login.user.role, 'user');
   const api = async (route, body, expected = 200) => {
-    const response = await fetch(app.url + route, { method: body === undefined ? 'GET' : 'POST',
+    const response = await fetch(address + route, { method: body === undefined ? 'GET' : 'POST',
       headers: { authorization: `Bearer ${login.token}`, 'content-type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const value = await response.json(); assert.equal(response.status, expected, JSON.stringify(value)); return value;
@@ -102,5 +117,7 @@ test('Linux isolated HTTP：bob(pro) 新建知识库→导入→knowledge-mainta
   assert.equal(value.rpc.child.pid, pid); assert.equal(value.rpc.child.exitCode, null);
   assert.equal(await runOwner(bob.id, () => app.data.jobs.paused(session.id)), false);
   assert.deepEqual(provider.errors, []);
+  assert.deepEqual(isolations, []);
+  assert.equal(logs.some(line => /\[(SH001|CT001)\]/.test(line)), false);
   t.diagnostic(`isolated=true; bob uid=${value.runtime.uid}; pid=${pid}; completed + wiki-effective; 未重启。`);
 });

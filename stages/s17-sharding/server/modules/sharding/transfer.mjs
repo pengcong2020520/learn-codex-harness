@@ -76,6 +76,8 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
   const parent = path.join(root, '.data/transfers'); fs.mkdirSync(parent, { recursive: true, mode: 0o700 }); assertRealPath(parent);
   // Stage next to the destination: .data and workspace are separate bind mounts, and rename() cannot cross mounts (EXDEV).
   const id = randomUUID(), archive = path.join(parent, id + '.tar'), stage = path.join(path.dirname(target), '.move-' + id);
+  // Create the user's parent directories first (correct owner/mode); on a fresh target node they may not exist yet.
+  prepareDirectories(root, record, { isolated: process.getuid() === 0 });
   assertRealPath(path.dirname(target));
   fs.mkdirSync(stage, { mode: 0o700 });
   try {

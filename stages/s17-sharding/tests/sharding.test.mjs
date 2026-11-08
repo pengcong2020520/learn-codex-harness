@@ -91,7 +91,7 @@ test('fence: business transactions SET LOCAL node and shard epoch, no control te
 });
 test('control: only control places unowned shards, synchronizes SQL and never fails over departed primaries',async t=>{
   const {client,c}=await cache(t); const writes=[];
-  const coordination={members,isController:()=>true,assertController(){},term:()=> '10',confirm:async()=>{},guardedPut:async(k,v)=>{writes.push(k);client.set(k,JSON.stringify(v));}};
+  const coordination={members,isController:()=>true,assertController(){},term:()=> '10',confirm:async()=>{},guardedPut:async(k,v)=>{writes.push(k);client.set(k,typeof v === 'string' ? v : JSON.stringify(v));}};
   const sql=[];const db={query:async(q,args)=>{sql.push([q,args]);return {rows:[]};},release(){}};const ctl=new ShardControl(coordination,c,{connect:async()=>db});
   coordination.members=new Map([['b',members.get('b')]]);await ctl.reconcile();assert.equal(c.shards[0].primary,'node-a');assert.equal(writes.length,0);
   client.set('/codex/shards/0',JSON.stringify({primary:null,epoch:0}));coordination.members=members;await ctl.reconcile();assert.equal(c.shards[0].primary,'node-a');assert.ok(sql.some(([q])=>q.includes('advance_cluster_term')));
@@ -112,7 +112,7 @@ test('move: pause → drain → copy → switch → resume; failure before/after
 test('move: control rolls override back if the PostgreSQL commit fails',async t=>{
   const {client,c}=await cache(t);client.set('/codex/overrides/'+user,'"0"');let commits=0;
   const db={query:async q=>{if(q==='COMMIT'&&!commits++)throw new Error('commit failed');return {rows:[]};},release(){}};
-  const ctl=new ShardControl({assertController(){},term:()=> '10',confirm:async()=>{},guardedPut:async(k,v)=>client.set(k,JSON.stringify(v))},c,{connect:async()=>db});
+  const ctl=new ShardControl({assertController(){},term:()=> '10',confirm:async()=>{},guardedPut:async(k,v)=>client.set(k,typeof v === 'string' ? v : JSON.stringify(v))},c,{connect:async()=>db});
   await assert.rejects(ctl.switchUser(user,'1'));assert.equal(c.overrides[user],'0');
 });
 test('move: failed rollback stays paused instead of starting both copies',async()=>{
