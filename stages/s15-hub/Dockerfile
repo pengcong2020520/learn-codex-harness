@@ -1,5 +1,5 @@
 # Node 与 digest 沿用已验证部署；npm 依赖与 s11 完全一致。
-FROM node:24.19.0-slim@sha256:a9f5f7c91a432950b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+FROM node:24.19.0-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
 ARG NPM_REGISTRY=https://registry.npmjs.org
 ARG APT_MIRROR=
 # 必须与宿主部署路径相同：Codex 原生历史保存绝对路径。
