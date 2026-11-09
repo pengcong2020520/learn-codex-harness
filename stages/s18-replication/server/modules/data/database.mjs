@@ -1,0 +1,159 @@
+import { maintenanceConnection } from './write.mjs';
+import { Pool } from "pg";
+import fs from "node:fs";
+import path from "node:path";
+import { randomUUID, createHash } from "node:crypto";
+import { readJson, writeJson } from "../storage/index.mjs";
+
+export async function transaction(pool, operation, { isolation, readOnly } = {}) {
+  // Transaction characteristics must precede the fencing wrapper's SET LOCAL/set_config.
+  const level = typeof isolation === 'string' ? isolation.toUpperCase() : isolation;
+  if (isolation !== undefined && !['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SERIALIZABLE'].includes(level))
+    throw new TypeError('transaction isolation 必须是有效的 PostgreSQL 隔离级别。');
+  if (readOnly !== undefined && typeof readOnly !== 'boolean')
+    throw new TypeError('transaction readOnly 必须是 boolean。');
+  const begin = 'BEGIN' + (level ? ` ISOLATION LEVEL ${level}` : '') +
+    (readOnly === undefined ? '' : readOnly ? ' READ ONLY' : ' READ WRITE');
+  const client = await pool.connect();
+  try {
+    await client.query(begin);
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export function identity(root, { create = true } = {}) {
+  const file = path.join(root, ".data/identity.json");
+  if (create) fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  if (fs.lstatSync(path.dirname(file)).isSymbolicLink())
+    throw new Error("数据身份目录不能是链接。");
+  if (fs.existsSync(file)) {
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
+      throw new Error("数据身份文件不能是链接。");
+  }
+  let value = readJson(file, null);
+  if (!value) {
+    if (!create) throw new Error("数据实例身份尚未初始化，请先运行 npm run agent:init。");
+    value = { instanceId: randomUUID(), ownerId: randomUUID() };
+    writeJson(file, value);
+  }
+  for (const id of [value.instanceId, value.ownerId])
+    if (!/^[a-f0-9-]{36}$/.test(id || ""))
+      throw new Error("数据实例身份文件无效。");
+  return value;
+}
+
+// Same-host defaults; a node behind a cross-region tunnel needs several RTTs per handshake
+// and per transaction step, so deploy/remote-env.mjs widens these for that node only.
+export function boundedMs(env, name, fallback, min, max, unit = '毫秒') {
+  const raw = env[name] ?? String(fallback);
+  if (!/^\d+$/.test(String(raw)) || Number(raw) < min || Number(raw) > max) throw new Error(`${name} 必须是 ${min}–${max} 的整数（${unit}）。`);
+  return Number(raw);
+}
+export const connectTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_CONNECT_TIMEOUT_MS', 3000, 1000, 60000);
+export const poolMax = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_POOL_MAX', 6, 2, 32, '连接数');
+export const idleTransactionTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_IDLE_TX_TIMEOUT_MS', 15000, 5000, 120000);
+
+export async function openDatabase(url, { maintenance } = {}) {
+  if (!url)
+    throw new Error(
+      "缺少 DATABASE_URL。请配置 PostgreSQL 后运行 npm run data:migrate；不会回退到 JSON 存储。",
+    );
+  const pool = new Pool({
+    connectionString: url,
+    ...(maintenance === undefined ? {} : { options: `-c app.maintenance=${maintenance ? 'on' : 'off'}` }),
+    max: poolMax(),
+    connectionTimeoutMillis: connectTimeout(),
+    query_timeout: 12000,
+    keepAlive: true,
+    statement_timeout: 10000,
+    idle_in_transaction_session_timeout: idleTransactionTimeout(),
+  });
+  pool.on("error", () => {}); // Requests/worker heartbeat surface failures without printing connection secrets.
+  try {
+    const { rows } = await pool.query("SELECT current_setting('app.maintenance', true) AS maintenance");
+    if (rows[0].maintenance === 'on') {
+      maintenanceConnection(pool);
+      // Covers existing and future clients, including explicit transaction() clients.
+      pool.on('acquire', maintenanceConnection);
+    }
+    return pool;
+  } catch (error) {
+    await pool.end();
+    throw error;
+  }
+}
+
+const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql', 'migrations/014-user-knowledge.sql', 'migrations/015-cluster-term.sql', 'migrations/016-sharding.sql', 'migrations/017-shard-diagnostics.sql', 'migrations/018-move-security.sql', 'migrations/019-replication.sql', 'migrations/020-replica-missing.sql', 'migrations/021-replication-error.sql'].map((name, index) => {
+  const sql = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
+  return { version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex') };
+});
+function compatible(rows) {
+  return rows.length <= migrations.length && rows.every((row, i) => row.version === migrations[i].version && row.checksum === migrations[i].checksum);
+}
+export async function migrate(pool) {
+  await transaction(pool, async client => {
+    await client.query("SET LOCAL app.maintenance = 'on'");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('agent_data_migration'))");
+    await client.query('CREATE SCHEMA IF NOT EXISTS agent_data; CREATE TABLE IF NOT EXISTS agent_data.migrations(version integer PRIMARY KEY, checksum text NOT NULL)');
+    const { rows } = await client.query('SELECT * FROM agent_data.migrations ORDER BY version');
+    if (!compatible(rows)) throw new Error('数据库迁移版本或校验值不匹配；请勿修改已经执行的 migration。');
+    for (const migration of migrations.slice(rows.length)) {
+      await client.query(migration.sql);
+      await client.query('INSERT INTO agent_data.migrations VALUES($1,$2)', [migration.version, migration.checksum]);
+    }
+  });
+}
+export async function verifySchema(pool) {
+  let rows;
+  try { rows = (await pool.query('SELECT * FROM agent_data.migrations ORDER BY version')).rows; }
+  catch { throw new Error('数据库尚未初始化，请先运行 npm run data:migrate。'); }
+  if (!compatible(rows) || rows.length !== migrations.length) throw new Error('数据库版本不匹配，请运行 npm run data:migrate。');
+}
+
+// This service intentionally has one executor per instance, not distributed workers.
+export async function acquireDatabaseLock(pool, instanceId, onLost) {
+  const client = await pool.connect();
+  let lost = false;
+  const fail = () => {
+    if (!lost) {
+      lost = true;
+      onLost(new Error("数据库执行器锁连接已丢失；停止调度，请核对执行结果。"));
+    }
+  };
+  client.on("error", fail);
+  try {
+    const result = await client.query(
+      "SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked",
+      [instanceId],
+    );
+    if (!result.rows[0].locked)
+      throw new Error("这个数据实例已有执行器，不能重复启动。");
+  } catch (error) {
+    client.off("error", fail);
+    client.release();
+    throw error;
+  }
+  const timer = setInterval(() => {
+    client.query("SELECT 1").catch(fail);
+  }, 1000);
+  timer.unref();
+  return async () => {
+    clearInterval(timer);
+    client.off("error", fail);
+    if (!lost)
+      await client
+        .query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [
+          instanceId,
+        ])
+        .catch(() => {});
+    client.release(lost);
+  };
+}

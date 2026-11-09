@@ -236,3 +236,11 @@ test('浏览器：s17 只展示独立部署说明与课程，不发 Agent 请求
  assert.match(result.readme,/stages\/s17-sharding\/README\.md$/);
  assert.deepEqual(result.tabs,['learn','chat']);assert.equal(result.connect,0);assert.equal(result.agentRequests,0);
 });
+
+test('浏览器：s18 只展示独立部署说明与课程，不发 Agent 请求',options,async t=>{
+ const {url,b}=await setup(t);await b.open(url+'/?stage=s18&view=run');
+ const result=await b.run(`${helpers}await until(()=>$('.stage.active')?.dataset.stage==='s18');await sleep(150);return {pane:$('#pane').textContent,readme:$('#pane a').getAttribute('href'),tabs:$$('[data-tab]').map(el=>el.dataset.tab),connect:$$('[data-action="real"],[data-action="preview"],[data-action="reconnect"]').length,agentRequests:performance.getEntriesByType('resource').filter(e=>e.name.includes('/api/agent/')).length};`);
+ assert.match(result.pane,/remote\.sh tunnel/);
+ assert.match(result.readme,/stages\/s18-replication\/README\.md$/);
+ assert.deepEqual(result.tabs,['learn','chat']);assert.equal(result.connect,0);assert.equal(result.agentRequests,0);
+});

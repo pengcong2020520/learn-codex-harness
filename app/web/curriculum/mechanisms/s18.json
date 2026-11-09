@@ -1,0 +1,353 @@
+[
+  {
+    "id": "s18-boundary",
+    "title": "先固定历史边界，再异步发送",
+    "question": "主节点继续服务时，怎样复制一份一致、可核对的原生历史？",
+    "file": "stages/s18-replication/server/modules/replication/worker.mjs",
+    "start": 46,
+    "end": 64,
+    "expect": "      // Close admission BEFORE checking again;",
+    "notes": {},
+    "actors": [
+      [
+        "primary",
+        "主节点"
+      ],
+      [
+        "replica",
+        "副本 / 新主"
+      ],
+      [
+        "control",
+        "control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "派发": "开放",
+      "副本": "旧",
+      "位点": "旧"
+    },
+    "steps": [
+      {
+        "flow": [
+          "primary",
+          "primary",
+          "固定 snapshot"
+        ],
+        "say": "全部会话空闲时捕获边界 8。",
+        "state": {
+          "派发": "暂停",
+          "位点": "旧"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "primary",
+          "释放 release"
+        ],
+        "say": "本地快照完成即放开新轮次。",
+        "state": {
+          "派发": "开放"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "replica",
+          "发送 tar"
+        ],
+        "say": "目录与附属内容校验后成对发布。",
+        "state": {
+          "副本": "边界 8"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "pg",
+          "提交 sequence"
+        ],
+        "say": "只写捕获的位点；新轮次仍在窗口外。",
+        "state": {
+          "位点": "8"
+        }
+      }
+    ],
+    "takeaway": "副本是异步历史窗口；暂停新轮次只到本地快照完成，位点只描述快照已经包含的历史。"
+  },
+  {
+    "id": "s18-lag",
+    "title": "落后看未复制尾部，不看空闲多久",
+    "question": "用户一小时没有说话，是否意味着副本落后一小时？",
+    "file": "stages/s18-replication/server/modules/replication/store.mjs",
+    "start": 6,
+    "end": 11,
+    "expect": "export const LAG_MS =",
+    "notes": {},
+    "actors": [
+      [
+        "primary",
+        "主节点"
+      ],
+      [
+        "replica",
+        "副本 / 新主"
+      ],
+      [
+        "control",
+        "control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "轮数": "0",
+      "等待": "0 秒",
+      "退化": "否",
+      "就绪": "200"
+    },
+    "steps": [
+      {
+        "flow": [
+          "pg",
+          "primary",
+          "计算 lagOf"
+        ],
+        "say": "零尾部时秒数为零，与空闲时间无关。",
+        "state": {
+          "轮数": "0",
+          "等待": "0 秒"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "pg",
+          "记录 completed"
+        ],
+        "say": "产生未复制尾部。",
+        "state": {
+          "轮数": "2"
+        }
+      },
+      {
+        "flow": [
+          "pg",
+          "primary",
+          "报告 replica_lagging"
+        ],
+        "say": "最早尾部等待超过 300 秒。",
+        "state": {
+          "等待": "301 秒",
+          "退化": "是"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "primary",
+          "返回 ready"
+        ],
+        "say": "主服务仍就绪，附带副本退化。",
+        "state": {
+          "就绪": "200"
+        }
+      }
+    ],
+    "takeaway": "复制延迟描述尚未复制的已完成轮次；副本落后可以告警，但主节点仍能服务。"
+  },
+  {
+    "id": "s18-recovery",
+    "title": "接管先确认副本，再核对三类任务",
+    "question": "主节点租约消失以后，副本能接手哪些历史，哪些必须明确提示缺失？",
+    "file": "stages/s18-replication/server/modules/replication/control.mjs",
+    "start": 60,
+    "end": 74,
+    "expect": "  async switch(shardId, { manual = false } = {}) {",
+    "notes": {},
+    "actors": [
+      [
+        "primary",
+        "主节点"
+      ],
+      [
+        "replica",
+        "副本 / 新主"
+      ],
+      [
+        "control",
+        "control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "门禁": "待核对",
+      "epoch": "4",
+      "主": "失联",
+      "恢复": "等待",
+      "派发": "封闭"
+    },
+    "steps": [
+      {
+        "flow": [
+          "control",
+          "control",
+          "核对 replica_ready"
+        ],
+        "say": "租约消失后确认在线副本、完整位点与无未完成传输。",
+        "state": {
+          "门禁": "通过"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "pg",
+          "提交 epoch"
+        ],
+        "say": "先 PG 提交主归属与 epoch+1。",
+        "state": {
+          "epoch": "5",
+          "派发": "封闭"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "replica",
+          "发布 shards"
+        ],
+        "say": "etcd 发布失败则对账重试；不回退 epoch。",
+        "state": {
+          "主": "原副本"
+        }
+      },
+      {
+        "flow": [
+          "replica",
+          "pg",
+          "恢复 tasks"
+        ],
+        "say": "尾部 replica_missing，执行中 unconfirmed，queued 按会话规则首次派发。",
+        "state": {
+          "恢复": "已核对"
+        }
+      },
+      {
+        "flow": [
+          "replica",
+          "control",
+          "确认 recovered"
+        ],
+        "say": "恢复完成才开放派发。",
+        "state": {
+          "派发": "按会话状态开放"
+        }
+      }
+    ],
+    "takeaway": "接管接受尾部丢失；已完成、执行中和排队任务不能用同一种重跑策略。"
+  },
+  {
+    "id": "s18-fence",
+    "title": "旧主失权后，以副本身份回来",
+    "question": "假死的旧主醒来，怎样避免两份历史同时成为权威？",
+    "file": "stages/s18-replication/server/modules/sharding/fence.mjs",
+    "start": 23,
+    "end": 27,
+    "expect": "  if (owner && after && after.primary !== generation.nodeId && !refreshFailed) {",
+    "notes": {},
+    "actors": [
+      [
+        "primary",
+        "主节点"
+      ],
+      [
+        "replica",
+        "副本 / 新主"
+      ],
+      [
+        "control",
+        "control"
+      ],
+      [
+        "pg",
+        "PostgreSQL"
+      ]
+    ],
+    "state0": {
+      "写入": "等待",
+      "旧主": "旧 epoch",
+      "ready": "false"
+    },
+    "steps": [
+      {
+        "flow": [
+          "primary",
+          "pg",
+          "拒绝 SH001"
+        ],
+        "say": "旧 epoch 的业务与位点写入被拒绝。",
+        "state": {
+          "写入": "拒绝"
+        }
+      },
+      {
+        "flow": [
+          "primary",
+          "primary",
+          "停止 stopShard"
+        ],
+        "say": "刷新确认失去归属，只停该分片。",
+        "state": {
+          "旧主": "停止该分片"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "primary",
+          "设置 replica"
+        ],
+        "say": "旧主回归不自动切回，ready=false。",
+        "state": {
+          "旧主": "副本",
+          "ready": "false"
+        }
+      },
+      {
+        "flow": [
+          "replica",
+          "primary",
+          "发送 baseline"
+        ],
+        "say": "新主复制全部用户当前 epoch 基线。",
+        "state": {
+          "旧主": "副本追平中"
+        }
+      },
+      {
+        "flow": [
+          "control",
+          "pg",
+          "确认 ready"
+        ],
+        "say": "所有位点完整才可再次接管。",
+        "state": {
+          "旧主": "副本",
+          "ready": "true"
+        }
+      }
+    ],
+    "takeaway": "epoch 拒绝旧主写入；旧主以副本回归，完整追平前不能再次接管。"
+  }
+]

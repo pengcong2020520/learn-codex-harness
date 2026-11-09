@@ -1,5 +1,7 @@
 # s17：分片与路由
 
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → `s17` → [s18](../s18-replication/README.md) → [app](../../app/)
+
 对应六个问题：③ 之前聊过什么 ⑥ 谁说了算
 
 [导论](../introduction.md) · [s16 → s17 增量](../CHANGES.md#s17) · [总架构图](../../app/web/public/course/assets/s17-architecture.svg)
@@ -173,4 +175,6 @@ export function validateRoute(cache, userId, nodeId, revision) {
 
 用户的历史随用户分片留在同一主节点。入口通过带 revision 的缓存定位，数据库用 owner 与 epoch 守住写入边界，跨分片读取继续通过 Hub，手动迁移在暂停后切换归属。
 
-下一章：s18 副本与故障接管。
+## 从这里往哪里走
+
+下一章：[s18 副本与故障接管](../s18-replication/README.md)。

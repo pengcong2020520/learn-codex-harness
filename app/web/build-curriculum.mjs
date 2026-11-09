@@ -23,6 +23,7 @@ const chapterMetadata={
  s12:{name:'部署单元',focus:'健康与就绪、容量限制、备份与恢复'},
  s13:{name:'账号与认证',focus:'密码校验、令牌吊销与 owner 归属'},
  s14:{name:'用户隔离',focus:'owner 路由、运行环境池与系统文件边界'},
+ s18:{name:'副本与故障接管',focus:'边界快照、异步历史窗口、epoch 与旧主回归'},
  s17:{name:'分片与路由',focus:'用户归属、路由缓存、分片隔离与手动迁移'},
  s16:{name:'协调面',focus:'成员租约、control 选举与任期隔离'},
  s15:{name:'权限与资源 Hub',focus:'统一授权、工具三方交集与 Skill 共享审批'}

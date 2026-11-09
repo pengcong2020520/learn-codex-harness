@@ -20,7 +20,8 @@ const chapterSources=[
  ['s14','s14-isolation.html','s14-isolation'],
  ['s15','s15-hub.html','s15-hub'],
  ['s16','s16-coordination.html','s16-coordination'],
- ['s17','s17-sharding.html','s17-sharding']
+ ['s17','s17-sharding.html','s17-sharding'],
+ ['s18','s18-replication.html','s18-replication']
 ];
 const retainedAnchors={
  'm3-screen-1':'s05','m3-screen-2':'s05','m3-screen-3':'s05',
@@ -268,5 +269,12 @@ test('s17 长文总架构图声明与 SVG 一致的宽高',()=>{
  const html=fs.readFileSync(new URL('modules/s17-sharding.html',course),'utf8');
  const tag=html.match(/<img[^>]+src="\/course\/assets\/s17-architecture\.svg"[^>]*>/)[0];
  const svg=fs.readFileSync(new URL('assets/s17-architecture.svg',course),'utf8');
+ for(const attr of ['width','height'])assert.equal(tag.match(new RegExp(`${attr}="(\\d+)"`))?.[1],svg.match(new RegExp(`${attr}="(\\d+)"`))?.[1]);
+});
+
+test('s18 长文总架构图声明与 SVG 一致的宽高',()=>{
+ const html=fs.readFileSync(new URL('modules/s18-replication.html',course),'utf8');
+ const tag=html.match(/<img[^>]+src="\/course\/assets\/s18-architecture\.svg"[^>]*>/)[0];
+ const svg=fs.readFileSync(new URL('assets/s18-architecture.svg',course),'utf8');
  for(const attr of ['width','height'])assert.equal(tag.match(new RegExp(`${attr}="(\\d+)"`))?.[1],svg.match(new RegExp(`${attr}="(\\d+)"`))?.[1]);
 });

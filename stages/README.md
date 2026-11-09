@@ -27,18 +27,18 @@
 | [s15-hub（已完成）](s15-hub/README.md) | 权限与资源 Hub | 角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改 | 4329 |
 | [s16-coordination（已完成）](s16-coordination/README.md) | 协调面 | 节点是否存活变成租约是否过期 | 4334（入口），4340–4342（节点） |
 | [s17-sharding（已完成）](s17-sharding/README.md) | 分片与路由 | 用户按分片落到节点，路由表变了大家同时知道 | 4335（入口），4340–4342（节点） |
-| s18（规划中） | 副本与故障接管 | 主节点坏了，从节点接手，丢多少说得清 | — |
+| [s18-replication（已完成）](s18-replication/README.md) | 副本与故障接管 | 主节点坏了，从节点接手，丢多少说得清 | 4336（入口），4340–4342（节点） |
 | [../app](../app/README.md) | 持续开发的完整项目 | 在 s11 之上继续演进：Docker 部署、Web 工作台与互动课程 | 4317 |
 
 课程、Web 工作台、服务 API 与实验命令统一使用这套编号，例如 `/api/agent/s09`、`npm run lesson -- s01-transport`。旧书签里的 `?stage=demoN` 会自动对应到 `s0N`。
 
 ## 互动课程与 Web 工作台
 
-在 `../app` 运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [版本工作台](http://127.0.0.1:4320/)。机制课程 s01–s17 共 48 节已上线，先看架构、再逐层拆解，每节的源码摘录都直接取自本目录；工作台选择对应阶段；s12–s17 仅展示课程和独立部署说明，不连接实时服务。使用说明见 [Web 客户端说明](../app/web/README.md)。
+在 `../app` 运行 `npm run web`，打开 [互动课程](http://127.0.0.1:4320/course/) 或 [版本工作台](http://127.0.0.1:4320/)。机制课程 s01–s18 共 52 节已上线，先看架构、再逐层拆解，每节的源码摘录都直接取自本目录；工作台选择对应阶段；s12–s18 仅展示课程和独立部署说明，不连接实时服务。使用说明见 [Web 客户端说明](../app/web/README.md)。
 
 ## 关键约束
 
-- **单机单 Agent 配置、多 Thread**：每服务实例绑定一个 Agent 配置，支持多个会话 Thread，s14 已按 owner 分配独立 Codex 进程、原生目录与系统 uid/gid。s15 已提供[权限与资源 Hub](s15-hub/README.md)，s16 已提供[协调面](s16-coordination/README.md)，s17 已提供[分片与路由](s17-sharding/README.md)，s18 规划副本与故障接管；相关思路见 s09、s10 章节末尾的"延伸"。
+- **单机单 Agent 配置、多 Thread**：每服务实例绑定一个 Agent 配置，支持多个会话 Thread，s14 已按 owner 分配独立 Codex 进程、原生目录与系统 uid/gid。s15 已提供[权限与资源 Hub](s15-hub/README.md)，s16 已提供[协调面](s16-coordination/README.md)，s17 已提供[分片与路由](s17-sharding/README.md)，s18 已提供[副本与故障接管](s18-replication/README.md)；相关思路见 s09、s10 章节末尾的"延伸"。
 - **Node >= 24，`@openai/codex` 固定 `0.154.0`**。
 - **不自造模型/工具执行 loop**：模型执行循环由 Codex 原生负责。
 - **版本变化需新 Thread**：配置、角色、Skill 任一变更后旧 Thread 不自动兼容，需 `/new`；不删除原生历史。
@@ -58,8 +58,8 @@
 - **[s15 权限与资源 Hub](s15-hub/README.md)（已完成）** —— 角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改
 - **[s16 协调面](s16-coordination/README.md)（已完成）** —— 节点是否存活变成租约是否过期
 - **[s17 分片与路由](s17-sharding/README.md)（已完成）** —— 用户按分片落到节点，路由表变了大家同时知道
-- **s18 副本与故障接管（规划中）** —— 主节点坏了，从节点接手，丢多少说得清
-- **app** 在 s11 之上持续开发，s12、s13、s14、s15、s16、s17 提供独立部署快照，另有 Web 工作台与互动课程。
+- **[s18 副本与故障接管](s18-replication/README.md)（已完成）** —— 主节点坏了，从节点接手，丢多少说得清
+- **app** 在 s11 之上持续开发，s12、s13、s14、s15、s16、s17、s18 提供独立部署快照，另有 Web 工作台与互动课程。
 
 ## 修改阶段快照的规则
 

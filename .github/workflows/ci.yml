@@ -39,6 +39,7 @@ jobs:
           - stages/s15-hub
           - stages/s16-coordination
           - stages/s17-sharding
+          - stages/s18-replication
           - app
     defaults:
       run:

@@ -1,0 +1,23 @@
+{
+  "stage": 17,
+  "name": "分片与路由",
+  "synchronization": "independent-source-copy",
+  "excluded": [
+    "node_modules",
+    ".data",
+    ".runs",
+    "workspace (runtime root only)",
+    ".env",
+    "backups",
+    "nodes"
+  ],
+  "runtime": {
+    "node": ">=24",
+    "codex": "0.154.0"
+  },
+  "notes": [
+    "保留版本化 examples/*/workspace。",
+    "在协调面上只增加 sharding 单元；依赖不变。",
+    "三个节点各自独立数据目录；不实现副本和故障接管。"
+  ]
+}
