@@ -1,6 +1,6 @@
 # s13: 账号与认证
 
-[导论](../introduction.md) · [s12](../s12-deploy/README.md) → `s13` → `s14`
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → `s13` → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → [s17](../s17-sharding/README.md) → [s18](../s18-replication/README.md) → [app](../../app/)
 
 全仓入口：[机制课堂](../../app/web/public/course/index.html#s13) · [阶段演示](../../app/web/public/course/changes.html#s13) · [章节长文](../../app/web/public/course/handbook.html#module-s13) · [总架构图](../../app/web/public/course/assets/s13-architecture.svg)
 

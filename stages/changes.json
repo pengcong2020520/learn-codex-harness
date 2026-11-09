@@ -612,6 +612,48 @@
           "018-move-security.sql"
         ]
       }
+    },
+    {
+      "id": "s18",
+      "dir": "s18-replication",
+      "title": "副本与故障接管：保留可核对的历史窗口",
+      "summary": "轮次边界快照异步复制；接管推进 epoch，明确标记丢失尾部，旧主以副本回归。",
+      "previous": "s17-sharding",
+      "modules": [
+        {
+          "layer": "副本与故障接管",
+          "name": "异步副本",
+          "desc": "边界快照、位点与故障接管"
+        }
+      ],
+      "surface": {
+        "tools": [],
+        "routes": [
+          "POST /cluster/promote"
+        ],
+        "env": [
+          "AGENT_RUNTIME_LIMIT",
+          "COMPOSE_FILE",
+          "COMPOSE_PROFILES",
+          "AGENT_NODE_ADDRESS_B",
+          "NODE_B_UPSTREAM",
+          "REMOTE_BRIDGE_SUBNET",
+          "REMOTE_BRIDGE_GATEWAY",
+          "ETCD_PREFIX",
+          "AGENT_REPLICATION_RATE_LIMIT",
+          "AGENT_DATABASE_CONNECT_TIMEOUT_MS",
+          "AGENT_DATABASE_IDLE_TX_TIMEOUT_MS",
+          "AGENT_ETCD_RPC_TIMEOUT_MS",
+          "AGENT_DATABASE_POOL_MAX",
+          "AGENT_REDIS_TIMEOUT_MS",
+          "AGENT_REQUEST_TIMEOUT_MS"
+        ],
+        "migrations": [
+          "019-replication.sql",
+          "020-replica-missing.sql",
+          "021-replication-error.sql"
+        ]
+      }
     }
   ]
 }

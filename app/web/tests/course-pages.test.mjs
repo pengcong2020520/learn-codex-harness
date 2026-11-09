@@ -106,12 +106,22 @@ test('长文生成内容使用最新术语解释，源章节不需要手工改�
   assert.ok(matches>0&&untouched>0);
 });
 
-test('全景默认已完成的 s17，增量从 s16 到 s17',()=>{
- assert.equal(stages.at(-1).id,'s17');
- assert.equal(stages.at(-1).previous,'s16-coordination');
+test('全景默认已完成的 s18，增量从 s17 到 s18',()=>{
+ assert.equal(stages.at(-1).id,'s18');
+ assert.equal(stages.at(-1).previous,'s17-sharding');
  const overview=read('overview.html');
- assert.match(overview,/data-stage-panel="s17"(?! hidden)/);
- assert.match(overview,/<output[^>]*>s17<\/output>/);
- assert.match(overview,/\/course\/assets\/s17-architecture.svg/);
- assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['用户分片']);
+ assert.match(overview,/data-stage-panel="s18"(?! hidden)/);
+ assert.match(overview,/<output[^>]*>s18<\/output>/);
+ assert.match(overview,/\/course\/assets\/s18-architecture.svg/);
+ assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['异步副本']);
+});
+
+test('s18 八个术语都有释义，相关术语都能在术语表中找到',()=>{
+ const rows=glossary.filter(row=>row.stage==='s18');
+ assert.deepEqual(rows.map(row=>row.term),['异步复制','复制位点','尾部丢失','故障接管','epoch（分片任期）','副本追平','边界快照','复制限速']);
+ const names=new Set(glossary.flatMap(row=>[row.term,...row.aka]));
+ for(const row of rows){assert.ok(row.short.trim()&&row.detail.trim(),row.term);for(const name of row.related)assert.ok(names.has(name),`${row.term} → ${name}`);}
+ assert.equal(validate(glossary),glossary);
+ for(const invalid of [null,42,' '])assert.throws(()=>validate([{...rows[0],short:invalid}]),/Invalid glossary fields/);
+ assert.deepEqual(stages.at(-1).surface.routes,['POST /cluster/promote']);
 });

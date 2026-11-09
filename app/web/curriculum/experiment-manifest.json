@@ -1244,6 +1244,179 @@
       "command": "npm run lesson -- move",
       "offlineOrIntegration": "offline",
       "relatedExperiments": []
+    },
+    {
+      "id": "s18-boundary",
+      "title": "轮次边界与5秒去抖",
+      "mode": "offline",
+      "question": "同一用户两轮紧接着结束，会复制几次？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^(轮次边界|复制失败)",
+        "tests/replication-worker.test.mjs"
+      ],
+      "observations": [
+        "检查 Node 测试断言与阶段顺序。",
+        "生产 worker 在无执行轮次后合并同用户请求，只有成功传输后写位点；内容 hash 相同跳过。"
+      ],
+      "why": "生产 worker 在无执行轮次后合并同用户请求，只有成功传输后写位点；内容 hash 相同跳过。",
+      "boundary": "离线断言不代替真实 PG / Linux uid / etcd；见 README 外部验收命令。",
+      "catalogId": "replication-boundary",
+      "stage": "s18-replication",
+      "command": "npm run lesson -- replication-boundary",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "strategies",
+          "title": "槽策略与范围策略",
+          "mode": "offline",
+          "question": "用户 ID 如何决定分片？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^strategy:",
+            "tests/sharding.test.mjs"
+          ],
+          "observations": [
+            "观察实际 Node 测试输出中的成功与失败断言。"
+          ],
+          "why": "SHA-256 % 64 与十六进制首字节范围做对照，override 先于策略。",
+          "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+          "catalogId": "strategies",
+          "stage": "s18-replication",
+          "command": "npm run lesson -- strategies",
+          "offlineOrIntegration": "offline"
+        }
+      ]
+    },
+    {
+      "id": "s18-lag",
+      "title": "落后计算与degraded",
+      "mode": "offline",
+      "question": "用户很久不说话也算落后吗？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^(落后计算|readiness)",
+        "tests/replication-worker.test.mjs"
+      ],
+      "observations": [
+        "检查 Node 测试断言与阶段顺序。",
+        "从最早未复制 completed 轮次计时；零尾部是零秒，超过300秒才告警。"
+      ],
+      "why": "从最早未复制 completed 轮次计时；零尾部是零秒，超过300秒才告警。",
+      "boundary": "离线断言不代替真实 PG / Linux uid / etcd；见 README 外部验收命令。",
+      "catalogId": "replication-lag",
+      "stage": "s18-replication",
+      "command": "npm run lesson -- replication-lag",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "stale-route",
+          "title": "revision 落后与一次重试",
+          "mode": "offline",
+          "question": "错误缓存如何恢复？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^route:",
+            "tests/sharding.test.mjs"
+          ],
+          "observations": [
+            "观察实际 Node 测试输出中的成功与失败断言。"
+          ],
+          "why": "主核对归属和 revision，409 后整表刷新，只重试一次；SSE 不改序号。",
+          "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+          "catalogId": "stale-route",
+          "stage": "s18-replication",
+          "command": "npm run lesson -- stale-route",
+          "offlineOrIntegration": "offline"
+        }
+      ]
+    },
+    {
+      "id": "s18-recovery",
+      "title": "接管时的三类任务",
+      "mode": "offline",
+      "question": "为什么已完成任务也可能缺失？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^(接管恢复|自动接管|接管门禁|etcd 写失败)",
+        "tests/replication-control.test.mjs",
+        "tests/replication-worker.test.mjs"
+      ],
+      "observations": [
+        "检查 Node 测试断言与阶段顺序。",
+        "复制位点之外的已完成任务标记 replica_missing；执行中 unconfirmed，queued由新主首次派发。"
+      ],
+      "why": "复制位点之外的已完成任务标记 replica_missing；执行中 unconfirmed，queued由新主首次派发。",
+      "boundary": "离线断言不代替真实 PG / Linux uid / etcd；见 README 外部验收命令。",
+      "catalogId": "replication-recovery",
+      "stage": "s18-replication",
+      "command": "npm run lesson -- replication-recovery",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "shard-fence",
+          "title": "SH001 与节点隔离",
+          "mode": "offline",
+          "question": "不是 owner 的节点能写吗？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^fence:",
+            "tests/sharding.test.mjs"
+          ],
+          "observations": [
+            "观察实际 Node 测试输出中的成功与失败断言。"
+          ],
+          "why": "事务局部 node/epoch 供 SQL 触发器核对；刷新仍自认为主时隔离。",
+          "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+          "catalogId": "shard-fence",
+          "stage": "s18-replication",
+          "command": "npm run lesson -- shard-fence",
+          "offlineOrIntegration": "offline"
+        }
+      ]
+    },
+    {
+      "id": "s18-fence",
+      "title": "旧主只停止失去的分片",
+      "mode": "offline",
+      "question": "旧主醒来以后还能写结果吗？",
+      "args": [
+        "--test",
+        "--test-name-pattern=^旧主 SH001",
+        "tests/replication-control.test.mjs"
+      ],
+      "observations": [
+        "检查 Node 测试断言与阶段顺序。",
+        "生产 shardFailure 刷新后调用 stopShard，不隔离仍持有其他分片的节点。"
+      ],
+      "why": "生产 shardFailure 刷新后调用 stopShard，不隔离仍持有其他分片的节点。",
+      "boundary": "离线断言不代替真实 PG / Linux uid / etcd；见 README 外部验收命令。",
+      "catalogId": "replication-fence",
+      "stage": "s18-replication",
+      "command": "npm run lesson -- replication-fence",
+      "offlineOrIntegration": "offline",
+      "relatedExperiments": [
+        {
+          "id": "move",
+          "title": "暂停、拷贝、切换、恢复",
+          "mode": "offline",
+          "question": "失败后哪个节点继续服务？",
+          "args": [
+            "--test",
+            "--test-name-pattern=^move:",
+            "tests/sharding.test.mjs"
+          ],
+          "observations": [
+            "观察实际 Node 测试输出中的成功与失败断言。"
+          ],
+          "why": "先暂停并 drain；拷贝成功才切换，失败回滚；回滚不确认则保持暂停。",
+          "boundary": "不启动端口或外部服务；SH001 的 SQL 拒绝需另跑 test:data，Watch 时延需真实 etcd。",
+          "catalogId": "move",
+          "stage": "s18-replication",
+          "command": "npm run lesson -- move",
+          "offlineOrIntegration": "offline"
+        }
+      ]
     }
   ]
 }

@@ -59,7 +59,7 @@ test('docs: 分片教学模板、离线实验、两幅时序与三段真实源�
   for (const heading of ['要回答的问题', '核心概念', '分工', '跑起来看看', '关键代码', '限制', '小结']) {
     const index = chapter.indexOf(`## ${heading}\n`); assert.ok(index > previous, heading); previous = index;
   }
-  assert.match(chapter, /下一章：s18 副本与故障接管/);
+  assert.match(chapter, /下一章：\[s18 副本与故障接管\]\(\.\.\/s18-replication\/README\.md\)/);
   const design = read('docs/design.md');
   assert.equal([...design.matchAll(/```mermaid/g)].length, 2);
   const sources = ['server/modules/sharding/strategy.mjs', 'server/modules/sharding/cache.mjs', 'server/modules/sharding/routing.mjs'].map(read).join('\n');

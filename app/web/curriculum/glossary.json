@@ -2054,5 +2054,127 @@
       "分片归属表"
     ],
     "source": "stages/s17-sharding/README.md#核心概念"
+  },
+  {
+    "term": "异步复制",
+    "aka": [
+      "asynchronous replication"
+    ],
+    "stage": "s18",
+    "short": "主节点先回复用户，再在后台把用户目录复制到副本；副本永远比主节点晚一点。",
+    "detail": "本教程在每轮结束、用户没有执行中轮次时复制（5 秒去抖，另有 60 秒空闲兜底）。好处是对话不必等跨机器的写入；代价是主节点突然坏掉时，最后一次复制之后的内容在副本上看不到。同步复制能做到不丢，但每一轮都要等副本确认。",
+    "related": [
+      "复制位点",
+      "尾部丢失",
+      "边界快照"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "复制位点",
+    "aka": [
+      "replication position",
+      "replication_positions"
+    ],
+    "stage": "s18",
+    "short": "PostgreSQL 里记着的“这个用户复制到了第几个任务、哪一次快照”。",
+    "detail": "位点只在副本确认收齐 home 与 workspace 两棵树之后才提交，所以它说的是“副本上一定有的内容”。接管时用它划线：序号不超过位点的任务在新主上都有；超过的就是尾部丢失。位点时间取快照边界时刻，不取发送完成时刻，否则发送期间新建的会话会被误认为已复制。",
+    "related": [
+      "异步复制",
+      "尾部丢失"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "尾部丢失",
+    "aka": [
+      "tail loss",
+      "replica_missing",
+      "REPLICA_MISSING"
+    ],
+    "stage": "s18",
+    "short": "主节点坏掉时，最后一次复制之后完成的内容在新主上看不到；本教程明确接受这一点，并且如实告诉用户。",
+    "detail": "按粒度处理：已复制过的旧会话照样能续聊，只把超出位点的那几轮标为 replica_missing 并在会话里提示；复制之后才新建的会话在新主上没有任何文件，访问返回 409 REPLICA_MISSING，用户需要新建会话；执行中的轮次按 s08 记为待核对，不自动重跑。任务记录在 PostgreSQL 里一直保留。",
+    "related": [
+      "复制位点",
+      "故障接管"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "故障接管",
+    "aka": [
+      "failover",
+      "takeover"
+    ],
+    "stage": "s18",
+    "short": "分片主节点的 etcd 租约过期后，control 把这个分片交给已追平的副本。",
+    "detail": "顺序是先在 PostgreSQL 事务里把副本设为主、epoch 加一，再写 etcd 路由表；各节点经 Watch 更新缓存后，新主开始为这个分片的用户服务。副本不在线、还没建好基线或有未完成的传输时不接管，分片暂时不可用并写明原因。不做自动切回，需要时用 cluster:promote 手动切换。",
+    "related": [
+      "epoch（分片任期）",
+      "副本追平",
+      "成员租约"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "epoch（分片任期）",
+    "aka": [
+      "epoch",
+      "分片 epoch"
+    ],
+    "stage": "s18",
+    "short": "每个分片的任期号，每次换主就加一；数据库拒绝带着旧 epoch 的写入。",
+    "detail": "旧主可能只是假死：暂停十几秒后醒来，它仍以为自己是主。它写的每一行业务数据都带着自己记的 epoch，数据库触发器（SH001）发现不是当前值就拒绝，所以醒来的旧主写不进去。它已经发出的模型或工具调用撤不回，这一点写在限制里。",
+    "related": [
+      "故障接管",
+      "任期隔离",
+      "SH001"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "副本追平",
+    "aka": [
+      "catch-up",
+      "replica_ready"
+    ],
+    "stage": "s18",
+    "short": "副本把主节点上每个用户的最新快照都收齐，分片才标记 replica_ready=true。",
+    "detail": "旧主恢复后不会直接回去当主，而是以副本身份加入，先从新主全量同步；追平之前不能被选为主，也不能被手动提升。/cluster 显示每个分片落后多少轮、多少秒，落后超过 5 分钟会标为副本落后。",
+    "related": [
+      "故障接管",
+      "复制位点"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "边界快照",
+    "aka": [
+      "boundary snapshot",
+      "replication spool"
+    ],
+    "stage": "s18",
+    "short": "在轮次边界短暂暂停用户的新轮次，把目录打包成本地快照，然后立刻放行，再慢慢发送。",
+    "detail": "只在轮次边界复制，是为了避免拷到写了一半的 SQLite 或 JSONL。暂停只持续到本地快照完成，网络发送在暂停之外进行，所以链路再慢用户也不会被卡住；发送期间如果又有一轮结束，当前发送完成后自动再复制一次。目录哈希没变时直接跳过，不打包。",
+    "related": [
+      "异步复制",
+      "复制限速"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
+  },
+  {
+    "term": "复制限速",
+    "aka": [
+      "AGENT_REPLICATION_RATE_LIMIT"
+    ],
+    "stage": "s18",
+    "short": "限制本节点复制发送的总速率，给同一条链路上的租约续约和请求转发留出余量。",
+    "detail": "两台实测中节点之间只有一条 SSH 隧道，复制流量不加限制时，同一隧道上一个健康检查要等 11.6 秒，超过 10 秒的租约 TTL，节点会因此被移出集群。经验是不超过实测链路带宽的 70%；单机模拟不设置。",
+    "related": [
+      "边界快照",
+      "成员租约"
+    ],
+    "source": "stages/s18-replication/README.md#核心概念"
   }
 ]

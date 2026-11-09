@@ -42,7 +42,7 @@ test('deploy 执行：首次未初始化成功退出，不启动 agent 或注册
   assert.match(result.stdout, /账号尚未初始化：运行 DEPLOY_HOST=fixture-host bash deploy\/remote.sh auth-init/);
   assert.match(result.calls, /up -d etcd\n[\s\S]*run --rm --no-deps -T etcd-init\n[\s\S]*up -d --wait etcd postgres redis gateway/);
   assert.match(result.calls, /run --rm --no-deps --user 0 -T .*node-a node scripts\/cluster-migrate.mjs/);
-  assert.doesNotMatch(result.calls, /up[^\n]* node-a|enable-service|cluster-ready.sh/);
+  assert.doesNotMatch(result.calls, /compose up[^\n]* node-a|enable-service|cluster-ready.sh/);
 });
 test('deploy 执行：已初始化启动 agent 并检查 ready；状态查询错误不能误判成功', t => {
   const f = fixture(t);
@@ -53,7 +53,7 @@ test('deploy 执行：已初始化启动 agent 并检查 ready；状态查询错
   for (const env of [{ STATUS_EXIT: '1' }, { ACCOUNT_STATUS: 'unexpected' }]) {
     const failed = f.run('server-setup.sh', [], env);
     assert.notEqual(failed.status, 0);
-    assert.doesNotMatch(failed.calls, /up[^\n]* node-a|enable-service|cluster-ready.sh/);
+    assert.doesNotMatch(failed.calls, /compose up[^\n]* node-a|enable-service|cluster-ready.sh/);
   }
 });
 test('remote auth-init：保留 TTY；成功及重复初始化启动 agent，其他错误阻止启动', t => {

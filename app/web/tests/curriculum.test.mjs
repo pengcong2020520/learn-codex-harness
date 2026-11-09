@@ -259,3 +259,35 @@ test('s17 迁移补充摘录必须唯一命中',t=>{
  const f=fixture(t);f.edit('lessons/s17.json',rows=>{rows[2].sources[0].needle='missing-export';});
  assert.throws(f.build,/Source needle missing or ambiguous/);
 });
+
+test('s18 四课覆盖完整 catalog，摘录与实验保持真实来源',()=>{
+ const lessons=buildCurriculumData().lessons.filter(l=>l.stage==='s18-replication');
+ assert.deepEqual(lessons.map(l=>l.id),['s18-boundary','s18-lag','s18-recovery','s18-fence']);
+ const manifest=JSON.parse(fs.readFileSync(path.join(source,'experiment-manifest.json'),'utf8')).lessons.filter(e=>e.stage==='s18-replication');
+ const catalog=JSON.parse(fs.readFileSync(path.join(source,'../../../stages/s18-replication/lessons/catalog.json'),'utf8'));
+ const experiments=manifest.flatMap(e=>[e,...e.relatedExperiments]);
+ assert.deepEqual(experiments.map(e=>e.catalogId).sort(),catalog.map(e=>e.id).sort());
+ for(const exp of experiments){
+  const original=catalog.find(e=>e.id===exp.catalogId);
+  for(const key of Object.keys(original))if(key!=='id')assert.deepEqual(exp[key],original[key]);
+  assert.equal(exp.command,`npm run lesson -- ${original.id}`);
+ }
+ for(const excerpt of lessons.flatMap(l=>[l.source,...l.sources])){
+  const original=fs.readFileSync(path.join(source,'../../..',excerpt.file),'utf8');
+  assert.equal(excerpt.code,original.split('\n').slice(excerpt.start-1,excerpt.start-1+excerpt.code.split('\n').length).join('\n'));
+ }
+ const text=JSON.stringify(lessons);
+ for(const boundary of ['异步历史窗口','5 秒','300 秒','217 ms','3 Mbit/s','11.6 秒','262144','生产必须同地域','replica_missing','unconfirmed','needs-review','旧主以副本回归','不自动切回'])assert.ok(text.includes(boundary),boundary);
+ const mechanisms=JSON.parse(fs.readFileSync(path.join(source,'mechanisms/s18.json'),'utf8'));
+ const final=m=>m.steps.reduce((state,step)=>({...state,...step.state}),m.state0);
+ assert.equal(final(mechanisms[0]).位点,'8');
+ assert.equal(final(mechanisms[1]).就绪,'200');
+ assert.equal(final(mechanisms[2]).epoch,'5');
+ assert.equal(final(mechanisms[3]).旧主,'副本');
+ assert.equal(final(mechanisms[3]).ready,'true');
+});
+
+test('s18 补充源码改动导致锚点失效时构建拒绝',t=>{
+ const f=fixture(t);f.edit('lessons/s18.json',rows=>{rows[3].sources[0].needle='missing-rejoin';});
+ assert.throws(f.build,/Source needle missing or ambiguous/);
+});

@@ -10,7 +10,8 @@ export function validateGlossary(rows, {repository, stages}) {
   if (!Array.isArray(rows)) throw Error('Glossary must be an array');
   const known = new Set(['intro', ...stages.map(stage => stage.id)]), terms = new Set(), anchors = new Set();
   for (const row of rows) {
-    if (!row || ['term','short','detail','source'].some(key => typeof row[key] !== 'string' || !row[key].trim()) ||
+    if (!row || ['term','source'].some(key => typeof row[key] !== 'string' || !row[key].trim()) ||
+        ['short','detail'].some(key => typeof row[key] !== 'string' || (row[key] !== '' && !row[key].trim())) ||
         ['aka','related'].some(key => !Array.isArray(row[key]) || row[key].some(item => typeof item !== 'string' || !item.trim()))) throw Error('Invalid glossary fields');
     if (!known.has(row.stage)) throw Error(`Invalid glossary stage: ${row.stage}`);
     if (terms.has(row.term)) throw Error(`Duplicate glossary term: ${row.term}`);
@@ -48,7 +49,7 @@ export function linkGlossaryTerms(html, glossary) {
   return html.replace(/<span\b([^>]*\bclass="[^"]*\bterm\b[^"]*"[^>]*)>([^<]*)<\/span>/g, (original, attributes, text) => {
     if (!/\bdata-definition="[^"]*"/.test(attributes)) return original;
     const row = names.get(decodeHtml(text));
-    if (!row) return original;
+    if (!row || !row.short) return original;
     const updated = attributes.replace(/\bdata-definition="[^"]*"/, () => `data-definition="${escapeHtml(row.short)}"`);
     return `<a${updated} href="/course/glossary.html#${escapeHtml(termId(row.term))}">${text}</a>`;
   });

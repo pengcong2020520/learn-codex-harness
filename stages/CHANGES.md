@@ -219,3 +219,17 @@
 **新增环境变量**：`AGENT_NODE_KEY_A`、`AGENT_NODE_KEY_A_HASH`、`AGENT_NODE_KEY_B`、`AGENT_NODE_KEY_B_HASH`、`AGENT_NODE_KEY_C`、`AGENT_NODE_KEY_C_HASH`、`AGENT_TRANSFER_MAX_BYTES`、`AGENT_SHARD_STRATEGY`
 
 **新增数据迁移**：`016-sharding.sql`、`017-shard-diagnostics.sql`、`018-move-security.sql`
+
+<a id="s18"></a>
+
+## s18：副本与故障接管：保留可核对的历史窗口
+
+相比 [s17-sharding](s17-sharding/)：轮次边界快照异步复制；接管推进 epoch，明确标记丢失尾部，旧主以副本回归。
+
+**新增模块**：异步副本（副本与故障接管，边界快照、位点与故障接管）
+
+**新增接口**：`POST /cluster/promote`
+
+**新增环境变量**：`AGENT_RUNTIME_LIMIT`、`COMPOSE_FILE`、`COMPOSE_PROFILES`、`AGENT_NODE_ADDRESS_B`、`NODE_B_UPSTREAM`、`REMOTE_BRIDGE_SUBNET`、`REMOTE_BRIDGE_GATEWAY`、`ETCD_PREFIX`、`AGENT_REPLICATION_RATE_LIMIT`、`AGENT_DATABASE_CONNECT_TIMEOUT_MS`、`AGENT_DATABASE_IDLE_TX_TIMEOUT_MS`、`AGENT_ETCD_RPC_TIMEOUT_MS`、`AGENT_DATABASE_POOL_MAX`、`AGENT_REDIS_TIMEOUT_MS`、`AGENT_REQUEST_TIMEOUT_MS`
+
+**新增数据迁移**：`019-replication.sql`、`020-replica-missing.sql`、`021-replication-error.sql`

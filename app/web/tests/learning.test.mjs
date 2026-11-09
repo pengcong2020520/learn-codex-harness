@@ -58,7 +58,7 @@ test('课堂支持阶段 ID、目录名、阶段数组与全部模式，实验�
  assert.deepEqual(b.errors.filter(e=>!e.includes('favicon')),[]);
 });
 
-test('工作台按真实阶段选课：s00–s17 与 project，课程缺失时显示空态',options,async t=>{
+test('工作台按真实阶段选课：s00–s18 与 project，课程缺失时显示空态',options,async t=>{
  const {url,b}=await setup(t);
  for(const target of [...stageIds,'project']){
   const hash=target==='project'?'s11':target;

@@ -25,14 +25,14 @@ export function stages(root = ROOT) {
     .sort((a, b) => a.id.localeCompare(b.id))
     .concat({ id: "app", relative: "app", dir: path.join(root, "app") });
 }
-// s11、s12、s13、s14、s15、s16、s17 与 app 使用模型网关，不进入 link-login 默认列表。
+// s11、s12、s13、s14、s15、s16、s17、s18 与 app 使用模型网关，不进入 link-login 默认列表。
 export const loginStages = all => all.filter(stage => /^s(0[1-9]|10)$/.test(stage.id));
-export const gatewayStage = stage => ["s11", "s12", "s13", "s14", "s15", "s16", "s17", "app"].includes(stage.id);
+export const gatewayStage = stage => ["s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id);
 export function selectStages(all, selectors, defaults = all) {
   if (!selectors?.length) return defaults;
   const selected = selectors.flatMap(value => value.split(/[\s,]+/)).filter(Boolean).map(value => {
     const stage = all.find(item => item.id === value || item.relative === value || path.basename(item.dir) === value);
-    if (!stage) fail("阶段参数无效；请使用 s00–s17 或 app，可用逗号分隔。");
+    if (!stage) fail("阶段参数无效；请使用 s00–s18 或 app，可用逗号分隔。");
     return stage;
   });
   return [...new Set(selected)];

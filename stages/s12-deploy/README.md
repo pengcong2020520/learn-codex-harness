@@ -1,6 +1,6 @@
 # s12: 部署单元——让 Agent 在服务器上持续工作
 
-[导论](../introduction.md) · [s11](../s11-model-gateway/README.md) → `s12` → [s13](../s13-auth/README.md)
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → `s12` → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → [s17](../s17-sharding/README.md) → [s18](../s18-replication/README.md) → [app](../../app/)
 
 全仓入口：[机制课堂](../../app/web/public/course/index.html#s12) · [阶段演示](../../app/web/public/course/changes.html#s12) · [章节长文](../../app/web/public/course/handbook.html#module-s12) · [总架构图](../../app/web/public/course/assets/s12-architecture.svg)
 

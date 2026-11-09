@@ -1,4 +1,4 @@
-# 十八个阶段：教学与 Agent 外部客户端
+# 十九个阶段：教学与 Agent 外部客户端
 
 在 `app` 目录执行 `npm run web`，访问：
 
@@ -33,9 +33,10 @@
 | s15 | 权限与资源 Hub、工具交集与 Skill 审批 | [独立部署说明](../../stages/s15-hub/README.md)，remote.sh tunnel 经 SSH 隧道连接本机 4329；不代理实时服务 |
 | s16 | 协调面、成员租约、control 与任期隔离 | [独立部署说明](../../stages/s16-coordination/README.md)，remote.sh tunnel 经 SSH 隧道连接本机 4334；内部节点 4340–4342，不代理实时服务 |
 | s17 | 分片策略、revision 路由、SH001 与手动迁移 | [独立部署说明](../../stages/s17-sharding/README.md)，remote.sh tunnel 经 SSH 隧道连接本机 4335；内部节点 4340–4342，不代理实时服务 |
+| s18 | 边界快照、异步历史窗口、epoch 与故障接管 | [独立部署说明](../../stages/s18-replication/README.md)，remote.sh tunnel 经 SSH 隧道连接本机 4336；不代理实时服务 |
 | project（app） | 当前开发项目，s11 内核 | 独立服务，Workflow 目录读取 /workflows |
 
-新版主课程包含 s01–s17 共 48 节机制课、97 条正常/异常推演路径、48 道判断题，以及已发布课程阶段的 SVG 总架构图。按「问题 → 总图 → 概念 → 状态推演 → 源码与设计 → 实验 → 本节增量」组织。同一份课程数据用于工作台内嵌课堂与完整课程，避免两端解释不一致。s01 的运行体验另保留 7 个协议步骤的详细解读。
+新版主课程包含 s01–s18 共 52 节机制课、105 条正常/异常推演路径、52 道判断题，以及已发布课程阶段的 SVG 总架构图。按「问题 → 总图 → 概念 → 状态推演 → 源码与设计 → 实验 → 本节增量」组织。同一份课程数据用于工作台内嵌课堂与完整课程，避免两端解释不一致。s01 的运行体验另保留 7 个协议步骤的详细解读。
 
 在有机制课的阶段目录运行 `npm run lesson -- list` 查看实验，运行 `npm run lesson -- <id>` 执行本节。离线入口使用真实模块和本地测试夹具；集成入口默认明确显示 NOT RUN，需显式参数才启动隔离的 PG / Redis 等依赖。具体命令与边界见每个阶段的 `lessons/README.md`，或课堂「动手实验」。前端按钮只复制命令，不在浏览器里执行 shell。
 
@@ -75,6 +76,6 @@
 
 长文的五章最初用 [zarazhangrui/codebase-to-course](https://github.com/zarazhangrui/codebase-to-course) 这个 Skill 生成。该仓库没有开源协议，所以长文阅读器的样式、脚本与页面模板（`handbook.css`、`handbook.js`、`_handbook.html`）已由本项目重新编写，不含来源代码；章节正文与课程模块均为本项目内容。
 
-本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s17 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。48 节本地课程按 s01–s17 十七个源码阶段组织，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
+本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s18 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。52 节本地课程按 s01–s18 十八个源码阶段组织，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
 
-课程链接支持 `/course/#sNN`；旧的 `#module-1` 至 `#module-5` 依次映射到 s01、s02、s05、s08、s09。工作台使用真实阶段 ID；s05 / s06 实验入口分别打开 s05 / s06。s00 尚无机制课，完整阅读器保留请求阶段并显示空态，project 对应 s11。旧工作台 demo1–5 依次映射到 s01、s02、s07、s08、s09；未知或缺省目标回落 s09。桌面 1280×900 下无需滚动即可看到十八个阶段和当前开发项目，窄屏导航支持横向滚动。
+课程链接支持 `/course/#sNN`；旧的 `#module-1` 至 `#module-5` 依次映射到 s01、s02、s05、s08、s09。工作台使用真实阶段 ID；s05 / s06 实验入口分别打开 s05 / s06。s00 尚无机制课，完整阅读器保留请求阶段并显示空态，project 对应 s11。旧工作台 demo1–5 依次映射到 s01、s02、s07、s08、s09；未知或缺省目标回落 s09。桌面导航列出十九个阶段和当前开发项目，窄屏导航支持横向滚动。

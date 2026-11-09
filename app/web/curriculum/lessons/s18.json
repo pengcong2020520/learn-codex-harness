@@ -1,0 +1,642 @@
+[
+  {
+    "stage": "s18-replication",
+    "ownership": {
+      "codex": "维护 Thread、Turn 与原生历史，执行模型和工具调用；不负责跨节点复制或选主。",
+      "product": "在用户轮次边界取得一致快照、异步发送并提交位点；核对接管条件、推进 epoch、展示缺失并安排旧主追平。"
+    },
+    "reference": {
+      "session": "s18 设计与源码长文",
+      "url": "/course/handbook.html#module-s18",
+      "adaptation": "依据本阶段 README、design.md 与生产源码编写；推演为教学模拟，离线实验不代替真实 PG、认证 etcd 与 Linux uid 验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s18-replication 执行本节离线实验，核对实际断言与退出码。"
+    },
+    "id": "s18-boundary",
+    "title": "先固定历史边界，再异步发送",
+    "principle": "副本是异步历史窗口；暂停新轮次只到本地快照完成，位点只描述快照已经包含的历史。",
+    "problem": "主节点继续服务时，怎样复制一份一致、可核对的原生历史？",
+    "change": {
+      "before": "用户按分片定位独立磁盘，归属与写入已有 epoch 保护。",
+      "added": "本地一致性边界与网络发送分开，只提交捕获的 sequence。",
+      "kept": "原生历史、用户 uid 隔离、Hub 授权与持久任务继续承担原有职责。"
+    },
+    "concepts": [
+      {
+        "term": "边界快照",
+        "meaning": "用户全部会话没有执行中轮次时，关闭空闲进程并固定 home、workspace、内容清单和 sequence。"
+      },
+      {
+        "term": "复制位点",
+        "meaning": "成功发布后提交的 shard、epoch、sequence 与边界时间，不能取发送结束时的新进度。"
+      },
+      {
+        "term": "异步复制",
+        "meaning": "本地快照后释放用户派发，再排队发送；主节点可继续产生尚未复制的尾部。"
+      }
+    ],
+    "mechanism": "轮次结束后等待 5 秒合并同用户请求；先关派发、等已进入边界的请求，再检查全部会话。快照生成后立即 release，目标队列和网络耗时不再占用用户暂停。每目标串行、不同目标并行；主节点在成对目录与附属内容校验发布后，以 SH001 保护提交快照位点。发送中有新边界会记脏标记，成功或失败后都再等 5 秒调度；60 秒空闲扫描兜底。",
+    "design": {
+      "decision": "本地一致性边界与网络发送分开，只提交捕获的 sequence。",
+      "reason": "运行中的 SQLite、JSONL 和工具产物不能因目录可读就视为一致快照。",
+      "alternative": "直接在线复制可能得到混合时点；等待整个网络发送结束才开放派发会放大暂停。",
+      "cost": "全量 tar 占磁盘 IO、暂存和带宽；5 秒只是合并等待，不是零丢失承诺。"
+    },
+    "source": {
+      "file": "stages/s18-replication/server/modules/replication/worker.mjs",
+      "needle": "      // Close admission BEFORE checking again;",
+      "before": 0,
+      "after": 18,
+      "explanation": "先关闭准入，再快照；release 早于 forTarget 和 send，finish 使用 boundary.sequence。"
+    },
+    "sources": [
+      {
+        "file": "stages/s18-replication/server/modules/replication/worker.mjs",
+        "needle": "  schedule(userId) {",
+        "before": 0,
+        "after": 15,
+        "explanation": "pending 中的新边界记 dirty，finally 再次 schedule。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "快照完成就恢复派发",
+        "steps": [
+          {
+            "title": "合并边界",
+            "actor": "worker",
+            "event": "教学模拟 · schedule",
+            "explain": "两轮紧接结束，等待 5 秒后合并。",
+            "state": {
+              "派发": "开放",
+              "副本": "旧位点"
+            },
+            "lines": []
+          },
+          {
+            "title": "固定快照",
+            "actor": "主节点",
+            "event": "教学模拟 · snapshot",
+            "explain": "全部会话空闲后固定 sequence=8。",
+            "state": {
+              "派发": "短暂停止",
+              "副本": "快照 8"
+            },
+            "lines": []
+          },
+          {
+            "title": "释放并发送",
+            "actor": "主节点",
+            "event": "教学模拟 · release / send",
+            "explain": "新轮次可继续，发送只读暂存文件。",
+            "state": {
+              "派发": "开放",
+              "副本": "发送 8"
+            },
+            "lines": []
+          },
+          {
+            "title": "提交位点",
+            "actor": "PG",
+            "event": "教学模拟 · finish",
+            "explain": "即使主已到 9，位点仍提交 8。",
+            "state": {
+              "派发": "开放",
+              "副本": "位点 8，尾部 9"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "发送失败不把副本算成已追平",
+        "steps": [
+          {
+            "title": "发送中有新轮次",
+            "actor": "worker",
+            "event": "教学模拟 · dirty",
+            "explain": "记录需要再同步。",
+            "state": {
+              "复制": "进行中",
+              "脏标记": "有"
+            },
+            "lines": []
+          },
+          {
+            "title": "网络失败",
+            "actor": "worker",
+            "event": "教学模拟 · fail",
+            "explain": "保留失败证据，不推进位点。",
+            "state": {
+              "复制": "失败",
+              "副本": "旧位点"
+            },
+            "lines": []
+          },
+          {
+            "title": "重新调度",
+            "actor": "worker",
+            "event": "教学模拟 · schedule",
+            "explain": "清除 pending 后按 5 秒调度，不等 60 秒兜底。",
+            "state": {
+              "复制": "等待新快照",
+              "派发": "开放"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "发送时主节点又完成一轮，应该提交哪个 sequence？",
+      "options": [
+        "发送结束时最新 sequence",
+        "快照边界捕获的 sequence",
+        "只记录当前时间即可"
+      ],
+      "answer": 1,
+      "explanation": "位点必须对应实际发布的目录，不能把发送期间的新历史算进副本。"
+    }
+  },
+  {
+    "stage": "s18-replication",
+    "ownership": {
+      "codex": "维护 Thread、Turn 与原生历史，执行模型和工具调用；不负责跨节点复制或选主。",
+      "product": "在用户轮次边界取得一致快照、异步发送并提交位点；核对接管条件、推进 epoch、展示缺失并安排旧主追平。"
+    },
+    "reference": {
+      "session": "s18 设计与源码长文",
+      "url": "/course/handbook.html#module-s18",
+      "adaptation": "依据本阶段 README、design.md 与生产源码编写；推演为教学模拟，离线实验不代替真实 PG、认证 etcd 与 Linux uid 验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s18-replication 执行本节离线实验，核对实际断言与退出码。"
+    },
+    "id": "s18-lag",
+    "title": "落后看未复制尾部，不看空闲多久",
+    "principle": "复制延迟描述尚未复制的已完成轮次；副本落后可以告警，但主节点仍能服务。",
+    "problem": "用户一小时没有说话，是否意味着副本落后一小时？",
+    "change": {
+      "before": "用户按分片定位独立磁盘，归属与写入已有 epoch 保护。",
+      "added": "以业务尾部度量落后，并将副本退化与主服务就绪分开。",
+      "kept": "原生历史、用户 uid 隔离、Hub 授权与持久任务继续承担原有职责。"
+    },
+    "concepts": [
+      {
+        "term": "尾部丢失",
+        "meaning": "最后成功复制之后的历史可能在主节点故障时丢失，这是明确接受的窗口。"
+      },
+      {
+        "term": "复制限速",
+        "meaning": "所有目标的 tar 发送共享本节点字节预算，为租约续约和请求转发留带宽。"
+      },
+      {
+        "term": "replica_lagging",
+        "meaning": "未复制尾部等待超过 300 秒、复制错误或未完成传输时暴露的退化状态。"
+      }
+    ],
+    "mechanism": "落后轮数只计位点之后的 completed；秒数从最早未复制完成轮次起算，无尾部就是 0。超过 300 秒显示 replica_lagging，/ready 保持 200 并附 degraded。README 跨地域实测 RTT 217 ms、约 3 Mbit/s；无限速复制让 /health 首字节延迟 11.6 秒，超过 10 秒租约 TTL。262144 字节/秒的共享限速为控制流留余量；20 MB 全量复制实测约 1 分钟，限速后可能更久。生产必须同地域、同一内网，节点与 PG、etcd、Redis 的往返应不到 1 毫秒。",
+    "design": {
+      "decision": "以业务尾部度量落后，并将副本退化与主服务就绪分开。",
+      "reason": "长时间空闲不产生新历史；以复制时间距今计算会误报。",
+      "alternative": "把副本慢等同主故障会让正常请求被切走；无限速发送又可能挤占续约。",
+      "cost": "限速延长尾部窗口；跨洋 SQL/etcd 往返仍很慢，放宽超时不能代替同地域部署。"
+    },
+    "source": {
+      "file": "stages/s18-replication/server/modules/replication/store.mjs",
+      "needle": "export const LAG_MS =",
+      "before": 0,
+      "after": 5,
+      "explanation": "rounds 为零时 seconds 为零；错误、未完成传输或超过阈值触发落后。"
+    },
+    "sources": [
+      {
+        "file": "stages/s18-replication/server/modules/replication/store.mjs",
+        "needle": "  async status() {",
+        "before": 0,
+        "after": 15,
+        "explanation": "只聚合当前 shard/epoch 位点之后的 completed 任务。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "已同步用户长时间空闲",
+        "steps": [
+          {
+            "title": "完成复制",
+            "actor": "PG",
+            "event": "教学模拟 · position",
+            "explain": "最新完成轮次已经进入位点。",
+            "state": {
+              "尾部轮数": "0",
+              "等待": "0 秒"
+            },
+            "lines": []
+          },
+          {
+            "title": "空闲一小时",
+            "actor": "store",
+            "event": "教学模拟 · lagOf",
+            "explain": "没有新增 completed，秒数仍为零。",
+            "state": {
+              "尾部轮数": "0",
+              "等待": "0 秒",
+              "退化": "否"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "尾部堆积但主服务仍可用",
+        "steps": [
+          {
+            "title": "产生新尾部",
+            "actor": "主节点",
+            "event": "教学模拟 · completed",
+            "explain": "复制位点尚未推进。",
+            "state": {
+              "尾部轮数": "2",
+              "等待": "开始计时"
+            },
+            "lines": []
+          },
+          {
+            "title": "等待超过阈值",
+            "actor": "store",
+            "event": "教学模拟 · lagOf",
+            "explain": "最早未复制轮次等待 301 秒。",
+            "state": {
+              "尾部轮数": "2",
+              "等待": "301 秒",
+              "退化": "replica_lagging"
+            },
+            "lines": []
+          },
+          {
+            "title": "报告退化",
+            "actor": "健康接口",
+            "event": "教学模拟 · ready",
+            "explain": "就绪仍为 200，副本状态附在 degraded。",
+            "state": {
+              "就绪": "200",
+              "退化": "replica_lagging"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "已同步的用户空闲一小时，lag_seconds 应是多少？",
+      "options": [
+        "3600",
+        "300",
+        "0"
+      ],
+      "answer": 2,
+      "explanation": "没有未复制的已完成尾部，就没有等待复制的轮次。"
+    }
+  },
+  {
+    "stage": "s18-replication",
+    "ownership": {
+      "codex": "维护 Thread、Turn 与原生历史，执行模型和工具调用；不负责跨节点复制或选主。",
+      "product": "在用户轮次边界取得一致快照、异步发送并提交位点；核对接管条件、推进 epoch、展示缺失并安排旧主追平。"
+    },
+    "reference": {
+      "session": "s18 设计与源码长文",
+      "url": "/course/handbook.html#module-s18",
+      "adaptation": "依据本阶段 README、design.md 与生产源码编写；推演为教学模拟，离线实验不代替真实 PG、认证 etcd 与 Linux uid 验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s18-replication 执行本节离线实验，核对实际断言与退出码。"
+    },
+    "id": "s18-recovery",
+    "title": "接管先确认副本，再核对三类任务",
+    "principle": "接管接受尾部丢失；已完成、执行中和排队任务不能用同一种重跑策略。",
+    "problem": "主节点租约消失以后，副本能接手哪些历史，哪些必须明确提示缺失？",
+    "change": {
+      "before": "用户按分片定位独立磁盘，归属与写入已有 epoch 保护。",
+      "added": "PG 先提交权威归属，再发布 etcd，恢复完成才开放新主派发。",
+      "kept": "原生历史、用户 uid 隔离、Hub 授权与持久任务继续承担原有职责。"
+    },
+    "concepts": [
+      {
+        "term": "故障接管",
+        "meaning": "副本在线、基线完整且无未完成复制时，由 control 在 PG 事务内更换主并推进 epoch。"
+      },
+      {
+        "term": "replica_ready",
+        "meaning": "当前 epoch 已有完整用户基线，不表示每个新轮次都已同步。"
+      },
+      {
+        "term": "replica_missing / unconfirmed",
+        "meaning": "前者表示副本缺少已完成结果，后者表示执行结果不明；两者都不自动重跑。"
+      }
+    ],
+    "mechanism": "成员 TTL 为 10 秒。control 发现主成员消失后，检查副本在线、ready、所有用户基线位点及未完成操作单。先在 CT001 事务提交 primary、epoch+1、publishing/recovering，再 guardedPut etcd；发布失败保持封闭并对账补发，不回退 epoch。新主以旧 epoch 位点核对任务：执行中转 unconfirmed 并暂停会话；completed 尾部转 replica_missing；已有会话的 queued 由 outbox 正常首次派发，同会话待核对时先暂停。整会话晚于最后成功复制或整个 home 缺失时，返回 409 REPLICA_MISSING，queued 转 needs-review。只有尾部缺失的会话可保留 rollout 前缀续聊。",
+    "design": {
+      "decision": "PG 先提交权威归属，再发布 etcd，恢复完成才开放新主派发。",
+      "reason": "路由只是可 Watch 的发布面；已完成业务记录并不能证明副本磁盘已有原生历史。",
+      "alternative": "看到主离线就直接提升可能接管半份目录；自动重跑结果不明任务可能重复工具副作用。",
+      "cost": "没有完整基线或传输未提交时不可接管；PG、Redis、etcd、gateway 仍有单点。"
+    },
+    "source": {
+      "file": "stages/s18-replication/server/modules/replication/control.mjs",
+      "needle": "  async switch(shardId, { manual = false } = {}) {",
+      "before": 0,
+      "after": 14,
+      "explanation": "在 locked 事务中验证副本，推进 epoch 后 publish；不靠缓存直接换主。"
+    },
+    "sources": [
+      {
+        "file": "stages/s18-replication/server/modules/replication/store.mjs",
+        "needle": "  async recover(userId, epoch, { missingHome = false } = {}) {",
+        "before": 0,
+        "after": 22,
+        "explanation": "先标记整会话或尾部缺失，再处理执行中任务与 outbox。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "有完整基线的副本接管",
+        "steps": [
+          {
+            "title": "主租约消失",
+            "actor": "control",
+            "event": "教学模拟 · Watch Delete",
+            "explain": "副本在线且具备完整基线，无未完成复制。",
+            "state": {
+              "主": "失联",
+              "epoch": "4"
+            },
+            "lines": []
+          },
+          {
+            "title": "提交与发布",
+            "actor": "PG / etcd",
+            "event": "教学模拟 · switch / publish",
+            "explain": "PG 改主和 epoch，再发布路由。",
+            "state": {
+              "主": "原副本",
+              "epoch": "5",
+              "派发": "恢复中"
+            },
+            "lines": []
+          },
+          {
+            "title": "核对任务",
+            "actor": "新主",
+            "event": "教学模拟 · recover",
+            "explain": "completed 尾部缺失，执行中待核对；已复制会话的 queued 保留，复制后新建会话的 queued 待核对。",
+            "state": {
+              "尾部": "replica_missing",
+              "执行中": "unconfirmed",
+              "排队": "queued"
+            },
+            "lines": []
+          },
+          {
+            "title": "恢复服务",
+            "actor": "新主",
+            "event": "教学模拟 · recovered",
+            "explain": "确认恢复完成；无待核对阻塞的已有会话可继续。",
+            "state": {
+              "主": "原副本",
+              "派发": "按会话状态开放"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "有任务记录却没有整段原生会话",
+        "steps": [
+          {
+            "title": "会话创建较晚",
+            "actor": "新主",
+            "event": "教学模拟 · replicaSessionMissing",
+            "explain": "会话晚于最后一次成功复制，副本没有 rollout。",
+            "state": {
+              "会话": "整会话缺失"
+            },
+            "lines": []
+          },
+          {
+            "title": "拒绝恢复",
+            "actor": "会话服务",
+            "event": "教学模拟 · REPLICA_MISSING",
+            "explain": "返回 409，不调用 Codex 恢复。",
+            "state": {
+              "会话": "409 REPLICA_MISSING",
+              "排队": "needs-review"
+            },
+            "lines": []
+          },
+          {
+            "title": "保留证据",
+            "actor": "PG",
+            "event": "教学模拟 · missingTurns",
+            "explain": "保留任务记录并提示核对；用户可新建会话。",
+            "state": {
+              "会话": "持久标记缺失",
+              "排队": "不自动执行"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "执行中的任务在接管后应该怎样处理？",
+      "options": [
+        "自动重跑直到成功",
+        "标记 unconfirmed，暂停会话待核对",
+        "直接标记 completed"
+      ],
+      "answer": 1,
+      "explanation": "原主可能已产生外部副作用，不能凭失联推断它没有执行。"
+    }
+  },
+  {
+    "stage": "s18-replication",
+    "ownership": {
+      "codex": "维护 Thread、Turn 与原生历史，执行模型和工具调用；不负责跨节点复制或选主。",
+      "product": "在用户轮次边界取得一致快照、异步发送并提交位点；核对接管条件、推进 epoch、展示缺失并安排旧主追平。"
+    },
+    "reference": {
+      "session": "s18 设计与源码长文",
+      "url": "/course/handbook.html#module-s18",
+      "adaptation": "依据本阶段 README、design.md 与生产源码编写；推演为教学模拟，离线实验不代替真实 PG、认证 etcd 与 Linux uid 验收。",
+      "label": "本章设计依据"
+    },
+    "experiment": {
+      "action": "在 stages/s18-replication 执行本节离线实验，核对实际断言与退出码。"
+    },
+    "id": "s18-fence",
+    "title": "旧主失权后，以副本身份回来",
+    "principle": "epoch 拒绝旧主写入；旧主以副本回归，完整追平前不能再次接管。",
+    "problem": "假死的旧主醒来，怎样避免两份历史同时成为权威？",
+    "change": {
+      "before": "用户按分片定位独立磁盘，归属与写入已有 epoch 保护。",
+      "added": "旧主回归先重建副本基线，不凭节点名称或旧磁盘认定历史可用。",
+      "kept": "原生历史、用户 uid 隔离、Hub 授权与持久任务继续承担原有职责。"
+    },
+    "concepts": [
+      {
+        "term": "epoch（分片任期）",
+        "meaning": "每次切换单调增加；PG 用当前主节点与 epoch 拒绝旧归属写入。"
+      },
+      {
+        "term": "副本追平",
+        "meaning": "旧主回归先 ready=false，由新主为全部用户复制当前 epoch 基线，全部成功后才 ready=true。"
+      },
+      {
+        "term": "SH001 / CT001",
+        "meaning": "SH001 保护用户分片业务和复制位点；CT001 保护 control 的协调写入。"
+      }
+    ],
+    "mechanism": "旧主以旧 epoch 写业务或位点，PG 返回 SH001。shardFailure 刷新归属后只停止已失去分片的用户进程，仍可服务其他分片；刷新失败或仍误认为自己是主时隔离。旧主通过 rejoin 回归后，control 将 previous_primary 设为 replica 且 ready=false，新主全量复制全部用户后才确认 ready，不自动切回。手动切换另需持久暂停、等待轮次、最后全量同步，再切换和恢复；同步失败保留暂停，禁止回退 epoch。",
+    "design": {
+      "decision": "旧主回归先重建副本基线，不凭节点名称或旧磁盘认定历史可用。",
+      "reason": "旧主磁盘可能有未复制尾部，也可能缺少新主已完成的历史。",
+      "alternative": "自动切回会让旧磁盘覆盖接管后的新历史；只刷新路由不足以拒绝迟到 SQL。",
+      "cost": "epoch 不能撤销已经发出的模型和工具调用；旧主仍可能产生非权威本地副作用。"
+    },
+    "source": {
+      "file": "stages/s18-replication/server/modules/sharding/fence.mjs",
+      "needle": "  if (owner && after && after.primary !== generation.nodeId && !refreshFailed) {",
+      "before": 0,
+      "after": 4,
+      "explanation": "确认失去分片后 stopShard；无法确认归属时沿用隔离。"
+    },
+    "sources": [
+      {
+        "file": "stages/s18-replication/server/modules/replication/control.mjs",
+        "needle": "      } else if (!row.replica && row.previous_primary",
+        "before": 0,
+        "after": 3,
+        "explanation": "旧主上线后成为 replica，ready=false；不恢复它的主身份。"
+      },
+      {
+        "file": "stages/s18-replication/server/modules/replication/control.mjs",
+        "needle": "  async ready(shardId, epoch, caller) {",
+        "before": 0,
+        "after": 9,
+        "explanation": "核对当前主、epoch 和所有用户基线，才设置 ready。"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "normal",
+        "name": "旧主被拒写后追平成为副本",
+        "steps": [
+          {
+            "title": "迟到写入",
+            "actor": "旧主",
+            "event": "教学模拟 · SH001",
+            "explain": "请求携带旧 epoch，数据库拒绝。",
+            "state": {
+              "旧主": "失权",
+              "写入": "拒绝"
+            },
+            "lines": []
+          },
+          {
+            "title": "刷新归属",
+            "actor": "旧主",
+            "event": "教学模拟 · stopShard",
+            "explain": "停止失去分片的进程，保留其他分片服务。",
+            "state": {
+              "旧主": "停止该分片",
+              "写入": "拒绝"
+            },
+            "lines": []
+          },
+          {
+            "title": "重新加入",
+            "actor": "control",
+            "event": "教学模拟 · previous_primary",
+            "explain": "将旧主设置为副本，ready=false。",
+            "state": {
+              "旧主": "副本",
+              "ready": "false"
+            },
+            "lines": []
+          },
+          {
+            "title": "全量追平",
+            "actor": "新主",
+            "event": "教学模拟 · ready",
+            "explain": "全部用户当前 epoch 位点建立后 ready=true。",
+            "state": {
+              "旧主": "副本",
+              "ready": "true"
+            },
+            "lines": []
+          }
+        ]
+      },
+      {
+        "id": "failure",
+        "name": "回归但尚未完成基线",
+        "steps": [
+          {
+            "title": "开始追平",
+            "actor": "新主",
+            "event": "教学模拟 · sync",
+            "explain": "部分用户基线仍缺失。",
+            "state": {
+              "旧主": "副本",
+              "ready": "false"
+            },
+            "lines": []
+          },
+          {
+            "title": "再次故障",
+            "actor": "control",
+            "event": "教学模拟 · missingSnapshots",
+            "explain": "未满足全部用户基线，拒绝提升。",
+            "state": {
+              "接管": "REPLICA_UNAVAILABLE",
+              "ready": "false"
+            },
+            "lines": []
+          },
+          {
+            "title": "保留边界",
+            "actor": "control",
+            "event": "教学模拟 · epoch",
+            "explain": "不回退 epoch，也不自动切回。",
+            "state": {
+              "接管": "等待有效副本",
+              "epoch": "保持当前值"
+            },
+            "lines": []
+          }
+        ]
+      }
+    ],
+    "quiz": {
+      "question": "旧主回归后能否立即重新当主？",
+      "options": [
+        "可以，节点名称没变",
+        "可以，旧磁盘仍存在",
+        "不可以，先作为副本全量追平；不会自动切回"
+      ],
+      "answer": 2,
+      "explanation": "当前新主的历史才是权威；旧主需要取得当前 epoch 的完整基线。"
+    }
+  }
+]

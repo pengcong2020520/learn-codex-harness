@@ -1,5 +1,7 @@
 # s18：副本与故障接管
 
+[导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → [s17](../s17-sharding/README.md) → `s18` → [app](../../app/)
+
 对应六个问题：③ 之前聊过什么 ⑥ 谁说了算
 
 ## 要回答的问题
@@ -259,4 +261,4 @@ PG、Redis、etcd 和 gateway 仍是控制面单点；副本不等于整个服�
 
 ## 从这里往哪里走
 
-下一章：无，路线图到此结束。生产化可以继续建设三节点 etcd、PG 高可用、独立对象存储和增量复制；再根据真实恢复时间、目录规模与允许丢失窗口设定服务目标。
+下一章：无。这是主线最后一章。回到 [app](../../app/) 查看完整项目、Web 工作台与互动课程。生产化可以继续建设三节点 etcd、PG 高可用、独立对象存储和增量复制；再根据真实恢复时间、目录规模与允许丢失窗口设定服务目标。
