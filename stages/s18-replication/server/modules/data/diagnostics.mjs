@@ -3,6 +3,9 @@ import { shardUser } from '../sharding/fence.mjs';
 const token = value => typeof value === 'string' && /^[\w.-]{1,96}$/.test(value) ? value : null;
 export const connectionError = error => /^(08\w{3}|57P0[1-5]|ECONNRESET|ECONNREFUSED|ECONNABORTED|EPIPE|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|ENOTFOUND)$/.test(error?.code || '') ||
   /^(Connection terminated|Connection ended|timeout exceeded when trying to connect)/i.test(error?.message || '');
+// Safe category for operators: only the error code or the fixed prefix matched above.
+export const connectionKind = error => error?.code ||
+  (/^(Connection terminated[^:]*|Connection ended|timeout exceeded when trying to connect)/i.exec(error?.message || '')?.[1] ?? 'unknown');
 // Never serialize driver message/detail, SQL values, request URLs or the first stack line:
 // any of them can contain credentials, query text, or source content.
 export function rowFenceDetail(error) {

@@ -50,6 +50,17 @@ export function identity(root, { create = true } = {}) {
   return value;
 }
 
+// Same-host defaults; a node behind a cross-region tunnel needs several RTTs per handshake
+// and per transaction step, so deploy/remote-env.mjs widens these for that node only.
+export function boundedMs(env, name, fallback, min, max, unit = '毫秒') {
+  const raw = env[name] ?? String(fallback);
+  if (!/^\d+$/.test(String(raw)) || Number(raw) < min || Number(raw) > max) throw new Error(`${name} 必须是 ${min}–${max} 的整数（${unit}）。`);
+  return Number(raw);
+}
+export const connectTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_CONNECT_TIMEOUT_MS', 3000, 1000, 60000);
+export const poolMax = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_POOL_MAX', 6, 2, 32, '连接数');
+export const idleTransactionTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_IDLE_TX_TIMEOUT_MS', 15000, 5000, 120000);
+
 export async function openDatabase(url, { maintenance } = {}) {
   if (!url)
     throw new Error(
@@ -58,12 +69,12 @@ export async function openDatabase(url, { maintenance } = {}) {
   const pool = new Pool({
     connectionString: url,
     ...(maintenance === undefined ? {} : { options: `-c app.maintenance=${maintenance ? 'on' : 'off'}` }),
-    max: 6,
-    connectionTimeoutMillis: 3000,
+    max: poolMax(),
+    connectionTimeoutMillis: connectTimeout(),
     query_timeout: 12000,
     keepAlive: true,
     statement_timeout: 10000,
-    idle_in_transaction_session_timeout: 15000,
+    idle_in_transaction_session_timeout: idleTransactionTimeout(),
   });
   pool.on("error", () => {}); // Requests/worker heartbeat surface failures without printing connection secrets.
   try {

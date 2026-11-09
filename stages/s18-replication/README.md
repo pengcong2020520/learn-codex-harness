@@ -150,10 +150,11 @@ COMPOSE_FILE=compose.yaml:deploy/two-host.compose.yaml
 COMPOSE_PROFILES=remote-access
 AGENT_NODE_ADDRESS_B=http://host.docker.internal:4341
 AGENT_REPLICATION_RATE_LIMIT=262144
+AGENT_REQUEST_TIMEOUT_MS=120000
 NODE_B_UPSTREAM=host.docker.internal:4341
 ```
 
-控制机 `.env` 也必须加入上面的 `AGENT_REPLICATION_RATE_LIMIT=262144`；`deploy/remote-env.mjs` 为第二台生成同样数值。原则是不超过实测链路带宽的约 70%，给同一 SSH 连接上的 etcd 续约和请求转发留余量。实测约 3 Mbit/s（约 360 KB/s）、RTT 217 ms；未留余量时 `/health` 首字节曾延迟 11.6 秒，超过 10 秒租约 TTL。三个节点通过 compose 的共享环境配置继承该变量。
+控制机 `.env` 还要加入 `AGENT_REQUEST_TIMEOUT_MS=120000`；第二台需要的放宽值由 `deploy/remote-env.mjs` 生成，原因见下文「跨地域实测」。
 
 2. 控制机首次初始化使用以下步骤。两台模式不要调用会显式启动本地 node-b 的 `server-setup.sh` / `remote.sh deploy`；也不要同时启动第二个 node-b。
 
@@ -199,6 +200,24 @@ systemctl status codex-harness-s18-tunnel codex-harness-s18-remote
 
 4. `/cluster` 确认三成员和副本 ready。让 bob 在分片 0 完成两轮，等复制为零落后后在控制机停 node-a；node-b 应接管。恢复 node-a 后观察全量追平，再用 admin promote 验证手动切换。备份/恢复时同时停第二台节点与隧道相关业务；原单机备份脚本不包含第二台磁盘，应分别备份并核对同一业务时点，不能把旧磁盘直接挂到新 epoch。
 
+### 跨地域实测：同一份代码为什么在跨洋时变慢
+
+本章的教学实测把第二台放在美东、控制机在北京：往返 217 ms，隧道带宽约 3 Mbit/s。故障接管本身成立：停掉北京的主节点，15 秒内美东节点接手，复制过去的历史完整，续聊能接上之前的内容。但很多按"同一内网"设定的时限被逐个突破，因为第二台的每条 SQL、每次 etcd 调用都要跨洋一个来回（单次约 0.45 秒），恢复一个会话要几十次这样的往返。
+
+| 环节 | 同机默认 | 跨洋实测 | 第二台取值 |
+|---|---|---|---|
+| 复制发送 | 不限速 | 无限速时同一 SSH 连接上 `/health` 首字节延迟 11.6 秒，超过租约 TTL | `AGENT_REPLICATION_RATE_LIMIT=262144`（链路约 70%） |
+| PG 建连 | 3 秒 | 1.4–2.8 秒，拥堵时 27 秒 | `AGENT_DATABASE_CONNECT_TIMEOUT_MS=15000` |
+| PG 事务内空闲 | 15 秒 | 每条语句等一个来回，长事务被断开（25P03） | `AGENT_DATABASE_IDLE_TX_TIMEOUT_MS=60000` |
+| PG 连接池 | 6 | 长事务占满连接池，节点常驻 7–9 条连接 | `AGENT_DATABASE_POOL_MAX=16` |
+| etcd 单次调用 | 3 秒 | 0.45–1.2 秒，拥堵时超时 | `AGENT_ETCD_RPC_TIMEOUT_MS=10000` |
+| Redis 建连与命令 | 2 秒 | 启动激活失败 | `AGENT_REDIS_TIMEOUT_MS=10000` |
+| 请求预算（转发方与接收方共用） | 30 秒 | 恢复会话 31 秒、发消息 39 秒 | `AGENT_REQUEST_TIMEOUT_MS=120000`（控制机也要设） |
+
+调完这些，跨洋节点能工作，但每一步都慢；从美东回传北京的全量追平也会长时间停滞。结论是：**节点与 PG、etcd、Redis 必须在同一地域、同一内网**（往返不到 1 毫秒），跨洋两台只用来演示"不共享磁盘的两台机器之间接管"。真正的跨地域容灾要在每个地域各有一套控制面，再做地域之间的复制，不在本教程范围。
+
+排查中还补了两处对单机同样成立的修正：连接池已满时排队超时只让当次请求返回 503 `DATABASE_BUSY`，不再当作数据库断连去自我隔离（否则一阵高负载就会引发一次故障接管）；节点自我隔离时日志写出原因，数据库断连附带错误类别（只记错误码或固定前缀，不含连接信息）。
+
 ## 关键代码
 
 `server/modules/replication/control.mjs`：
@@ -227,6 +246,8 @@ export const LAG_MS = 5 * 60 * 1000;
 ## 限制
 
 PG、Redis、etcd 和 gateway 仍是控制面单点；副本不等于整个服务高可用。没有自动再平衡，每分片只配置一个副本；从节点离线、未建好基线、存在未完成传输时不接管，分片 unavailable 并记录原因。
+
+成员身份只认节点名，不核对磁盘是哪一次复制的结果：把旧磁盘挂回同名节点时，它会被当作现任节点接着服务（两台实测换回单机时，测试账号在第二台上跑的最后一轮因此丢失）。换盘、恢复备份前必须先核对复制位点，或者让该节点以副本身份全量追平。
 
 旧主假死醒来到被隔离之间，已发出的 Codex 轮次可能继续调用模型与工具。PG 写入由 SH001 阻止，副作用只落在旧主本地、已非权威的磁盘；epoch 隔离不能撤销已经发出的模型或工具调用。
 

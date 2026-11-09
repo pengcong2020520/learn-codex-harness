@@ -1,4 +1,5 @@
-import { connectionError, logFailure } from './diagnostics.mjs';
+import { AppError } from '../../../shared/errors.mjs';
+import { connectionError, connectionKind, logFailure } from './diagnostics.mjs';
 import { setShard, shardFailure } from '../sharding/fence.mjs';
 import { Pool, Client } from 'pg';
 
@@ -41,13 +42,22 @@ export function fencePool(pool, generation) {
     termFailure(error, generation, origin, statement);
     await shardFailure(error, generation, origin, statement);
     if (connectionError(error) && !error.connectionIsolated) {
-      error.connectionIsolated = true; generation.isolate?.('database-connection-lost');
+      error.connectionIsolated = true; generation.isolate?.(`database-connection-lost:${connectionKind(error)}`);
     }
   };
   pool.on?.('error', error => { void report(error, new Error('PG idle connection'), ''); });
   const checkout = async origin => {
+    const full = () => pool.totalCount >= (pool.options?.max ?? Infinity);
+    const busyBefore = full();
     try { return await pool.connect(); }
-    catch (error) { await report(error, origin, ''); throw error; }
+    catch (error) {
+      // Waiting for a busy pool is overload, not a lost database: fail this request only.
+      // Isolating here would turn a slow burst into a failover.
+      if (busyBefore && full() && /^timeout exceeded when trying to connect/i.test(error?.message || '')) {
+        throw Object.assign(new AppError('数据库连接池已满，请稍后重试。', 503, 'DATABASE_BUSY'), { cause: error });
+      }
+      await report(error, origin, ''); throw error;
+    }
   };
   const setTerm = client => {
     assertTerm(generation);

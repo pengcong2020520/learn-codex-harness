@@ -154,3 +154,15 @@ test('关停补记复用正常任期入口：失去任期后不能通过空 asse
   await assert.rejects(recover(), { code: 'NOT_CONTROLLER' });
   assert.deepEqual(calls, []);
 });
+
+test('连接池已满时取连接超时 → 503 DATABASE_BUSY、不自我隔离；未满时同样的超时仍按断连隔离', async () => {
+  const timeout = () => Promise.reject(new Error('timeout exceeded when trying to connect'));
+  const isolated = [];
+  const generation = { term: '42', assert() {}, log() {}, isolate: reason => isolated.push(reason) };
+  const busy = fencePool({ totalCount: 6, options: { max: 6 }, on() {}, connect: timeout }, generation);
+  await assert.rejects(busy.query('SELECT 1'), error => error.status === 503 && error.code === 'DATABASE_BUSY');
+  assert.deepEqual(isolated, []);
+  const lost = fencePool({ totalCount: 0, options: { max: 6 }, on() {}, connect: timeout }, generation);
+  await assert.rejects(lost.query('SELECT 1'), /timeout exceeded/);
+  assert.deepEqual(isolated, ['database-connection-lost:timeout exceeded when trying to connect']);
+});

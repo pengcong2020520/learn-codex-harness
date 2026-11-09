@@ -40,8 +40,22 @@ test('两台部署：remote-env 输出 262144 字节/秒，compose 三节点继�
   ...['A','B','C'].map(n=>`AGENT_NODE_KEY_${n}_HASH=${'a'.repeat(64)}`),
  ].join('\n'));
  const result=spawnSync(process.execPath,[path.join(root,'deploy/remote-env.mjs')],{env:{...process.env,NODE_ID:'node-b'},encoding:'utf8'});
- assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/^AGENT_REPLICATION_RATE_LIMIT=262144$/m);
+ assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/^AGENT_REPLICATION_RATE_LIMIT=262144$/m);assert.match(result.stdout,/^AGENT_DATABASE_CONNECT_TIMEOUT_MS=15000$/m);assert.match(result.stdout,/^AGENT_DATABASE_IDLE_TX_TIMEOUT_MS=60000$/m);assert.match(result.stdout,/^AGENT_ETCD_RPC_TIMEOUT_MS=10000$/m);assert.match(result.stdout,/^AGENT_DATABASE_POOL_MAX=16$/m);assert.match(result.stdout,/^AGENT_REDIS_TIMEOUT_MS=10000$/m);assert.match(result.stdout,/^AGENT_REQUEST_TIMEOUT_MS=120000$/m);
  const compose=fs.readFileSync(file('compose.yaml'),'utf8');
  assert.match(compose,/AGENT_REPLICATION_RATE_LIMIT: \$\{AGENT_REPLICATION_RATE_LIMIT:-0\}/);
  for(const node of ['node-b','node-c'])assert.match(compose,new RegExp(`  ${node}:[\\s\\S]*?environment:\\n      <<: \\*node-env`));
+});
+
+test('跨地域超时：默认值不变；可调；越界或非整数启动失败',async()=>{
+ const { connectTimeout, idleTransactionTimeout } = await import('../server/modules/data/database.mjs');
+ const { etcdRpcTimeout } = await import('../server/modules/coordination/etcd.mjs');
+ assert.equal(idleTransactionTimeout({}),15000);assert.equal(etcdRpcTimeout({}),3000);
+ assert.equal(idleTransactionTimeout({AGENT_DATABASE_IDLE_TX_TIMEOUT_MS:'60000'}),60000);assert.equal(etcdRpcTimeout({AGENT_ETCD_RPC_TIMEOUT_MS:'10000'}),10000);
+ assert.throws(()=>etcdRpcTimeout({AGENT_ETCD_RPC_TIMEOUT_MS:'30001'}),/1000–30000/);
+ const { redisTimeout } = await import('../server/modules/data/queue.mjs');
+ assert.equal(redisTimeout({}),2000);
+ const { requestTimeout } = await import('../server/modules/sharding/routing.mjs');
+ assert.equal(requestTimeout({}),30000);assert.equal(requestTimeout({AGENT_REQUEST_TIMEOUT_MS:'120000'}),120000);assert.equal(redisTimeout({AGENT_REDIS_TIMEOUT_MS:'10000'}),10000);
+ assert.equal(connectTimeout({}),3000);assert.equal(connectTimeout({AGENT_DATABASE_CONNECT_TIMEOUT_MS:'15000'}),15000);
+ for(const bad of ['999','60001','1.5','abc',''])assert.throws(()=>connectTimeout({AGENT_DATABASE_CONNECT_TIMEOUT_MS:bad}),/1000–60000/);
 });

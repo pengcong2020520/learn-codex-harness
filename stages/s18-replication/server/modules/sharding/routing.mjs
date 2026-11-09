@@ -2,6 +2,9 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { AppError } from '../../../shared/errors.mjs';
+import { boundedMs } from '../data/database.mjs';
+// One request budget for the forwarding node and the receiving node; two-host mode widens both.
+export const requestTimeout = (env = process.env) => boundedMs(env, 'AGENT_REQUEST_TIMEOUT_MS', 30000, 10000, 300000);
 export const staleRoute = () => new AppError('路由表过期，请刷新。', 409, 'STALE_ROUTE');
 export const unavailable = reason => new AppError(reason, 503, 'SHARD_UNAVAILABLE');
 export const nodeKeyHash = key => createHash('sha256').update(key).digest('hex');
@@ -50,11 +53,11 @@ export async function bufferBody(request) {
 }
 export async function forwardHttp(request, address, route, userId, key, body, { fetcher = fetch, signal } = {}) {
   const sse = request.method === 'GET' && new URL(request.url, 'http://localhost').pathname === '/events';
-  const timeout = sse ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
+  const timeout = sse ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(requestTimeout())]) : AbortSignal.timeout(requestTimeout());
   const requested = new URL(request.url, 'http://localhost');
   try { return await fetcher(new URL(requested.pathname + requested.search, address), { method: request.method, headers: forwardHeaders(request.headers, key, route, userId),
     body: ['GET','HEAD'].includes(request.method) ? undefined : body, redirect: 'error', signal: timeout }); }
-  catch { throw unavailable('分片主节点连接失败或转发超过 30 秒。'); }
+  catch { throw unavailable('分片主节点连接失败或转发超时。'); }
 }
 export async function streamResponse(upstream, response) {
   const headers = Object.fromEntries([...upstream.headers].filter(([k]) => !hop.has(k) && k !== 'content-encoding'));

@@ -2,8 +2,10 @@
 // Pinned etcd3 1.1.2: Campaign calls namespace.lease -> grant -> put.
 // Campaign error/resign revokes this shared lease; automatic rejoin obtains a fresh one.
 import { normalizePrefix, clusterKey } from './keys.mjs';
+import { boundedMs } from '../data/database.mjs';
+export const etcdRpcTimeout = (env = process.env) => boundedMs(env, 'AGENT_ETCD_RPC_TIMEOUT_MS', 3000, 1000, 30000);
 
-export async function connectEtcd(hosts, auth, { prefix, rpcTimeout = 3000 } = {}) {
+export async function connectEtcd(hosts, auth, { prefix, rpcTimeout = etcdRpcTimeout() } = {}) {
   prefix = normalizePrefix(prefix);
   const { Etcd3, Election } = await import('etcd3');
   // Bound unary RPCs and authentication, not the long-lived Watch/KeepAlive streams.

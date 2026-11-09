@@ -68,6 +68,7 @@ export class Coordination extends EventEmitter {
     clearTimeout(this.timer);
     this.lease?.release(); // no more automatic renewals after local fencing
     this.record('isolated', { nodeId: this.nodeId, reason });
+    if (reason !== 'shutdown') console.warn(`节点 ${this.nodeId} 自我隔离：${reason}`); // 运维靠这一行区分续约超时、选举失败与任期过期。
     this.emit('lost', reason); // synchronous admission/result fence before any await
   }
   async refreshMembers(epoch = this.generation) {
