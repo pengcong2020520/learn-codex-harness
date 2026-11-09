@@ -8,6 +8,7 @@ import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from ".
 import { AppError, requireId } from "../../../shared/errors.mjs";
 import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
 import { MISSING_SESSION_MESSAGE } from '../replication/store.mjs';
+import { resumeFailure } from '../replication/loss.mjs';
 
 // 每个会话在内存里最多保留的轮次。快照只发最后 SESSION_TURN_LIMIT 轮；完成的轮次结果已持久化，完整历史在 Codex 原生记录里。
 // 多留一些，给追加消息定位较早的目标轮次。
@@ -144,10 +145,17 @@ export class SessionService extends EventEmitter {
       const legacyPath = this.tools && !this.repository ? await importLegacyThread(this.config.root, selected) : undefined;
       const cwd = this.rpc.pool ? this.userRuntime().workspaceDir : selected.cwd;
       await ensureThreadDirectory(this.config.root, cwd, this.userRuntime().workspaceDir);
-      const result = await this.rpc.request("thread/resume", {
-        ...this.userOptions(), threadId, cwd, excludeTurns: false,
-        ...(legacyPath ? { path: legacyPath } : {})
-      });
+      let result;
+      try {
+        result = await this.rpc.request("thread/resume", {
+          ...this.userOptions(), threadId, cwd, excludeTurns: false,
+          ...(legacyPath ? { path: legacyPath } : {})
+        });
+      } catch (error) {
+        if (resumeFailure(error) && await this.repository?.markReplicaMissingAfterResume?.(threadId))
+          throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
+        throw error;
+      }
       if (result.thread.id !== threadId) throw new AppError("历史文件与 Thread id 不一致。", 409);
       return this.register(result);
     }, { allowBusy: true });

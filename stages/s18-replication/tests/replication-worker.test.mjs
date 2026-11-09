@@ -41,11 +41,13 @@ test('接收方：每节点认证之后仍核对当前主、目标、epoch、操
  for(const patch of [{caller:'node-c'},{receiver:'node-c'},{epoch:6},{token:'old'}])await assert.rejects(authorizeReplica(db,{...args,...patch}),{code:'REPLICA_AUTH'});
  row.publishing=true;await assert.rejects(authorizeReplica(db,args),{code:'REPLICA_AUTH'});
 });
-test('接管恢复：生产 SQL 只标已完成尾部、执行中待核对，queued 只写 outbox',async()=>{
- const queries=[],db={query:async(sql,args)=>{queries.push([sql,args]);return {rows:[],rowCount:1};},release(){}};
+test('接管恢复：丢失会话暂停、尾部标记，执行中待核对，其他 queued 写 outbox',async()=>{
+ const queries=[],db={query:async(sql,args)=>{queries.push([sql,args]);return {rows:sql.startsWith('SELECT c.*')?[{id:'tail',epoch:'8',replication_epoch:'7',previous_primary:'node-a',last_task_sequence:'10',last_completed_sequence:'11',replicated_at:new Date()}]:[],rowCount:1};},release(){}};
  await new ReplicationStore({connect:async()=>db},'instance').recover('bob',8);
  assert.equal(queries[0][0],'BEGIN');assert.equal(queries.at(-1)[0],'COMMIT');
- const missing=queries.find(([q])=>q.includes("SET status='replica_missing'"));assert.match(missing[0],/t.status='completed'/);assert.match(missing[0],/t.sequence>coalesce/);assert.equal(missing[1][3],8);
+ const missing=queries.find(([q])=>q.includes("SET status='replica_missing'"));assert.match(missing[0],/t.status='completed'/);assert.match(missing[0],/t.sequence>\$6::bigint/);assert.equal(missing[1][5],'10');
+ assert.ok(queries.some(([q,args])=>q.includes("SET status='needs-review'")&&args[2]==='tail'));
+ assert.ok(queries.some(([q])=>q.includes('replica_missing=true,paused=true')));
  assert.ok(queries.some(([q])=>q.includes("SET status='unconfirmed'")&&q.includes("('starting','running','steering')")));
  assert.ok(queries.some(([q])=>q.includes('INSERT INTO agent_data.outbox')&&q.includes("t.status='queued'")));
  assert.ok(!queries.some(([q])=>q.includes("SET status='queued'")));

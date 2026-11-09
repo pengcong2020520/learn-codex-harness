@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { openDatabase,migrate } from '../server/modules/data/database.mjs';
 import { fencePool } from '../server/modules/data/write.mjs';
 import { runOwner } from '../server/modules/accounts/context.mjs';
+import { Repository } from '../server/modules/data/repository.mjs';
 import { ReplicationStore } from '../server/modules/replication/store.mjs';
 import { ShardControl } from '../server/modules/sharding/control.mjs';
 import { ReplicationControl } from '../server/modules/replication/control.mjs';
@@ -40,6 +41,7 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,'replica-thread',$2,'/tmp')",[instance,user]);
  for(const [id,status] of [['copied','completed'],['tail','completed'],['inflight','running'],['pending','queued']])await admin.query("INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,status,created_at) VALUES($1,$2,'replica-thread','test','enqueue',$3,1)",[instance,id,status]);
  const sequence=(await admin.query("SELECT sequence FROM agent_data.tasks WHERE instance_id=$1 AND id='copied'",[instance])).rows[0].sequence;
+ await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,'copied-empty',$2,'/tmp')",[instance,user]);
  const route={shardId:'0',epoch:1};let token=randomUUID();
  await runOwner(user,async()=>{await sa.begin(user,route,token);await sa.finish(user,route,sequence,'hash',token);});
  await runOwner(user,()=>assert.rejects(sb.begin(user,route,randomUUID()),{code:'SH001'}));
@@ -51,10 +53,28 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  assert.equal(taken.node_id,'node-b');assert.equal(taken.replica,null);assert.equal(taken.replica_ready,false);assert.equal(taken.previous_primary,'node-a');
  await runOwner(user,()=>assert.rejects(sa.begin(user,route,randomUUID()),{code:'SH001'}));
  await runOwner(user,()=>assert.rejects(sa.pool.query("UPDATE agent_data.tasks SET error='old result' WHERE instance_id=$1",[instance]),{code:'SH001'}));
+ // An empty post-snapshot conversation is also absent from the copied home.
+ await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd,created_at) VALUES($1,'empty-tail',$2,'/tmp',clock_timestamp())",[instance,user]);
  await runOwner(user,()=>sb.recover(user,2));
+ assert.deepEqual((await admin.query('SELECT id,replica_missing,paused FROM agent_data.conversations WHERE instance_id=$1 ORDER BY id',[instance])).rows,
+  [{id:'copied-empty',replica_missing:false,paused:false},{id:'empty-tail',replica_missing:true,paused:true},{id:'replica-thread',replica_missing:true,paused:true}]);
  assert.deepEqual((await admin.query('SELECT id,status FROM agent_data.tasks WHERE instance_id=$1 ORDER BY sequence',[instance])).rows,
- [{id:'copied',status:'completed'},{id:'tail',status:'replica_missing'},{id:'inflight',status:'unconfirmed'},{id:'pending',status:'queued'}]);
+ [{id:'copied',status:'completed'},{id:'tail',status:'replica_missing'},{id:'inflight',status:'unconfirmed'},{id:'pending',status:'needs-review'}]);
  assert.equal((await admin.query("SELECT error FROM agent_data.tasks WHERE instance_id=$1 AND id='tail'",[instance])).rows[0].error,'该轮结果在故障接管时丢失，请核对');
+ const repository=new Repository(sb.pool,{instanceId:instance,ownerId:user});
+ await runOwner(user,async()=>{
+  const listed=await repository.listConversations();
+  assert.equal(listed.find(r=>r.id==='copied-empty').replicaMissing,false);
+  assert.equal(listed.find(r=>r.id==='empty-tail').replicaMissing,true);
+  assert.equal(await repository.markReplicaMissingAfterResume('copied-empty'),false);
+ });
+ // Previous releases only marked tasks: reads/listing must still avoid native resume.
+ await admin.query("UPDATE agent_data.conversations SET replica_missing=false WHERE instance_id=$1 AND id='replica-thread'",[instance]);
+ await runOwner(user,async()=>{
+  assert.equal((await repository.conversation('replica-thread')).replica_missing,true);
+  assert.equal((await repository.listConversations()).find(r=>r.id==='replica-thread').replicaMissing,true);
+  assert.equal(await repository.markReplicaMissingAfterResume('replica-thread'),true);
+ });
  await ctl.recovered('0',2,'node-b');c.members.set('node-a',{nodeId:'node-a'});await ctl.place();
  assert.equal((await admin.query('SELECT 1 FROM agent_data.user_shards WHERE user_id=$1',[unmapped])).rowCount,0,'placement must not import another instance');
  assert.deepEqual(await sb.users('0'),[user]);

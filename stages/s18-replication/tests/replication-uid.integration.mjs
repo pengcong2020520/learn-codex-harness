@@ -17,9 +17,10 @@ import { cleanup,installToolFixture,tempRoot,until } from './helpers.mjs';
 import { answer,responsesFixture } from './responses-fixture.mjs';
 import { startClusterNode,scriptedCoordination } from './fixtures/sharding-cluster.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
-for (const missingHome of [false, true]) test(missingHome ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
+for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario === 'missing-tail' ? 'Linux uid：旧会话已复制、home 存在，新会话未复制即接管返回 409，新建会话可用' : scenario === 'missing-home' ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
  skip:process.platform!=='linux'||process.getuid?.()!==0?'需要 Linux 0:1000、真实 PG/Redis 和 Codex':false,timeout:240000
 },async t=>{
+ const missingHome=scenario==='missing-home', missingTail=scenario==='missing-tail';
  assert.equal(process.getgid(),1000);
  const caps=BigInt('0x'+fs.readFileSync('/proc/self/status','utf8').match(/^CapEff:\s+(\w+)/m)[1]);
  assert.equal(caps,[0n,3n,6n,7n].reduce((n,b)=>n|(1n<<b),0n));
@@ -60,8 +61,8 @@ for (const missingHome of [false, true]) test(missingHome ? 'Linux uid：无首�
  };
  const token=(await api(2,'/auth/login',{username:'bob',password},200)).token;
  const session=await api(2,'/sessions',{},201,token);
- const complete=async(index,id,text)=>{
-  await api(2,'/messages',{threadId:session.id,clientMessageId:id,text},202,token);
+ const complete=async(index,id,text,threadId=session.id)=>{
+  await api(2,'/messages',{threadId,clientMessageId:id,text},202,token);
   let job;await until(async()=>{job=await runOwner(bob.id,()=>nodes[index].app.data.jobs.get(id));return ['completed','failed','unconfirmed','interrupted'].includes(job?.status);},60000);
   assert.equal(job.status,'completed',JSON.stringify({job,logs}));
  };
@@ -108,9 +109,49 @@ for (const missingHome of [false, true]) test(missingHome ? 'Linux uid：无首�
  // so files created there inherit gid 1000; compare against the primary copy instead of assuming gid=uid.
  const source=spawnSync(process.execPath,['-e',`const fs=require('fs'),s=fs.statSync(process.argv[1]);console.log(JSON.stringify([s.uid,s.gid,s.mode&511]));`,path.join(homes[0],'private-marker')],{uid:record.uid,gid:record.uid,encoding:'utf8'});
  const replica=JSON.parse(stat.stdout);assert.deepEqual(replica,JSON.parse(source.stdout));assert.equal(replica[0],record.uid);assert.equal(replica[2],0o600);const ws=fs.statSync(path.join(roots[1],relative));assert.deepEqual([ws.uid,ws.gid,ws.mode&0o777],[0,1000,0o660]);
+ let lost, empty;
+ if(missingTail) {
+  // Freeze the completed baseline, then reproduce the crash window deterministically.
+  await nodes[0].app.replication.worker.close();
+  const before=await nodes[0].app.replication.store.position(bob.id);
+  lost=await api(2,'/sessions',{},201,token);
+  await complete(0,'tail','NEW unreplicated conversation',lost.id);
+  empty=await api(2,'/sessions',{},201,token);
+  assert.equal(fs.existsSync(homes[1]),true,'existing user home is already replicated');
+  const after=await nodes[0].app.replication.store.position(bob.id);
+  assert.equal(after.last_task_sequence,before.last_task_sequence);
+  const tail=(await admin.query("SELECT sequence FROM agent_data.tasks WHERE instance_id=$1 AND id='tail'",[scope.instanceId])).rows[0];
+  assert.ok(BigInt(tail.sequence)>BigInt(before.last_task_sequence));
+ }
  await nodes[0].app.close();nodes[0].generation.active=false;
  await new Promise(resolve=>{nodes[0].server.close(resolve);nodes[0].server.closeAllConnections();});members.delete('node-a');
  await nodes[2].control.switch('0');await nodes[1].app.replication.tick();
+ if(missingTail) {
+  await api(2,'/state?threadId='+session.id,undefined,200,token);
+  for(const threadId of [lost.id,empty.id]) {
+   for(const [route,body] of [
+    ['/state?threadId='+threadId,undefined],['/events?threadId='+threadId,undefined],
+    ['/sessions/resume',{threadId}],['/messages',{threadId,clientMessageId:'reject-'+threadId,text:'continue'}],
+   ]) {
+    const result=await api(2,route,body,409,token);
+    assert.equal(result.error.code,'REPLICA_MISSING');
+    assert.match(result.error.message,/原会话无法恢复，请新建会话；任务记录已标记待核对/);
+   }
+  }
+  const listed=await api(2,'/sessions',undefined,200,token);
+  assert.equal(listed.sessions.find(s=>s.id===lost.id).replicaMissing,true);
+  assert.equal(listed.sessions.find(s=>s.id===empty.id).replicaMissing,true);
+  assert.equal(listed.sessions.find(s=>s.id===session.id).replicaMissing,false);
+  assert.equal((await admin.query("SELECT status FROM agent_data.tasks WHERE instance_id=$1 AND id='tail'",[scope.instanceId])).rows[0].status,'replica_missing');
+  const fresh=await api(2,'/sessions',{},201,token);
+  await api(2,'/state?threadId='+fresh.id,undefined,200,token);
+  await complete(1,'after-tail-loss','new session works',fresh.id);
+  await runOwner(bob.id,()=>nodes[1].app.runtimes.pool.remove(nodes[1].app.runtimes.pool.entries.get(bob.id)));
+  await api(2,'/state?threadId='+fresh.id,undefined,200,token);
+  await api(2,'/state?threadId='+lost.id,undefined,409,token);
+  assert.deepEqual(isolations,[]);assert.deepEqual(provider.errors,[]);
+  return;
+ }
  await api(2,'/sessions/resume',{threadId:session.id},200,token);await complete(1,'three','THIRD continue');
  const continued=provider.requests.find(r=>JSON.stringify(r.input).includes('THIRD'));assert.ok(continued);assert.match(JSON.stringify(continued.input),/FIRST_REPLY/);assert.match(JSON.stringify(continued.input),/SECOND_REPLY/);
  nodes[0]=await start(0);await nodes[2].control.place();

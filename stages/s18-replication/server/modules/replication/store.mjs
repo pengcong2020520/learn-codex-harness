@@ -1,5 +1,6 @@
 import { businessQuery } from '../data/write.mjs';
 import { transaction } from '../data/database.mjs';
+import { lossStateSql, replicaTailMissing, takeoverAdvanced } from './loss.mjs';
 export const MISSING_MESSAGE = '该轮结果在故障接管时丢失，请核对';
 export const MISSING_SESSION_MESSAGE = '该用户在最近一次复制之前的故障接管中丢失了数据，原会话无法恢复，请新建会话；任务记录已标记待核对';
 export const LAG_MS = 5 * 60 * 1000;
@@ -37,19 +38,13 @@ export class ReplicationStore {
   async recover(userId, epoch, { missingHome = false } = {}) {
     // Run on the new primary with runOwner and its fenced pool, before reopening dispatch.
     await transaction(this.pool, async db => {
-      if (missingHome) {
-        await businessQuery(db,`UPDATE agent_data.conversations SET replica_missing=true,paused=true
-          WHERE instance_id=$1 AND owner_id=$2`,[this.instanceId,userId]);
-        await businessQuery(db,`UPDATE agent_data.tasks t SET status='needs-review',error=$3
-          FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id
-          AND c.instance_id=$1 AND c.owner_id=$2 AND t.status IN ('queued','waiting','proposed')`,
-        [this.instanceId,userId,MISSING_SESSION_MESSAGE]);
+      const rows = (await businessQuery(db,lossStateSql + ' AND s.epoch=$3',
+        [this.instanceId,userId,epoch])).rows;
+      for (const row of rows) {
+        if (!takeoverAdvanced(row)) continue;
+        if (missingHome || row.replica_missing || replicaTailMissing(row))
+          await markMissingConversation(db,this.instanceId,userId,row,{ missingHome });
       }
-      await businessQuery(db,`UPDATE agent_data.tasks t SET status='replica_missing',error=$3
-        FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id
-        AND c.instance_id=$1 AND c.owner_id=$2 AND t.status='completed'
-        AND ($5::boolean OR t.sequence>coalesce((SELECT last_task_sequence FROM agent_data.replication_positions WHERE user_id=$2 AND epoch=$4::bigint-1),0))`,
-      [this.instanceId,userId,MISSING_MESSAGE,epoch,missingHome]);
       await businessQuery(db,`UPDATE agent_data.tasks t SET status='unconfirmed',error='原主失联，执行结果待核对，不自动重跑。'
         FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id
         AND c.instance_id=$1 AND c.owner_id=$2 AND t.status IN ('starting','running','steering')`,[this.instanceId,userId]);
@@ -76,4 +71,19 @@ export class ReplicationStore {
       GROUP BY u.shard_id,u.user_id,a.username,p.last_task_sequence,p.replicated_at,x.started_at`,[this.instanceId])).rows;
     return rows.map(r => lagOf(r));
   }
+}
+
+// Persist before returning 409, so retries/listing and subsequent replication retain the evidence.
+export async function markMissingConversation(db, instanceId, userId, row, { missingHome = false } = {}) {
+  await businessQuery(db,`UPDATE agent_data.conversations SET replica_missing=true,paused=true
+    WHERE instance_id=$1 AND owner_id=$2 AND id=$3`,[instanceId,userId,row.id]);
+  await businessQuery(db,`UPDATE agent_data.tasks t SET status='needs-review',error=$4
+    FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id
+    AND c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3 AND t.status IN ('queued','waiting','proposed')`,
+  [instanceId,userId,row.id,MISSING_SESSION_MESSAGE]);
+  await businessQuery(db,`UPDATE agent_data.tasks t SET status='replica_missing',error=$4
+    FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id
+    AND c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3 AND t.status='completed'
+    AND ($5::boolean OR t.sequence>$6::bigint)`,
+  [instanceId,userId,row.id,MISSING_MESSAGE,missingHome,row.last_task_sequence || '0']);
 }

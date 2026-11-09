@@ -1,7 +1,13 @@
 import { businessQuery } from './write.mjs';
+import { lossStateSql, takeoverAdvanced } from '../replication/loss.mjs';
+import { markMissingConversation } from '../replication/store.mjs';
 import { can } from '../hub/policy.mjs';
 import { AppError } from "../../../shared/errors.mjs";
 import { transaction } from "./database.mjs";
+
+// Older recoveries marked tasks but not their conversations. Preserve that PG evidence too.
+const missingConversationSql = `(c.replica_missing OR EXISTS(SELECT 1 FROM agent_data.tasks t
+  WHERE t.instance_id=c.instance_id AND t.thread_id=c.id AND t.status='replica_missing'))`;
 
 export class Repository {
   constructor(pool, scope) {
@@ -41,7 +47,7 @@ export class Repository {
   async conversation(id) {
     const row = (
       await this.query(
-        "SELECT * FROM agent_data.conversations WHERE instance_id=$1 AND owner_id=$2 AND id=$3",
+        `SELECT c.*,${missingConversationSql} AS replica_missing FROM agent_data.conversations c WHERE c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3`,
         [id],
       )
     ).rows[0];
@@ -53,12 +59,21 @@ export class Repository {
   async listConversations(keyword = "") {
     return (
       await this.query(
-        `SELECT id,name,cwd,updated_at AS "updatedAt" FROM agent_data.conversations
+        `SELECT id,name,cwd,updated_at AS "updatedAt",${missingConversationSql} AS "replicaMissing" FROM agent_data.conversations c
       WHERE instance_id=$1 AND owner_id=$2 AND (strpos(lower(name),lower($3))>0 OR strpos(lower(id),lower($3))>0)
       ORDER BY updated_at DESC LIMIT 200`,
         [keyword],
       )
     ).rows;
+  }
+  async markReplicaMissingAfterResume(id) {
+    return transaction(this.pool, async db => {
+      const row = (await this.query(lossStateSql + ' AND c.id=$3', [id], db)).rows[0];
+      if (!row || !takeoverAdvanced(row) ||
+          BigInt(row.last_sequence || 0) <= BigInt(row.last_task_sequence || 0)) return false;
+      await markMissingConversation(db, this.instanceId, this.ownerId, row);
+      return true;
+    });
   }
   async preferences() {
     return (
