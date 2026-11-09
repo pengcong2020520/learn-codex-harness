@@ -26,13 +26,13 @@
       <button class="nav-dot" data-target="module-s09" data-tooltip="s09 知识：可用且有边界" aria-label="s09 知识：可用且有边界"></button>
       <button class="nav-dot" data-target="module-s10" data-tooltip="s10 Skill 教方法，Workflow 管边界和终点" aria-label="s10 Skill 教方法，Workflow 管边界和终点"></button>
       <button class="nav-dot" data-target="module-s11" data-tooltip="s11 模型网关：选谁来做，何时停派" aria-label="s11 模型网关：选谁来做，何时停派"></button>
-      <button class="nav-dot" data-target="module-s12" data-tooltip="s12 部署单元：健康、就绪与可恢复状态" aria-label="s12 部署单元：健康、就绪与可恢复状态"></button>
-      <button class="nav-dot" data-target="module-s13" data-tooltip="s13 账号与认证：请求有身份，资源有归属" aria-label="s13 账号与认证：请求有身份，资源有归属"></button>
-      <button class="nav-dot" data-target="module-s14" data-tooltip="s14 用户隔离：让 owner 落到进程与文件权限" aria-label="s14 用户隔离：让 owner 落到进程与文件权限"></button>
-      <button class="nav-dot" data-target="module-s15" data-tooltip="s15 权限与资源 Hub：能用什么，谁说了算" aria-label="s15 权限与资源 Hub：能用什么，谁说了算"></button>
-      <button class="nav-dot" data-target="module-s16" data-tooltip="s16 协调面：谁还活着，谁有权写入" aria-label="s16 协调面：谁还活着，谁有权写入"></button>
-      <button class="nav-dot" data-target="module-s17" data-tooltip="s17 分片与路由：用户的历史留在自己的主节点" aria-label="s17 分片与路由：用户的历史留在自己的主节点"></button>
-      <button class="nav-dot" data-target="module-s18" data-tooltip="s18 副本与故障接管：保留可核对的异步历史窗口" aria-label="s18 副本与故障接管：保留可核对的异步历史窗口"></button>
+      <button class="nav-dot" data-target="module-s12" data-tooltip="s12 上云部署：没人看着，也能启动与恢复" aria-label="s12 上云部署：没人看着，也能启动与恢复"></button>
+      <button class="nav-dot" data-target="module-s13" data-tooltip="s13 账号与认证：身份由登录决定，资源各有归属" aria-label="s13 账号与认证：身份由登录决定，资源各有归属"></button>
+      <button class="nav-dot" data-target="module-s14" data-tooltip="s14 用户隔离：每个用户一个运行环境" aria-label="s14 用户隔离：每个用户一个运行环境"></button>
+      <button class="nav-dot" data-target="module-s15" data-tooltip="s15 权限与资源 Hub：谁能用、谁能改，一处判定" aria-label="s15 权限与资源 Hub：谁能用、谁能改，一处判定"></button>
+      <button class="nav-dot" data-target="module-s16" data-tooltip="s16 协调面：租约判断谁活着，任期决定谁说了算" aria-label="s16 协调面：租约判断谁活着，任期决定谁说了算"></button>
+      <button class="nav-dot" data-target="module-s17" data-tooltip="s17 分片与路由：按用户分布，从任意入口找到他" aria-label="s17 分片与路由：按用户分布，从任意入口找到他"></button>
+      <button class="nav-dot" data-target="module-s18" data-tooltip="s18 副本与故障接管：有人接手，丢多少说得清" aria-label="s18 副本与故障接管：有人接手，丢多少说得清"></button>
     </div>
     <a class="workbench-link" href="/course/overview.html">全景</a>
     <a class="workbench-link" href="/course/glossary.html">术语表</a>
@@ -54,13 +54,13 @@
   <a href="#module-s09">s09 知识：可用且有边界</a>
   <a href="#module-s10">s10 Skill 教方法，Workflow 管边界和终点</a>
   <a href="#module-s11">s11 模型网关：选谁来做，何时停派</a>
-  <a href="#module-s12">s12 部署单元：健康、就绪与可恢复状态</a>
-  <a href="#module-s13">s13 账号与认证：请求有身份，资源有归属</a>
-  <a href="#module-s14">s14 用户隔离：让 owner 落到进程与文件权限</a>
-  <a href="#module-s15">s15 权限与资源 Hub：能用什么，谁说了算</a>
-  <a href="#module-s16">s16 协调面：谁还活着，谁有权写入</a>
-  <a href="#module-s17">s17 分片与路由：用户的历史留在自己的主节点</a>
-  <a href="#module-s18">s18 副本与故障接管：保留可核对的异步历史窗口</a>
+  <a href="#module-s12">s12 上云部署：没人看着，也能启动与恢复</a>
+  <a href="#module-s13">s13 账号与认证：身份由登录决定，资源各有归属</a>
+  <a href="#module-s14">s14 用户隔离：每个用户一个运行环境</a>
+  <a href="#module-s15">s15 权限与资源 Hub：谁能用、谁能改，一处判定</a>
+  <a href="#module-s16">s16 协调面：租约判断谁活着，任期决定谁说了算</a>
+  <a href="#module-s17">s17 分片与路由：按用户分布，从任意入口找到他</a>
+  <a href="#module-s18">s18 副本与故障接管：有人接手，丢多少说得清</a>
 </nav>
 <section class="module" id="module-s01">
 <div class="module-content">
@@ -2980,26 +2980,23 @@ NODE</code></pre>
 <div class="module-content">
 <header class="module-header animate-in">
 <span class="module-number">s12</span>
-<h2 class="module-title">部署单元：健康、就绪与可恢复状态</h2>
-<p class="module-subtitle">用独立 Compose 交付运行环境，用就绪探测和容量限制守住入口，用固定路径与停服备份保留恢复依据。</p>
+<h2 class="module-title">上云部署：没人看着，也能启动与恢复</h2>
+<p class="module-subtitle">交付固定的运行环境，分清活着与就绪；接不过来就拒绝，关闭和恢复都有依据。</p>
 </header>
 <div class="module-body">
 <section class="screen animate-in" id="s12-screen-1">
-<h2 class="screen-heading">交付一个部署单元，明确进程与数据的归属</h2>
-<p>已有的 Agent 可以组织任务、使用工具和知识、执行 Workflow，并通过模型网关选择模型。让它在服务器上持续工作，还需要回答几件具体的事：运行环境怎样复现，服务什么时候能接任务，退出后由谁重新启动，数据库和原生历史放在哪里，升级失败以后能恢复到什么状态。本章把这些责任收进一套独立部署，不改变 Codex 的推理与工具执行循环。</p>
+<h2 class="screen-heading">交付物是镜像，代码和数据分开放</h2>
+<p>上一章，云端 Agent 已能聊天、使用工具和知识、执行工作流，并由模型网关管理模型。但它还依赖你的电脑：电脑合上，服务就停了。本章把它交给没人看着的服务器，补上启动、持久化、容量和恢复的责任。</p>
 <figure class="architecture-figure"><a href="/course/assets/s12-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S12 总架构 SVG 大图"><img src="/course/assets/s12-architecture.svg" width="1600" height="1192" alt="S12 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>部署层增加就绪检查、容量限制与关闭机制；已有任务、数据和模型执行仍各自承担原有职责。点击查看大图。</figcaption></figure>
-<p><span class="term" data-definition="把固定镜像、容器依赖、持久化挂载、启动与关闭、备份恢复共同作为可交付的运行单位。">部署单元</span> 包含 postgres、redis、gateway、agent 四个服务。PostgreSQL 保存业务事实，Redis 承担队列唤醒，Bifrost 承接模型请求，agent 运行既有服务。只有 agent 发布宿主回环端口；客户端使用 SSH 隧道进入。它不加入 app 的共享 stages 容器，也不登记为工作台默认实时目标。</p>
-<table><thead><tr><th>边界</th><th>本章负责什么</th><th>仍需保留的依据</th></tr></thead><tbody><tr><td>Codex</td><td>管理 Thread、Turn、上下文与工具执行。</td><td>原生 SQLite / JSONL 历史与固定路径。</td></tr><tr><td>Agent 服务</td><td>判断就绪，限制排队、执行和连接，关闭时保存不确定状态。</td><td>PostgreSQL 任务记录、执行器与队列状态。</td></tr><tr><td>Compose / Docker</td><td>固定服务版本、依赖健康、挂载与退出重启。</td><td>镜像、锁文件、卷与宿主目录。</td></tr><tr><td>宿主 Bash / systemd</td><td>开机启动、远程部署、停服备份和恢复。</td><td>部署版本、成功备份、权限与操作结果。</td></tr></tbody></table>
-<p>镜像固定 Node 版本和 digest，按 npm 锁文件安装依赖，使用非 root 的 node 用户。Agent 镜像额外安装 lsof 和 bubblewrap；数据库转储使用正在运行的 postgres 容器，不要求在 Agent 镜像里安装 PostgreSQL 客户端。构建可以配置 NPM_REGISTRY 与 APT_MIRROR，配置改变镜像下载来源，不改变服务的责任。</p>
-<p>PostgreSQL 和 Redis 使用命名卷；<code>.data</code>、<code>.runs</code>、<code>workspace</code> 和 <code>backups</code> 使用宿主目录挂载。代码和镜像可以替换，持久状态需要保留。正文、产物与原生历史都不应该因为容器重建而消失。部署脚本不会把镜像当成数据备份，也不会把删除数据卷作为日常停止方式。</p>
-<p><span class="term" data-definition="CONTAINER_APP_DIR 与宿主部署目录一致且保持不变；Codex 原生历史中的绝对路径依赖这一约定。">固定路径</span> 是恢复契约。<code>CONTAINER_APP_DIR</code> 必须等于宿主部署目录，容器内工作位置保持一致。使用带时间戳的新目录运行下一版代码，看起来便于保留版本，却会改变历史引用的位置。本章在固定位置替换代码与镜像；要转移原生历史，需要连同原路径保持一致，没有实现跨路径历史改写。</p>
-<p>密钥保存在权限为 600 的宿主 .env，Compose 按服务列出变量。服务商密钥只交给 gateway；agent 获得访问网关的凭据和自己的数据库配置，通过不含密钥的服务商名称清单判断模型可用范围。生成配置保存环境变量引用，镜像和命令参数不包含密钥正文。实例身份和正文属于恢复数据，服务商密钥则需要另行妥善保管。</p>
-<p>每个服务采用 json-file 日志轮转，单文件 10m、保留 3 个。默认内存分别为 PostgreSQL 256m、Redis 128m、gateway 256m、agent 768m，可通过对应的 MEMORY_LIMIT 变量覆盖。这些是容器资源边界，不能替代应用层的任务并发和请求限制。文件产物仍在 workspace；本章没有接入对象存储。</p>
+<p>在本机能跑，依赖的是本机的 Node、依赖和系统工具。镜像把这些固定下来，换机器也能得到同一运行环境。<span class="term" data-definition="把固定镜像、容器依赖、持久化挂载、启动与关闭、备份恢复共同作为可交付的运行单位。">部署单元</span>把 PostgreSQL、Redis、网关和 Agent 的镜像与依赖关系写进同一份 Compose 配置；Codex 仍负责每轮执行，Compose 与 systemd 负责启动和退出后的恢复。</p>
+<p>镜像可以替换，数据不能跟着消失。数据库和 Redis 使用独立数据卷；会话历史、运行目录、资料产物和备份挂载在宿主机上。升级换代码与镜像，持久状态原地保留。</p>
+<p><span class="term" data-definition="CONTAINER_APP_DIR 与宿主部署目录一致且保持不变；Codex 原生历史中的绝对路径依赖这一约定。">固定路径</span>是一份持久化契约：Codex 原生历史记录绝对路径，容器内与宿主机的部署路径必须一致。回滚也在同一路径替换代码，否则旧会话找不到历史记录的位置。</p>
+<p>密钥只放在权限为 600 的宿主 .env 中，镜像不带密钥。各服务只取自己需要的凭据：服务商密钥留在网关，Agent 只取网关访问密钥和自己的数据库配置。构建、资源与部署参数见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
-
 <section class="screen animate-in" id="s12-screen-2">
-<h2 class="screen-heading">依赖健康决定启动顺序，/ready 判断当前能否接任务</h2>
-<p>启动顺序解决的是“后续进程什么时候开始”，就绪检查解决的是“现在是否可以工作”。gateway 等待 postgres 健康，agent 等待 postgres、redis 和 gateway 健康。数据库、Redis、网关各有自己的探针，agent 的探针执行 <code>deploy/ready.mjs</code>。下面是 agent 的依赖与 healthcheck 原文。</p>
+<h2 class="screen-heading">活着，不等于能接活</h2>
+<p>健康检查问“进程还活着吗”，就绪检查问“依赖与执行器能接任务吗”。数据库或网关断开时，HTTP 仍可能响应；把这两个问题分开，入口才能停止向暂时不能工作的服务派发请求。</p>
+<p>Compose 按依赖健康决定启动顺序。下面的配置让 Agent 等依赖就绪后启动，但运行途中依赖失效，还需要服务持续检查自己的状态。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/compose.yaml · 第 110–118 行</span>
 <pre><code data-source="stages/s12-deploy/compose.yaml" data-start="110" data-end="118">    depends_on:
       postgres: { condition: service_healthy }
@@ -3011,8 +3008,7 @@ NODE</code></pre>
       timeout: 10s
       retries: 20</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">gateway 的依赖条件是 service_healthy；同一 depends_on 段还包含 postgres 和 redis。</p><p class="tl">agent 的探针执行 Node 脚本，周期 5 秒、超时 10 秒、最多重试 20 次。</p><p class="tl">这些条件约束启动时机。依赖在运行途中失效时，Compose 不会持续按依赖图重新排布全部服务。</p></div></div></div>
-<p>四个服务都采用 <code>restart: unless-stopped</code> 和 30 秒停止宽限。systemd 负责开机执行 Compose；Docker restart policy 处理进程退出后的重新启动。容器标为 unhealthy 并不等于进程已经退出，也不会仅凭这个标记自动重启。排障时要分别查看进程、健康结果和业务就绪结果，不能把它们当成同一个状态。</p>
-<p><code>/health</code> 只返回 HTTP 进程的存活事实，状态为 alive；<code>/ready</code> 核对数据库、网关、模型目录以及执行相关状态，不能接任务时返回 503。两个接口都返回 version，读取 REVISION，没有文件时为 dev；它们不需要连接令牌，不扣请求额度，也不输出凭据。</p>
+<p><code>/health</code>只报告存活；<code>/ready</code>核对数据库、网关、模型目录和调度状态，任一条件不满足就返回 503。进程退出由重启策略处理，容器标记 unhealthy 本身不会触发重启。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 24–34 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="24" data-end="34">export function createReadiness({ config, data, messages, tools, fetcher = fetch, stopping = () =&gt; false }) {
   const version = revision(config.root);
@@ -3031,29 +3027,26 @@ NODE</code></pre>
         const result = await ready();
         return json(result.status === &#x27;ready&#x27; ? 200 : 503, result);</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">HTTP handler 等待就绪检查，并把 ready 映射为 200、其余映射为 503。</p><p class="tl">这个分支在入口请求限流之前；健康诊断不会因普通请求额度用完而被挡住。</p></div></div></div>
-<table><thead><tr><th>运行情形</th><th>/health</th><th>/ready</th><th>能得出的结论</th></tr></thead><tbody><tr><td>依赖与执行器都正常</td><td>200</td><td>200</td><td>本次探测满足已实现的就绪条件。</td></tr><tr><td>网关不可用，HTTP 仍存活</td><td>200</td><td>503</td><td>进程仍能响应，模型依赖尚未就绪。</td></tr><tr><td>Redis 队列不健康</td><td>200</td><td>503</td><td>任务事实仍在数据库，需要恢复调度通道。</td></tr><tr><td>启动失败，HTTP 尚未打开</td><td>连接失败</td><td>连接失败</td><td>没有可用的 HTTP 探测入口。</td></tr></tbody></table>
-<p>外部验收可以停止 gateway，确认 /ready=503 而 /health=200，再恢复网关并重查。离线实验通过真实 handler 和依赖夹具验证分支，不能证明容器网络、实际数据库、模型服务商和部署机器已经可用。就绪检查也不保证供应商余额充足、指定模型开通或下一轮一定成功。</p>
+<p>例如停掉网关，HTTP 仍存活时应看到 <code>/health=200</code>、<code>/ready=503</code>；恢复依赖后再核对就绪。就绪只说明本次探测满足条件，不保证模型额度、响应质量或下一轮成功。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">不要把一次健康检查扩大成服务质量承诺</p><p>Compose 的依赖健康是启动条件；/ready 是当前运行状态检查；真实模型调用还要验证鉴权、额度和响应。三种证据分别保留，故障时才能知道是哪一层不满足条件。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-3">
-<h2 class="screen-heading">接多少、做多少、连多少：四个容量边界</h2>
-<p>服务长期运行后，一次请求所占的资源并不一样。普通 HTTP 请求可能很快结束；SSE 可以保持连接；数据库中的 queued 任务等待执行；一个运行中的模型轮次可能持续较久。只限制请求频率不能限制活动轮次数，只限制轮次又挡不住连接耗尽。因此部署配置分别给出四个上限。</p>
+<h2 class="screen-heading">接不过来就明确拒绝</h2>
+<p>背压是在资源耗尽前限制工作进入，避免把所有请求都接下后一起变慢、一起失败。执行轮次、排队任务、请求频率和长连接占用不同资源，因此需要分别设上限。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 13–16 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="13" data-end="16">    maxConcurrentTurns: integer(&#x27;AGENT_MAX_CONCURRENT_TURNS&#x27;, 2),
     maxQueued: integer(&#x27;AGENT_MAX_QUEUED&#x27;, 200),
     rateLimit: integer(&#x27;AGENT_RATE_LIMIT_PER_MINUTE&#x27;, 120),
     maxSse: integer(&#x27;AGENT_MAX_SSE&#x27;, 20),</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">每个配置值先经过正整数校验；非法值会在启动配置阶段报错。</p><p class="tl">maxConcurrentTurns 限制新轮次派发，maxQueued 限制进入排队，rateLimit 约束每个来源窗口，maxSse 限制全局连接名额。</p><p class="tl">修改一项不意味着其余三项跟着改变。容量应按实际资源分别安排。</p></div></div></div>
-<table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后的行为</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued，等待执行名额。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>新入队操作返回 429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>超频返回 429 RATE_LIMITED 与 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>满额返回 429 SSE_FULL，Retry-After 为 5 秒。</td></tr></tbody></table>
-<p>任务创建、用户确认和 Workflow 再排队都会进入同一个数据库容量门禁。仓储在事务里先获取实例级 advisory lock，再检查全局和本会话 queued 数量。检查与写入共享事务边界，避免两个并发请求都看到“还剩一个位置”，最后同时入队。等待确认和提议没有算入 queued 容量；确认进入队列时才需要重新过门禁。</p>
-<p>调度器全局串行扫描，按 tasks.sequence 查找可执行任务，并保留已有的会话内追加优先语义。跨会话的活动轮次达到默认 2 个时，不继续开启新轮次。已有活动 Turn 的追加走 steer，不额外占用新轮次名额。暂停会话和预算不足的任务不阻塞其他可执行会话，因此这里不承诺一个阻塞所有会话的严格总 FIFO。</p>
+<table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>429 RATE_LIMITED，附 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>429 SSE_FULL，5 秒后再试。</td></tr></tbody></table>
+<p>入队检查和写入在同一数据库事务中串行完成，防止并发请求抢到同一个空位。新建、确认、Workflow 再排队都过这道门禁；Workflow 遇到满队列会等待用户确认。执行名额满了只停止新轮次派发，已持久化的任务仍在。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 255–256 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="255" data-end="256">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
     if (running.size &gt;= maxConcurrentTurns) return;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">running 统计当前占用执行名额的会话；达到上限直接停止这次新轮次派发。</p><p class="tl">任务仍在持久队列中，后续扫描可以在容量释放后继续；这个 return 没有把任务标为失败。</p></div></div></div>
-<p>Workflow 自动进入下一步时若队列已满，会停在等待确认，容量释放后由用户确认继续，不能绕过门禁超额排队。执行器仍依赖 PostgreSQL 独占锁，这里的并发限制针对服务派发的对话轮次，不限制 Codex 内部工具并行。看到多个工具活动，不能直接推断轮次上限失效。</p>
-<p><span class="term" data-definition="在每次请求时删除距当前时刻至少 60 秒的记录，再统计仍在窗口中的请求。">滑动窗口</span> 以连接令牌和实际 socket peer 为键。实现不信任 X-Forwarded-For，无效令牌合并到同一来源桶，不能通过不断换无效令牌绕过限制。代理后看到的是代理的实际地址；本章没有用户身份系统，也没有跨进程共享的限流账本。</p>
+<p>调度按任务顺序寻找可执行会话，暂停或预算不足的会话不阻塞其他会话；已有轮次的追加走 steer，不另占新轮次名额。这是服务派发上限，不限制 Codex 内部工具并行。</p>
+<p><span class="term" data-definition="在每次请求时删除距当前时刻至少 60 秒的记录，再统计仍在窗口中的请求。">滑动窗口</span>按令牌与实际 socket 来源计数，不信任转发头；无效令牌合并到同一来源桶，避免换令牌绕过限制。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 45–59 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="45" data-end="59">  request(token, address) {
     const now = this.now();
@@ -3071,13 +3064,11 @@ NODE</code></pre>
     values.push(now);
     this.windows.set(key, values);</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">每次请求清理过期记录，空桶也会删除；仍在 60 秒窗口内的记录参与计数。</p><p class="tl">令牌和 socket peer 组合后计算摘要作为键；无效认证由 HTTP 层传入统一的 unauthenticated 标识。</p><p class="tl">达到额度时创建 429 RATE_LIMITED。等待时间由最早请求到期的剩余毫秒向上取整，最少为 1 秒。</p><p class="tl">未超限才追加当前时间。因此拒绝的第 121 次请求不会延长已有窗口。</p></div></div></div>
-<p>假设窗口内已有 120 次请求，最早一条发生在一秒前，下一次请求会被拒绝，并建议等待 59 秒。HTTP handler 把 error.retryAfter 写入 Retry-After 响应头。等待是客户端重试的依据，不能把 429 当成模型已经执行失败；这次请求可能根本没有进入业务处理。进程重启会清空内存窗口，这是当前实现的范围。</p>
-<p>SSE 使用独立名额：在异步读取会话数据前先 acquireSse，连接 close 时释放。释放函数带有 released 标记，即使清理路径重复调用，也只减一次计数。满额错误与请求超频错误都使用 429，但错误码和等待时间不同。健康接口绕过限流，让运维仍然能检查进程和依赖。</p>
+<p>429 表示入口拒绝或要求稍后再试，不代表模型已经执行失败。SSE 断开时释放名额，健康探测不占请求额度。限流窗口在内存中，重启会清空；本章尚无按用户的身份与配额。</p>
 </section>
-
 <section class="screen animate-in" id="s12-screen-4">
-<h2 class="screen-heading">关闭先停止派发，重启保留不确定事实</h2>
-<p>一次轮次可能已经执行了外部操作，但尚未来得及把最终结果完整持久化。进程此时收到停止信号，不能把未收到终态等同于“模型完全没做事”，也不能把残留任务直接再发一次。部署的关闭逻辑要先阻止新增工作，再保存已经确定的状态，并给未确认的执行留下人工核对入口。</p>
+<h2 class="screen-heading">关闭先停派发，结果不明就待核对</h2>
+<p>关闭时最难的不是退出进程，而是保留执行事实：模型可能已经调用工具，却没来得及保存终态。不能把“没收到结果”当成“什么也没做”，自动重发可能造成重复操作。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 74–80 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="74" data-end="80">export function gracefulShutdown({ stopDispatch, markUnconfirmed, close, exit = code =&gt; process.exit(code), timer = setTimeout, clear = clearTimeout }) {
   let pending;
@@ -3087,18 +3078,13 @@ NODE</code></pre>
     try { await markUnconfirmed(); await close(); }
     finally { clear(deadline); }</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">pending 让多次关闭请求共享一次流程，避免重复关闭资源。</p><p class="tl">stopDispatch 同步执行，收到信号后先停止继续派发。</p><p class="tl">随后保存 unconfirmed，再关闭 HTTP、SSE、RPC 和数据资源；30 秒定时器是资源卡住时的退出截止。</p><p class="tl">正常清理结束后取消截止定时器；无法在截止前落库的残留执行状态，交给启动恢复再次处理。</p></div></div></div>
-<p>SIGTERM 到达后，关闭入口按这个顺序组织服务：同步停止派发，把执行中的不确定状态持久化为 unconfirmed，然后关闭连接和资源。queued 任务仍保留。重启时沿用已有 recover 处理残余 starting、running、steering，不会自动重发需要核对的任务。这个设计保留了事实的不确定程度。</p>
-<table><thead><tr><th>停止前状态</th><th>停止或恢复后的含义</th><th>下一步动作</th></tr></thead><tbody><tr><td>queued</td><td>尚未派发的持久任务仍在。</td><td>服务恢复后按队列机制处理。</td></tr><tr><td>starting / running / steering</td><td>可能已发生执行，结果需要核对。</td><td>恢复为 unconfirmed，先查看任务结果与产物。</td></tr><tr><td>完成且已落库</td><td>保留已有完成事实。</td><td>根据已保存结果继续业务流程。</td></tr><tr><td>资源关闭卡住</td><td>30 秒截止后强制退出。</td><td>启动恢复检查残留状态，不能推断外部操作未发生。</td></tr></tbody></table>
-<p>优雅关闭并不是跨模型、数据库和文件系统的原子事务。执行器依赖 PostgreSQL 独占锁，服务停止后重建连接与锁仍需验证；模型工具内部的行为也不是部署模块重新实现的。真实 SIGTERM 验收应观察派发停止、任务状态、进程退出时间和重启后的恢复结果。离线断言能验证调用顺序，不能取代服务器上的完整故障过程。</p>
-<p>代码回滚同样要区分事实。remote.sh 保留上一版目录和 previous 镜像标签，回滚替换代码与镜像，数据目录维持原路径。它不恢复 .env 的历史版本，也不会自动倒转数据库和 workspace。如果升级包含破坏性 schema 变化，需要兼容代码或升级前的完整备份，不能只切换镜像就宣称业务数据已恢复。</p>
-<p>部署失败会留下 pending 标记，下一次部署前需要先处理回滚。首次部署没有上一版，排除故障并确认没有部署进程后，才能清除 pending 再重试。这个标记记录的是未完成的交付事实；它和 flock 锁文件不是同一概念。flock 在进程退出后释放，不需要通过删除锁文件来解锁。</p>
+<p>收到 SIGTERM 后，先停止派发新任务，再把执行中状态标为 <code>unconfirmed</code>，最后关闭连接，整个关闭过程以 30 秒为截止。queued 保留，重启后继续派发；残留 starting、running、steering 也按待核对处理，不自动重跑。</p>
+<p>回滚解决代码版本的问题：保留上一版代码与镜像，在固定路径换回去。它不倒转数据库、workspace 或凭据；破坏性 schema 变化还需要兼容代码或升级前的完整备份。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">先核对结果，再决定是否重做</p><p>unconfirmed 表示证据尚不足。查看任务、产物和外部系统后再继续；直接重发可能重复已经发生的操作。部署模块保留这种不确定性，而不是替使用者猜测结果。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-5">
-<h2 class="screen-heading">同一停服窗口完成备份，失败路径也有确定行为</h2>
-<p>完整恢复需要数据库与目录相互对应。数据库记录任务和资源版本，workspace 和不可变正文保存文件，.data/codex 保存原生历史。若 agent 一边写入，一边分别复制数据库和目录，两份数据可能来自不同时间。本章采用短暂停止 agent 的办法，把备份组织在一个没有业务写入的窗口里。</p>
-<p>宿主 Bash 负责流程编排，真正的数据库工具在 postgres 容器内运行。宿主不依赖 Node/npm，但需要 Docker、Compose、Bash、flock、gzip/gunzip 等工具；打包程序在一次性 agent 容器内使用已有 Node 和 tar。agent 镜像不额外安装 postgresql-client。</p>
+<h2 class="screen-heading">备份要对应同一时刻，恢复失败就保持停止</h2>
+<p>备份是数据库记录与文件历史的一组恢复依据。若两者在持续写入时分别复制，可能一份新、一份旧，所以本章短暂停止 Agent，在同一个停服窗口导出数据库并打包目录。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/deploy/backup.sh · 第 9–34 行</span>
 <pre><code data-source="stages/s12-deploy/deploy/backup.sh" data-start="9" data-end="34">partial=&#x27;&#x27;
 cleanup() {
@@ -3127,41 +3113,14 @@ docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exis
 if [ &quot;$(id -u)&quot; = 0 ]; then chown 1000:1000 backups &quot;$partial&quot; &quot;$partial/database.sql.gz&quot;; fi
 docker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --partial &quot;$name&quot;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">脚本此前已用文件描述符 9 获取共享非阻塞 flock；冲突立即返回 75。</p><p class="tl">cleanup 保存原始退出码并清理未发布 partial，无论成功还是失败都尝试 up -d --wait agent；重启失败也保留非零结果。</p><p class="tl">EXIT trap 安装在 stop 之前，停止操作失败或被中断时仍尝试恢复 agent。INT 和 TERM 被转为明确退出码。</p><p class="tl">pg_dump 在 postgres 容器内执行，gzip 将纯 SQL 写入隐藏 partial；pipefail 让转储失败可以传播。</p><p class="tl">root 创建的目录与 SQL 交给 uid 1000；一次性 agent 容器用 --no-deps 避免重新拉起依赖，并执行打包发布。</p></div></div></div>
-<p>备份、恢复和实际 rsync sender 共用 <code>backups/.download.lock</code>，锁持续覆盖整个操作。锁文件保留同一 inode，进程退出后自动释放。删除再创建锁文件可能让不同操作持有不同 inode，破坏互斥；因此流程不把删除锁文件当成清理动作。下载通过 SSH 与 rsync，限速 200 KB/s，备份不会经 HTTP 提供。</p>
-<p>SQL 先写入隐藏的 <code>.partial</code> 目录，再由 backup.mjs 打包 workspace、原生历史、实例身份和不可变文件正文。manifest 包含大小、SHA-256 与版本。目录归档和校验完成后原子重命名为正式备份，只保留最近 7 份成功备份。partial 不存在或缺少 SQL 时拒绝发布，失败包不能占用成功备份的名额。</p>
-<table><thead><tr><th>内容</th><th>是否包含</th><th>恢复含义</th></tr></thead><tbody><tr><td>数据库 gzip 纯 SQL</td><td>包含</td><td>用运行中的 postgres 容器重放。</td></tr><tr><td>workspace、原生历史、实例身份与不可变正文</td><td>包含</td><td>与 SQL 在同一停服窗口内保存。</td></tr><tr><td>Redis 缓存、.runs 日志</td><td>不包含</td><td>不作为完整业务恢复的事实来源。</td></tr><tr><td>.env、服务商密钥、镜像</td><td>不包含</td><td>需要另行保管凭据与可运行代码镜像。</td></tr></tbody></table>
-<p>SHA-256 可以发现文件被修改或损坏，但 manifest 本身不是数字签名；攻击者如果能同时替换包和 manifest，摘要无法证明来源。恢复只接受管理员信任的备份。恢复还要求相同部署路径与兼容数据库 schema，不能把完整包理解成任意机器、任意版本之间的自动转移格式。</p>
-<p>restore.sh 先持有同一个锁并停止 agent，再从 /dev/tty 确认；非交互运行且未提供 --yes 时拒绝。确认后，一次性 agent 容器先校验 manifest；宿主使用 gunzip 与 postgres 容器里的 psql 重放 SQL，开启单事务和 ON_ERROR_STOP；之后恢复目录，保留 bind mount 根目录，最后启动 agent 并检查 /ready。</p>
-<p>恢复取消或任何一步失败都保持 agent 停止；启动或就绪失败也再次停止，避免继续提供数据库与文件混合的数据。备份失败则尝试重启 agent，因为原业务数据仍是工作的依据。两种失败策略不同，不能把备份 cleanup 机械地复制给恢复。恢复跨数据库和文件系统，不是一个总原子事务，失败后应继续停服并重新恢复完整备份。</p>
+<p>数据库、workspace、原生历史、实例身份与不可变正文一并保存；Redis 缓存、运行日志、密钥和镜像不在备份中。清单记录大小、SHA-256 与版本，全部完成才发布为成功备份，只保留最近 7 份。备份失败会清理未完成包，并尝试重启原服务。</p>
+<p>恢复先校验，再重放数据库和恢复目录，最后检查就绪。任一步失败都保持 Agent 停止，避免用混合状态继续服务。跨数据库与文件系统没有总原子事务，失败后需重新恢复完整备份；具体互斥、下载与恢复步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
+<p>校验和能发现损坏，不能认证备份来源；恢复只接受可信备份，并要求固定路径和兼容 schema。一个备份包存在，也不能证明整套服务已恢复。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">成功备份与可恢复部署分别验收</p><p>离线测试可以验证真实 tar 打包、manifest、保留策略、篡改拒绝和 Bash 成败分支。真实数据库备份恢复、权限、固定路径与就绪重查仍要在 Docker 环境完成。只有包存在，还不足以证明整套服务能恢复。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-6">
-<h2 class="screen-heading">运行步骤、离线证据与外部验收</h2>
-<p>本机体验需要 Node.js 24+、Docker 和 Compose v2。进入 stages/s12-deploy，按 README 安装锁定依赖、复制 .env.example 并生成网关访问密钥。实际凭据只写入本机 .env，设置权限 600；CONTAINER_APP_DIR 使用部署目录的实际绝对路径，不把真实路径写进教学材料。模型和数据库配置完成后再构建运行。</p>
-<pre><code>cd stages/s12-deploy
-npm ci
-cp .env.example .env
-npm run gateway:key
-# 按 README 填写 .env，再执行以下步骤
-docker compose build agent
-bash deploy/configure.sh
-docker compose up -d --wait postgres redis gateway
-docker compose run --rm --no-deps -T agent npm run data:migrate
-docker compose run --rm --no-deps -T agent npm run agent:init
-docker compose up -d --wait agent
-curl --fail http://127.0.0.1:4326/ready</code></pre>
-<p>预期 /ready 返回 ready，checks 全部为 true；没有 REVISION 时版本为 dev。Linux 的 bind mount 目录需要 uid 1000 可读写，管理员可按 README 的 configure 步骤初始化权限。普通停止使用 docker compose stop，保留数据卷。实际部署要记录代码版本、检查结果与未完成项，不把预期输出当作已经运行成功的证据。</p>
-<p>远程目标使用 systemd 的 Linux 服务器，准备 Docker、Compose、rsync、flock、tar、gzip 和 sha256sum。SSH 用户需要管理 Docker 与安装 systemd 单元的权限。remote.sh init-env 通过固定版本的 Node 容器准备远端配置，重新生成数据库与网关凭据，拒绝覆盖已有文件；deploy 交付当前工作区并记录基准版本与工作区部署时间，不执行 Git 提交。</p>
-<pre><code>export DEPLOY_HOST=example.com
-bash deploy/remote.sh check
-bash deploy/remote.sh init-env
-bash deploy/remote.sh deploy
-bash deploy/remote.sh status
-bash deploy/remote.sh tunnel</code></pre>
-<p>s12 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机 http://127.0.0.1:4326。工作台提供课程、机制演示和 README 入口，不直接代理这个部署。生产域名、HTTPS、Basic 口令和路径白名单见 s12 的 production 文档；这些不属于教学启动步骤，也不等于完整用户身份系统。</p>
-<table><thead><tr><th>离线实验</th><th>观察什么</th><th>仍需外部验证</th></tr></thead><tbody><tr><td>npm run lesson -- s12-health</td><td>就绪与存活、配置默认值、关闭顺序。</td><td>真实依赖失效和 Docker 健康状态。</td></tr><tr><td>npm run lesson -- s12-queue</td><td>跨会话轮次限制、全局和会话容量、持久状态。</td><td>真实 PostgreSQL 排队事务竞争。</td></tr><tr><td>npm run lesson -- s12-protection</td><td>429 与 Retry-After、窗口恢复、SSE 释放。</td><td>代理后的实际来源与连接行为。</td></tr><tr><td>npm run lesson -- s12-backup</td><td>manifest、保留 7 份、篡改拒绝、编排失败路径。</td><td>真实数据库与目录恢复、权限和路径一致性。</td></tr></tbody></table>
-<p>这些命令运行真实模块与离线夹具，不启动 Docker、不监听端口、不调用真实模型。npm run test:deploy 汇总部署离线测试；外部 npm run test:deploy:integration 检查真实 Compose 资源配置与网关停止后的健康分离，需要已配置环境并初始化数据库。Linux 还可以单独检查真实 flock；远程传输、SIGTERM 和回滚需要按 delivery.md 完成。</p>
+<h2 class="screen-heading">用故障理解部署的边界</h2>
+<p>部署能力要在依赖失效、容量耗尽和恢复失败时检验，不能只看一次启动成功。离线实验验证就绪、队列、限流和备份分支；真实容器、数据库、SIGTERM 与回滚仍需外部验收，步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>。</p>
 <div class="quiz" id="s12-quiz"><h3>检查理解</h3><div class="quiz-questions">
 <div class="quiz-question-block" data-correct="b" data-explanation-right="存活接口不探测业务依赖；/ready 也不保证模型额度和质量。" data-explanation-wrong="存活接口不探测业务依赖；/ready 也不保证模型额度和质量。"><h3 class="quiz-question">/health=200 能证明什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>所有模型都一定可用</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>HTTP 进程存活，业务就绪还需 /ready</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>数据库和网关永远不会出错</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="c" data-explanation-right="接收容量与执行并发分开；HTTP 超频又是独立门禁。" data-explanation-wrong="接收容量与执行并发分开；HTTP 超频又是独立门禁。"><h3 class="quiz-question">已有两个活动轮次，队列尚有容量时，新任务怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>自动取消最早的轮次</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>必定拒绝 HTTP 请求</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>保留 queued，等待执行名额</span></button></div><div class="quiz-feedback"></div></div>
@@ -3169,39 +3128,24 @@ bash deploy/remote.sh tunnel</code></pre>
 <div class="quiz-question-block" data-correct="b" data-explanation-right="恢复跨多个存储，失败后保持停服；摘要校验不认证来源。" data-explanation-wrong="恢复跨多个存储，失败后保持停服；摘要校验不认证来源。"><h3 class="quiz-question">恢复目录时出错，为什么不能照备份流程直接重启？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>因为 Compose 不支持重启</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>数据库与目录可能已处于混合状态，应保持停服</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>因为 SHA-256 已证明包来自可信来源</span></button></div><div class="quiz-feedback"></div></div>
 </div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s12-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s12-quiz">重新作答</button></div></div>
 <p><a href="/course/changes.html#s12">→ 打开 s12 阶段演示</a> · <a href="/course/#s12">→ 打开 s12 机制课堂</a></p>
-<p>部署把运行环境、持久状态和故障处理连接起来：就绪检查判断当前依赖，容量门禁限制资源进入，关闭保留不确定事实，备份提供可以核对的恢复材料。每一项都有独立的证据边界；未运行的服务器验收继续标为未验证。</p>
+<p>服务器上的 Agent 能自己启动、恢复了，但进来的人仍共用一个连接令牌，在服务看来都是同一个用户。要让几个人共用，先得认清每个请求是谁发的，以及会话和任务属于谁。下一章进入 s13 账号与认证。</p>
 </section>
-
-</div>
-</div>
-</section>
+</div></div></section>
 
 <section class="module" id="module-s13">
 <div class="module-content"><header class="module-header animate-in">
-<span class="module-number">s13</span><h2 class="module-title">账号与认证：请求有身份，资源有归属</h2>
-<p class="module-subtitle">密码校验建立身份，令牌维持登录状态，owner 检查贯穿数据、缓存、任务、文件与事件。</p>
+<span class="module-number">s13</span><h2 class="module-title">账号与认证：身份由登录决定，资源各有归属</h2>
+<p class="module-subtitle">认证回答你是谁，归属回答这是谁的；身份跟着任务走，不属于你的资源看不见。</p>
 </header><div class="module-body">
-
-<section class="screen animate-in" id="s13-screen-1"><h2 class="screen-heading">服务已经部署，谁在使用它？</h2>
-
-<p>服务能够启动、恢复和限制容量之后，还要回答：谁在提交任务，谁能看到结果？如果只用同一个连接凭据，客户端可以进入服务，却无法表达“这个会话属于当前用户”。账号与认证把使用者变成明确的身份，但登录成功只是起点；会话、知识库、产物和用量都要沿用这个身份。</p>
+<section class="screen animate-in" id="s13-screen-1"><h2 class="screen-heading">认证与归属，缺一不可</h2>
+<p>上一章让云端 Agent 在服务器上长期运行，但共享连接令牌把所有使用者当成同一个人。几个人一起用，服务就必须知道每个请求来自谁，会话、知识库、产物和用量分别属于谁。</p>
 <figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1304" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
-<p><span class="term" data-definition="认证确定当前请求代表哪个用户；本章用用户名、密码和服务端存储的不透明令牌实现。">认证</span> 回答“你是谁”。<span class="term" data-definition="owner 是资源所属用户；读取、缓存、后台执行和事件推送都必须携带并核对这个归属。">归属</span> 回答“这份资源属于谁”。一个用户知道别人的会话 ID，不应因此获得访问权。即使是 admin，也不能越过资源的 owner 检查。</p>
-<table><thead><tr><th>执行位置</th><th>负责什么</th><th>可观察证据</th></tr></thead><tbody>
-<tr><td>Codex</td><td>管理原生 Thread、Turn、模型调用、上下文与工具循环。</td><td>现有协议与任务执行结果；不负责认定 HTTP 用户。</td></tr>
-<tr><td>accounts / HTTP</td><td>校验密码、签发与吊销令牌、建立请求身份。</td><td>登录响应、会话查询、401 和请求上下文。</td></tr>
-<tr><td>数据、工具与事件</td><td>按 owner 查询和定位文件，后台沿用持久记录的身份。</td><td>他人资源 404、他人事件不推送、用户目录不同。</td></tr>
-<tr><td>管理员与使用者</td><td>交互设置密码，维护账号，保管客户端凭据，验证真实部署。</td><td>账号命令、双客户端检查和交付记录。</td></tr>
-</tbody></table>
-<p>账号仅有 admin 和 user 两种技术角色，用户名规范化为小写。没有注册、邮箱、找回密码或 Web 登录页，账号通过管理命令创建。identity.json 继续标识实例；它在首次初始化时帮助确定已有数据的首个 admin，不能成为业务请求缺少身份时的默认值。</p>
-<p>本章沿用单实例的数据范围。用户名在实例内唯一，知识库 ID 也仍在实例内唯一。首个 admin 保留已有知识库，新账号看不到其他 owner 的库；创建一个账号不会复制别人的资料，也不会自动授予共享知识权限。</p>
+<p><span class="term" data-definition="认证确定当前请求代表哪个用户；本章用用户名、密码和服务端存储的不透明令牌实现。">认证</span>回答“你是谁”，<span class="term" data-definition="owner 是资源所属用户；读取、缓存、后台执行和事件推送都必须携带并核对这个归属。">归属</span>回答“这份资源属于谁”。只有认证，任何登录者都可能看到全部数据；只有归属，谁都可以自称是别人。因此每个请求先认证，之后每次读写再核对 owner，模型不参与身份认定。</p>
+<p>账号由管理员创建，角色为 admin 或 user；即使是 admin，也不能凭别人的会话 ID 越过个人资源的 owner 检查。用户名和知识库 ID 都在实例内唯一，新账号不会获得别人的资料。</p>
 </section>
-
-<section class="screen animate-in" id="s13-screen-2"><h2 class="screen-heading">密码验证：随机盐、固定成本与统一错误</h2>
-
-<p>密码不能以明文保存。hashPassword 使用 Node 内置 scrypt，参数固定为 N=32768、r=8、p=1，每次生成 16 字节随机盐，派生 64 字节结果。数据库保存包含参数、盐与派生结果的字符串。随机盐让同一个密码的不同保存结果也不同，但校验时仍能从已保存的盐重新派生。</p>
-<p>verifyPassword 只接受这组固定参数与固定长度编码，不从数据库字符串读任意成本设置。格式不符合预期时，使用同参数的哑哈希格式完成派生；未知用户名在 Accounts.login 中也传入 DUMMY_HASH。昂贵的密码计算不会因为“没有这个账号”而被直接省略。</p>
-
+<section class="screen animate-in" id="s13-screen-2"><h2 class="screen-heading">密码只存算出来的结果，登录要防猜</h2>
+<p>密码验证要避免数据库泄露直接暴露密码。本章用故意很慢的 scrypt 加随机盐，保存派生结果；登录时再算一次作比较，同一个密码的两次保存结果也不同。</p>
+<p>成本固定为 N=32768、r=8、p=1，盐为 16 字节，结果为 64 字节。未知用户名和不合法哈希也走同参数的哑哈希计算，不因账号不存在就省掉昂贵步骤。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/password.mjs · 第 13–20 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/password.mjs" data-start="13" data-end="20">export const DUMMY_HASH = `scrypt$32768$8$1$${'00'.repeat(16)}$${'00'.repeat(64)}`;
 export async function verifyPassword(password, encoded, kdf = derive) {
   const match = /^scrypt\$32768\$8\$1\$([a-f0-9]{32})\$([a-f0-9]{128})$/.exec(encoded || '')
@@ -3210,9 +3154,7 @@ export async function verifyPassword(password, encoded, kdf = derive) {
   const equal = timingSafeEqual(actual, Buffer.from(match[2], 'hex'));
   return typeof password === 'string' &amp;&amp; Boolean(password) &amp;&amp; encoded !== DUMMY_HASH &amp;&amp; equal;
 }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>13–14 行</strong>：声明哑哈希，验证函数允许测试注入 kdf，默认使用真实 scrypt。</p><p class="tl"><strong>15–16 行</strong>：只解析本章参数和长度；无法解析时取哑哈希的盐与结果。</p><p class="tl"><strong>17 行</strong>：按同一参数派生；非字符串输入也不绕过派生步骤。</p><p class="tl"><strong>18 行</strong>：使用 timingSafeEqual 比较两个固定长度结果。</p><p class="tl"><strong>19–20 行</strong>：返回值还要求非空字符串、不是 DUMMY_HASH 并且比较相等。</p></div></div></div>
-
-<p>恒定时间比较约束的是派生结果比较这一步，不能推导出网络、数据库与整次登录请求的耗时完全相同。统一的失败响应也不是完整的网络侧信道证明。离线实验核对同一验证函数和昂贵路径是否执行，真实系统还受数据库状态、调度与网络延迟影响。</p>
-
+<p>恒定时间比较约束的是结果比较这一步；相同计算路径与统一错误减少账号枚举线索，但不能保证包含数据库和网络的整次请求耗时完全一致。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/index.mjs · 第 15–31 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/index.mjs" data-start="15" data-end="31">  async login({ username, password }, source) {
     const finish = this.limits.begin(username, source);
     let success = false;
@@ -3230,16 +3172,12 @@ export async function verifyPassword(password, encoded, kdf = derive) {
       return { token, expiresAt, user: publicUser(user) };
     } finally { finish(success); }
   }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>15–17 行</strong>：登录限流先预占，成功标记初始为 false。</p><p class="tl"><strong>18–21 行</strong>：查规范化用户名，以真实哈希或 DUMMY_HASH 验证；密码错误、未知或禁用账号统一失败。</p><p class="tl"><strong>22–23 行</strong>：生成 32 字节随机令牌并计算绝对有效期。</p><p class="tl"><strong>24–27 行</strong>：创建会话前锁定账号并重新核对，保存摘要；状态变化时拒绝签发。</p><p class="tl"><strong>28–30 行</strong>：成功后返回令牌，finally 结束限流预占；失败保留计数。</p><p class="tl"><strong>31 行</strong>：结束登录函数，后续请求进入 authenticate。</p></div></div></div>
-
-<p>登录限流按“规范化用户名 + 实际来源”限制 15 分钟内 5 次失败，按来源限制 15 分钟内 20 次；超限返回 429 和 Retry-After。先预占再执行 scrypt，避免并发请求同时绕过计数。成功后释放本次预占，失败保留。计数在当前进程内，服务重启会清空窗口。</p>
-<p>密码验证通过之后，管理命令可能已经修改密码或禁用账号。因此创建令牌前还要锁定账号，重新核对哈希和禁用状态。验证与签发之间的竞争由数据库事务处理。改密码和禁用同样在事务内更新账号并吊销会话；离线测试能核对调用顺序，真实锁和约束要在 PostgreSQL 上验收。</p>
+<p>防猜还需要限流：同一用户名与来源，15 分钟最多失败 5 次；同一来源最多 20 次，超过返回 429 和 Retry-After。计算前预占名额，成功后释放本次预占，防止并发绕过；进程重启会清空窗口。</p>
+<p>密码校验与签发令牌之间，账号可能被禁用或改密。因此签发前在事务中锁定账号、再次核对，避免用已经失效的验证结果发出新令牌。</p>
 </section>
-
-<section class="screen animate-in" id="s13-screen-3"><h2 class="screen-heading">令牌不是身份自述，每次请求都要查库</h2>
-
-<p>登录返回 randomBytes(32) 生成的 base64url 不透明令牌。客户端把它保存到权限 0600 的 .data/credentials.json；.data/connection.json 只保存服务地址。服务端只存令牌 SHA-256。这里没有 JWT，也没有 refresh；客户端获得 401 后重新运行 npm run login。</p>
-<p>令牌有两条期限：绝对 7 天，闲置 12 小时。last_seen_at 最多每分钟更新一次，降低持续请求的写入频率。认证依然每次查库，更新时间节流不等于缓存认证结果。数据库中的账号禁用、会话吊销和期限状态共同决定当前令牌是否可用。</p>
-
+<section class="screen animate-in" id="s13-screen-3"><h2 class="screen-heading">不透明令牌可以随时作废</h2>
+<p>令牌是服务端签发的随机凭据，不是客户端自报的身份。本章每次请求都查库验证，所以登出、改密码和禁用账号能够在下一次请求时生效；单服务已经需要查库，选择不透明令牌比另建 JWT 提前吊销机制更直接。</p>
+<p>令牌由 32 字节随机值编码，数据库只存 SHA-256 摘要。绝对有效期为 7 天，闲置 12 小时也会失效；活动时间最多每分钟写一次，认证仍每次查库。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/accounts/index.mjs · 第 32–42 行</span><pre><code data-source="stages/s13-auth/server/modules/accounts/index.mjs" data-start="32" data-end="42">  async authenticate(authorization) {
     const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization || '');
     if (!match) throw unauthorized();
@@ -3251,24 +3189,13 @@ export async function verifyPassword(password, encoded, kdf = derive) {
     return { userId: row.id, role: row.role, authSessionId: row.session_id, user: publicUser(row) };
   }
   async logout(identity) { await this.store.revokeAll(identity.userId); }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>32–34 行</strong>：检查 Authorization 是否符合 Bearer 与 43 位 base64url 令牌形状。</p><p class="tl"><strong>35–36 行</strong>：以 SHA-256 查询会话，获取当前时间。</p><p class="tl"><strong>37–38 行</strong>：会话不存在、账号禁用、吊销、绝对或闲置超时都拒绝。</p><p class="tl"><strong>39 行</strong>：距上次活动更新时间至少一分钟时才写入 last_seen_at。</p><p class="tl"><strong>40–41 行</strong>：返回 userId、role 和 authSessionId，供请求上下文使用。</p><p class="tl"><strong>42 行</strong>：logout 等待 revokeAll，吊销该用户全部令牌。</p></div></div></div>
-
-<p>登出先认证当前请求，再吊销该用户全部令牌，等待完成后返回 loggedOut。另一个客户端即使仍保存该账号的旧令牌，下一次请求也会因 revoked_at 被拒绝。只删除当前客户端文件无法完成这个保证；服务端必须更新持久化会话状态。</p>
-<table><thead><tr><th>触发条件</th><th>服务端行为</th><th>客户端观察</th></tr></thead><tbody>
-<tr><td>有效 Bearer</td><td>查库检查状态与期限，返回认证身份。</td><td>进入业务请求，仍受 owner 门禁约束。</td></tr>
-<tr><td>缺少或错误令牌</td><td>认证失败。</td><td>401，提示重新登录。</td></tr>
-<tr><td>登出、改密码或禁用</td><td>吊销该用户全部会话令牌。</td><td>旧令牌的下一次请求返回 401。</td></tr>
-<tr><td>有效身份访问他人资源</td><td>归属检查没有得到当前 owner 的资源。</td><td>404 NOT_FOUND，与资源不存在相同。</td></tr>
-</tbody></table>
-<p>HTTP 认证成功后用 AsyncLocalStorage 携带 { userId, role, authSessionId }，再进入门禁和实际处理。模型不能修改这个身份。业务请求按 userId 限制每分钟 120 次，未认证请求按实际 socket 来源限制，不信任 X-Forwarded-For。/health 和 /ready 免认证，带 Origin 的请求仍被拒绝，认证响应设置 Cache-Control: no-store。</p>
+<p>登出会吊销该用户的全部令牌，其他客户端下一次请求也返回 401。仅删除本地凭据不能完成服务端吊销。认证成功后，服务端把 userId、角色和登录会话绑定到请求上下文，模型与请求参数都不能替换它。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">区分下一次请求和现有连接</p><p>已有 SSE 不逐帧重新验证令牌。吊销保证下一次请求失效，不承诺当前订阅立刻断开；当前订阅仍只能接收所属用户的事件。验收应分别观察这两条边界。</p></div></div>
 </section>
-
-<section class="screen animate-in" id="s13-screen-4"><h2 class="screen-heading">owner 贯穿缓存、任务与 SSE</h2>
-
-<p>数据库查询按 instance_id、owner_id 和资源 ID 限定范围，缓存命中也要重新核对归属。否则只要曾经加载过别人的会话，后续请求就可能绕过数据库过滤。资源不存在与不属于当前用户统一返回 404 NOT_FOUND，避免接口暴露“这个 ID 实际存在，只是不属于你”。</p>
-<p>后台执行没有当前 HTTP 用户。outbox 和调度维护可以扫描实例任务，但派发每个任务前必须从记录取得 owner，再绑定执行上下文。媒体任务和知识索引 worker 也从持久记录获取归属。延迟写入用量时，在入链时捕获 owner，不能等待异步执行时再猜当前请求是谁。</p>
-<p>SSE 有实时推送、连接建立期间的缓冲、断线补发和快照四条路径。listener 先检查 owner 和 Thread，再决定立即写入或放入缓冲。重连时 hub.since 也带 userId；历史不能因为已经在内存中就跳过归属过滤。</p>
-
+<section class="screen animate-in" id="s13-screen-4"><h2 class="screen-heading">身份跟着任务走，看不见就等于不存在</h2>
+<p>任务排队后，执行时可能早已没有当前 HTTP 请求，身份必须从任务和会话记录取得，不能猜“刚才是谁触发了调度”。查询、缓存、工具回调和用量写入都要延续这份可信归属。</p>
+<p>读取别人的资源统一返回 404 NOT_FOUND，与真正不存在相同，避免用 403 暴露某个 ID 确实存在。缓存命中也要核对 owner，不能因为对象已在内存里就跳过检查。</p>
+<p>事件同样有主人：实时推送、连接缓冲、断线补发和快照都按用户过滤。下面的 SSE 入口先核对 owner，再缓冲或写出。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s13-auth/server/modules/http/index.mjs · 第 149–164 行</span><pre><code data-source="stages/s13-auth/server/modules/http/index.mjs" data-start="149" data-end="164">        const listener = event =&gt; { if (event.ownerId === identity.userId &amp;&amp; (!event.threadId || event.threadId === id)) {
           if (ready) write(event, event.sequence);
           else if (buffered.length &lt; 1000) buffered.push(event);
@@ -3285,49 +3212,17 @@ export async function verifyPassword(password, encoded, kdf = derive) {
           // 等待队列快照期间缓冲的会话事件已包含在会话快照里；其余事件照常补发，但不带编号，避免断点倒退。
           for (const event of buffered) if (!SESSION_EVENT_TYPES.has(event.type)) write(event, null);
         }</code></pre></div><div class="translation-english"><span class="translation-label">逐行解读 · 行号对应源文件</span><div class="translation-lines"><p class="tl"><strong>149–153 行</strong>：实时 listener 先比较 ownerId 与请求身份，再核对 Thread；未就绪时只缓冲已匹配事件。</p><p class="tl"><strong>154–155 行</strong>：注册监听，并在连接关闭时移除监听和心跳。</p><p class="tl"><strong>156–158 行</strong>：补发请求同时传入 Last-Event-ID、Thread 与 userId，只写回筛选后的历史。</p><p class="tl"><strong>159–161 行</strong>：没有可补发历史时读取队列快照，快照标记当前 owner。</p><p class="tl"><strong>162–164 行</strong>：处理快照等待期间的已过滤缓冲，避免重复会话快照与断点倒退。</p></div></div></div>
-
-<p>EventHub 在 publish 入口就拒绝没有 ownerId 的事件，发出警告并返回 null，不让无主事件进入历史或推送。不能把缺少 owner 当成“所有人可见”。一个真实属于用户 B 的事件也不会进入用户 A 的订阅，哪怕客户端构造了相同 Thread ID。</p>
-<p>文件 locator 继续是相对路径，可信 owner 决定实际工具根 workspace/users/&lt;ownerId&gt;/。目录按需创建，权限 0700；原有路径校验继续拒绝越界、符号链接和不允许的文件类型。不同用户可以拥有同名相对路径，数据唯一键包含 owner_id。请求参数不能直接选择另一个用户的物理根。</p>
-<p>这仍有明确边界：所有用户共用一个 Codex 进程、一个 CODEX_HOME 和一个 workspace，Codex cwd 没有按用户变化。原生文件能力保持关闭，文件经过工具层。工具目录和 API 门禁不是操作系统沙箱，不能抵御同机管理员或恶意插件，也不能自动清除 Thread 中已有上下文。</p>
+<p>缺少 ownerId 的事件直接丢弃，不能当作“所有人可见”。文件工具也由可信 owner 选择用户目录，两人可以各有同名文章；客户端不能指定别人的物理根目录。</p>
+<p>这些检查仍在 API 和工具层。所有用户共用一个 Codex 进程和 CODEX_HOME，原生文件能力保持关闭；分目录不等于操作系统隔离，也不会清空已有 Thread 上下文。</p>
 </section>
-
-<section class="screen animate-in" id="s13-screen-5"><h2 class="screen-heading">独立部署与首次账号初始化</h2>
-
-<p>s13 使用自己的 Compose 项目，默认端口 4327，不进入工作台实时目标或共享 stages 容器。工作台提供本章内容、机制演示与 README 链接。实际连接由 SSH 隧道与终端客户端完成；s13 需要登录：remote.sh tunnel 后 npm run login。</p>
-<p>首次 deploy 等待 postgres、redis、gateway 健康，用 agent 镜像的一次性容器准备数据库与目录并查询启用账号数。没有启用账号时，deploy 成功退出并提示 auth-init，agent 尚未启动，此时没有 /ready。不能把这次部署命令退出 0 当成已经可以接受用户请求。</p>
-<pre><code>cd stages/s13-auth
-# 按 README 准备依赖与 .env，显式设置 AGENT_MEMORY_ENABLED=false
-export DEPLOY_HOST=example.com
-bash deploy/remote.sh check
-bash deploy/remote.sh init-env
-bash deploy/remote.sh deploy
-bash deploy/remote.sh auth-init
-bash deploy/remote.sh user -- add bob
-bash deploy/remote.sh tunnel</code></pre>
-<p>auth-init 通过 SSH TTY 交互设置首个账号，密码隐藏输入，不放入命令参数。成功后启动 agent，注册开机启动并输出包含 status: ready 的 JSON。已经初始化时拒绝重新初始化，远程命令仍确保 agent 启动；其他错误不能被当成“已经做过”而忽略。</p>
-<p>初始化保留 identity.json 中原 owner 的标识，使已有会话和知识库继续归首个 admin。已有顶层资料进入该 admin 的用户目录。数据库与文件系统不能作为一个事务提交，处理已有数据前要停服、备份，遇到同名资料冲突时核对目录，不能覆盖目标资料后继续。文件移动中断后的重试同样不覆盖已经移动的内容。</p>
-<p>保持隧道终端打开，在另一个终端进入本阶段目录：</p>
-<pre><code>export AGENT_SERVER_URL=http://127.0.0.1:4327
-npm run login
-npm run chat
-# 结束当前账号的登录会话
-npm run logout</code></pre>
-<p>两个账号应使用两个独立客户端工作副本，避免共用 credentials.json。用户 A 创建会话后，用户 B 的列表里看不到它，尝试恢复其 ID 应为 404；知识库列表和按 kbId 读取也遵循同样规则。两个用户生成同名产物时，应落在不同的用户工具目录中。</p>
-<p>启用账号达到两个时必须显式设置 AGENT_MEMORY_ENABLED=false，否则启动与添加第二个账号都会拒绝。原生共享记忆可能把一个用户的内容提供给另一个用户。启动检查和添加账号使用数据库锁串行核对；仅给管理命令临时设置 false，不能绕过尚未重启且仍启用记忆的服务。关闭记忆后 API 不再返回旧共享摘要，但底层文件与已有 Thread 上下文仍保留。</p>
+<section class="screen animate-in" id="s13-screen-5"><h2 class="screen-heading">账号初始化建立归属，共享记忆仍有风险</h2>
+<p>首个账号初始化要把既有数据明确交给一个主人，不能让未认证请求退回实例默认身份。首个 admin 继承实例已有归属；没有启用账号时只准备依赖，创建首个管理员后才启动 Agent。</p>
+<p>数据库和文件不能一起原子提交，初始化已有资料前需停服、备份，遇到同名冲突不能覆盖后继续。账号创建、登录和部署步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>，初始化细节见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
+<p>原生记忆可能把一个人的内容提炼进公共摘要。因此启用账号达到 2 个时，必须显式关闭原生记忆，否则启动和添加第二个账号都会被拒绝。关闭后 API 不返回共享摘要，但底层旧文件与已有会话上下文仍保留。</p>
 </section>
-
-<section class="screen animate-in" id="s13-screen-6"><h2 class="screen-heading">用拒绝路径验收账号边界</h2>
-
-<p>“能够登录”只能证明成功路径。验证归属还要检查密码错误、未知账号、旧令牌、他人资源、缺少 owner 的事件和跨用户缓存。每项实验都运行实际模块并由断言决定退出码，不能把预期输出当作已通过记录。</p>
-<table><thead><tr><th>离线命令</th><th>核对的行为</th><th>证据边界</th></tr></thead><tbody>
-<tr><td>npm run lesson -- hash</td><td>真实 scrypt 验证与未知账号的相同派生路径。</td><td>不证明网络端到端耗时完全相同。</td></tr>
-<tr><td>npm run lesson -- logout</td><td>真实 HTTP handler 在吊销后拒绝旧令牌。</td><td>内存请求与响应，不监听端口。</td></tr>
-<tr><td>npm run lesson -- ownership</td><td>数据查询与会话缓存核对 owner，跨用户统一 404。</td><td>使用查询夹具，真实 SQL 另验。</td></tr>
-<tr><td>npm run lesson -- events</td><td>EventHub 拒绝无主事件，SSE 实时与补发过滤归属。</td><td>真实模块配内存 SSE 响应。</td></tr>
-</tbody></table>
-<p>npm run test:offline 汇总不监听端口、不连接数据库的测试；npm run test:ports 验证实际 HTTP、SSE、CLI 和 MCP。npm run test:auth:integration 读取专用 DATA_TEST_DATABASE_URL，验证真实事务、约束与记忆锁。真实服务器和两个客户端的操作步骤见本章 README；课程构建和离线夹具都不能替代这些检查。</p>
-<p>多个用户共享全局并发两轮，没有按用户配额。账号角色不会增加资源范围，没有共享知识权限，也没有 Web 登录页。本章完成的是经过认证的 owner 传递；理解了这个范围，才能准确解释哪些请求应为 401，哪些资源应为 404，以及为什么底层运行环境还需要更强隔离。</p>
-
+<section class="screen animate-in" id="s13-screen-6"><h2 class="screen-heading">能登录之外，还要验证会拒绝</h2>
+<p>账号系统不仅要认出合法用户，还要拒绝旧令牌、他人资源和无主事件。用两个账号交叉访问，比只走一次登录成功更能说明归属边界是否成立。</p>
+<p>四个离线实验分别核对密码计算、全部令牌吊销、资源归属和事件过滤；它们不证明真实数据库事务、端口或服务器已经验收。完整检查见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。所有用户仍共享全局 2 轮并发，本章没有按用户配额。</p>
 <div class="quiz" id="s13-quiz"><h3>检查理解</h3><div class="quiz-questions">
 
 <div class="quiz-question-block" data-correct="1" data-explanation-right="未知账号仍执行同成本派生，返回统一登录错误。" data-explanation-wrong="未知账号仍执行同成本派生，返回统一登录错误。"><h3 class="quiz-question">未知用户名应走哪条路径？</h3><div class="quiz-options">
@@ -3361,32 +3256,24 @@ npm run logout</code></pre>
 </div><div class="quiz-feedback"></div></div>
 
 </div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s13-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s13-quiz">重新作答</button></div></div>
+<p>API 层已经互相看不见，底层却仍共用同一个进程和 CODEX_HOME，历史、索引与记忆放在一起。关闭共享记忆只能避开一条串话路径。下一章 s14 让隔离继续落到进程和文件，每个用户都有自己的运行环境。</p>
 <p><a href="/course/changes.html#s13">→ 打开 s13 阶段演示</a> · <a href="/course/#s13">→ 打开 s13 机制课堂</a> · <a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md" target="_blank" rel="noopener noreferrer">本章 README</a></p>
 </section></div></div></section>
 
 <section class="module" id="module-s14">
 <div class="module-content">
-<header class="module-header animate-in"><span class="module-number">s14</span><h2 class="module-title">用户隔离：让 owner 落到进程与文件权限</h2><p class="module-subtitle">请求确定身份，运行环境池提供连接，系统 uid/gid 约束文件访问；每次启动、读取和回收都有明确的用户范围。</p></header>
+<header class="module-header animate-in"><span class="module-number">s14</span><h2 class="module-title">用户隔离：每个用户一个运行环境</h2><p class="module-subtitle">接口之外，原生状态也要分开；独立进程和目录承接用户身份，操作系统权限兜底。</p></header>
 <div class="module-body">
 <section class="screen animate-in" id="s14-screen-1">
-<h2 class="screen-heading">接口有归属之后，原生状态也需要边界</h2>
-<p>登录让服务知道请求来自谁，owner 检查让资源查询只返回这个用户的数据。但一个 Codex App Server 还管理原生历史、索引、记忆和 Skill 副本。即使 HTTP 接口已经检查归属，这些底层状态仍需要说明：它们属于哪个用户，保存在哪个目录，由哪个进程读取。s14 把用户边界落实到运行环境，让每个 owner 拥有自己的 App Server、CODEX_HOME、工作目录和系统身份。</p>
+<h2 class="screen-heading">接口挡得住请求，挡不住底层文件</h2>
+<p>上一章让云端 Agent 认出每个用户，API 层彼此看不见。但 Codex 自己读写的历史、索引、记忆和 Skill 副本不经过 API，仍由同一个进程打开。要避免底层串话，不同用户的原生状态必须放在不同目录、由不同进程读取。</p>
 <figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1416" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
-<p><a class="term" data-definition="每个用户一个独立的 Codex App Server 进程，配自己的 CODEX_HOME、工作目录和系统 uid。" href="/course/glossary.html#term-用户运行环境">用户运行环境</a>不等于一个请求，也不等于一条 Thread。一个用户可以有多个会话，它们进入同一用户的连接；不同用户不会因为使用相同 Agent 配置而共用原生状态。服务仍维护全局业务队列和模型预算，所有用户合计最多执行 2 轮。池中允许 4 个进程常驻，表达的是另一种容量。</p>
-<table><thead><tr><th>组件</th><th>负责的边界</th><th>不能代替什么</th></tr></thead><tbody>
-<tr><td>RuntimeStore</td><td>事务中分配 uid，持久化用户与目录映射，监听禁用通知。</td><td>映射存在不代表进程已经启动。</td></tr>
-<tr><td>RuntimePool</td><td>控制 4 个名额、启动 Promise、租约、超时与回收。</td><td>池容量不代替轮次并发和预算。</td></tr>
-<tr><td>RuntimeRouter</td><td>使用认证上下文或持久任务 owner 选连接，隔离通知和工具回调。</td><td>用户提交的 owner 字符串不能作为授权凭据。</td></tr>
-<tr><td>CodexConnection</td><td>执行 stdio JSON-RPC，按 uid/gid、固定 umask 和白名单环境启动。</td><td>执行循环不决定 HTTP 身份和资源权限。</td></tr>
-<tr><td>SessionService / MessageService</td><td>核对会话与任务归属，派发轮次，按 owner 恢复不确定状态。</td><td>进程退出不意味着已经执行的任务可以安全重发。</td></tr>
-</tbody></table>
-<p>用户 uid 从 10001 顺序分配，gid 与 uid 同号，不依赖系统账号文件。user_runtimes 保存 user_id、uid、codex_home、created_at，并由 instance_id 区分数据实例。第一个 admin 保留既有原生目录的绝对位置；后续用户使用各自的原生目录。进程被回收后，映射、原生历史和业务记录仍然存在，下一次访问可以重新启动并恢复会话。</p>
-<p>路径属于系统映射的一部分，不能从聊天参数里随意覆盖。工具目录继续作为受信配置；Skill 的安装位置、核验结果和记忆对象属于各用户。启动时会同步 Agent 包 Skill 到当前用户目录，并向这个用户的 Codex 核验。真正的 Skill 输入和会话 cwd 都使用当前用户目录，避免一次用户切换影响另一个用户的运行状态。</p>
+<p>一个<a class="term" data-definition="每个用户一个独立的 Codex App Server 进程，配自己的 CODEX_HOME、工作目录和系统 uid。" href="/course/glossary.html#term-用户运行环境">用户运行环境</a>包含独立 Codex App Server、CODEX_HOME、工作目录和系统身份。同一个用户的多个会话共用自己的进程，不同用户不因 Agent 配置相同而共用状态。</p>
+<p>用户映射持久化保存 uid 和目录，uid 从 10001 顺序分配，gid 同号；首个 admin 保留既有原生目录的绝对位置。进程回收不删除映射与历史，下次可以重新启动。Skill 安装、核验与会话工作目录也随用户分开。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-2">
-<h2 class="screen-heading">首次请求：预留名额，再共享同一次启动</h2>
-<p>假设同一个账号的两个客户端几乎同时发起首次请求。服务不能只检查“现在有没有 ready 连接”，否则两个请求都会看到没有连接，各启动一个进程。池要把 starting 也作为已经占用名额的状态：第一个请求创建池项并保存启动 Promise，后来的同 owner 请求找到这个池项，等待同一份结果。这就是 <span class="term" data-definition="同一个 owner 的并发请求复用同一个正在进行的启动 Promise。只有首次请求创建进程，后续请求增加租约并等待。">single-flight</span>。</p>
-<p>withOwner 首先要求存在可信 owner，再处理当前上下文内的同 owner 嵌套调用。外层请求通过 serial 进入 admission：检查池是否关闭、账号是否禁用，再查已有池项。串行区域保护名额和租约，耗时的启动与核验则在锁外等待。这样一个用户启动较慢时，其他用户仍可申请自己的运行环境。</p>
+<h2 class="screen-heading">按需启动，同一个用户只启动一次</h2>
+<p>按需启动让进程数取决于活跃用户，而不是注册用户总数。同一用户同时发来几个首次请求时，不能各启动一个进程：先占位，后来的请求等待同一份启动结果，这就是<span class="term" data-definition="同一个 owner 的并发请求复用同一个正在进行的启动 Promise。只有首次请求创建进程，后续请求增加租约并等待。">single-flight</span>。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/pool.mjs · 第 60–93 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/pool.mjs" data-start="60" data-end="93">  async withOwner(owner, operation) {
     if (!owner) throw new Error('运行环境缺少可信 owner。');
     const nested = this.context.getStore();
@@ -3421,20 +3308,14 @@ npm run logout</code></pre>
       return await this.context.run(entry, () =&gt; operation(value));
     } finally {
       entry.refs--; entry.lastUsed = this.now();</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>身份与上下文</strong>：owner 为空直接拒绝。同 owner 的 ready 嵌套调用复用当前 value；池关闭或账号禁用时不能沿用这个快捷路径。</p><p class="tl"><strong>串行 admission</strong>：先调用 assertEnabled 核对账号，再读取 entries。closing 项不能借用，等待清理时仍应返回繁忙。</p><p class="tl"><strong>占位与 Promise</strong>：entries.set 发生在请求等待之前。entry.ready 只在新项创建时赋值，同用户的请求自然汇合到一个 Promise。</p><p class="tl"><strong>请求租约</strong>：refs 在等待前增加，覆盖启动等待和业务执行。try / finally 确保成功、异常都减少租约并更新 lastUsed。</p><p class="tl"><strong>连接路由</strong>：await entry.ready 之后还检查 state；通过 context.run 才把 operation 放入当前用户运行环境。取得旧引用不等于可以使用已关闭连接。</p></div></div></div>
-
-<p>启动有 30 秒期限。create 必须响应 AbortSignal，并在发布连接前再次检查是否已中止。超时后不能让一个晚到的进程重新成为可用对象：请求应失败，池项进入 closing，随后等待创建收尾并关闭晚到进程。清理完成才删除池项；否则旧进程尚未退出、新进程已经启动的瞬间，会突破最多 4 个进程的约束。</p>
-<p>服务级 /ready 与用户连接 ready 也要分开看。运行环境按需启动，服务就绪并不意味着所有用户都完成了 Codex 初始化、Skill、工具和记忆核验。首次用户请求才会触发自己的启动链路。部署探测通过可以说明服务具备接入条件，不能替用户的实际启动结果作保证。</p>
-<p>HTTP 使用认证后的 owner；后台派发使用持久任务记录的 owner；通知带上连接启动时绑定的 owner。工具回调还要比较 connectionOwner、task.userId 和 session.ownerId。只有这些身份一致，才继续执行账号状态、轮次和 PermissionGate 检查。参数里自称的身份不进入授权链，后台任务也不能因为复用了异步回调而借到别人的请求上下文。</p>
+<p>启动上限为 30 秒。超时后即使进程迟到，也不能发布为可用连接；必须等待清理完成才释放名额，避免旧进程没退出又开一份。</p>
+<p>请求按认证身份路由，后台按任务记录路由。工具回调要同时核对连接 owner、任务用户和会话 owner，一致后再检查轮次与工具权限；参数里自称的身份不参与授权。</p>
+<p>服务的 <code>/ready</code> 不表示所有用户进程已启动。首次请求才触发该用户的 Codex、Skill、工具与记忆核验，就绪探测不能提前保证这次启动成功。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-3">
-<h2 class="screen-heading">容量到顶：先证明空闲，再等待旧进程退出</h2>
-<p>池满时，第 5 个用户不能拿一个正在执行任务的进程让位。候选必须 ready，refs 为 0，且没有执行中轮次和排队任务。lastUsed 只决定检查顺序，并不能单独证明对象空闲。池按时间从旧到新逐个检查，找到第一个满足条件的对象才回收；忙碌状态查询出错时保守跳过本轮回收。</p>
-<table><thead><tr><th>触发条件</th><th>回收判断</th><th>结果</th></tr></thead><tbody>
-<tr><td>第 5 个 owner 申请名额</td><td>按 lastUsed 寻找无租约、无轮次、无排队任务的 ready 项。</td><td>不必等 10 分钟；关闭完成后为新人占位。</td></tr>
-<tr><td>定时 sweep</td><td>上述空闲条件成立，且距最后请求达到 10 分钟。</td><td>释放不用的进程，下次请求重新启动。</td></tr>
-<tr><td>4 个对象全部忙</td><td>不存在符合条件的 victim。</td><td>503 RUNTIME_BUSY，Retry-After: 10，不受理消息。</td></tr>
-<tr><td>启动失败但尚未清理完成</td><td>closing 项仍计入 entries.size。</td><td>清理结束才能重新使用名额。</td></tr>
-</tbody></table>
+<h2 class="screen-heading">进程有限：空闲回收，全忙就拒绝</h2>
+<p>每人一个进程也不能无限增长。池最多保留 4 个进程；满了先回收最久未用且确实空闲的一个，全都忙就返回 503 RUNTIME_BUSY，提示 10 秒后再试。这延续了 s12 的背压。</p>
+<p>“空闲”要同时满足 ready、没有请求租约、没有执行中轮次和排队任务。定时回收还要求闲置 10 分钟，容量满时则不必等满 10 分钟；查不清忙闲时保守地不回收。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/pool.mjs · 第 28–36 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/pool.mjs" data-start="28" data-end="36">  async idle(entry) {
     if (entry.state !== 'ready' || entry.refs) return false;
     try { return !await this.isBusy(entry.owner); }
@@ -3460,15 +3341,13 @@ npm run logout</code></pre>
     return entry.removing;
   }
   crash(entry, error) { return this.serial(() =&gt; this.entries.get(entry.owner) === entry ? this.remove(entry, error) : undefined); }</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>共用清理</strong>：entry.removing 存在时直接返回，避免同一对象并发清理。设置 closing 并中止启动后，其他请求不能继续取得它。</p><p class="tl"><strong>先停止</strong>：已有 value 就 await closeValue；启动尚未返回则等待 creating 收尾并关闭结果。关闭前不能释放名额。</p><p class="tl"><strong>再收尾</strong>：带 error 时调用 onLost 核对该 owner 的任务状态，然后 onRemoved 清理缓存。最后确认 Map 中仍是当前 entry 才删除。</p></div></div></div>
-
-<p>closeValue 同样按对象共享一次清理 Promise。它先尝试正常关闭；如果关闭抛错或超过 10 秒，进入强制终止兜底。隔离模式没有额外增加 KILL capability，而是用 SETUID/SETGID 启动同 uid/gid 的短命信号发送器。连接直接 exec 原生 Codex，可减少只杀掉包装器而留下孙进程的风险。</p>
-<p>这里的“4 个进程”不能读成“4 轮同时执行”。进程池决定哪些用户的原生运行环境保持活动，MessageService 仍在全局最多派发 2 轮。一个 ready 进程可以暂时没有轮次，也可以有排队任务等待预算或并发名额。只要存在这些任务，就不能仅凭当前没有输出把它当成空闲对象。</p>
-<p>回收只改变活动进程与内存缓存。下一次请求重新进入 withOwner，读取相同用户映射，使用自己的原生状态恢复。对使用者而言可能增加一次启动延迟，但不会因为池满而把会话转给其他用户的进程，也不会用另一个用户的 HOME 继续执行。</p>
+<p>回收先等待进程退出，再释放名额；关闭异常或超过 10 秒时执行强制终止兜底。回收只影响活动进程和缓存，下次仍从同一用户的历史恢复。</p>
+<p>4 个进程不等于 4 轮并发。全局同时执行仍最多 2 轮；一个进程即使没有输出，也可能有排队任务，不能直接当成空闲。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-4">
-<h2 class="screen-heading">最终 spawn 与文件读取共同守住系统边界</h2>
-<p>系统权限必须在最终创建进程的位置生效，不能只停留在目录名称里。用户目录由用户 uid 所有，服务共享组为 gid 1000，模式为 2770。setgid 让目录内新文件继承共享组；用户子进程不加入这个共享组，因此不能靠共享组身份读取别人的目录。父目录只开放必要的穿越权限，用户边界目录不开放其他用户访问。</p>
-<p>容器服务以 0:1000 运行，删除全部 capability 后只加回 SETUID、SETGID、CHOWN、FOWNER，并设置 no-new-privileges。没有 DAC_OVERRIDE，服务自身的读写也受权限位约束。独立数值 uid/gid 不需要为每个应用用户创建系统账号，但要求真正以这些身份启动子进程。非 root 本机运行会明确警告未启用系统用户隔离；容器内切换身份失败则拒绝启动。</p>
+<h2 class="screen-heading">操作系统兜底：每人一个系统身份</h2>
+<p>只分目录还依赖代码把路径写对。再给每个用户进程独立 uid，并让目录归这个 uid，操作系统就能拒绝跨用户读取：即使知道别人的路径，也没有权限打开。</p>
+<p>这里使用独立数值 uid/gid，不需要系统账号文件中的条目。服务进程能切换身份和调整归属，但没有无视权限位的能力；用户进程只继承白名单环境，不拿数据库或服务商密钥。最终 spawn 才是这些约束真正生效的位置。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · codex/launch.mjs · 第 199–211 行</span><pre><code data-source="stages/s14-isolation/server/modules/codex/launch.mjs" data-start="199" data-end="211">export function userEnvironment(environment, home) {
   const env = {};
   for (const name of ['CODEX_BASE_URL', 'CODEX_API_KEY', 'PATH', 'LANG']) {
@@ -3482,8 +3361,7 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
     command: '/bin/sh',
     args: ['-c', 'umask 0007 &amp;&amp; exec "$0" "$@"', executable, ...args],
     options: isolated ? { uid, gid } : {},</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>正向白名单</strong>：只选择 CODEX_BASE_URL、CODEX_API_KEY、PATH、LANG，再设置属于用户自己的 HOME、CODEX_HOME、CODEX_SQLITE_HOME。数据库、Redis、服务商凭据和 Node 注入变量不会被整体继承。</p><p class="tl"><strong>固定 umask</strong>：shell 脚本文本保持固定，可执行文件和参数逐项传入。umask 0007 阻止其他用户取得新文件权限。</p><p class="tl"><strong>系统身份</strong>：isolated 时传 uid/gid。Node/libuv 清空继承的补充组；本机非隔离模式不传这些选项，不能将此模式当作权限验收结果。</p></div></div></div>
-
-<p>即使模型进程已经降权，服务代读文件仍可能扩大权限。因此读取产物、原生状态或用户文件时，需要明确“以谁的权限读取”。readAsUser 在隔离模式创建指定 uid 的短命辅助进程，使用固定 PATH 与 LANG，不继承服务密钥。正文经 stdout 返回，单独的 fd 3 传递有大小上限的元数据；读取还受超时和字节上限约束。</p>
+<p>服务代读文件也要按用户权限进行，否则会成为绕过隔离的通道。隔离模式用同 uid 辅助进程读取，检查属主、文件类型、链接和大小；不能只校验一次路径字符串就放行。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/user-files.mjs · 第 78–84 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/user-files.mjs" data-start="78" data-end="84">export async function readAsUser(uid, file, { maxBytes, isolated = process.getuid?.() === 0 &amp;&amp; uid !== process.getuid(), metadata = false, truncate = false, metadataOnly = false } = {}) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes &lt; 0 || maxBytes &gt; 16 * 1024 * 1024) throw new Error('必须指定有效的读取上限。');
   const options = { maxBytes, truncate, metadataOnly };
@@ -3497,68 +3375,39 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
     if (!stat.isFile() || stat.nlink !== 1) throw new Error('读取产物必须是独立普通文件。');
     if (stat.uid !== uid) throw new Error('读取产物属主不匹配。');
     const chunks = []; let length = 0;</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>打开标志</strong>：O_NOFOLLOW 拒绝最终路径的符号链接；O_NONBLOCK 避免特殊文件造成阻塞，随后还要核对类型。父目录也逐级检查是真实目录。</p><p class="tl"><strong>绑定描述符</strong>：fstat 与后续 readSync 使用同一 fd，要求独立普通文件、单个硬链接且 uid 匹配。通过路径字符串的检查不能代替这些条件。</p></div></div></div>
-
-<p>这些检查仍有明确边界。secureTree 使用 fd 校验和修改条目，但目录遍历依赖父路径，存在父目录被替换的残余竞态；权限修复应在用户进程停止后进行。文件 API 归属与工具权限检查仍然必要。独立 uid 约束文件访问，并不提供 CPU、内存、网络或内核隔离，不能据此宣称拥有按用户容器的全部保护。</p>
+<p>独立 uid 提供文件级保护，不隔离 CPU、内存、网络和内核，API 归属与工具权限仍必需。非 root 本机模式没有系统用户隔离，容器内切换身份失败则拒绝启动。目录遍历还有父路径被替换的残余竞态，权限修复应在用户进程停止后做。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-5">
-<h2 class="screen-heading">故障只收口到当前 owner，证据按验证层次核对</h2>
-<p>用户进程的 fatal 通知带有连接归属。池先停止这个连接，再在该 owner 上下文调用 recoverOwner：starting、running、steering 等执行中状态变为 unconfirmed，相关会话暂停。因为进程可能已经完成了部分操作，服务不能把断线当成“尚未执行”，再自动重发同一轮。清理用户会话缓存后，下次访问从该用户的原生历史核对结果；其他用户的连接、failure 和任务状态保持不变。</p>
-<p>账号禁用也必须到达活动进程。数据库事务同时吊销令牌并发出通知；通知到达就关闭对应进程并中止启动。每次取得运行环境和每次工具调用仍查询账号状态，覆盖通知与请求交叉的窗口。如果通知连接丢失，执行器会停止，避免继续使用无法及时吊销的进程。这种全局停止是控制通道失效的处理，不能混同于普通单用户 Codex 崩溃。</p>
-<p>第一个 admin 被禁用后，保留的原生目录映射不会转移给另一个账号。原生记忆虽按用户物理分开，是否开启仍服从服务端总开关、读取与贡献语义，账号数量不再决定开关。开启也不代表摘要生成成功：固定版本禁用原生写工具时，后台合并仍不能写出最终摘要；知识库挂载策略对记忆的限制继续生效。</p>
-<table><thead><tr><th>验证层次</th><th>运行方式</th><th>能证明什么</th></tr></thead><tbody>
-<tr><td>离线路由</td><td>npm run lesson -- routing</td><td>真实池、路由与业务模块在模拟连接下按 owner 选连接、过滤通知；不监听端口。</td></tr>
-<tr><td>离线容量</td><td>npm run lesson -- pool</td><td>名额、租约、single-flight、回收和全忙 503 等断言；不证明 OS 权限。</td></tr>
-<tr><td>离线崩溃</td><td>npm run lesson -- crash</td><td>单个 owner 的连接失败不会停止其他用户轮次；不切换 uid。</td></tr>
-<tr><td>真实 PostgreSQL</td><td>npm run test:runtimes:pg</td><td>真实数据结构、并发 uid 分配、数据库通知与 owner 恢复。</td></tr>
-<tr><td>Linux 容器</td><td>npm run test:runtimes:uid</td><td>指定 capability 下的真实 uid、私有组、跨用户不可读、umask 与环境白名单。</td></tr>
-<tr><td>端口回归</td><td>npm run test:ports</td><td>需要监听端口的继承链路；与不监听端口的 npm test 分开。</td></tr>
-</tbody></table>
-<p>在 stages/s14-isolation 目录可先运行下面三个离线实验。它们执行真实测试并以退出码判断，不调用模型、不访问 PostgreSQL、不要求 root。课程中的泳道、状态卡片和答案是固定教学推演，不能替代命令输出。尤其是 crash 实验，它验证故障影响范围，不能因为与文件边界同在一章，就被视为 readAsUser 或 Linux 权限的运行证据。</p>
-<pre><code>npm run lesson -- routing
-npm run lesson -- pool
-npm run lesson -- crash</code></pre>
-<p>s14 保持独立部署，默认端口 4328。运行 remote.sh tunnel 建立 SSH 隧道后，CLI 连接本机回环地址并登录。工作台只提供本章教材和部署说明，不把这个阶段加入共享 stages 容器，也不代理它的实时会话。部署后还要按本章验收说明检查容器、数据库和真实模型；静态 Compose 检查不能证明远程环境已经运行。</p>
+<h2 class="screen-heading">一个人的进程崩溃，不连累别人</h2>
+<p>用户进程崩溃只能说明结果不确定，不能说明工具没有执行。服务按连接 owner 关闭该进程，把他的执行中任务标为 unconfirmed、暂停相关会话待核对；其他用户继续工作，下次请求可重新拉起他的进程。</p>
+<p>禁用账号同样会关闭对应进程，并在取得运行环境和工具调用时复查账号状态。若接收禁用通知的控制通道丢失，执行器会停止；这与单用户进程崩溃的影响范围不同。</p>
+<p>原生记忆已按用户物理分开，但开启不代表摘要生成成功：固定版本禁用原生写工具时，后台合并仍不能写出最终摘要，知识库挂载策略的限制也继续生效。</p>
+<p>离线路由、容量和崩溃实验分别验证身份、回收与故障范围；真实 uid 文件隔离、数据库通知和模型运行需另外验证。部署与实验入口见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s14-isolation/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>，权限及已知限制见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s14-isolation/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 <div class="callout callout-accent"><div class="callout-content"><p class="callout-title">判断隔离时，分别寻找三类证据</p><p>业务层看认证与任务 owner；进程层看连接归属、租约和生命周期；系统层看真实 uid/gid、目录权限和有界读取。三层互相补充。只看到 HTTP 返回 404，不能证明底层文件不可跨读；只看到用户进程分开，也不能省略工具与资源归属检查。</p></div></div>
 <div class="quiz-container" id="s14-quiz">
 <div class="quiz-question-block" data-correct="1" data-explanation-right="owner 是池项键，启动 Promise 与租约一起保证 single-flight 和使用期间不回收。" data-explanation-wrong="owner 是池项键，启动 Promise 与租约一起保证 single-flight 和使用期间不回收。"><h3 class="quiz-question">同 owner 第二个请求在 starting 时到来，应怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>另开一个进程</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>等待同一个 entry.ready，并持有租约</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>借用任意 ready 进程</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="2" data-explanation-right="容量回收不要求等待 10 分钟，但必须逐项证明空闲。" data-explanation-wrong="容量回收不要求等待 10 分钟，但必须逐项证明空闲。"><h3 class="quiz-question">第 5 个用户触发容量回收，候选还必须满足哪项？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>启动最早即可</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>必须先满 10 分钟</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>ready、无租约、无执行中轮次和排队任务</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="catalog 的 crash 实验使用模拟连接，不切 uid；文件读取源码与 OS 权限必须分别核对。" data-explanation-wrong="catalog 的 crash 实验使用模拟连接，不切 uid；文件读取源码与 OS 权限必须分别核对。"><h3 class="quiz-question">离线 crash 实验通过，能证明真实 Linux uid 文件隔离吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>能，所有隔离都已验证</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不能；它检验故障范围，系统权限需容器验收</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>能，只要有 ownerId</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s14-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s14-quiz">重新作答</button></div></div>
+<p>每个用户有了自己的运行环境，团队却还需要一起用资料：知识库能分享给谁，接收者能否修改，谁能用哪些工具，又能用多少？下一章 s15 用权限与资源 Hub 统一回答这些问题。</p>
 <p><a href="/course/changes.html#s14">→ 打开 s14 阶段演示</a> · <a href="/course/#s14">→ 打开 s14 机制课堂</a></p>
 </section></div></div></section>
 
 <section class="module" id="module-s15">
 <div class="module-content">
-<header class="module-header animate-in"><span class="module-number">s15</span><h2 class="module-title">权限与资源 Hub：能用什么，谁说了算</h2><p class="module-subtitle">把资源可见性、动作、权益与分享审批放在同一处判定；执行中的轮次保留快照，下一轮核对新规则。</p></header>
+<header class="module-header animate-in"><span class="module-number">s15</span><h2 class="module-title">权限与资源 Hub：谁能用、谁能改，一处判定</h2><p class="module-subtitle">资源范围决定向谁开放，权益决定能用多少；分享需要明确授权，每轮使用自己的权限快照。</p></header>
 <div class="module-body">
 <section class="screen animate-in" id="s15-screen-1">
-<h2 class="screen-heading">用户已经隔离，怎样让资源有边界地共享</h2>
-<p>bob 和 carol 各有自己的运行环境、原生历史与工作目录。现在 bob 想把一个知识库分享给 carol，又想让 carol 使用自己写的 Skill。共享不能等同于把两个目录合在一起：carol 可以读知识库，却不能改 bob 的原文；Skill 是会影响模型行为的指令，不能在 bob 提交名单时就进入 carol 的执行环境。服务还要知道，授权撤销后哪一次请求开始拒绝，以及正在执行的任务是否继续。</p>
-
+<h2 class="screen-heading">隔离之后，团队还需要有边界地共享</h2>
+<p>上一章让云端 Agent 的每个用户都有独立运行环境。但团队还需要一起用：bob 想把知识库给 carol 读，不让她修改；用户写的 Skill 想影响别人的 Agent，需要有人审阅；一个人用完预算，也不该拖住其他人。</p>
 <figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1528" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
-
-<p><a class="term" data-definition="统一判定某用户能否对某资源做 use、read、modify、share、delete，并列出“我能看到的资源”。" href="/course/glossary.html#term-hub">权限与资源 Hub</a> 回答两个问题：这个用户能不能看到资源，以及看到以后能做哪个动作。资源包括 Agent、工具组、知识库和 Skill，动作固定为 use、read、modify、share、delete。GET /hub 返回可见资源的类型、scope、所有者用户名与可执行动作，客户端不必自己猜权限。</p>
-<table><thead><tr><th>单元</th><th>本章职责</th><th>继续保留的边界</th></tr></thead><tbody>
-<tr><td>Hub</td><td>可见范围、动作、权益、授权审批、配额与审计。</td><td>身份来自认证或持久任务 owner，不接受模型提供的身份。</td></tr>
-<tr><td>PermissionGate</td><td>把最新授权快照绑定到可信轮次上下文。</td><td>Agent 挂载、workflow 临时授权和输出范围仍需满足。</td></tr>
-<tr><td>sessions / messages</td><td>新轮次重验共享知识库，按用户权益决定派发。</td><td>任务继续持久化排队，全局同时最多两轮。</td></tr>
-<tr><td>runtimes / Codex</td><td>同步用户 Skill，空闲时受控重启并核验发现结果。</td><td>每用户进程、目录与 uid 保持独立，Codex 执行 Thread / Turn。</td></tr>
-<tr><td>PostgreSQL</td><td>保存权益、授权、审批、scope 联动和只追加审计。</td><td>数据库提交不等于文件系统同步已成功。</td></tr>
-</tbody></table>
-<p>会话与普通文件仍是个人隔离对象。admin 能管理 Hub 资源，不代表可以通过分享接口进入别人的会话。工具组与 Agent 都是 system 资源，由部署者提供定义和代码；本章不允许用户上传新的工具实现，也不提供动态 Agent 上传。用户可以上传的 Skill 只包含指令文本，实际执行能力仍取决于可信工具与权限判定。</p>
-<p>这套服务是独立部署，默认端口 4329。工作台展示教材和部署说明，通过 remote.sh tunnel 建立 SSH 隧道后，CLI 连接本机 http://127.0.0.1:4329。共享工作台不会把 s15 注册成实时代理目标。这里的授权说明用于理解服务端行为，静态卡片和泳道演示本身不会创建账号、授权或安装 Skill。</p>
+<p><a class="term" data-definition="统一判定某用户能否对某资源做 use、read、modify、share、delete，并列出“我能看到的资源”。" href="/course/glossary.html#term-hub">权限与资源 Hub</a>统一回答“这个用户，能不能对这个资源做这个动作”。使用、读取、修改、分享、删除五种动作都到这里判定，避免工具、知识库和调度器各说各话。</p>
+<p>身份来自认证或持久任务，Codex 继续执行轮次，不参与授权。Hub 管理资源范围、权益、分享和审计；会话与普通文件仍是个人隔离对象，admin 也不能借 Hub 访问别人的会话。工具和 Agent 由部署者提供，用户不能上传新的工具实现或动态 Agent。</p>
 </section>
 <section class="screen animate-in" id="s15-screen-2">
-<h2 class="screen-heading">同一判定：先决定看得见，再决定能做什么</h2>
-<p><a class="term" data-definition="资源分三档：system 所有人可用、只有 admin 能改；shared 授权的指定用户可用；private 只有所有者。" href="/course/glossary.html#term-资源范围">scope</a> 描述资源面向谁。private 由所有者和 admin 使用、修改；shared 增加指定接收者的 use/read，修改仍由所有者和 admin 管理；system 对用户开放使用，但受权益限制，修改由 admin 管理。知识库删除有显式所有者规则，不能把通用表格当成省略具体动作检查的理由。</p>
-<table><thead><tr><th>请求</th><th>结果</th><th>原因</th></tr></thead><tbody>
-<tr><td>carol 读取 bob 未分享的 private 知识库</td><td>404</td><td>资源对 carol 不可见，不透露存在性。</td></tr>
-<tr><td>bob 分享后，carol 读取该库</td><td>200</td><td>指定授权使资源可见，read 是允许动作。</td></tr>
-<tr><td>carol 修改共享库</td><td>403</td><td>资源可见，但共享接收者没有 modify。</td></tr>
-<tr><td>bob 撤销后，carol 发起新的读取</td><td>404</td><td>新快照中不再存在 carol 的授权。</td></tr>
-</tbody></table>
-<p>Hub 的 can 方法委托给策略内核，checkResource 则从当前可信快照查资源，再检查动作。模型不能通过参数声称自己是 bob；currentIdentity 来自认证上下文，后台执行则取持久任务的 owner。列表也用同一个 decision 过滤，并逐项计算 actions，避免列表显示与实际请求使用两套不同规则。</p>
-
+<h2 class="screen-heading">资源范围：私有、分享、系统</h2>
+<p><a class="term" data-definition="资源分三档：system 所有人可用、只有 admin 能改；shared 授权的指定用户可用；private 只有所有者。" href="/course/glossary.html#term-资源范围">scope</a>说明资源面向谁。私有资源面向所有者，分享增加指定接收者的读取与使用，系统资源向用户开放但受权益限制；管理员管理 Hub 资源，也可访问这些资源，但个人会话不在这个例外内。</p>
+<p>看不见的资源返回 404，不透露其存在；看得见却不能做某个动作返回 403。例如 carol 获得分享后能读 bob 的知识库，却不能修改、删除或再分享。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 39–43 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="39" data-end="43">  can(user, action, resource) { return can(user, action, resource); }
   resource(type, id) { return this.current().resources.get(`${type}:${id}`); }
   check(action, resource) { return can(this.current().user, action, resource); }
@@ -3586,10 +3435,7 @@ export function can(user, action, resource) {
   if (status !== 200) throw new AppError(status === 404 ? '资源不存在或未授权。' : '没有执行这个动作的权限。', status, 'HUB_DENIED');
   return true;
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>首先拒绝不存在、禁用或缺少资源的情况。personal 在 admin 分支之前检查归属；随后判断 owner、scope 和指定授权。Agent 与工具组还检查权益，最终才按 use/read 或所有者管理动作放行。can 将非 200 结果转为带状态码的 HUB_DENIED。</p></div></div>
-
-<p>bob 分享知识库无需审批，但名单有严格限制：每个资源最多授权 20 人，不能授权给自己、不存在或已禁用账号。禁用账号的旧授权保留，身份加载失败使其不能继续使用。有授权时 scope 为 shared，最后一条撤销后回 private。这些约束在业务方法和数据库约束中落实，不能仅靠前端禁用按钮。</p>
-<p>所有 Hub 写操作在实例级事务锁内执行，资源行再用 FOR UPDATE 取得，分享名单与审计一起提交。发布为 system 会清除指定授权；取消发布回 private，不会自动恢复发布之前的名单。两次操作均把清除的用户 ID 写到 publish 审计的 detail.revokedGrantees，因此管理员能够追踪一次公开范围调整究竟撤掉了哪些指定授权。</p>
-
+<p>分享只给指定的人，不等于公开。知识库由所有者直接授权，最多 20 人，不接受自己、不存在或禁用账号；撤销最后一条授权就回到 private。发布为 system 会清除指定名单，取消发布也不自动恢复名单。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 105–113 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="105" data-end="113">  async grantKnowledge(id, username) {
     return this.mutate('knowledge', id, 'share', async (client, actor, row, before) =&gt; {
       if (row.visibility === 'system') throw new AppError('system 资源无需授权。', 409);
@@ -3599,15 +3445,12 @@ export function can(user, action, resource) {
       await this.audit(client, actor, 'share', 'knowledge', id, before, after); return { grantees: after, scope: 'shared' };
     });
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先检查 share 动作，system 资源无需指定授权。targets 验证用户名与剩余名额，insertGrant 写授权，audit 记前后名单；外层 mutate 管理事务。</p></div></div>
-
-<p>授权通过只是读取链路的起点。知识库还要符合 Agent 的挂载规则，修改与索引继续需要对应知识库的 workflow 授权，读取再核验原文版本、Wiki 或 RAG 索引。共享原文按登记 owner 的工作区定位，由原 owner 的 uid 辅助进程读取；请求身份仍是 carol，不会为了读一份共享资料就临时变成 bob。</p>
-<p>普通用户可以通过 POST /knowledge 创建自己的 private 库，所有者取登录身份。库 ID 为 1–64 位小写字母、数字或连字符，在实例内唯一；标题为 1–200 字。数量检查、登记与目录准备共用事务边界。用户创建的库只可继承 Agent 第一个 knowledge 挂载项的默认动作和模式；没有挂载项就不挂载，未声明的静态库也不能借这个规则获得权限。</p>
-<p>删除只允许所有者或 admin。在持久任务或活动 gate 上下文中仍被挂载、或索引正在执行时，返回 409 KNOWLEDGE_BUSY。允许删除后，清理授权、Wiki 和索引登记、外部索引与 owner 目录，并将原文资源标为 revoked。数据库和目录没有跨系统事务：清理失败不能报告成功，已清理的文件也不能靠 SQL 回滚自动恢复。</p>
+<p>授权、范围变化和审计在同一事务提交。读取还要符合 Agent 挂载和原文版本要求：来源变化但未登记新版本时返回 SOURCE_STALE。共享读取使用所有者的文件权限，请求身份仍是接收者，不能为取文件而冒充主人。</p>
+<p>用户可创建自己的私有知识库，受权益数量限制。仍被任务挂载或正在索引的库返回 409 KNOWLEDGE_BUSY；删除后的数据库与文件清理不能原子回滚，失败必须报错。格式和接口细节见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s15-hub/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
 <section class="screen animate-in" id="s15-screen-3">
-<h2 class="screen-heading">工具三方交集与权益：有一层不允许，就不能执行</h2>
-<p>Agent 配置可以声明 read_webpage，但 basic 用户没有 web 工具组权益；同样，pro 可以使用全部系统工具组，也不能调用 Agent 没有声明的工具。<span class="term" data-definition="工具必须同时属于 Agent 白名单、用户权益允许的工具组以及该用户可见的工具组范围；三个集合取交集。">有效工具</span> 把三道限制合起来：Agent 白名单 ∩ 权益工具组 ∩ 工具组可见范围。</p>
-
+<h2 class="screen-heading">权益决定能用多少，工具取三份清单的交集</h2>
+<p>权益描述能选哪些 Agent、工具组，以及每日用量和并发上限。<span class="term" data-definition="工具必须同时属于 Agent 白名单、用户权益允许的工具组以及该用户可见的工具组范围；三个集合取交集。">有效工具</span>必须同时满足 Agent 白名单、权益工具组和工具组可见范围；任何一层没允许，都不能因为另两层允许就执行。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 44–48 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="44" data-end="48">  checkTool(name, agent) {
     const groups = [...this.current().resources.values()].filter(r =&gt; r.type === 'tool_group');
     if (!effectiveTools(this.current().user, agent.definition.agent, groups).includes(name)) missing();
@@ -3617,30 +3460,21 @@ export function can(user, action, resource) {
   return [...new Set(groups.filter(group =&gt; decision(user, 'use', { ...group, type: 'tool_group' }) === 200)
     .flatMap(group =&gt; group.tools).filter(name =&gt; agent.tools.allow.includes(name)))];
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先用 decision 筛选允许 use 的工具组。这个判断同时包含 scope 与权益；再展开组内 tools，过滤 Agent 的 allow，最后去重。任何一方减少集合，结果只能减少。</p></div></div>
-
-<table><thead><tr><th>权益</th><th>Agent / 工具组</th><th>每日 token</th><th>用户并发</th><th>知识库 / 私有 Skill</th></tr></thead><tbody>
-<tr><td>basic</td><td>writing；files、knowledge</td><td>200,000</td><td>1</td><td>各 3</td></tr>
-<tr><td>pro</td><td>全部系统 Agent 与工具组</td><td>1,000,000</td><td>2</td><td>各 20</td></tr>
-<tr><td>admin</td><td>豁免权益限制，管理操作仍审计</td><td>权益不限</td><td>仍受全局最多 2 轮限制</td><td>权益不限</td></tr>
-</tbody></table>
-<p>新用户默认为 basic，admin 通过 HTTP 分配权益。pro 的星号表示按可信目录展开全部系统集合，没有第三档权益。writing 是权益里的配置选择器，部署中对应 agents/writing/，Agent ID 为 writing-assistant。选择 Agent 时仍需 Hub 校验当前部署的授权资源，不能把配置选择器、Agent ID 与任意可上传代码混为一谈。</p>
-<p>原生联网搜索也必须检查 web 工具组。即使模型声明支持原生搜索，用户没有 web 权益仍不能启用；不能因为它不走普通 MCP 工具回调，就绕开相同限制。工具组与 Agent 保持 system，也不代表所有用户都自动享有它们：system 解决资源范围，plan 进一步限制实际可选集合。</p>
-
+<table><thead><tr><th>权益</th><th>Agent / 工具组</th><th>每日 token</th><th>用户并发</th><th>知识库 / 私有 Skill</th></tr></thead><tbody><tr><td>basic</td><td>writing；files、knowledge</td><td>200,000</td><td>1</td><td>各 3</td></tr><tr><td>pro</td><td>全部系统 Agent 与工具组</td><td>1,000,000</td><td>2</td><td>各 20</td></tr><tr><td>admin</td><td>豁免权益，管理动作仍审计</td><td>权益不限</td><td>仍受全局 2 轮限制</td><td>权益不限</td></tr></tbody></table>
+<p>新用户默认 basic，由管理员调整。表中的 writing 是配置选择器，对应 Agent ID 为 writing-assistant。pro 也不能绕过 Agent 白名单，原生联网搜索同样必须有 web 工具组权益。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 67–71 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="67" data-end="71">  async nativeSearch(id) {
     const snapshot = await this.snapshot(id);
     const group = snapshot.resources.get('tool_group:web');
     return decision(snapshot.user, 'use', group) === 200 &amp;&amp; group.tools.includes('read_webpage');
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>nativeSearch 重新取用户快照，要求 web 组允许 use，且组内包含 read_webpage。原生能力与业务工具因此服从同一权益来源。</p></div></div>
-
-<p>配额同样发生在派发前。服务按 owner_id 汇总用量，时区沿用 AGENT_BUDGET_TIMEZONE；读取前等待账本写入链，写入失败保持拒绝派发。达到每日上限时任务仍为 queued，由定时唤醒在预算时区的次日再检查。已在运行的一轮与当前轮次的追加继续完成，因此配额不是对正在生成的 token 做逐个截断。</p>
-<p>并发按执行任务与活动会话去重计数，先服从全局两轮，再服从用户权益。basic 的另一个任务可以继续等待，并不意味着其他用户必须一起等待。admin 豁免每日 token 与资源数量的权益上限，也不能突破全局轮次容量。降级保留已有资料，数量超额时拒绝新增；它不会为了凑回额度而删除用户知识库。</p>
-<p>一次降级还可能改变工具和原生搜索的允许集合。新的轮次取得最新权益，必要时在空闲边界重启用户进程。旧轮次继续使用启动快照，避免执行到一半时同一个工具动作突然换用另一套身份事实。这里要分别观察任务排队状态、用户运行环境集合与用量账本，不能只看客户端按钮是否显示。</p>
+<p>配额在新轮次派发前检查。当天 token 用完，只停该用户的新任务，queued 保留到预算时区的次日再检查；正在执行的一轮与轮内追加继续完成，其他用户不受影响。因此额度不是生成中逐 token 截断，也不能突破全局 2 轮上限。</p>
+<p>权限在轮次边界生效：每轮开始取最新快照，该轮一直按它执行，撤销或降级从下一轮生效。降级保留已有资料，超额时拒绝新增；必要的进程重启等到空闲边界进行。</p>
 </section>
 <section class="screen animate-in" id="s15-screen-4">
-<h2 class="screen-heading">Skill 分享：提议不授权，批准后还要安装与核验</h2>
-<p>Skill 上传后是 private，先同步到所有者自己的 CODEX_HOME/skills。上传接口接收 JSON 文本文件映射，不解压归档，只接受 SKILL.md 与 references/ 下的 .md/.txt，最多 50 个文件，合计 128 KiB。路径穿越、链接与代码文件不被接受。Codex 负责 frontmatter 解析和原生发现，服务负责验证允许集合；文本指令不会凭空得到新的工具执行能力。</p>
-<p>bob 提议把 Skill 分享给 carol 时，shareSkill 校验所有者和接收名单，然后写入 pending。它只记录需要审阅的申请，不插入 resource_grants。carol 此时既没有新授权，也没有因此安装的新副本。再次提议会更新待审名单并清除旧审批身份，不能把之前的一次通过当成任意新名单的授权。</p>
-
+<h2 class="screen-heading">用户 Skill：可以提议，不能自批</h2>
+<p>Skill 会改变别人的 Agent 如何工作，所以分享需要另一位管理员审阅批准；知识库是所有者的资料，分享不需要这道审批。用户 Skill 只能是指令文本，执行能力仍来自可信工具。</p>
+<p>上传默认私有，只安装到自己的 CODEX_HOME。格式限定 SKILL.md 和 references 中的 Markdown 或文本，最多 50 个文件、合计 128 KiB，拒绝代码、链接和路径穿越。</p>
+<p>提议分享只写入 pending，不授予权限，也不安装到接收者环境。更新名单需要重新审批，不能沿用先前批准。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 224–232 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="224" data-end="232">  async shareSkill(id, usernames) {
     return this.mutate('skill', id, 'share', async (client, actor, row, before) =&gt; {
       if (!owns(actor, row)) throw new AppError('共享申请由所有者提出。', 403);
@@ -3650,9 +3484,7 @@ export function can(user, action, resource) {
       await this.audit(client, actor, 'share', 'skill', id, before, { status: 'pending', usernames }); return { status: 'pending' };
     });
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>所有者是申请的唯一发起者。写入 pending 与审计在事务内完成；这里没有 insertGrant，也没有面向接收者的 syncSkills。</p></div></div>
-
-<p>另一位 admin 先通过 readSkill 查看正文和申请，审阅不会把待审内容安装到管理员自己的运行目录。reviewSkill 要求角色为 admin 且不是 proposed_by，申请必须仍为 pending；非 admin、自批与重复审批分别被拒绝。approve 时再次查接收者状态与剩余名额，避免提交申请到审批之间的变化绕过约束。</p>
-
+<p>另一位 admin 先读正文再批准，提议者不能自批。批准时再次检查接收者状态和名额；拒绝不授权，所有者撤销无需审批，并从待审名单中移除该接收者。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · hub/index.mjs · 第 233–251 行</span><pre><code data-source="stages/s15-hub/server/modules/hub/index.mjs" data-start="233" data-end="251">  async reviewSkill(id, approve) {
     const result = await this.mutate('skill', id, 'share', async (client, actor, row, before) =&gt; {
       const request = (await this.query('SELECT * FROM agent_data.skill_share_requests WHERE instance_id=$1 AND skill_id=$2 FOR UPDATE', [id], client)).rows[0];
@@ -3672,39 +3504,14 @@ export function can(user, action, resource) {
     return { status: result.status };
   }
   async assign(username, planId) {</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>只有 approve 分支调用 insertGrant。授权、approved/rejected 和审计在同一事务提交；syncSkills 放在提交之后，且只在批准时调用。返回 approved 的前提还包括同步调用没有报错。</p></div></div>
-
-<table><thead><tr><th>时点</th><th>数据库状态</th><th>carol 的执行环境</th></tr></thead><tbody>
-<tr><td>bob 上传</td><td>private，所有者 bob</td><td>没有新副本。</td></tr>
-<tr><td>bob 提议 carol</td><td>pending，没有新 grant</td><td>仍没有新副本。</td></tr>
-<tr><td>admin approve</td><td>approved、授权与审计提交</td><td>开始安装集合对账；失败会报错。</td></tr>
-<tr><td>carol 下一轮</td><td>重新读取权限快照</td><td>集合变化等待空闲重启，发现核验后可用。</td></tr>
-<tr><td>bob 撤销</td><td>删除 grant，也从 pending 名单移除</td><td>立即移除安装副本；活动轮次保留原快照。</td></tr>
-</tbody></table>
-<p>“下一轮可用”包含明确前提。批准之后，运行环境先以接收者 uid 对账安装集合，冷启动与同步共享该 owner 的串行边界；集合改变时等待活动轮次结束，在空闲租约关闭旧进程，重新启动并核验 Skill。若旧会话的指纹已不兼容，需要新建会话，原历史仍保留。批准动作不直接把新指令塞进 carol 正在执行的一轮。</p>
-<p>reject 只把申请置为 rejected 并写审计，不授予权限。所有者撤销无需再次审批，会立即移除接收者安装副本；同时把该接收者从待审批名单删除，防止旧申请之后又把已撤销对象授权回来。对账只删除本服务 manifest 管理的 Skill，不触碰 .system 或其他目录。</p>
-<p>数据库提交和文件同步之间没有分布式事务。同步失败时授权可能已经提交，接口会报错，不能把 SQL 回滚当成已完成的补偿。重试撤销会再次清理副本，下一次用户进程启动完整对账，在核验完成之前不执行新轮次。这也是演示中必须分别显示申请、授权、安装、轮次四种状态的原因。</p>
-<p>权限撤销不会远程抹去已经发送给模型的正文。活动轮次继续持有启动快照，下一轮才按新规则检查 Agent、Skill 与会话已挂载知识库。普通 HTTP 读取则取得最新快照，所以 bob 撤销知识库分享后，carol 新请求返回 404，与旧轮次继续完成并不矛盾。</p>
+<p>批准提交授权后，还要以接收者 uid 同步安装集合，在空闲边界重启并核验 Skill，下一轮才可使用。数据库提交和文件同步不是同一事务：同步失败会报错，重试或下次启动须完整对账，核验前不执行新轮次。</p>
+<p>撤销移除安装副本，但不能抹去已送入模型的正文。活动轮次保留原快照；普通 HTTP 读取取最新权限，下一轮也重新检查。会话指纹不兼容时需新建会话，历史仍保留。</p>
 </section>
 <section class="screen animate-in" id="s15-screen-5">
-<h2 class="screen-heading">用真实实验验证规则，用部署验收证明外部边界</h2>
-<p>离线实验调用本阶段真实 Hub 策略、业务方法与调度器，用测试夹具驱动资源、时钟和安装集合。课程中的状态卡片和泳道是固定教学推演，不能替代测试结果。先在 stages/s15-hub 执行实验，再比较实际断言与自己的判断；如果断言失败，命令必须以非零状态退出。</p>
-<pre class="terminal">npm run lesson -- list
-npm run lesson -- scope
-npm run lesson -- intersection
-npm run lesson -- skill-approval
-npm run lesson -- quota
-npm run lesson -- revocation</pre>
-<table><thead><tr><th>实验</th><th>主要观察</th><th>不能据此证明</th></tr></thead><tbody>
-<tr><td>scope</td><td>private 不可见，shared 只读，非法目标和超过 20 人被拒。</td><td>真实 PostgreSQL 触发器和并发锁已经运行。</td></tr>
-<tr><td>intersection</td><td>分别改变白名单、权益、scope，任一层都不能被扩大。</td><td>外部模型实际执行了某种原生能力。</td></tr>
-<tr><td>skill-approval</td><td>pending 不授权，approve 同步，reject 不授权，撤销清副本。</td><td>生产容器具备 uid 切换与文件权限。</td></tr>
-<tr><td>quota</td><td>超额仍 queued，改变测试时钟后恢复，并发按权益限制。</td><td>真实模型费用或 token 会被精确封顶。</td></tr>
-<tr><td>revocation</td><td>旧轮次保留快照，新任务用新规则，集合变化受控重启。</td><td>已经进入模型上下文的资料能够被抹除。</td></tr>
-</tbody></table>
-<p>外部验收要验证另一组事实。PostgreSQL 测试真实执行重复执行数据库升级、并发授权竞争、审批、scope 联动与审计修改拒绝；Linux uid 测试真正启动文件辅助进程并检查跨用户读取拒绝。服务器验收还要经 HTTP 走完整路径：bob 创建、导入与分享知识库，carol 读取成功而写入 403，未获授权用户 404，bob 撤销后新的访问与下一轮被拒绝。</p>
-<p>permission_events 保存 actor、动作、资源、前后状态、detail 与时间，UPDATE、DELETE、TRUNCATE 都被触发器拒绝。这保护正常数据库写接口下的审计记录，并不取消数据库超级管理员的管理能力。共享来源也要保持版本一致：原文变化但尚未登记新版本时返回 SOURCE_STALE，不能为了让读取看似成功而返回旧内容。</p>
-<p>本章边界保持清楚：只支持指定用户名，没有组织、小组、支付、Skill 市场或多主机。权益由 admin 手动分配，工具代码由部署者交付。文件系统与数据库的跨系统失败通过报错、可重试对账和新轮次前核验收敛；路径复核仍存在同 uid 恶意进程造成的竞态窗口，不能替代系统隔离。本机非 root 模式没有系统 uid 隔离，生产容器不能切 uid 时应拒绝启动。</p>
-<p>动手时先完成阶段 README 中的独立部署、账号初始化和模型配置，再保持 SSH 隧道运行，以自己的账号登录 CLI。审批使用另一位 admin 的身份，读取与撤销结果用 carol 的新请求验证。需要数据库、端口或容器的检查应单独记录执行结果，不能将离线实验成功写成部署已验收。</p>
+<h2 class="screen-heading">变更留下审计，规则要验证拒绝路径</h2>
+<p>权限决定谁能使用资源，审计解释这份权力如何变化。每次分享、撤销、发布、权益调整和 Skill 审批，都追加记录谁、对什么、从什么改成什么以及时间，正常数据库接口不能修改或删除这些记录。</p>
+<p>验证时同时看允许与拒绝：被分享者能读不能改，未授权者看不见，撤销后的新请求被拒绝，旧轮次继续遵循快照。离线实验验证这些规则；真实数据库约束、Linux uid 和文件同步需外部验收，步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s15-hub/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>。</p>
+<p>本章只支持指定用户，没有组织、小组、支付或 Skill 市场。权限数据库与文件之间仍有失败窗口，不能把一次批准等同于安装成功。</p>
 <div class="quiz-container" id="s15-quiz">
 
 <div class="quiz-question-block" data-correct="1" data-explanation-right="共享授予 use/read，修改仍受动作限制；不可见与可见但无权操作分别为 404 和 403。" data-explanation-wrong="共享授予 use/read，修改仍受动作限制；不可见与可见但无权操作分别为 404 和 403。"><h3 class="quiz-question">carol 能看见 bob 共享的知识库，但试图修改正文，应该怎样响应？</h3><div class="quiz-options">
@@ -3723,27 +3530,24 @@ npm run lesson -- revocation</pre>
 <button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>把申请自动改回 pending 即可</span></button>
 </div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s15-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s15-quiz">重新作答</button></div></div>
+<p>一台服务器上的云端 Agent 已能让多人各用各的、按权限共享。但这台机器停了，所有人一起停；用户多了，一台也装不下。要走向多台机器，先得让它们就“谁还活着、谁说了算”达成一致。下一章进入 s16 协调面。</p>
 <p><a href="/course/changes.html#s15">→ 打开 s15 阶段演示</a> · <a href="/course/#s15">→ 打开 s15 机制课堂</a></p>
 </section></div></div></section>
 
 <section class="module" id="module-s16">
-<div class="module-content">
-<header class="module-header animate-in">
-<span class="module-number">s16</span>
-<h2 class="module-title">协调面：谁还活着，谁有权写入</h2>
-<p class="module-subtitle">成员由租约定义，control 由 Election 决定；用任期保护协调信息和业务写入，恢复完成后才接收流量。</p>
+<div class="module-content"><header class="module-header animate-in">
+<span class="module-number">s16</span><h2 class="module-title">协调面：租约判断谁活着，任期决定谁说了算</h2>
+<p class="module-subtitle">分不清慢和死，就用共同规则判断成员资格；旧主醒来，也不能凭过期任期继续写入。</p>
 </header><div class="module-body">
-<section class="screen animate-in" id="s16-screen-1"><h2 class="screen-heading">从一个服务到三个节点：先回答谁可以服务</h2>
-<p>用户隔离和 Hub 已经回答了某个请求属于谁、能用哪些资源。现在同一套业务放进三个节点，新的问题是：哪个节点可以接收任务，哪个节点应该等待？旧 control 暂停十几秒后又醒来，进程还在、连接还在、内存里还记着自己当选过，这些都不能证明它仍有权派发和写入。这个判断必须有一份所有节点共同认可的依据。</p>
+<section class="screen animate-in" id="s16-screen-1"><h2 class="screen-heading">分布式里，分不清“慢”和“死”</h2>
+<p>上一章的云端 Agent 已能让多人安全共用，但只有一台机器，停了就一起停。扩展到多台之前，先要回答谁还活着、谁有权服务：节点没响应，可能是故障，也可能只是网络慢。</p>
 <figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1640" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
-<p>本章的变化可以用一句话说明：节点是否存活变成租约是否过期。<span class="term" data-definition="etcd 为成员分配的有期限凭据；绑定键随租约失效而删除。进程存在不等于租约有效。">lease</span> 把成员资格交给 etcd。<span class="term" data-definition="当前被 Election 选出并经过任期确认的控制节点；只有完成数据库任期推进和业务恢复后才接收流量。">control</span> 负责完整业务栈，另外两个节点保留协调能力和接任资格。本章尚无用户分片，因此采用一个 control 加两个热备。</p>
-<table><thead><tr><th>单元</th><th>负责的事实或动作</th><th>不能替代什么</th></tr></thead><tbody><tr><td>etcd</td><td>保存 /codex/ 下的成员、选举与协调元数据。</td><td>不保存业务会话、任务与产物正文。</td></tr><tr><td>coordination</td><td>租约、Watch、Election、任期事务、失权隔离和集群状态。</td><td>不能单靠本地状态保护外部数据库。</td></tr><tr><td>PostgreSQL / Redis</td><td>PG 保存业务事实及任期；Redis 唤醒持久队列。</td><td>Redis 唤醒不是任务已完成的证据。</td></tr><tr><td>ActiveService / runtimes</td><td>当选后启动业务，失权后停派并关闭用户进程。</td><td>关闭过程不能撤销已经发生的外部副作用。</td></tr><tr><td>Caddy</td><td>探测 /ready，只转发到完成恢复的 control。</td><td>健康缓存不能替代节点入口自己的任期检查。</td></tr><tr><td>Codex</td><td>复用 Thread，执行 Turn 与工具循环。</td><td>不负责选举、租约或 PostgreSQL 写入授权。</td></tr></tbody></table>
-<p>三个容器在本章共享 .data、workspace、.runs 和 backups，仅用于单机模拟。每用户 uid、独立 Codex 进程、CODEX_HOME 和 Hub 授权继续生效，但三个容器不等于三个独立故障域。数据库、Redis、模型网关和 etcd 本身仍为单实例，控制节点可接任不代表所有依赖都高可用。</p>
-<p>入口端口为 4334，后端 node-a、node-b、node-c 分别使用 4340、4341、4342。节点地址使用 Compose 服务名，etcd 不发布宿主端口。工作台只展示本章课程和独立部署说明；实际体验保持 remote.sh tunnel 运行，在阶段目录登录 CLI。登录后的 admin 可调用 GET /cluster，普通用户不能借此查询完整集群状态。</p>
-<p>理解这张图时先跟着状态走：节点加入只是成员资格，当选才产生 control 任期，确认任期只是开始，推进数据库任期并完成恢复以后才就绪。每一步都能失败，失败就停在对应边界，不能把后一步的成功状态提前写给用户。</p>
+<p>如果把慢误判为死，选出了新主，旧主醒来后又继续写，就会出现两个主同时工作的脑裂。因此成员资格交给所有节点共同认可的<span class="term" data-definition="etcd 为成员分配的有期限凭据；绑定键随租约失效而删除。进程存在不等于租约有效。">lease</span>，完整业务由当选的<span class="term" data-definition="当前被 Election 选出并经过任期确认的控制节点；只有完成数据库任期推进和业务恢复后才接收流量。">control</span>负责，另外两个节点热备，随时准备接任。</p>
+<p>etcd 只保存成员、选举与任期等协调信息；业务会话和任务仍在 PostgreSQL，Redis 唤醒队列，Codex 执行轮次。入口只转发给就绪的 control，用户隔离与 Hub 授权继续生效。</p>
+<p>本章三个容器共享数据卷，只用于单机主备模拟，并非三个独立故障域。PostgreSQL、Redis、模型网关和 etcd 仍是单实例；control 能接任，不等于依赖也高可用。</p>
 </section>
-<section class="screen animate-in" id="s16-screen-2"><h2 class="screen-heading">成员注册与 Watch：不要用一次 ping 判断权利</h2>
-<p>join 创建固定 TTL 10 秒的租约。etcd3 自动按 TTL/3 续约，应用监听 lost、keepaliveSucceeded 和 keepaliveFailed，不另外实现一套 KeepAlive 定时 RPC。成员键与选举键共享同一 lease：到期时两个键一起消失，正常退出则主动撤销。节点进程被 kill 后没有机会做清理，成员信息仍会在租约到期后被 etcd 删除。</p>
+<section class="screen animate-in" id="s16-screen-2"><h2 class="screen-heading">租约：按时续约才算活着</h2>
+<p>租约把“它活着吗”变成一个共同可查的事实：租约还在，就有成员资格；过期，注册信息自动消失。本章 TTL 为 10 秒，etcd3 按 TTL/3 自动续约；正常下线主动撤销，不必等待到期。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 24–45 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="24" data-end="45">  async join() {
     if (this.closed || this.alive) throw new Error(&#39;节点已关闭或已经加入。&#39;);
     const epoch = ++this.generation;
@@ -3766,8 +3570,7 @@ npm run lesson -- revocation</pre>
     await lease.put(MEMBERS + this.nodeId).value(JSON.stringify(member));
     if (epoch !== this.generation || !this.checkLease()) throw notController();
     this.record(&#39;joined&#39;, { nodeId: this.nodeId });</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>租约事件带 generation 校验；注册键经 lease.put 写入。</p></div></div>
-<p>每次 join 都增加 generation，并把它捕获为 epoch。租约事件只处理当前 lease、当前 epoch 的通知。这个限制很具体：旧租约发出的 lost 不能关闭后来加入的新代；旧租约迟到的成功回包也不能替新代续命。注册成功以后记录 joined，成员内容包含节点地址、REVISION、Agent 定义与指令哈希、容量和加入时间。</p>
-<p>成功回包到达时还要检查单调时钟。进程被暂停以后，定时器、网络回调都可能一起排队，解冻时先运行哪个回调并不可靠。如果距离上次成功 KeepAlive 已经超过 TTL，就先隔离，再考虑是否能更新时间。这样不能靠一条迟到回包把失效的控制权恢复回来；HTTP 入口和业务回调也会检查这个条件，不只依赖定时器。</p>
+<p>每次加入还有本地代次 generation，旧租约的通知不能影响新代。暂停后迟到的续约成功回包，也不能替旧主续命：单调时钟若已超过 TTL，先隔离。入口与回调都检查这一点，不只依赖可能被延迟的定时器。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 89–99 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="89" data-end="99">  async watchMembers() {
     const epoch = this.generation;
     this.memberEvents = []; this.memberRevision = &#39;0&#39;;
@@ -3779,13 +3582,11 @@ npm run lesson -- revocation</pre>
       if (epoch === this.generation) void this.reconcile().catch(() =&gt; { if (epoch === this.generation) this.record(&#39;reconcile-failed&#39;); });
     }, 5000);
     this.reconcileTimer.unref?.();</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先快照再 Watch，每 5 秒对账。</p></div></div>
-<p>Watch 先整前缀读取快照并记住 revision R，然后从 R+1 观察变化。读取快照期间也可能已经收到更新，因此实现会保留快照之后的事件，再把这个后缀应用到整表替换的缓存上，避免成员状态倒退。revision 以字符串保存，用 BigInt 做加一和比较，不把长整数塞进可能丢精度的普通 Number。</p>
-<p>连接恢复不是简单地继续相信旧缓存。每次连接或重连后重新整读前缀，每 5 秒再核对成员和当前 control/任期。发现压缩时重建 Watch，既识别 compact_revision 字段，也识别压缩错误文本。坏 JSON 被记录并忽略，不能让某个成员格式错误破坏整个成员列表。</p>
-<table><thead><tr><th>发生什么</th><th>成员视图怎么变化</th><th>观察时应注意</th></tr></thead><tbody><tr><td>正常 join</td><td>lease.put 写入成员键，Watch 得到 Put。</td><td>成员已存在不代表已经当选。</td></tr><tr><td>进程硬退出</td><td>等 lease 到期后收到 Delete。</td><td>TTL 是成员判断条件，不是端到端恢复 SLA。</td></tr><tr><td>正常停机</td><td>先停业务，再 resign / revoke，键主动消失。</td><td>共享 lease 下 resign 本身也可能撤销成员键。</td></tr><tr><td>Watch 断线或压缩</td><td>重读前缀并建立新 Watch，定时对账纠正差异。</td><td>不能用本地未更新缓存认定成员永远在线。</td></tr><tr><td>暂停后迟到成功回包</td><td>单调时钟检查使旧代失效。</td><td>回包成功不保证到达时租约还有效。</td></tr></tbody></table>
-<p>GET /cluster 展示的剩余 TTL 来自 etcd 的 leaseTimeToLive，不用 joinedAt 推算。加入时间只是事实记录，续约已经发生多少次不能由它得出。接口还提供最近 20 条成员、观察、选举和隔离事件，适合理解切换过程，但这个内存缓冲不是持久审计日志，重启后不能用它还原完整历史。</p>
+<p>Watch 订阅成员变化：先读快照并记录 revision，再从下一版本监听，保留期间到达的更新，避免旧快照覆盖新事实。断线或压缩后重读，每 5 秒对账，补上可能漏掉的变化。</p>
+<p>租约到期只说明成员资格失效，不是端到端恢复时限。集群状态里的剩余 TTL 取自 etcd，近期 20 条事件帮助观察过程，但内存事件不等于持久审计。</p>
 </section>
-<section class="screen animate-in" id="s16-screen-3"><h2 class="screen-heading">Election 与任期：检查和写入必须是一个事务</h2>
-<p>etcd3 发出 elected 事件后，应用读取 campaign 对应的键，核对键值确实是本节点、lease 是当前成员租约、generation 没有变化。任期只取这条选举键的 create_revision。全局 revision 会随其他写入增长，时间戳也不能表示选举资格，因此两者都不拿来充当任期。</p>
+<section class="screen animate-in" id="s16-screen-3"><h2 class="screen-heading">选举与任期：旧主醒来也写不进去</h2>
+<p>选举决定谁当 control，任期号证明这份权力属于哪一任。选举记录绑定租约，过期后候选者接任；任期取当选记录的 create_revision，只增不减，不能用时间戳或全局最新版本代替。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 174–186 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="174" data-end="186">  async elected(campaign, epoch) {
     const key = await campaign.getCampaignKey();
     const { kvs } = await this.client.get(key).exec();
@@ -3799,7 +3600,7 @@ npm run lesson -- revocation</pre>
     this.record(&#39;elected&#39;, { nodeId: this.nodeId, term: this.ownTerm });
     this.emit(&#39;controller&#39;, this.ownTerm);
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>任期取 create_revision；confirm 成功后发 controller。</p></div></div>
-<p>elected 先设置候选任期并调用 confirm，通过后才记录当选事件、发出 controller。ActiveService 收到通知后还会再次确认，避免异步启动链排队时控制权已经变化。热备没有完整 PG 业务连接、Redis worker、用户进程与目录维护器，只有当前有效 control 才启动这些组件。</p>
+<p>“曾经当选”不能证明写入时仍有权。协调写入把“选举键仍属于我的任期”和 put 放在同一个 etcd 事务中；旧键消失或同名键重建，比较都会失败，返回 NOT_CONTROLLER 并隔离。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 195–203 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="195" data-end="203">  async guardedPut(key, value) {
     this.assertController();
     const epoch = this.generation;
@@ -3809,8 +3610,7 @@ npm run lesson -- revocation</pre>
     if (!result.succeeded) { this.isolate(&#39;stale-term&#39;); throw notController(); }
     this.assertController();
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>比较选举键和写操作属于同一 etcd 事务。</p></div></div>
-<p>guardedPut 将 Create == ownTerm 与 put 放进同一 etcd 事务。旧选举键删除时比较失败，后来同名键重建也会得到新的 create revision，因此旧任期不能借同一个键名重新获得写权。失败时同步 isolate 并抛 409 NOT_CONTROLLER，写入不会执行。事务返回后再次核对 generation 和控制权，拒绝在等待期间已经失效的异步结果。</p>
-<p>如果先普通 get，再普通 put，读取之后仍可能失权；两条成功响应无法证明中间没有其他节点当选。这里需要事务比较保护真正的写操作。本章以 /codex/cluster/info 演示这个机制，写入成员数、任期与时间。这个 info 键不绑定成员 lease，保留最近一次信息，因此不能把它直接当作当前 control。GET /cluster 会整读选举前缀，用 create revision 最早的候选查询当前控制节点。</p>
+<p>etcd 的事务只保护 etcd，业务数据库必须另设任期门禁。新 control 先确认选举任期，再推进 PostgreSQL 任期；若库中已有更高任期，返回 CT001 并隔离，不能倒退任期后继续服务。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/fence.mjs · 第 4–14 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/fence.mjs" data-start="4" data-end="14">export async function advanceTerm(pool, generation) {
   assertTerm(generation);
   const origin = new Error(&#39;推进数据库任期调用栈&#39;);
@@ -3822,8 +3622,7 @@ npm run lesson -- revocation</pre>
     throw error;
   }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>推进数据库任期失败不能继续启动业务。</p></div></div>
-<p>etcd 的事务只保护 etcd。PostgreSQL 有自己的任期行 agent_data.cluster_term，新 control 必须调用单调推进函数；推进成功后，旧任期业务 SQL 才会被数据库拒绝。如果数据库中已经存在更高任期，推进返回 CT001，当前节点立即隔离。不能把数据库值降回自己的任期，也不能在推进失败后继续恢复任务。</p>
-<p>主备恢复顺序是：再次确认 etcd 任期，推进 PG 任期，核对持久任务与会话，恢复 queued outbox，再开放派发和就绪。正在执行的轮次标为 unconfirmed，留给人核对历史，不自动重发可能具有副作用的工具。queued 已有持久记录，可以通过 outbox 重新唤醒，这与不确定轮次的处理方式不同。</p>
+<p>推进成功后才恢复任务：执行中的轮次标为待核对，不自动重发；queued 重新唤醒。整个恢复过程完成、再次确认控制权后，才开放派发与就绪。启动中失权的迟到回调不能让旧代重新就绪。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/service.mjs · 第 14–31 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/service.mjs" data-start="14" data-end="31">  async activate(term, activationId) {
     const c = this.coordination;
     if (activationId !== this.activationId || !c.isController() || c.term() !== term) return;
@@ -3842,10 +3641,9 @@ npm run lesson -- revocation</pre>
       generation.assert(); this.ready = true;
     } catch (error) {
       generation.active = false; this.ready = false;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>业务启动、再次确认和写入集群信息均通过后才 ready。</p></div></div>
-<p>ActiveService 捕获本次 activationId 和 generation。业务启动完成后还会确认 control、写入集群信息，最后才把 ready 设为 true。启动中失权时，代次门禁会阻止旧启动结果使服务就绪；后续再次当选也不能让旧通知、查询或 COMMIT 回调复活。这个顺序让“曾当选”和“现在可服务”有清楚的区别。</p>
 </section>
-<section class="screen animate-in" id="s16-screen-4"><h2 class="screen-heading">数据库任期保护：旧 control 醒来也不能冒充新代</h2>
-<p>暂停后的旧进程可能保留数据库连接，正在执行的后台任务也不一定经过新的 HTTP 请求。因此 PG 写入边界独立验证任期。连接包装器将每条独立 SQL 也纳入事务，用 SET LOCAL app.term 写入本代任期；显式事务沿用同一个 client 和 term，直到 COMMIT 或 ROLLBACK。只允许本地门禁通过时发出查询和提交，清理需要的回滚、退订与释放连接仍可执行。</p>
+<section class="screen animate-in" id="s16-screen-4"><h2 class="screen-heading">数据库也认任期，不依赖旧主自觉停下</h2>
+<p>旧进程可能仍持有数据库连接，后台写入也不一定经过 HTTP。数据库必须独立核对每笔写入的任期，才能让“旧主醒来也写不进去”成立；这个只增不减的号码就是 fencing token。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/015-cluster-term.sql · 第 37–44 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql" data-start="37" data-end="44">  supplied := current_setting(&#39;app.term&#39;, true);
   -- Hold a shared row lock until COMMIT: an old transaction cannot commit after promotion.
   actual := agent_data.locked_cluster_term();
@@ -3854,14 +3652,13 @@ npm run lesson -- revocation</pre>
   END IF;
   RETURN NULL;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>锁定当前任期后核对事务任期，缺失或过期抛 CT001。</p></div></div>
-<p>触发器读取 app.term，再通过 locked_cluster_term 取得当前任期并持有 FOR SHARE 锁。任期缺失、空字符串或与实际值不同，统一返回 CT001。共享锁保持到事务结束，新任期推进必须等已有旧事务完成，因此新任期推进成功以后不会再出现一个通过旧任期检查的事务迟到提交。推进之前已完成的旧写入仍是已发生的事实，不能把锁解释为撤销历史。</p>
+<p>每笔业务事务携带 app.term，触发器锁住当前任期并比较，缺失或过期都返回 CT001。锁保持到事务结束，推进新任期必须等待旧事务完成，因此推进成功后，不会再有已通过旧检查的事务迟到提交。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/015-cluster-term.sql · 第 45–50 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/migrations/015-cluster-term.sql" data-start="45" data-end="50">DO $$ DECLARE tab record; BEGIN
   FOR tab IN SELECT tablename FROM pg_tables WHERE schemaname=&#39;agent_data&#39;
     AND tablename NOT IN (&#39;migrations&#39;,&#39;cluster_term&#39;) LOOP
     EXECUTE format(&#39;CREATE TRIGGER cluster_term_guard BEFORE INSERT OR UPDATE OR DELETE ON agent_data.%I FOR EACH STATEMENT EXECUTE FUNCTION agent_data.require_cluster_term()&#39;, tab.tablename);
   END LOOP;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>为 agent_data 业务表建立 BEFORE 语句级触发器，排除 migrations 与 cluster_term。</p></div></div>
-<p>015-cluster-term.sql 为 agent_data 下除 migrations、cluster_term 外的业务表建立 BEFORE INSERT、UPDATE、DELETE 的语句级触发器。业务表是否受保护需要逐一覆盖，后续新增表也必须配置触发器。SQL 触发器作用于数据库写操作，既不是文件权限，也不是对任意外部 API 的事务补偿。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/write.mjs · 第 20–29 行</span><pre><code data-source="stages/s16-coordination/server/modules/data/write.mjs" data-start="20" data-end="29">export function termFailure(error, generation, origin, statement) {
   if (error.code !== &#39;CT001&#39; || error.termDiagnostic) return;
   let current = true;
@@ -3872,14 +3669,12 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
   catch { /* Logging must not replace CT001 or prevent isolation. */ }
   finally { generation.isolate?.(&#39;database-stale-term&#39;); }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>CT001 的诊断不能阻止 finally 中的隔离。</p></div></div>
-<p>termFailure 看到 CT001 时记录诊断，在 finally 中隔离 generation；即使日志输出失败也不能阻止隔离。这与 etcd guardedPut 的 NOT_CONTROLLER 是不同边界：前者由数据库任期不匹配拒写，后者由选举键比较失败拒写。课程中的第二个泳道专门演示旧 SQL 到达数据库时的保护；正常请求可能更早被单调时钟或入口门禁挡住，并不是每次解冻都会先出现一条 CT001。</p>
-<table><thead><tr><th>边界</th><th>核对内容</th><th>失败效果</th></tr></thead><tbody><tr><td>etcd guardedPut</td><td>选举键 Create 是否等于 ownTerm。</td><td>事务不写，NOT_CONTROLLER，节点隔离。</td></tr><tr><td>PG 业务触发器</td><td>app.term 是否等于锁定的 cluster_term。</td><td>CT001，业务写入失败，节点隔离。</td></tr><tr><td>本地 generation</td><td>当前调用是否仍属于有效业务代次。</td><td>迟到回调、查询与提交被拒绝。</td></tr><tr><td>运维通道</td><td>app.maintenance=on 且 current_user 是超级用户。</td><td>普通节点试图绕过会收到 42501。</td></tr></tbody></table>
-<p>运维不能只靠一个任意连接都能 SET 的变量绕过保护。PostgreSQL 自定义会话变量无法用普通 GRANT 禁止设置，所以触发器同时检查 current_user 的超级用户身份。节点角色没有超级用户、建库、建角色权限，不能直接写 cluster_term 或 migrations；它们只获准调用固定 search_path 的单调推进函数。长期节点仅持有自己的 PG 和 etcd 凭据，账号管理和数据库升级使用一次性运维容器。</p>
-<p>失权时的任务清理同样不能扩大范围。旧代只记录自己实际派发过的任务 ID，且只将仍为 starting、running 或 steering 的任务标记为待核对。若新任期已经推进，旧代清理也可能得到 CT001；随后由新 control 的恢复过程完成核对。旧 control 不能执行全局 recover，误把新 control 刚派发的任务也标为不确定。</p>
-<p>最容易误读的边界是共享文件。docker pause 冻结整个容器，包括用户 Codex 子进程，解冻后它们可能立刻继续写共享卷。PG 触发器能够拒绝旧任期结果记录，却不能撤销文件写入或外部工具副作用。本章明确只做单机共享卷模拟；后续分片、路由与副本工作需要每节点独立磁盘，不能把数据库任期保护当作全部一致性问题已经解决。</p>
+<p>etcd 比较、数据库触发器、本地 generation 各守一个边界：协调信息、业务写入、迟到回调。普通节点不能用自行设置的维护变量绕过数据库检查，维护例外还要求超级用户身份。</p>
+<p>旧代只清理自己派发过且仍在执行的任务；若已被新任期拒写，就交给新 control 恢复，不能全局清理并误伤新任务。数据库锁也不能撤销此前已完成的写入。</p>
+<p>任期保护不覆盖外部副作用。旧主已经发出的模型和工具调用撤不回，解冻的子进程也可能继续写共享卷。共享卷仅用于本章模拟，独立磁盘和副本还要分别解决数据放置与恢复。</p>
 </section>
-<section class="screen animate-in" id="s16-screen-5"><h2 class="screen-heading">自我隔离与重新加入：先关旧代，再拿新租约</h2>
-<p>isolate 的第一步是同步把 alive、controller 清零并增加 generation，停止相关定时器、释放本地 KeepAlive，然后同步发出 lost。这里不等待网络撤销或数据库清理。只要失权已经确定，新的请求、派发和结果回调就必须停止；清理慢不能成为继续接收任务的理由。/ready 立即返回不可用，完整业务栈随后关闭。</p>
+<section class="screen animate-in" id="s16-screen-5"><h2 class="screen-heading">自我隔离：续不上约，就自己停下</h2>
+<p>节点发现续约失败并超过 TTL，不能等别人通知才停。它立即关闭准入与派发，使就绪变成 503，再关闭用户进程，把执行结果不明的轮次交给待核对流程。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/index.mjs · 第 62–70 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/index.mjs" data-start="62" data-end="70">  isolate(reason) {
     if (!this.alive &amp;&amp; !this.controller) return;
     this.alive = false; this.controller = false; this.generation++;
@@ -3889,7 +3684,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
     this.record(&#39;isolated&#39;, { nodeId: this.nodeId, reason });
     this.emit(&#39;lost&#39;, reason); // synchronous admission/result fence before any await
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先清空 alive/controller 并递增代次，同步发出 lost。</p></div></div>
-<p>关闭 worker、数据库连接与用户进程池需要时间，不能在后台尚未关闭时建立新池。Rejoin 只有一条恢复链，先等待 service.stop，确认旧用户进程已退出，再 leaveGeneration、join、watchMembers 和 campaign。任何一步失败就记录重试事件，按 2、4、8、16、30 秒退避，之后保持 30 秒。进程无法确认退出时持续隔离，不冒险启动第二份用户执行环境。</p>
+<p>隔离先同步让本代失效，清理随后完成；清理慢不是继续接活的理由。重新加入必须等旧业务和用户进程停干净，再领取新租约、订阅和竞选，不能在旧进程未退出时启动第二份。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/coordination/rejoin.mjs · 第 15–35 行</span><pre><code data-source="stages/s16-coordination/server/modules/coordination/rejoin.mjs" data-start="15" data-end="35">  async recover() {
     const c = this.coordination;
     let backoff = 2000;
@@ -3911,56 +3706,36 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
         c.record(&#39;rejoin-retry&#39;, { delayMs: backoff });
         await this.sleep(backoff);
         backoff = Math.min(30000, backoff * 2);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先 stop 和 leaveGeneration，再以新租约加入和竞选。</p></div></div>
-<p>重新加入意味着新成员 lease、新 generation 与新的竞选过程；它不会沿用旧 ownTerm，也没有自动切回首选节点的规则。如果另一个 control 已经正常服务，重新加入的节点就是热备。只有之后当选、确认任期并完成业务恢复才有机会就绪。一个节点恢复网络，不等于它马上获得接收用户请求的资格。</p>
-<table><thead><tr><th>接口或探测</th><th>热备 / 隔离节点</th><th>有效 control</th></tr></thead><tbody><tr><td>/health</td><td>进程仍活着时返回 200。</td><td>进程存活返回 200。</td></tr><tr><td>/ready</td><td>503；没有恢复好的业务服务。</td><td>先确认 control 与任期，再检查数据库、网关、模型与队列。</td></tr><tr><td>普通业务 HTTP</td><td>入口门禁拒绝，不凭 Caddy 缓存放行。</td><td>本代有效才交给业务 HTTP 处理。</td></tr><tr><td>GET /cluster</td><td>无有效服务时不可用。</td><td>经登录令牌验证，并且要求 admin。</td></tr></tbody></table>
-<p>Compose 容器健康检查使用 /health，因此 docker compose --wait 不会因为两个热备尚未就绪就把部署判断为失败。Caddy 用 health_uri /ready 决定转发，服务内部再独立检查任期，这两层检查各有职责。SSE 不缓冲，旧业务栈关闭时连接断开，客户端重新连接新 control，再用业务快照和持久状态核对进展。</p>
-<p>正常停机的顺序与网络分区不同：先关闭业务栈，防止共享文件并发，再 resign，最后 revoke 和取消 Watch。共享 lease 下 resign 本身可能已经撤销成员键，重复 revoke 保持幂等。分区时撤销请求可能送不到 etcd，因此释放本地 KeepAlive 并等待远端到期，不能把本地发送动作当成远端删除已经完成。</p>
-<p>选举适配还存在明确版本边界。当前锁定 etcd3 1.1.2，借助 Namespace 接口让 Election 使用已授予的成员 lease，依赖 Campaign 构造、grant 和写选举键的调用顺序。它不是稳定公开的 shared-lease API；升级库必须重新跑认证集成测试，核对成员键与选举键确实绑定同一个 lease，不能仅凭离线替身继续证明兼容。</p>
+<p>恢复网络后先作为热备，不自动切回。当选并完成恢复才有机会就绪。热备 <code>/health</code> 可为 200，<code>/ready</code> 为 503；容器用健康判断是否活着，Caddy 用就绪选择服务节点，节点入口仍独立验证任期。</p>
+<p>正常停机先停业务，再退出选举和撤销租约；网络分区时撤销可能送不到 etcd，只能停止本地续约、等待远端到期。发送撤销请求不代表删除已经完成。</p>
 </section>
-<section class="screen animate-in" id="s16-screen-6"><h2 class="screen-heading">从离线断言到故障实验：分别记录能证明的事实</h2>
-<p>先运行离线实验理解每个边界。测试注入 etcd3 接口替身，显式发送 elected，不自己实现一个假的候选排序算法来证明真实选举。课程的状态卡片与泳道是固定教学推演；可点击不意味着集群真的发生过故障。必须把实际命令退出码、断言和部署观察分别记录。</p>
-<pre class="terminal">npm run lesson -- list
-npm run lesson -- lease
-npm run lesson -- watch
-npm run lesson -- election
-npm run lesson -- fencing
-npm run lesson -- isolation
-npm run lesson -- service</pre>
-<table><thead><tr><th>实验</th><th>离线观察</th><th>需要外部验证的事实</th></tr></thead><tbody><tr><td>lease / watch</td><td>lost、迟到回包、快照、增量和压缩分支。</td><td>etcd 实际到期删除、网络断开与重连行为。</td></tr><tr><td>election / fencing</td><td>当选键核对、create revision 事务失败、旧代回调被拒。</td><td>真实三成员唯一 control、共享 lease 和旧任期事务拒绝。</td></tr><tr><td>isolation / service</td><td>同步关闭入口、迟到结果失效、先恢复再就绪。</td><td>实际容器进程关闭、PG 触发器、Redis worker 与 Linux uid。</td></tr></tbody></table>
-<p>真实 etcd 集成测试必须指向独立空实例，不能复用正在运行的业务集群。先初始化节点账号与角色，再提供测试连接和三个节点独立凭据，执行 npm run test:coordination。测试核对三成员唯一 control、成员键与选举键的 lease ID、撤销后的接任，以及认证账号无法写 /codex/ 之外的前缀。离线实验不能证明这些网络和认证事实。</p>
-<p>npm run test:data 需要 initdb、pg_ctl 和 redis-server，建立并清理独立临时数据库。coordination-pg 验证缺任期或旧任期写入 CT001、普通节点运维绕过返回 42501、新任期可以写入，以及推进必须等待旧事务提交。这组测试直接覆盖数据库锁与权限，不能用一段静态 SQL 摘录代替运行结果。</p>
-<p>容器故障实验前先完成 README 的配置、账号初始化和部署检查。用 cluster status 找到当前 control，再对该节点执行 kill 或 pause；不要固定认定 node-a 永远是主节点。kill 后等待旧 lease 到期，观察新 control、任期、ready 与对话恢复。pause 超过 TTL 再解冻时，观察旧代隔离、拒写与重新加入。restart: unless-stopped 可能自动重启节点，必须比较 lease 和 term，区分新进程加入与旧任期继续服务。</p>
-<p>网络分区实验同样先确认当前 control，断开其 Compose 网络，超过 TTL 后再接回。预期它先停止接收和派发，再确认旧进程退出，取得新 lease 并重新竞选。集群切换不自动重放不确定轮次，已执行工具必须核对历史。事件缓冲只保留近期 20 条，需要结合容器日志与经认证的 etcd 查询理解完整过程。</p>
-<p>备份、恢复和升级要停止三个节点，不能只停 control：热备可能马上接任并继续写共享卷。操作前保持固定数据路径，确认目标 Compose 项目和数据库，再按部署脚本完成一致停机与恢复。本章三个 agent 默认各 768 MiB，加上依赖的容器上限合计约 3.1 GiB；服务器还要为系统、镜像构建和文件缓存留余量，建议至少 4 GiB，实际负载需要实测。</p>
-<p>本章交付的判断方式有明确边界：lease 定义成员存活，Election 定义 control，etcd 任期事务保护协调写入，PG 触发器保护业务写入，generation 防止旧回调复活。它没有实现按用户分片、路由发布或数据副本；也没有让 PostgreSQL、Redis、网关、etcd 自动获得多故障域能力。下一步的分片与路由、再下一步的副本与故障接管，分别解决用户落点和节点数据接手的问题。</p>
+<section class="screen animate-in" id="s16-screen-6"><h2 class="screen-heading">接任之后，还缺少把负载分出去</h2>
+<p>主备解决的是故障时谁接任，验证重点应是旧主失权、新主恢复以及待核对任务是否被保留。离线实验核对逻辑分支，真实租约到期、PG 拒写和容器进程关闭仍需外部实验；部署参数与检查步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s16-coordination/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>及<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s16-coordination/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
+<p>停机、备份或恢复必须覆盖三个节点，否则热备可能接任并继续写共享卷。etcd 与 PostgreSQL、外部工具之间没有总原子事务，不能把切换理解成无损恢复所有副作用。</p>
 <div class="quiz-container" id="s16-quiz">
 <div class="quiz-question-block" data-correct="1" data-explanation-right="成功回包可能迟到；超过 TTL 或代次已经变化时不能重新开放入口。" data-explanation-wrong="成功回包可能迟到；超过 TTL 或代次已经变化时不能重新开放入口。"><h3 class="quiz-question">旧 control 解冻后收到之前的 KeepAlive 成功回包，应该怎么处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>直接恢复旧代</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>核对单调时钟与代次，超时则保持隔离</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>仅检查进程 PID</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="/health 表示进程存活；/ready 还要求有效 control、业务恢复和依赖检查通过。" data-explanation-wrong="/health 表示进程存活；/ready 还要求有效 control、业务恢复和依赖检查通过。"><h3 class="quiz-question">新 control 当选后，哪个顺序才允许开放 /ready？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>先 ready，再慢慢恢复任务</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>确认任期 → 推进 PG 任期 → 恢复 → ready</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只要容器 /health 是 200 就可以</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="不能把旧任务冒充为新任期；需要隔离旧代，关闭后重新加入，执行中的任务待核对而非自动重发。" data-explanation-wrong="不能把旧任务冒充为新任期；需要隔离旧代，关闭后重新加入，执行中的任务待核对而非自动重发。"><h3 class="quiz-question">新任期已经推进，旧 control 的 SQL 携带旧 app.term，应得到什么结果？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>继续提交，因为连接还活着</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>CT001 拒绝写入，并触发自我隔离</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>自动改为新任期后重试</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s16-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s16-quiz">重新作答</button></div></div>
+<p>一台坏了有人接任，但所有用户仍挤在 control，另外两台算力闲着，一台装不下的问题还在。下一章 s17 按用户分片，让每台机器都干活，并让任意入口找到用户所在的主节点。</p>
 <p><a href="/course/changes.html#s16">→ 打开 s16 阶段演示</a> · <a href="/course/#s16">→ 打开 s16 机制课堂</a></p>
 </section></div></div></section>
 
 <section class="module" id="module-s17">
-<div class="module-content">
-<header class="module-header animate-in">
-<span class="module-number">s17</span>
-<h2 class="module-title">分片与路由：用户的历史留在自己的主节点</h2>
-<p class="module-subtitle">用用户分片定位独立磁盘，用 revision 核对缓存，用 SH001 保护写入；迁移先暂停、等轮次、拷贝，再切换与恢复。</p>
+<div class="module-content"><header class="module-header animate-in">
+<span class="module-number">s17</span><h2 class="module-title">分片与路由：按用户分布，从任意入口找到他</h2>
+<p class="module-subtitle">用户先归分片，分片再归节点；请求核对路由，数据库核对写权，搬家前先停写。</p>
 </header><div class="module-body">
-<section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">把用户放在一个主节点，让任意入口找到他</h2>
-<p>一台机器放不下所有用户时，首先要决定搬走什么。请求只是一次通信，用户的原生历史才是后续对话的依据。Codex 将 SQLite 状态、JSONL 历史和记忆保存在这个用户的 CODEX_HOME；如果把连续两条消息随机发往不同磁盘，下一轮未必看得到上一轮的上下文。本章因此按用户分片，以数据库用户 UUID 作为稳定分片键，用户名只用于管理命令的查找。</p>
-<p>本章唯一新增单元是 sharding。它接入 HTTP、后台 worker、数据库事务和用户运行环境，回答三个问题：这个用户现在属于哪个分片，哪个节点负责这个分片，切换节点时怎样保持一份可继续使用的历史。协调模块仍管理 lease、Election、任期和失权重入；Hub 仍决定能读哪些知识、能用哪些工具。分片不会代替授权，也不会改变 Codex 的执行循环。</p>
+<section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">分片键是用户，不是消息</h2>
+<p>上一章的云端 Agent 有三个节点，却只有 control 干活，用户多了仍是一台装不下。本章把用户分到不同节点，让每台都工作；入口还要能找到用户，不能把请求随意交给一块没有他历史的磁盘。</p>
+<p>从 s14 起，历史、索引和记忆都保存在用户自己的 CODEX_HOME。若第一轮在 A、第二轮在 B，B 看不到前文。所以分片键取稳定的用户 ID，一个人的全部会话与原生状态跟着他落在同一主节点。</p>
 <figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1752" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
-<p><span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>与节点是两层不同的关系。一个用户先得到分片 ID，再用 shards 表找到 primary 和 epoch。<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>负责用户业务，control 负责放置与更新元数据。所有存活且完成业务恢复的成员都能服务自己的用户，各自承担所属用户的业务。</p>
-<p>三个节点各自挂载独立的 .data、workspace 和 .runs；只有部署 identity UUID 相同。PG 保存全局账号、Hub 授权和业务记录，Redis 唤醒任务，各节点本地保存自己的原生历史和文件。共享配置目录中的模型网关清单不等于共享用户数据。读取 PG 会话索引能知道会话存在，却不能替代丢失的原生文件。</p>
-<p>独立部署入口为 4335，内部 node-a、node-b、node-c 分别使用 4340、4341、4342。Compose 项目网络隔离后，内部端口可以相同，宿主入口必须区分。工作台的本阶段卡片只提供课程和 README 链接；通过 remote.sh tunnel 保持 SSH 隧道，在阶段目录设置本机入口并登录 CLI，才进入真实集群。</p>
-<table><thead><tr><th>对象</th><th>权威位置与职责</th><th>边界</th></tr></thead><tbody><tr><td>成员与 control</td><td>etcd lease / Election</td><td>进程存在不能代替有效租约。</td></tr><tr><td>shards / slots / overrides</td><td>etcd，control 按选举任期发布</td><td>本地缓存可能短暂落后。</td></tr><tr><td>user_shards / shard_owners</td><td>PG 映射、paused 与 epoch</td><td>写入还要验证节点 SQL 角色。</td></tr><tr><td>用户历史与工作区</td><td>用户所属节点的独立磁盘</td><td>没有后台副本和自动故障接管。</td></tr><tr><td>Codex</td><td>Thread、Turn、工具循环与原生历史</td><td>不决定分片归属或管理员迁移。</td></tr></tbody></table>
-<p>阅读后面的流程时，要把“有权接收”“有权执行”和“有权写入”分开观察。Caddy 的 ready 检查只选择可接入节点；入口随后按用户定位，主节点继续检查暂停与映射，SQL 最后检查实际行归属。前一个检查通过，不能提前替后一个检查作承诺。</p>
+<p>用户先属于一个<span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>，再由分片找到<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>。control 发布归属，主节点运行用户业务；两种职责不同。三个节点各用自己的磁盘，仅部署身份一致，PG 中有会话索引不等于其他节点已有原生文件。</p>
+<p>租约、任期、用户隔离和 Hub 权限继续生效。分片负责放置与寻找数据，不替代认证授权，也不改变 Codex 的执行循环。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-2"><h2 class="screen-heading">策略只算分片，override 优先于两种策略</h2>
-<p>默认 slots 策略先对用户 ID 做 SHA-256，取前 32 位无符号整数，再对 64 取模。64 个槽按 slot % 3 分给分片 0、1、2，槽数为 22、21、21。槽数量是固定规则，不意味着任意三个用户正好一人占一个分片。示例账号的 UUID 随机生成，观察分布时应看实际映射，而不是用用户名猜测。</p>
-<p>range 策略便于直观看到边界：去掉 UUID 的连字符，取第一个十六进制字节，00–54 归 0，55–a9 归 1，aa–ff 归 2。这是对照策略，不是对哈希槽算法的另一种写法。用户 ID 分布不均时会产生热点；所有节点必须选择一致的策略，已有数据不能通过改一个环境变量就当作完成搬迁。</p>
+<section class="screen animate-in" id="s17-screen-2"><h2 class="screen-heading">用户归分片，分片归机器，两步分开</h2>
+<p>分配策略只决定用户属于哪个分片，control 再决定分片在哪台机器。两步分开，换机器不必重新计算每个用户的归属；个别用户还能有 override 例外记录，供手动迁移使用。</p>
+<p>默认把用户 ID 哈希到 64 个槽，再按 slot % 3 分到三个分片，槽数为 22、21、21，不保证任意三个用户正好均匀。范围策略按 ID 前缀划分，直观但易冷热不均；改变策略本身不会搬走已有数据。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/strategy.mjs · 第 3–14 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/strategy.mjs" data-start="3" data-end="14">export const SLOT_COUNT = 64;
 export const defaultSlots = () =&gt; Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) =&gt; [n, SHARDS[n % 3]]));
 export const slotOf = id =&gt; createHash(&#x27;sha256&#x27;).update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;
@@ -3973,8 +3748,7 @@ export const strategies = {
     return n &lt; 0x55 ? &#x27;0&#x27; : n &lt; 0xaa ? &#x27;1&#x27; : &#x27;2&#x27;;
   } },
 };</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>slots 与 range 都返回分片 ID；完整策略对象不包含节点选择。</p></div></div>
-<p>策略不关心 node-a 或 node-b，它只返回分片 ID。RouteCache 再查询 /codex/shards 下的归属记录，取得 primary 和 epoch。管理员对单个用户的调整通过 /codex/overrides/&lt;userId&gt; 表达，优先级高于槽和范围。override 的值是 JSON 编码的分片字符串；兼容旧数字值时，计算结果仍统一为文本 ID，避免与 PG 的 text 列比较失败。</p>
-<p>这份兼容处理保留了诊断所需的原始值。routeStatus 可以同时显示 override 的值与类型、归一化后的 shardId、PG shard_id、本地暂停和 canDispatch。若某个非法 override 无法解释，代码不会悄悄回退到 slots，否则管理员看见一份指定映射，请求却走另一条默认规则，故障会被隐藏。</p>
+<p>override 优先于默认策略，合法数字值也统一成文本分片 ID；非法值不能悄悄回退，否则指定的归属与实际请求会不一致。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/cache.mjs · 第 67–74 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/cache.mjs" data-start="67" data-end="74">  routeOf(userId) {
     // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.
     // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.
@@ -3983,14 +3757,12 @@ export const strategies = {
     const owner = this.shards[shardId];
     return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>override 优先；合法数字值归一化为文本分片 ID，非法值不回退到默认策略。</p></div></div>
-<p>control 初始化时按当前成员排序，把三个分片放到三个成员。没有成员可选时保留空主，后续新增成员只填无主分片。已有主节点离开时保留原 primary，状态变为 unavailable；它的磁盘尚未复制到另一台机器，不能只改一个节点名称就声称完成接管。成员列表变化与分片数据归属变化是两件事。</p>
-<p>缓存通过一次 /codex/ 整前缀快照读取 shards、slots 和 overrides，三张表共享同一个 MVCC revision；随后从 revision+1 Watch。一个整前缀 Watch 比三个独立 Watch 更容易判断跨表进度。路由 apply 只处理需要的键，revision 用十进制字符串与 BigInt，不把可能很大的版本号转为不精确的 Number。</p>
-<p>快照与事件会交错到达。读快照期间收到的更新不能被旧快照覆盖，代码重放比快照新的后缀；断线或压缩后整表重读，再接新的 revision+1。每五秒对账作为兜底。Watch 提供快速传播，但“路由发布了”不等于“所有进程已经同时应用”，请求协议仍需要版本核对与有限重试。</p>
-<table><thead><tr><th>输入与状态</th><th>处理结果</th><th>不能推断的结论</th></tr></thead><tbody><tr><td>没有 override</td><td>使用所选 shardOf 策略</td><td>不能据此跳过 PG 用户映射。</td></tr><tr><td>合法 override</td><td>优先采用指定分片</td><td>不能据此认定主节点在线。</td></tr><tr><td>缓存落后</td><td>等待 Watch、对账或显式 refresh</td><td>不能保证请求立即成功。</td></tr><tr><td>原 primary 离线</td><td>503 SHARD_UNAVAILABLE</td><td>不能自动读取另一节点的磁盘。</td></tr></tbody></table>
+<p>每个节点缓存一份路由表，避免每次请求都查 etcd。启动整表读取 shards、slots、overrides，记录共同 revision，再用 Watch 增量更新；断线或版本压缩后重读，每 5 秒对账。快照期间的新事件要重放，不能被旧快照覆盖。</p>
+<p>Watch 快不等于所有节点同时更新，请求仍要核对版本。主节点离线时保留它的归属并返回不可用；磁盘没有复制过去，改个节点名不能完成接管。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-3"><h2 class="screen-heading">入口转发带版本，目标主节点再做一次判断</h2>
-<p>Caddy 根据 /ready 选择任意可服务成员。入口先验证 Bearer，从认证和资源记录确定路由用户，不能接受客户端随意提供的 x-route-user 作为可信归属。非主入口转发原用户令牌，并写入自己的 x-node-id、x-node-key、路由用户 ID 与 revision；目标重新认证用户和调用节点，节点密钥不代替用户身份。</p>
-<p>目标的 validateRoute 同时检查自己是否是用户主节点，以及自己的缓存 revision 是否不落后于请求。前者防止旧入口把用户送到已经失去归属的节点，后者防止较新的入口把请求交给尚未应用新信息的接收方。任一条件不通过都返回 409 STALE_ROUTE，这只是路由状态不一致，不授权任何节点绕过检查。</p>
+<section class="screen animate-in" id="s17-screen-3"><h2 class="screen-heading">任意入口转发，主节点再核对一次</h2>
+<p>路由让用户不必知道自己在哪台机器。任意就绪节点都可作为入口，先认证用户，再按缓存转发给主节点；接收方重新认证用户与调用节点，不能因为“来自集群”就信任身份和权限。</p>
+<p>接收方核对两件事：自己仍是该用户的主节点，自己的缓存 revision 不落后于请求携带的 revision。任一不满足返回 409 STALE_ROUTE；不是无条件拒绝版本较旧的转发请求。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/routing.mjs · 第 22–39 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/routing.mjs" data-start="22" data-end="39">export function validateRoute(cache, userId, nodeId, revision) {
   if (!/^\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) &lt; BigInt(revision)) throw staleRoute();
 }
@@ -4009,11 +3781,8 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     }
   }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>主节点核对归属与 revision；仅 STALE_ROUTE 允许 refresh 后再试一次，普通业务 409 不触发重试。</p></div></div>
-<p>routedRequest 最多进入两次循环：第一次请求，发生 STALE_ROUTE 后 refresh，再进行最后一次尝试。HTTP 返回还必须带 x-cluster-error: STALE_ROUTE，普通业务 409 不触发这条路径。刷新不会保证远端立刻追上；第二次仍不一致就向客户端返回错误。无限重试会让持续故障放大成请求风暴，也让用户无法知道任务是否进入执行。</p>
-<p>可以按两个例子理解同一个 409。第一种是入口的路由旧了，用户已经切到新主，旧主明确拒绝；入口刷新后改投新主。第二种是入口较新而目标 revision 落后，目标暂时不能确认请求；入口刷新重试时，目标还需要通过 Watch 或对账赶上。这两个窗口都不能靠伪造 revision 或忽略归属消除。</p>
-<p>普通 HTTP 转发有 30 秒超时，连接失败或超时返回不可用。SSE 不设同样的总时限，代理保留背压和断开传播，不把长连接当成卡死请求。事件在用户主节点产生，代理不重编 Last-Event-ID；迁移或重启之后事件代次改变，客户端回到快照，不承诺跨节点永久连续的全局事件序号。</p>
-<p>转发地址只来自已选择的 etcd 成员。即使外部请求采用 HTTP 绝对形式 URL，也只取 pathname 和 query 拼到成员地址，不能把内部节点密钥发送到请求者指定的外部域名。forwardHeaders 过滤跳跃头和来路中的 x-node-id、x-node-key、x-route-user、x-route-revision，再由服务端写入本次转发值。</p>
-<p>每个节点持有独立的 AGENT_NODE_KEY_A/B/C 中属于自己的明文密钥，以及全部节点的 SHA-256 验证哈希。authenticateNode 用 x-node-id 选择预置哈希，再以 timingSafeEqual 核对来钥的哈希，验证通过才返回调用节点身份。仅自报 node-a 或知道自己的节点密钥，不能冒充另一个节点；内部接口还要按具体操作检查权限，不能把“来自集群”当作管理员授权。</p>
+<p>入口只在 STALE_ROUTE 时刷新缓存并重试一次，普通业务 409 不触发重试。旧入口可能投错主，或较新的入口遇到尚未更新的接收方；第二次仍不一致就返回错误，不无限重试放大故障。</p>
+<p>节点凭据证明调用来自哪个节点，用户令牌证明代表谁，两者不能互相代替。转发过滤客户端自带的内部身份头，目标地址只来自集群成员，防止把节点密钥送往任意外部地址。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/routing.mjs · 第 9–16 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/routing.mjs" data-start="9" data-end="16">export function authenticateNode(headers, keyHashes) {
   const nodeId = headers[&#x27;x-node-id&#x27;], key = headers[&#x27;x-node-key&#x27;];
   const expected = keyHashes?.[nodeId];
@@ -4022,18 +3791,18 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     throw new AppError(&#x27;节点认证失败。&#x27;, 403, &#x27;NODE_AUTH&#x27;);
   return nodeId;
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>节点身份必须由对应密钥证明；身份头只用于选择待验证的节点，不直接授予权限。</p></div></div>
-<p>GET /cluster/route?username=… 是管理员诊断入口。它按成员内容里的 nodeId 查询每个节点，观察各自缓存、原始 override 类型、本地暂停和 PG 映射，不自动 refresh，以免消除 Watch 滞后证据。成员 Map 的键是完整 etcd 路径，节点身份应取 value.nodeId。</p>
-<table><thead><tr><th>观察到的错误</th><th>可能位置</th><th>下一步核对</th></tr></thead><tbody><tr><td>409 STALE_ROUTE</td><td>归属已变或目标 revision 落后</td><td>比较各节点缓存 revision，再看一次重试结果。</td></tr><tr><td>503 SHARD_UNAVAILABLE</td><td>未知主、离线主或暂停准入</td><td>检查成员、primary、PG paused 与 canDispatch。</td></tr><tr><td>诊断只有某节点报错</td><td>成员不可达或内部请求失败</td><td>保留其他节点结果，分别核对成员 nodeId 与地址。</td></tr><tr><td>SSE 重新回到快照</td><td>主节点事件代次改变</td><td>核对持久会话状态，不拼接不同代次的事件序号。</td></tr></tbody></table>
+<p>普通 HTTP 转发上限 30 秒；SSE 长连接保留背压和断开传播，不套用相同总时限。迁移或重启使事件代次变化时，客户端回到持久快照核对，不拼接不同节点的事件序号。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-4"><h2 class="screen-heading">准入挡住新派发，SH001 挡住错误的行写入</h2>
-<p>入场检查不能只看“这个容器 ready”。同一个节点可以负责许多用户，其中一个正在迁移时，其余用户还应继续服务。ShardRuntime.owns 要求本节点租约有效且缓存 primary 等于本节点；canDispatch 再看本地暂停，并查询 PG 的 paused 和 shard_id。只有两边映射一致且都未暂停，才允许继续派发；admit 将不满足条件的请求转成不可用错误。</p>
+<section class="screen animate-in" id="s17-screen-4"><h2 class="screen-heading">数据库按分片隔离写入</h2>
+<p>路由决定请求往哪走，数据库决定谁有权写。用户迁走后，旧节点可能还有后台任务，因此业务写入也要携带节点身份与分片任期 epoch；不匹配就以 SH001 拒绝。</p>
+<p>派发前还要同时确认租约、缓存归属和 PG 用户映射，并且用户未暂停。一个用户迁移时，只暂停他，其他用户继续工作。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/runtime.mjs · 第 18–23 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/runtime.mjs" data-start="18" data-end="23">  async canDispatch(userId) {
     if (!this.owns(userId) || this.paused.has(userId)) return false;
     const row = (await this.pool.query(&#x27;SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1&#x27;, [userId])).rows[0];
     return this.owns(userId) &amp;&amp; !this.paused.has(userId) &amp;&amp; row &amp;&amp; !row.paused &amp;&amp; row.shard_id === this.cache.routeOf(userId).shardId;
   }
   async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable(&#x27;用户正在迁移、归属尚未初始化或本节点不是分片主节点。&#x27;); }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>查询 PG 前后都核对本地租约、主归属与暂停，避免异步查询期间状态变化后放行。</p></div></div>
-<p>后台任务也要服从同一归属规则。任务扫描、恢复、媒体轮询、知识索引和用户目录初始化都过滤本节点用户。Redis 的 ready key 带 nodeId，但 Redis 只负责唤醒。媒体 tick 在每次 poll 前调用 canDispatch；暂停期间不启动新轮询。pollingOwners 在异步准入检查完成前就登记该次工作，drain 通过 waitOwner 等待已经开始的检查与轮询结束，避免复制期间又有媒体结果写盘。</p>
+<p>后台扫描、媒体轮询和知识索引也按归属派发。暂停后不启动新工作，搬文件前等已进入的异步工作结束，避免刚检查空闲就又有结果写盘。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/media/index.mjs · 第 159–175 行</span><pre><code data-source="stages/s17-sharding/server/modules/media/index.mjs" data-start="159" data-end="175">  async waitOwner(userId) { await this.pollingOwners.get(userId); }
   tick() {
     if (this.running || this.controller.signal.aborted) return this.running;
@@ -4051,7 +3820,7 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     })().finally(() =&gt; { this.running = null; });
     return this.running;
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>tick 逐项登记并等待媒体工作；paused 用户跳过新 poll，drain 等待既有工作退出。</p></div></div>
-<p>真正落库时，fencePool 为业务连接的事务设置 app.node 和 app.shard_epoch；普通单条 query 也包在事务中。身份来自认证上下文或持久任务 owner，资源管理请求可以在保持 actor 授权身份的同时，将 shard 上下文切到目标资源 owner。不能为了写资源而把请求者伪装成所有者。</p>
+<p>写入事务设置节点与 epoch，数据库从实际行追溯用户和分片，核对真实 SQL 角色。跨用户资源操作保留请求者的授权身份，只把写入分片定位到资源所有者。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 24–29 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/fence.mjs" data-start="24" data-end="29">export async function setShard(client, generation) {
   generation.assert();
   const user = shardUser(), route = user &amp;&amp; generation.routes.routeOf(user);
@@ -4073,8 +3842,7 @@ BEGIN
     &#x27;nodeId&#x27;,supplied,&#x27;suppliedEpoch&#x27;,current_setting(&#x27;app.shard_epoch&#x27;,true))::text;
  END IF;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>两张映射持锁到提交；核对真实 SQL 角色与 epoch，并在暂停且操作单处于 copying、copied、switched 或 failed 时拒写。</p></div></div>
-<p>check_shard 从 user_shards 联到 shard_owners，锁住用户映射与分片归属行直到提交；切换必须等待已持锁的事务。它比较真实 current_user 与 app.node 对应的节点角色，并核对 epoch。操作单为 paused 时，已开始的轮次可以完成收尾写入；进入 copying、copied、switched 或 failed 且用户仍暂停时，数据库拒绝该用户业务写入。这样停写边界同时约束后台迟到写入。</p>
-<p>行 owner 可能直接在 owner_id 或 user_id，也可能通过会话、知识库、资源引用追溯。UPDATE 同时检查 OLD 和 NEW，防止把别人的数据改成自己的 owner 后绕过保护。全局账号和登录令牌表服务所有节点，但节点角色校验之外还有列级权限：users 只允许 UPDATE(plan_id)；auth_sessions 允许 INSERT 与 UPDATE(last_seen_at, revoked_at)，无 DELETE；agent_versions 只允许 INSERT。建号、用户名、角色、密码和禁用状态由 maintenance 运维连接管理，plans、imports 也不向节点开放业务写入。</p>
+<p>用户映射与分片归属锁到事务提交，切换必须等旧事务完成。暂停阶段允许在途轮次收尾，进入复制阶段就拒绝该用户业务写入。UPDATE 同时检查修改前后的 owner，防止先改归属再绕过保护。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/018-move-security.sql · 第 17–27 行</span><pre><code data-source="stages/s17-sharding/server/modules/data/migrations/018-move-security.sql" data-start="17" data-end="27">DO $$ DECLARE r text; BEGIN
  FOREACH r IN ARRAY ARRAY[&#x27;agent_node_a&#x27;,&#x27;agent_node_b&#x27;,&#x27;agent_node_c&#x27;] LOOP
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
@@ -4107,7 +3875,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
   END IF;
  END LOOP;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>业务表挂逐行 shard_owner_guard；全局表挂节点校验，映射表保留 control 任期保护。</p></div></div>
-<p>SH001 表示缺失、外来或过期的分片写入。诊断先取实际被拒行的 owner，不能只用当前 requester 猜测，因为跨用户资源操作的写入目标可能不同。刷新前认为自己是主，刷新后确认用户已移走，只让这一请求失败并保留本节点其他分片；如果仍认为自己是主，或刷新失败，则隔离这个代次并记录诊断。旧 control 的元数据写入仍由 CT001 任期规则保护。</p>
+<p>SH001 后用被拒行的真实 owner 刷新归属。确认用户已移走，只拒绝该请求；仍认为自己是主或刷新失败，则隔离当前代次。control 的协调写入继续由 CT001 保护。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 7–23 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/fence.mjs" data-start="7" data-end="23">export async function shardFailure(error, generation, origin, statement) {
   if (error.code !== &#x27;SH001&#x27; || error.shardDiagnostic) return;
   // The rejected ROW is authoritative. Requester identity alone cannot identify its shard.
@@ -4125,11 +3893,11 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
   });
   if (isolate) generation.isolate?.(refreshFailed ? &#x27;shard-refresh-failed&#x27; : &#x27;database-stale-shard&#x27;);
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>使用数据库错误里的实际行 owner 诊断；刷新结果决定隔离当前代次还是仅拒绝此请求。</p></div></div>
-<p>这些锁与触发器保护 PostgreSQL 的写入。已经发生的工具副作用、磁盘写入和外部模型调用不在 SQL 事务里，不能因为数据库拒绝就声称其他动作已撤销。迁移还需要停止新派发、等待在途工作，并明确处理不确定的提交结果。离线测试可以验证错误分支与隔离决策，实际触发器和锁等待必须用真实 PostgreSQL 验收。</p>
+<p>数据库拒写不能撤销模型请求、工具副作用或磁盘写入，所以迁移仍需要停派发、等在途工作，并保留不确定结果待核对。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-5"><h2 class="screen-heading">迁移先等旧轮次结束，再移动文件与发布新归属</h2>
-<p>管理员执行 cluster move 时，请求由 control 编排；跨节点交给 control 时还要重新验证终端用户令牌的 admin 角色。control 持有单用户 advisory lock，beginMove 在任期保护的 PG 事务里创建 move_operations 操作单并将 paused 设为 true。操作单绑定用户、源/目标分片、control/源/目标节点及 30 分钟有效期，状态依次为 paused、copying、copied、switched、resumed，失败记为 failed。</p>
-<p>操作单限定内部调用能做哪一步。pause、drain、copy、resume 必须由单据中的 control 节点调用；transfer、content 必须由源节点发给目标节点，用户、接收节点、目标与状态都要匹配。接收端在发布目录或正文前再次检查操作单和暂停，拒绝过期或迟到传输。仅持有节点密钥，不能任意指定用户或写入另一节点的目录。</p>
+<section class="screen animate-in" id="s17-screen-5"><h2 class="screen-heading">迁移：先停写，再搬家</h2>
+<p>搬家时数据不能还在变化。手动迁移先暂停新任务，等执行中的轮次结束并关闭用户进程，再复制 CODEX_HOME 和工作目录，切换归属后才恢复派发。</p>
+<p>control 创建持久操作单，绑定用户、源目标、调用节点和 30 分钟有效期。内部步骤按单据核对身份与状态，节点密钥不能授权任意搬动他人的目录。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/operations.mjs · 第 3–13 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/operations.mjs" data-start="3" data-end="13">export async function authorizeMove(pool, { operationId, userId, caller, receiver, step, target }) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(operationId || &#x27;&#x27;)) throw denied();
   const op = (await pool.query(&#x27;SELECT * FROM agent_data.move_operations WHERE id=$1 AND expires_at &gt; now()&#x27;, [operationId])).rows[0];
@@ -4141,7 +3909,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
       (target !== undefined &amp;&amp; target !== op.target_node)) throw denied();
   return op;
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>检查单据有效期、用户、步骤状态、调用者和接收者；resume 只接受 switched，数据传输只接受 copying。</p></div></div>
-<p>PG 持久暂停覆盖进程重启，本地暂停及时关闭入场。已进入 starting、running 或 steering 的轮次允许完成；drain 等待在途 HTTP、进程引用、任务、索引及已开始的媒体轮询，再关闭用户进程。暂停时关闭用户 SSE。管理员编排可以等长轮次，但操作单有效期仍是 30 分钟；过期须核对状态，不能跳过 drain 或自动恢复已暂停的用户。</p>
+<p>暂停写入 PG，重启后也不会丢；drain 等待在途请求、轮次、索引和媒体轮询，关闭该用户 SSE 与进程。单据过期或任何一步失败都保持暂停，不跳过等待、不自动重做。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/move.mjs · 第 3–24 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/move.mjs" data-start="3" data-end="24">export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {
   if (!SHARDS.includes(shardId)) throw new Error(&#x27;分片必须是 0、1、2。&#x27;);
   const term = control.coordination?.term();
@@ -4164,7 +3932,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
     throw error;
   }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>beginMove 创建操作单并持久暂停；所有内部步骤携带 op.id，复制完成才切换；finishMove 收尾，失败则 failMove 保持暂停。</p></div></div>
-<p>copy 使用内部 HTTP 流式 tar，没有额外 SSH 数据通道，也没有后台持续复制。CODEX_HOME 由该用户数值 uid/gid 导出；workspace 由服务身份读取，因为工作区可能同时含用户与服务拥有的合法文件。迁移保留数值属主，不能只按用户名猜权限。源和目标必须采用同一 uid 映射与固定绝对部署目录，原生历史里的路径才有一致解释。</p>
+<p>拷贝保留数值 uid/gid，源目标使用同一用户映射和固定绝对路径，原生历史才能接着用。传输通过内部 HTTP 流式 tar；home 按用户身份导出，workspace 按服务身份读取合法文件。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer.mjs · 第 41–60 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer.mjs" data-start="41" data-end="60">export function exportTree(root, record, kind) {
   const directory = transferPath(root, record, kind); assertRealPath(directory);
   const identity = kind === &#x27;home&#x27; ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };
@@ -4185,7 +3953,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
     await done.catch(() =&gt; {});
   } };
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>home 以用户 uid/gid，workspace 以服务身份导出；辅助进程只接收最小环境，导出错误与终止均被等待。</p></div></div>
-<p>CODEX_HOME 的顶层 tmp/ 是运行时临时目录，可能有 arg0 辅助符号链接，启动时会重建。它不属于用户历史，因此导出检查和 tar 都跳过这一个顶层目录。其他位置的符号链接、硬链接、特殊文件、越界路径与不匹配属主仍然拒绝，不能为了绕开一个临时链接而放宽整棵目录的验证。workspace 不套用 home 的 tmp 排除规则。</p>
+<p>home 顶层 tmp 是运行时临时目录，启动可重建，因此不复制；其他位置的链接、特殊文件、越界路径和错误属主仍拒绝，不能放宽整棵目录验证。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer-worker.mjs · 第 9–25 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer-worker.mjs" data-start="9" data-end="25">const skipTop = process.argv[3] === &#x27;home&#x27; ? new Set([&#x27;tmp&#x27;]) : new Set();
 function inspect(target, top = false) {
   const s = fs.lstatSync(target);
@@ -4203,7 +3971,7 @@ try {
   child.once(&#x27;error&#x27;, e =&gt; { console.error(e.message); process.exitCode = 1; });
   child.once(&#x27;exit&#x27;, code =&gt; { process.exitCode = code ?? 1; });
 } catch (e) { console.error(e.message); process.exitCode = 1; }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>完整检查函数与导出流程：仅跳过 home 顶层 tmp，拒绝链接、特殊文件、不合法属主和文件名。</p></div></div>
-<p>接收端按单次传输计量：tar、正文 blob 和 BM25 索引的接收上限均为 1 GiB，AGENT_TRANSFER_MAX_BYTES 只允许下调。创建文件前检查目标卷至少有两倍配置上限的可用空间；tar 还检查临时归档所在卷。空间不足返回 507，流超限返回 413，并清理临时文件。此上限约束每次接收，不是整个用户目录总量的配额。</p>
+<p>每次接收默认最多 1 GiB，只能下调；落盘前检查至少两倍配置上限的空间。空间不足返回 507，流超限返回 413，清理临时文件。归档先校验，再在同挂载的暂存目录恢复权限和属主，最后发布，避免混合 SQLite 文件。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer.mjs · 第 14–33 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer.mjs" data-start="14" data-end="33">export const MAX_TRANSFER_BYTES = 1024 ** 3;
 export function transferLimit(env = process.env) {
   const value = env.AGENT_TRANSFER_MAX_BYTES === undefined ? MAX_TRANSFER_BYTES : Number(env.AGENT_TRANSFER_MAX_BYTES);
@@ -4224,8 +3992,7 @@ export function limitTransfer(limit = transferLimit()) {
   } });
 }
 export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o2777 : 0o777);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>流经过 limitTransfer 逐块计数；空间检查先于落盘。普通文件只恢复 0777 内权限，目录只额外保留 setgid。</p></div></div>
-<p>tar 先落临时归档，再列举并校验条目，拒绝链接、设备文件、路径穿越、重复条目、不匹配属主与 setuid。提取到目标目录同一挂载内的暂存目录，以免 rename 跨设备失败。按清单从下往上恢复属主，并用 restoredMode 清除普通文件全部特殊权限位，目录仅保留 setgid；校验完成后才发布，避免混合残留 SQLite 文件。旧目标与源副本保留供运维核对。</p>
-<p>用户工作区和 CODEX_HOME 都复制成功还不够。关联不可变 blob 根据 PG 用户关系选择，BM25 根据用户知识库索引选择，不能把其他用户数据一起打包。外部向量库仍是既有单实例，不在节点间复制；.runs 属于节点本地日志，不是迁移后会话历史的来源。全部内容就绪后才进入 switchUser。</p>
+<p>home、workspace、用户关联的不可变正文与 BM25 索引全部到位后，先在 PG 事务提交用户归属，再向 etcd 发布 override。外部向量库仍是单实例，运行日志不作为会话历史搬迁。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/control.mjs · 第 110–126 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/control.mjs" data-start="110" data-end="126">  async switchUser(userId, shardId, operationId) {
     const term = this.coordination.term();
     try {
@@ -4243,13 +4010,11 @@ export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o27
       throw error;
     }
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>copied → switched 与 PG 用户归属在同一任期事务内提交，之后才发布 etcd override；失败记录操作单并保持暂停。</p></div></div>
-<p>switchUser 先在 PG 事务中核对操作单的用户、源分片、目标和暂停，将 copied 推进为 switched 并更新 user_shards；locked 返回代表 COMMIT 完成，此后才 guardedPut 发布 etcd override。这个顺序避免先发布路由、数据库却仍为旧归属。两库没有原子提交，仍可能出现 PG 已提交而 etcd 未发布的窗口；paused 持续阻止新派发，操作单与行触发器约束写入。两端刷新并解除本地暂停后，finishMove 在同一事务将单据推进为 resumed 并解除 PG 暂停。</p>
-<p>失败统一进入 failMove：用原任期受 PG 锁保护地记录 failed 并保持 paused，不自动把 PG 或 override 改回源分片。copy 失败时归属仍在源，但也不自动恢复；切换或收尾 COMMIT 回复丢失时，以数据库实际状态为准，保留两份磁盘供运维核对。若较新 control 已取得任期锁，旧 control 的失败记录也会被拒绝，调用方标记 rollbackFailed 表示无法确认收尾。此字段不是自动回滚成功的承诺。</p>
-<p>control 对账只采纳最新操作单处于 switched/resumed 且目标匹配的 override，更新也只针对暂停用户；缺单、未复制完成或 failed 的 override 会被记录并忽略。beginMove 拒绝已暂停用户，重复 move 不能充当自动恢复。管理员需核对操作单、PG、etcd 与两端副本后再安排恢复。</p>
-<p>迁移成功后的验收是用同一用户继续同一会话。先查 cluster route 看各节点缓存与 PG 映射，再通过任意入口续聊，确认请求到新主且历史可读。只看到 tar 成功或 override 改变，不足以证明整条流程完成。节点磁盘已损坏或源节点离线时，这套手动迁移也不能凭空恢复数据。</p>
+<p>PG 与 etcd 没有跨库原子提交。发布或收尾失败就保持暂停，保留两份磁盘，以实际数据库状态为准核对，不自动回退；即使 COMMIT 回复丢失，也不能推断提交没发生。</p>
+<p>迁移成功要用同一用户继续同一会话来验证。源目标必须在线，源磁盘已坏时，手动迁移不能凭空恢复历史。传输与故障核对细节见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s17-sharding/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-6"><h2 class="screen-heading">授权、故障与实验：分别核对每一层证据</h2>
-<p>共享知识库仍只有所有者主节点的一份权威内容。被授权者节点先按 kb、mount 与 Hub 检查，再携带节点凭据和终端用户 Authorization 发内部只读请求。所有者节点拒绝正文中的 requester 字段，通过全局账号与会话表重新认证令牌，取得真实 requester，并获取新的 Hub 权限快照后读取自己的文件或不可变 blob。节点密钥不能替代有效用户令牌，自报用户 ID 也不能代替授权。</p>
+<section class="screen animate-in" id="s17-screen-6"><h2 class="screen-heading">共享知识只有一份，一台坏了只影响它那一片</h2>
+<p>用户分开存放后，共享知识库仍只有所有者主节点上的一份权威内容。接收者节点先问 Hub，再带着用户令牌访问所有者主节点；后者重新认证并检查授权，才通过只读接口交出内容，中途撤销也不能被缓存放行。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/knowledge.mjs · 第 31–42 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/knowledge.mjs" data-start="31" data-end="42">  runtime.readKnowledge = async (body, authorization) =&gt; {
     if (Object.hasOwn(body, &#x27;requester&#x27;)) throw new AppError(&#x27;不接受自报 requester。&#x27;, 403);
     const { action, args, revision } = body;
@@ -4262,36 +4027,30 @@ export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o27
       return local(action, args, owner);
     }))));
   };</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先拒绝自报 requester，再认证终端用户令牌；以认证身份取得新的 Hub 快照，并核对路由、暂停和读取权限。</p></div></div>
-<p>后续工具调用可以从本节点内存复用最近认证的用户令牌；令牌不写入任务、磁盘或操作单。节点重启或用户迁到新节点后，需要新的已认证请求建立该上下文，缺少令牌时拒绝跨分片读取。会话撤销、用户禁用和授权撤销都由所有者节点重新判断；不能切换成 owner 身份跳过检查。</p>
-<p>内部知识接口只允许 read、search、pages 和 resource。跨分片 RAG 查询在请求者节点生成 query embedding 并按请求者计费，内容读取仍由所有者主节点执行。未授权者看到 404，失效来源和未挂载知识库仍被拒绝。迁移不会让一份被撤销的授权恢复，也不会因为文件复制到了新节点就改变 Hub 的资源所有者。</p>
-<p>离线实验先验证策略与流程，再安排外部验收。运行以下命令不会监听端口，也不调用真实模型；界面的泳道和状态卡是固定教学推演，不意味着系统正在执行迁移。命令输出的断言与退出码才是这次本地运行的证据。</p>
-<pre class="terminal">npm run lesson -- list
-npm run lesson -- strategies
-npm run lesson -- stale-route
-npm run lesson -- shard-fence
-npm run lesson -- move</pre>
-<table><thead><tr><th>实验</th><th>离线可验证</th><th>仍需外部验证</th></tr></thead><tbody><tr><td>strategies</td><td>槽、范围、override 优先级</td><td>真实用户负载是否均衡。</td></tr><tr><td>stale-route</td><td>409 刷新一次、503 与事件字节透传</td><td>认证 etcd Watch 时延、真实 HTTP/SSE 断开。</td></tr><tr><td>shard-fence</td><td>SH001 诊断和隔离决策</td><td>真实 PG 触发器、节点角色与事务互锁。</td></tr><tr><td>move</td><td>操作单状态、暂停、复制、提交顺序与失败保留</td><td>Linux uid、tar 权限、跨挂载发布和原生会话续聊。</td></tr></tbody></table>
-<p>真实数据库测试使用专用临时实例，验证旧节点 SQL 被 SH001 拒绝，更新 owner 的 OLD 与 NEW 都受约束，映射切换必须等待旧事务结束。etcd 集成测试使用独立认证实例，核对快照、Watch、控制任期和键空间权限。节点凭据的静态 RBAC 限制 /codex/ 前缀，“只有 control 写归属”由受信任节点的 guardedPut API 动态实现；不能将 API 拒绝等同于原始节点凭据完全没有 put 能力。</p>
-<p>Linux UID 集成测试需要能切换 uid/gid 的 0:1000 容器。原生历史是用户私有文件，服务进程不依赖 DAC_OVERRIDE 直接打开；辅助进程以用户身份读写。知识维护完成后还要执行 Workflow 验收，验收拿到的 runtime.workspaceDir 已是用户目录，不能再追加 users/&lt;id&gt;。否则文件产物会查错位置，知识维护即使已生成有效 Wiki 也会因目录访问失败进入 needs-review。</p>
-<p>部署操作按 README 初始化账号与模型网关，再启动 etcd、PG、Redis、各节点和入口。etcd 健康检查使用只读 health 键的独立账号，不复用 root；升级已有部署保留原凭据与数据卷，只补所需配置。备份按节点保留各自磁盘，停机操作覆盖全部节点，不能只停 control 后让其他成员继续写。这里的配置和启动不是课程网页自动替用户执行的动作。</p>
-<p>故障实验先用 cluster status 确认分片归属，再停止选定节点。成员租约约十秒到期以后，该节点负责的分片返回不可用，其他分片继续服务；重启后原主恢复并核对未确认任务，不自动重放可能已产生副作用的轮次。暂停进程超过 TTL 后再恢复，也需要隔离旧代并按重新加入规则建立新租约，不能延续过期的服务权。</p>
-<p>本章没有副本、复制位点、自动提升、故障切换或自动重平衡。etcd、PostgreSQL、Redis 与模型网关在教学部署中仍是单实例，三个业务节点不能消除这些依赖的单点。手动迁移要求源目标在线；失去主磁盘就失去该用户的原生历史，PG 会话索引不是它的备份。系统能证明的是归属、有限重试、数据库拒写和停写后的手动搬迁，不能把这些能力扩展成无损自动恢复承诺。</p>
+<p>后续读取可复用内存中的最近认证令牌，但令牌不写入任务或磁盘；重启后缺令牌就拒绝跨分片读取。RAG 查询在请求者节点生成 embedding 并按请求者计费，内容仍由所有者节点读取。</p>
+<p>一台节点停止，只让它负责的分片返回 503 和原因，其他分片照常服务。重启要核对不确定任务，不自动重跑。策略、路由、拒写与迁移实验见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s17-sharding/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>；真实 PG、etcd、Linux uid 和原生续聊需分别验收。</p>
 <div class="quiz-container" id="s17-quiz">
 <div class="quiz-question-block" data-correct="0" data-explanation-right="一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。" data-explanation-wrong="一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。"><h3 class="quiz-question">收到 409 STALE_ROUTE 后应该怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>整表刷新路由，最多再试一次</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>绕过主节点校验直接执行</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>无限重试直到成功</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="迁移和后台任务存在并发窗口，数据库写入时必须再次校验。" data-explanation-wrong="迁移和后台任务存在并发窗口，数据库写入时必须再次校验。"><h3 class="quiz-question">只在 HTTP 入口核对主归属，足以阻止旧节点写库吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>足够，缓存永远一致</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不够，SQL 还要核对 owner、节点角色与 epoch</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只检查用户名称即可</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="2" data-explanation-right="目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。" data-explanation-wrong="目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。"><h3 class="quiz-question">解除暂停的 COMMIT 回复丢失，可以立即恢复旧磁盘吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，旧副本还在</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>可以，同时让两边服务</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>不可以，重新暂停并保留目标归属，核对后恢复</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s17-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s17-quiz">重新作答</button></div></div>
+<p>分片让每台机器都干活，但用户数据仍只在一台磁盘上，主节点坏了只能等。下一章 s18 提前把数据复制给副本，让别的节点接手，同时说清最后一点没来得及复制的内容会怎样。</p>
 <p><a href="/course/changes.html#s17">→ 打开 s17 阶段演示</a> · <a href="/course/#s17">→ 打开 s17 机制课堂</a></p>
-</section>
-</div></div></section>
+</section></div></div></section>
 
 <section class="module" id="module-s18">
-<div class="module-content"><header class="module-header animate-in"><span class="module-number">s18</span><h2 class="module-title">副本与故障接管：保留可核对的异步历史窗口</h2><p class="module-subtitle">边界快照后继续服务，接管明确接受尾部丢失；epoch 拒绝旧主写入，旧主以副本回归。</p></header><div class="module-body">
-<section class="screen animate-in" id="s18-screen-1"><h2 class="screen-heading">先区分业务记录与原生历史</h2>
-<p>主节点保存着用户的 SQLite、JSONL、记忆与工具产物。业务任务已经写进 PostgreSQL，不代表另一台机器已经有了这些原生历史。副本要回答的第一个问题是“哪些历史已经完整到达”，随后才是“谁能接着服务”。</p><p>本章的副本是异步历史窗口，尾部丢失明确接受。主服务继续向前执行，副本只保留最近一次成功提交的边界；主节点故障时，不把尚未复制的历史说成已经恢复。</p><figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1864" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure><p>Codex 负责原生历史与执行循环；worker 负责边界快照与异步发送；store 负责位点、落后统计和任务核对；control 负责接管、发布对账和旧主回归。<a class="term" data-definition="隔离保存当前服务实例配置、会话记录、原生 SQLite 与元数据的宿主目录。" href="/course/glossary.html#term-codex-home">CODEX_HOME</a> 仍属于各用户的运行环境，副本不改变用户隔离与 Hub 授权。</p><table><thead><tr><th>分片</th><th>初始主</th><th>初始副本</th></tr></thead><tbody><tr><td>0</td><td>node-a</td><td>node-b</td></tr><tr><td>1</td><td>node-b</td><td>node-c</td></tr><tr><td>2</td><td>node-c</td><td>node-a</td></tr></tbody></table><p>这三份磁盘彼此独立。PG 保存主副本归属、epoch 与复制位点，etcd 提供租约和可 Watch 的路由发布面；Redis 继续唤醒持久任务。副本不等于控制面也有高可用。</p>
+<div class="module-content"><header class="module-header animate-in"><span class="module-number">s18</span><h2 class="module-title">副本与故障接管：有人接手，丢多少说得清</h2><p class="module-subtitle">先拍快照再慢慢发，按会话标记尾部丢失；旧主先当副本，追平后才能再当主。</p></header><div class="module-body">
+<section class="screen animate-in" id="s18-screen-1"><h2 class="screen-heading">每个分片一主一从，环形放置</h2>
+<p>上一章让云端 Agent 的每台机器都干活，但用户历史只在一块磁盘上，主节点坏了只能等。本章提前把历史复制到另一个节点，让它能接手；复制会慢一步，因此还必须说明哪些内容已经到达、哪些尾部可能丢失。</p>
+<figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1864" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure>
+<p>每个分片有一个副本，三个节点环形错开；每台既是一个分片的主，也是另一个分片的副本。<a class="term" data-definition="隔离保存当前服务实例配置、会话记录、原生 SQLite 与元数据的宿主目录。" href="/course/glossary.html#term-codex-home">CODEX_HOME</a>仍按用户隔离，复制不改变 Hub 授权。</p>
+<table><thead><tr><th>分片</th><th>初始主</th><th>初始副本</th></tr></thead><tbody><tr><td>0</td><td>node-a</td><td>node-b</td></tr><tr><td>1</td><td>node-b</td><td>node-c</td></tr><tr><td>2</td><td>node-c</td><td>node-a</td></tr></tbody></table>
+<p>PG 保留任务事实、归属和复制位点，磁盘保存原生历史；任务写进 PG 不代表副本已有文件。etcd 提供租约和路由发布，副本只解决节点磁盘，不代表控制面也高可用。</p>
 </section>
-<section class="screen animate-in" id="s18-screen-2"><h2 class="screen-heading">先固定历史边界，再异步发送</h2>
-<p>副本是异步历史窗口；暂停新轮次只到本地快照完成，位点只描述快照已经包含的历史。</p><p>轮次结束后等待 5 秒合并同用户请求；先关派发、等已进入边界的请求，再检查全部会话。快照生成后立即 release，目标队列和网络耗时不再占用用户暂停。每目标串行、不同目标并行；主节点在成对目录与附属内容校验发布后，以 SH001 保护提交快照位点。发送中有新边界会记脏标记，成功或失败后都再等 5 秒调度；60 秒空闲扫描兜底。</p><table><thead><tr><th>概念</th><th>职责与边界</th></tr></thead><tbody><tr><td>边界快照</td><td>用户全部会话没有执行中轮次时，关闭空闲进程并固定 home、workspace、内容清单和 sequence。</td></tr><tr><td>复制位点</td><td>成功发布后提交的 shard、epoch、sequence 与边界时间，不能取发送结束时的新进度。</td></tr><tr><td>异步复制</td><td>本地快照后释放用户派发，再排队发送；主节点可继续产生尚未复制的尾部。</td></tr></tbody></table><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/worker.mjs · 第 46–64 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/worker.mjs" data-start="46" data-end="64">      // Close admission BEFORE checking again; quiesce waits for admission already in flight.
+<section class="screen animate-in" id="s18-screen-2"><h2 class="screen-heading">只在轮次边界复制：先拍快照，再慢慢发</h2>
+<p>执行中复制 SQLite、会话记录和工具产物，可能得到一半新、一半旧的内容。轮次边界要求用户所有会话都没有执行中轮次，短暂暂停新派发、关闭空闲进程，拍下本地快照后立即放行，再异步发送；网络再慢，也不会把暂停拖到传输结束。</p>
+<p>一轮结束后等 5 秒合并连续变化，每 60 秒检查空闲用户，内容没变则跳过。快照记下已完成到哪个任务，副本收齐 home、workspace 与附属内容并校验发布后，主节点才提交复制位点。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/worker.mjs · 第 46–64 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/worker.mjs" data-start="46" data-end="64">      // Close admission BEFORE checking again; quiesce waits for admission already in flight.
       if(!await this.quiesce(userId)) return false;
       const boundary=await this.store.boundary(userId);
       if(boundary.busy) return false;
@@ -4309,7 +4068,9 @@ npm run lesson -- move</pre>
         try { await this.store.finish(userId,route,boundary.sequence,snapshot.hash,token,boundary.captured_at); }
         finally { await receipt?.settle(); }
         this.errors.delete(userId);return true;
-      });</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先关闭准入，再快照；release 早于 forTarget 和 send，finish 使用 boundary.sequence。</p></div></div><p>用一个具体边界理解：快照捕获 sequence=8，发送期间主节点完成 sequence=9。副本位点仍只能是 8；把位点写成 9 会让系统把并未收到的历史误判为已经复制。replicated_at 也记录快照边界时间，以免把发送期间创建的会话当作已复制。</p><p>接收节点逐次核对调用方节点密钥、当前主、副本、epoch 与操作单。home、workspace 和附属内容全部暂存校验后才成对发布，任一 rename 失败要回滚；旧目录保留到 PG 位点提交成功，提交失败恢复旧副本。未完成操作单会阻止提升，也禁止凭哈希相同跳过。</p><p>同用户请求合并，同目标串行发送，不同目标可以并行。失败后有脏标记也会再调度；空闲检查遇到内容、权限、属主和位点都未改变的用户可跳过。一次复制默认最多 1 GiB，目录过大或磁盘空间不足会形成持续落后，不能当作可用副本。</p><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/worker.mjs · 第 14–29 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/worker.mjs" data-start="14" data-end="29">  schedule(userId) {
+      });</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先关闭准入，再快照；release 早于 forTarget 和 send，finish 使用 boundary.sequence。</p></div></div>
+<p>位点只说“副本上一定有的内容”。快照捕获 sequence=8，发送期间主节点完成 9，位点仍只能写 8；写成 9 就把没收到的历史当成已复制。接收方还核对节点、epoch 和操作单，发布或位点提交失败恢复旧副本，未完成传输会阻止接管。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/worker.mjs · 第 14–29 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/worker.mjs" data-start="14" data-end="29">  schedule(userId) {
     if(this.closed) return;
     if(this.pending.has(userId)) {this.dirty.add(userId);return;}
     this.clearTimer(this.timers.get(userId));
@@ -4324,18 +4085,23 @@ npm run lesson -- move</pre>
       this.errors.set(userId,{message:error.message,at:Date.now()});this.log(`副本落后 user=${userId}: ${error.message}`);throw error;
     }).finally(()=&gt;{
       this.pending.delete(userId);
-      if(this.dirty.delete(userId))this.schedule(userId);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>pending 中的新边界记 dirty，finally 再次 schedule。</p></div></div><p>运行中的 SQLite、JSONL 和工具产物不能因目录可读就视为一致快照。</p><p>全量 tar 占磁盘 IO、暂存和带宽；5 秒只是合并等待，不是零丢失承诺。</p>
+      if(this.dirty.delete(userId))this.schedule(userId);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>pending 中的新边界记 dirty，finally 再次 schedule。</p></div></div>
+<p>发送中新一轮结束，会记下变化，当前发送收尾后再调度。全量打包占磁盘、暂存和带宽，单次默认上限 1 GiB；超限会持续复制失败，不能当作可用副本。5 秒是合并等待，不是零丢失承诺。</p>
 </section>
-<section class="screen animate-in" id="s18-screen-3"><h2 class="screen-heading">落后看未复制尾部，不看空闲多久</h2>
-<p>复制延迟描述尚未复制的已完成轮次；副本落后可以告警，但主节点仍能服务。</p><p>落后轮数只计位点之后的 completed；秒数从最早未复制完成轮次起算，无尾部就是 0。超过 300 秒显示 replica_lagging，/ready 保持 200 并附 degraded。README 跨地域实测 RTT 217 ms、约 3 Mbit/s；无限速复制让 /health 首字节延迟 11.6 秒，超过 10 秒租约 TTL。262144 字节/秒的共享限速为控制流留余量；20 MB 全量复制实测约 1 分钟，限速后可能更久。生产必须同地域、同一内网，节点与 PG、etcd、Redis 的往返应不到 1 毫秒。</p><table><thead><tr><th>概念</th><th>职责与边界</th></tr></thead><tbody><tr><td>尾部丢失</td><td>最后成功复制之后的历史可能在主节点故障时丢失，这是明确接受的窗口。</td></tr><tr><td>复制限速</td><td>所有目标的 tar 发送共享本节点字节预算，为租约续约和请求转发留带宽。</td></tr><tr><td>replica_lagging</td><td>未复制尾部等待超过 300 秒、复制错误或未完成传输时暴露的退化状态。</td></tr></tbody></table><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/store.mjs · 第 6–11 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/store.mjs" data-start="6" data-end="11">export const LAG_MS = 5 * 60 * 1000;
+<section class="screen animate-in" id="s18-screen-3"><h2 class="screen-heading">复制位点之外，才是尚未复制的尾部</h2>
+<p>复制落后描述副本还缺多少已完成内容，帮助判断接管可能丢多少。轮数只计位点后的 completed，等待时间从最早未复制的完成轮次算起；没有尾部就为 0，不能把空闲很久误报成落后。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/store.mjs · 第 6–11 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/store.mjs" data-start="6" data-end="11">export const LAG_MS = 5 * 60 * 1000;
 export function lagOf(row, now = Date.now()) {
   const rounds = Number(row.lag_rounds || 0);
   const seconds = rounds ? Math.max(0, (now - new Date(row.pending_since).getTime()) / 1000) : 0;
   return { ...row, lag_rounds: rounds, lag_seconds: Math.floor(seconds), replica_lagging: Boolean(row.replication_error || row.transfer_started_at) || seconds &gt; LAG_MS / 1000 };
-}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>rounds 为零时 seconds 为零；错误、未完成传输或超过阈值触发落后。</p></div></div><p>replica_ready 表示已建立完整基线，不等于与正在服务的主节点逐字节一致。落后轮数和等待时间反映尾部窗口；副本离线或基线不完整时，即使主节点健康也不能承诺可接管。</p><p>网络复制可能持续超过 30 秒。发送每写出一个分块就重置进度计时，连续 30 秒无字节进展才中止；持续有进展的发送没有整体 30 秒上限。复制限速延长网络发送，却不把用户暂停延长到发送结束。</p><p>长时间空闲不产生新历史；以复制时间距今计算会误报。</p><p>限速延长尾部窗口；跨洋 SQL/etcd 往返仍很慢，放宽超时不能代替同地域部署。</p>
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>rounds 为零时 seconds 为零；错误、未完成传输或超过阈值触发落后。</p></div></div>
+<p>未复制尾部超过 300 秒、复制错误或传输未完成时显示 replica_lagging。主节点仍可服务，<code>/ready</code> 保持 200 并附退化说明。replica_ready 表示完整基线已经建立，不表示副本与持续执行的主节点逐字节一致；副本离线或基线不全时不能接管。</p>
+<p>限速给续约与请求留带宽，却可能扩大尾部窗口。传输连续 30 秒无字节进展才中止，持续有进展时没有整体 30 秒上限；用户暂停仍只到本地快照完成。参数与检查步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s18-replication/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
-<section class="screen animate-in" id="s18-screen-4"><h2 class="screen-heading">接管先确认副本，再核对三类任务</h2>
-<p>接管接受尾部丢失；已完成、执行中和排队任务不能用同一种重跑策略。</p><p>成员 TTL 为 10 秒。control 发现主成员消失后，检查副本在线、ready、所有用户基线位点及未完成操作单。先在 CT001 事务提交 primary、epoch+1、publishing/recovering，再 guardedPut etcd；发布失败保持封闭并对账补发，不回退 epoch。新主以旧 epoch 位点核对任务：执行中转 unconfirmed 并暂停会话；completed 尾部转 replica_missing；已有会话的 queued 由 outbox 正常首次派发，同会话待核对时先暂停。整会话晚于最后成功复制或整个 home 缺失时，返回 409 REPLICA_MISSING，queued 转 needs-review。只有尾部缺失的会话可保留 rollout 前缀续聊。</p><table><thead><tr><th>概念</th><th>职责与边界</th></tr></thead><tbody><tr><td>故障接管</td><td>副本在线、基线完整且无未完成复制时，由 control 在 PG 事务内更换主并推进 epoch。</td></tr><tr><td>replica_ready</td><td>当前 epoch 已有完整用户基线，不表示每个新轮次都已同步。</td></tr><tr><td>replica_missing / unconfirmed</td><td>前者表示副本缺少已完成结果，后者表示执行结果不明；两者都不自动重跑。</td></tr></tbody></table><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/control.mjs · 第 60–74 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/control.mjs" data-start="60" data-end="74">  async switch(shardId, { manual = false } = {}) {
+<section class="screen animate-in" id="s18-screen-4"><h2 class="screen-heading">租约过期后接管，尾部丢失按会话粒度处理</h2>
+<p>接管必须先确认副本能用，不能为了恢复入口而接上不完整数据。主节点租约过期后，control 核对副本在线、全部用户有基线且无未完成传输，再在 PG 事务中更换主、推进 epoch，随后发布路由。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/control.mjs · 第 60–74 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/control.mjs" data-start="60" data-end="74">  async switch(shardId, { manual = false } = {}) {
     if (!SHARDS.includes(shardId)) throw new AppError(&#39;无效分片。&#39;,400);
     const result = await this.locked(async db =&gt; {
       const row = (await db.query(&#39;SELECT * FROM agent_data.shard_owners WHERE shard_id=$1 FOR UPDATE&#39;,[shardId])).rows[0];
@@ -4349,7 +4115,10 @@ export function lagOf(row, now = Date.now()) {
       return { shardId, primary: row.replica, epoch: Number(row.epoch)+1 };
     });
     await this.publish(); return result;
-  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>在 locked 事务中验证副本，推进 epoch 后 publish；不靠缓存直接换主。</p></div></div><table><thead><tr><th>故障时的任务</th><th>接管结果</th><th>后续行为</th></tr></thead><tbody><tr><td>starting / running / steering</td><td>unconfirmed</td><td>暂停会话，人工核对，不自动重跑。</td></tr><tr><td>位点外的 completed</td><td>replica_missing</td><td>保留 PG 记录，明确提示该轮结果丢失。</td></tr><tr><td>已有会话的 queued</td><td>保持 queued</td><td>outbox 唤醒正常首次派发；有待核对任务时先核对。</td></tr><tr><td>整会话缺失时的 queued</td><td>needs-review</td><td>拒绝恢复原会话，可新建会话。</td></tr></tbody></table><p>例如副本有前两轮 rollout，第三轮已完成但超出位点：标记第三轮缺失，前缀仍可续聊，快照用 missingTurns 告知用户。若整个会话创建于最后一次复制之后，则没有可恢复的前缀；读、恢复和发消息均返回 409 REPLICA_MISSING，列表持久标记 replicaMissing。两种缺失不能混为一谈。</p><p>publishing 与 recovering 分别约束路由发布和任务恢复。PG 已切换但 etcd 发布失败时，新旧节点都不能派发；control 对账重发。等新主完成恢复并确认后才清除 recovering，不靠回退 epoch 解决发布故障。</p><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/store.mjs · 第 43–65 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/store.mjs" data-start="43" data-end="65">  async recover(userId, epoch, { missingHome = false } = {}) {
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>在 locked 事务中验证副本，推进 epoch 后 publish；不靠缓存直接换主。</p></div></div>
+<p>最后一次复制之后的内容可能丢失，任务记录却一直留在 PG。判断要落到会话：只有尾部缺失的会话还能续聊，整个会话缺失则没有可恢复前缀。</p>
+<table><thead><tr><th>接管时的情况</th><th>接管后</th></tr></thead><tbody><tr><td>会话已在副本，最后几轮未复制</td><td>未复制结果标为 replica_missing，提示核对，保留前缀续聊。</td></tr><tr><td>会话晚于最后快照，或整个 home 缺失</td><td>409 REPLICA_MISSING，提示新建会话；queued 转 needs-review。</td></tr><tr><td>starting / running / steering</td><td>unconfirmed，暂停会话待核对，不自动重跑。</td></tr><tr><td>副本已有会话的 queued</td><td>保留并由新主派发；同会话有待核对任务时先暂停。</td></tr></tbody></table>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/store.mjs · 第 43–65 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/store.mjs" data-start="43" data-end="65">  async recover(userId, epoch, { missingHome = false } = {}) {
     // Run on the new primary with runOwner and its fenced pool, before reopening dispatch.
     await transaction(this.pool, async db =&gt; {
       const rows = (await businessQuery(db,lossStateSql + &#39; AND s.epoch=$3&#39;,
@@ -4371,14 +4140,18 @@ export function lagOf(row, now = Date.now()) {
         ON CONFLICT(instance_id,thread_id) DO UPDATE SET generation=outbox.generation+1,due_at=now()`,[this.instanceId,userId]);
     });
   }
-  async status() {</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先标记整会话或尾部缺失，再处理执行中任务与 outbox。</p></div></div><p>路由只是可 Watch 的发布面；已完成业务记录并不能证明副本磁盘已有原生历史。</p><p>没有完整基线或传输未提交时不可接管；PG、Redis、etcd、gateway 仍有单点。</p>
+  async status() {</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先标记整会话或尾部缺失，再处理执行中任务与 outbox。</p></div></div>
+<p>PG 已切换但 etcd 发布失败时保持封闭，由 control 对账补发；新主完成恢复后才服务，不回退 epoch。5 秒去抖、长轮次和慢网络都会扩大丢失窗口，不能承诺零丢失。</p>
 </section>
-<section class="screen animate-in" id="s18-screen-5"><h2 class="screen-heading">旧主失权后，以副本身份回来</h2>
-<p>epoch 拒绝旧主写入；旧主以副本回归，完整追平前不能再次接管。</p><p>旧主以旧 epoch 写业务或位点，PG 返回 SH001。shardFailure 刷新归属后只停止已失去分片的用户进程，仍可服务其他分片；刷新失败或仍误认为自己是主时隔离。旧主通过 rejoin 回归后，control 将 previous_primary 设为 replica 且 ready=false，新主全量复制全部用户后才确认 ready，不自动切回。手动切换另需持久暂停、等待轮次、最后全量同步，再切换和恢复；同步失败保留暂停，禁止回退 epoch。</p><table><thead><tr><th>概念</th><th>职责与边界</th></tr></thead><tbody><tr><td>epoch（分片任期）</td><td>每次切换单调增加；PG 用当前主节点与 epoch 拒绝旧归属写入。</td></tr><tr><td>副本追平</td><td>旧主回归先 ready=false，由新主为全部用户复制当前 epoch 基线，全部成功后才 ready=true。</td></tr><tr><td>SH001 / CT001</td><td>SH001 保护用户分片业务和复制位点；CT001 保护 control 的协调写入。</td></tr></tbody></table><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 23–27 行</span><pre><code data-source="stages/s18-replication/server/modules/sharding/fence.mjs" data-start="23" data-end="27">  if (owner &amp;&amp; after &amp;&amp; after.primary !== generation.nodeId &amp;&amp; !refreshFailed) {
+<section class="screen animate-in" id="s18-screen-5"><h2 class="screen-heading">旧主回来：先当副本，追平了才能当主</h2>
+<p>旧主醒来可能仍以为自己有权写，但 epoch 已经增加，数据库直接以 SH001 拒绝旧任期。确认失去分片后，只停掉该分片用户进程，其他分片照常服务；无法确认归属或整个节点租约失效时仍需隔离。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 23–27 行</span><pre><code data-source="stages/s18-replication/server/modules/sharding/fence.mjs" data-start="23" data-end="27">  if (owner &amp;&amp; after &amp;&amp; after.primary !== generation.nodeId &amp;&amp; !refreshFailed) {
     void generation.stopShard?.(after?.shardId || before?.shardId)?.catch(error =&gt; generation.log?.(`分片进程停止失败：${error.message}`));
   }
   if (isolate) generation.isolate?.(refreshFailed ? &#39;shard-refresh-failed&#39; : &#39;database-stale-shard&#39;);
-}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>确认失去分片后 stopShard；无法确认归属时沿用隔离。</p></div></div><p>epoch 隔离约束权威写入，不能撤销旧主已经发出的模型请求或工具调用。假死期间的轮次可能继续修改旧主本地、已非权威的磁盘，因此执行结果不明必须交给用户核对。整个节点租约失效时仍走隔离和 rejoin，不能把“只停一个分片”泛化到所有失联情况。</p><p>手动切换要求管理员权限，由当前 control 执行。先持久化暂停，等待轮次，再完成最后一次全量同步；必须等待已有发送并取得暂停后的新快照，不能复用暂停前的复制结果。同步失败保留暂停，重试才能继续；epoch 不能人工倒退。</p><div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/control.mjs · 第 85–94 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/control.mjs" data-start="85" data-end="94">  async ready(shardId, epoch, caller) {
+}</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>确认失去分片后 stopShard；无法确认归属时沿用隔离。</p></div></div>
+<p>旧主回归先作为副本，ready=false，由新主全量推送这个分片全部用户，完整追平才就绪，不自动切回。管理员手动切换前还要暂停分片、等轮次结束、取得暂停后的最后快照并同步，不能复用暂停前的发送结果。</p>
+<div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/replication/control.mjs · 第 85–94 行</span><pre><code data-source="stages/s18-replication/server/modules/replication/control.mjs" data-start="85" data-end="94">  async ready(shardId, epoch, caller) {
     return this.locked(async db =&gt; {
       const row = (await db.query(&#39;SELECT * FROM agent_data.shard_owners WHERE shard_id=$1 FOR UPDATE&#39;,[shardId])).rows[0];
       if (!row || row.node_id !== caller || String(row.epoch)!==String(epoch) || !row.replica || row.publishing || row.recovering) throw new AppError(&#39;复制主节点或 epoch 已改变。&#39;,409);
@@ -4387,12 +4160,17 @@ export function lagOf(row, now = Date.now()) {
       await db.query(&#39;UPDATE agent_data.shard_owners SET replica_ready=true WHERE shard_id=$1&#39;,[shardId]);
       return {ready:true};
     });
-  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>核对当前主、epoch 和所有用户基线，才设置 ready。</p></div></div><p>旧主磁盘可能有未复制尾部，也可能缺少新主已完成的历史。</p><p>epoch 不能撤销已经发出的模型和工具调用；旧主仍可能产生非权威本地副作用。</p>
+  }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>核对当前主、epoch 和所有用户基线，才设置 ready。</p></div></div>
+<p>同步失败保持暂停，epoch 不能倒退。旧主已发出的模型与工具调用撤不回，可能继续影响它本地已不作数的磁盘；数据库拒写不能代替对这些结果的核对。</p>
 </section>
-<section class="screen animate-in" id="s18-screen-6"><h2 class="screen-heading">从跨地域实测理解生产边界</h2>
-<p>README 的跨地域实测将控制机放在北京、第二节点放在美东。往返 217 ms、隧道约 3 Mbit/s，停掉主节点后 15 秒内副本接手，已经复制的历史可以续聊。这证明独立磁盘之间能够接管，并不证明该网络适合生产。</p><table><thead><tr><th>观测</th><th>数字</th><th>含义</th></tr></thead><tbody><tr><td>SQL / etcd 单次跨洋调用</td><td>约 0.45 秒</td><td>恢复一个会话的几十次往返会累积。</td></tr><tr><td>无限速复制时 /health 首字节</td><td>11.6 秒；租约 TTL 10 秒</td><td>数据流拥塞足以影响存活判断。</td></tr><tr><td>PG 建连</td><td>1.4–2.8 秒，拥堵时 27 秒</td><td>网络拥堵会击穿短时限。</td></tr><tr><td>会话恢复 / 发消息</td><td>31 秒 / 39 秒</td><td>请求能成功仍可能很慢。</td></tr><tr><td>全量复制</td><td>20 MB，约 1 分钟一次</td><td>真实尾部窗口取决于目录、带宽和轮次。</td></tr><tr><td>共享 tar 限速</td><td>262144 字节/秒</td><td>原则上不超过实测带宽约 70%，给控制流留余量。</td></tr></tbody></table><p><strong>生产必须同地域、同一内网：</strong>节点与 PG、etcd、Redis 的往返应不到 1 毫秒。放宽超时只能让跨洋演示工作，不能消除长事务、连接池占用和全量追平耗时。跨地域容灾需要每个地域有独立控制面，再考虑地域之间复制。</p><p>本章明确保留控制面单点、每分片一个副本、没有自动再平衡、全量 tar 的 IO 与空间成本。成员身份只认节点名，不验证磁盘是哪一次复制的结果；换盘或恢复备份前必须核对位点，或先以副本身份全量追平。</p><p>四个离线实验分别核对边界合并、落后统计、三类任务恢复和旧主停止分片。它们调用生产实现，但不证明真实 PG 触发器、认证 etcd 自然过期时延和 Linux uid 文件访问已经通过。课堂推演是固定教学数据，实际证据来自测试断言与外部验收。</p><div class="quiz-container" id="s18-quiz"><div class="quiz-question-block" data-correct="1" data-explanation-right="位点必须对应实际发布的目录，不能把发送期间的新历史算进副本。" data-explanation-wrong="位点必须对应实际发布的目录，不能把发送期间的新历史算进副本。"><h3 class="quiz-question">发送时主节点又完成一轮，应该提交哪个 sequence？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>发送结束时最新 sequence</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>快照边界捕获的 sequence</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只记录当前时间即可</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="2" data-explanation-right="没有未复制的已完成尾部，就没有等待复制的轮次。" data-explanation-wrong="没有未复制的已完成尾部，就没有等待复制的轮次。"><h3 class="quiz-question">已同步的用户空闲一小时，lag_seconds 应是多少？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>3600</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>300</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>0</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="1" data-explanation-right="原主可能已产生外部副作用，不能凭失联推断它没有执行。" data-explanation-wrong="原主可能已产生外部副作用，不能凭失联推断它没有执行。"><h3 class="quiz-question">执行中的任务在接管后应该怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>自动重跑直到成功</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>标记 unconfirmed，暂停会话待核对</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>直接标记 completed</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="2" data-explanation-right="当前新主的历史才是权威；旧主需要取得当前 epoch 的完整基线。" data-explanation-wrong="当前新主的历史才是权威；旧主需要取得当前 epoch 的完整基线。"><h3 class="quiz-question">旧主回归后能否立即重新当主？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，节点名称没变</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>可以，旧磁盘仍存在</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>不可以，先作为副本全量追平；不会自动切回</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s18-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s18-quiz">重新作答</button></div></div><p>这是主线最后一章。副本提供可核对的异步历史窗口，任务记录保留证据，缺失明确展示；epoch 保护权威写入，旧主作为副本重新追平。</p><p><a href="/course/changes.html#s18">→ 打开 s18 阶段演示</a> · <a href="/course/#s18">→ 打开 s18 机制课堂</a> · <a href="/app/index.html?stage=project">→ 回到 app 工作台</a></p>
-</section>
-</div></div></section>
+<section class="screen animate-in" id="s18-screen-6"><h2 class="screen-heading">接管成立，不等于所有故障都已解决</h2>
+<p>跨地域实验说明“能接手”和“适合长期服务”是两个问题。README 实测北京与美东往返 217 ms、隧道约 3 Mbit/s，主节点停止后 15 秒内副本接手；但 SQL 与 etcd 的反复往返仍会累积延迟。</p>
+<p>无限速复制时，健康响应首字节曾等待 11.6 秒，超过 10 秒租约 TTL；20 MB 全量复制约需 1 分钟。放宽超时不能消除网络成本，节点与 PG、etcd、Redis 应在同地域、同一内网，往返不到 1 毫秒。实测与验收步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s18-replication/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>。</p>
+<p>PG、Redis、etcd 和网关仍有单点，每个分片只有一个副本，没有自动再平衡。成员只认节点名，不验证磁盘是哪次复制的结果；换盘或恢复备份前需核对位点，或先以副本身份全量追平。离线实验不替代真实 PG、认证 etcd 和 Linux uid 验收。</p>
+<div class="quiz-container" id="s18-quiz"><div class="quiz-question-block" data-correct="1" data-explanation-right="位点必须对应实际发布的目录，不能把发送期间的新历史算进副本。" data-explanation-wrong="位点必须对应实际发布的目录，不能把发送期间的新历史算进副本。"><h3 class="quiz-question">发送时主节点又完成一轮，应该提交哪个 sequence？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>发送结束时最新 sequence</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>快照边界捕获的 sequence</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只记录当前时间即可</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="2" data-explanation-right="没有未复制的已完成尾部，就没有等待复制的轮次。" data-explanation-wrong="没有未复制的已完成尾部，就没有等待复制的轮次。"><h3 class="quiz-question">已同步的用户空闲一小时，lag_seconds 应是多少？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>3600</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>300</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>0</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="1" data-explanation-right="原主可能已产生外部副作用，不能凭失联推断它没有执行。" data-explanation-wrong="原主可能已产生外部副作用，不能凭失联推断它没有执行。"><h3 class="quiz-question">执行中的任务在接管后应该怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>自动重跑直到成功</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>标记 unconfirmed，暂停会话待核对</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>直接标记 completed</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-question-block" data-correct="2" data-explanation-right="当前新主的历史才是权威；旧主需要取得当前 epoch 的完整基线。" data-explanation-wrong="当前新主的历史才是权威；旧主需要取得当前 epoch 的完整基线。"><h3 class="quiz-question">旧主回归后能否立即重新当主？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，节点名称没变</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>可以，旧磁盘仍存在</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>不可以，先作为副本全量追平；不会自动切回</span></button></div><div class="quiz-feedback"></div></div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s18-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s18-quiz">重新作答</button></div></div>
+<p>这是主线最后一章。“之前聊过什么”从会话历史走到主节点坏了还能从副本接着聊，“谁说了算”走到租约、任期与 epoch。生产化仍需控制面高可用、独立存储和更高效的复制，并按实测恢复时间与可接受丢失窗口制定服务目标。</p>
+<p><a href="/course/changes.html#s18">→ 打开 s18 阶段演示</a> · <a href="/course/#s18">→ 打开 s18 机制课堂</a> · <a href="/app/index.html?stage=project">→ 回到 app 工作台</a></p>
+</section></div></div></section>
 </main>
 </body>
 </html>

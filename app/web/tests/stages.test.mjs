@@ -370,11 +370,11 @@ test('s12 卡片、课程和运行说明完整，刷新不请求任何实时服�
  assert.ok(!defaultTargets.some(t=>t.id==='s12'));
 });
 
-test('s13 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s13 属于上云与多用户，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s13&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s13');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s13')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='上云与多用户')[1].includes('s13')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));
@@ -392,11 +392,11 @@ test('s13 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.equal(f.courses.at(-1),'s13');
  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17','s18'].includes(t.id)));
 });
-test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s14 属于上云与多用户，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s14&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s14');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s14')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='上云与多用户')[1].includes('s14')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));
@@ -415,11 +415,11 @@ test('s14 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17','s18'].includes(t.id)));
 });
 
-test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s15 属于上云与多用户，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s15&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s15');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s15')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='上云与多用户')[1].includes('s15')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));
@@ -438,11 +438,11 @@ test('s15 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17','s18'].includes(t.id)));
 });
 
-test('s16 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s16 属于多台机器，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s16&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s16');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s16')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='多台机器')[1].includes('s16')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));
@@ -461,11 +461,11 @@ test('s16 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17','s18'].includes(t.id)));
 });
 
-test('s17 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s17 属于多台机器，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s17&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s17');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s17')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='多台机器')[1].includes('s17')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));
@@ -484,11 +484,11 @@ test('s17 属于走向生产，登录说明与课程可用，刷新和订阅不�
  assert.ok(!defaultTargets.some(t=>['s12','s13','s14','s15','s16','s17','s18'].includes(t.id)));
 });
 
-test('s18 属于走向生产，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
+test('s18 属于多台机器，登录说明与课程可用，刷新和订阅不连接实时目标', async()=>{
  const f=frontend('?stage=s18&view=run');
  f.run('render()');
  assert.equal(f.run('state.target'),'s18');
- assert.equal(f.run("stageGroups.find(([label])=>label==='走向生产')[1].includes('s18')"),true);
+ assert.equal(f.run("stageGroups.find(([label])=>label==='多台机器')[1].includes('s18')"),true);
  const shell=f.elements.get('#app').innerHTML,pane=f.elements.get('#pane').innerHTML;
  assert.deepEqual([...shell.matchAll(/data-stage="(s\d{2})"/g)].map(m=>m[1]),allIds);
  assert.match(shell,new RegExp(stageCountLabel));

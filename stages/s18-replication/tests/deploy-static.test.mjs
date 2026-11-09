@@ -57,9 +57,9 @@ test('static: 版本回滚、下载限速与服务器 flock；不走 HTTP', () =
 });
 test('docs: 分片教学模板、离线实验、两幅时序与三段真实源码', () => {
   const chapter = read('README.md');
-  assert.match(chapter, /^# s18：/); assert.match(chapter, /^对应六个问题：③ 之前聊过什么 ⑥ 谁说了算$/m);
+  assert.match(chapter, /^# s18: /); assert.match(chapter, /^> \*\*对应六个问题\*\*：③\ 之前聊过什么？\ ⑥\ 谁说了算？$/m);
   let previous = -1;
-  for (const heading of ['要回答的问题', '核心概念', '分工', '跑起来看看', '关键代码', '限制', '小结']) {
+  for (const heading of ['要回答的问题', '核心概念', '分工：Codex 做什么，我们做什么', '跑起来看看', '关键代码', '限制', '小结']) {
     const index = chapter.indexOf(`## ${heading}\n`); assert.ok(index > previous, heading); previous = index;
   }
   assert.match(chapter, /下一章：无/);
@@ -145,7 +145,7 @@ test('static: etcd health uses a dedicated user without shell; both deploy paths
   for (const name of ['node-b', 'node-c']) assert.match(service(name), /<<: \*node/);
   assert.match(read('.env.example'), /^ETCD_HEALTH_PASSWORD=$/m);
   assert.match(read('scripts/deploy-env.mjs'), /values.ETCD_HEALTH_PASSWORD = randomBytes\(24\).toString\('hex'\)/);
-  for (const file of ['deploy/server-setup.sh', 'README.md']) {
+  for (const file of ['deploy/server-setup.sh', 'docs/design.md']) {
     const source = read(file);
     const start = source.indexOf('docker compose up -d etcd\n');
     const init = source.indexOf('docker compose run --rm --no-deps -T etcd-init');

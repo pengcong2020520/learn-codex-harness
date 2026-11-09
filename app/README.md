@@ -1,10 +1,10 @@
 # Codex Agent Harness — 配置驱动的 Agent 脚手架
 
-本项目是基于 [OpenAI Codex](https://learn.chatgpt.com/docs/app-server) 原生 App Server 协议的本机 Agent 服务（默认提供写作示例），监听 `127.0.0.1`，单机单用户本地开发，无多用户公网授权。角色行为、工具权限、资料绑定均由单一 JSON 配置文件集中管理；服务读取配置后挂载原生 Codex 并通过 HTTP/SSE 对外提供 CLI 与本地 Web 接入。
+本项目是基于 [OpenAI Codex](https://learn.chatgpt.com/docs/app-server) 原生 App Server 协议的本机 Agent 服务（默认提供写作示例），监听 `127.0.0.1`，单机单用户本地开发，无多用户公网授权（账号、用户隔离、资源权限和多台机器在教程的 s13–s18 中以独立快照实现，没有合入 app）。角色行为、工具权限、资料绑定均由单一 JSON 配置文件集中管理；服务读取配置后挂载原生 Codex 并通过 HTTP/SSE 对外提供 CLI 与本地 Web 接入。
 
 > **设计文档**：[docs/agent-core-design.md](docs/agent-core-design.md)（实施前基线，供参考）；实际实现以本 README 为准。
 
-本期数据层已接入 PostgreSQL + Redis + 文件存储，并保留 Codex 原生存储。审查结论、迁移步骤和验收边界见 [数据层升级说明](docs/data-layer.md)。当前仍是本机单用户入口，未实现账号登录或多用户运行环境隔离。
+数据层使用 PostgreSQL + Redis + 文件存储，并保留 Codex 原生存储。审查结论、迁移步骤和验收边界见 [数据层升级说明](docs/data-layer.md)。app 是本机单用户入口，不含账号登录和多用户运行环境隔离（见 s13、s14）。
 
 知识层设计基线见 [知识层架构方案](docs/knowledge-layer-design.md)及[图文阅读版](docs/knowledge-layer-design.html)：复用 Codex 原生执行与 Skills，新增通用权限门禁，分离能力执行与资源管理；默认 Wiki、可选 Chroma + BM25。s09 已实现统一门禁、版本化 Wiki 与可选 Chroma + BM25，具体接口、运行方式和剩余边界见 [知识层实现说明](docs/knowledge-implementation.md)。
 
@@ -275,11 +275,11 @@ npm run check:server
 
 `npm run test:protocol` 检查原生 Schema 与实际开关；`npm run test:protocol:research` 运行已接入的研究实验员探针（含超时、多连接、MCP 重载和扩展加载）；`npm run test:data` 验证隔离的 PostgreSQL/Redis；`npm run test:rag` 加入真实 Chroma。完整命令和边界见 [升级说明](docs/harness-upgrade.md)。
 
-**尚未验收**：联网搜索效果、真实模型完整记忆生成链路、多用户认证与隔离。
+**尚未验收**：联网搜索效果、真实模型完整记忆生成链路。多用户认证与隔离不在 app 范围内，见 s13、s14。
 
 ## 演进历史
 
-当前实现包含配置装配、结构化来源、Wiki、可选 RAG 和可信工具上下文；真实模型完整记忆生成及多用户认证/运行隔离仍后置。
+当前实现包含配置装配、结构化来源、Wiki、可选 RAG 和可信工具上下文；真实模型完整记忆生成链路尚未验收；多用户认证与运行隔离见 s13、s14。
 
 工作区设计基线见 [workspace-design.md](docs/workspace-design.md)；Skill 与 Workflow 的设计和实施计划见 [skill-workflow-design.md](docs/skill-workflow-design.md)；独立教学版本见 [s03–s09 演进总览](../stages/README.md)，演进总览见 [stages/README.md](../stages/README.md)。
 

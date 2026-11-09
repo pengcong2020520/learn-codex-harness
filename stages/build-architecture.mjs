@@ -158,7 +158,9 @@ export function renderArchitecture(n) {
   t("基础设施", SX + 24, iy + 20, 14, c.muted, 600);
   t(infra.filter(i => (i.until ?? Infinity) >= n && i.files !== "data/paths.mjs").map(i => i.name).join(" · "), SX + LW, iy + 20, 14, c.muted);
   const later = layers(n).filter(layer => layer.mods.every(m => m.stage > n)).map(layer => layer.name);
-  if (later.length) t(`后面还会加：${later.join(" · ")}`, SX + SW - 20, iy + 20, 14, c.faint, 400, "end");
+  // 只列最近的三项，其余合计成"等 N 项"，避免与左侧基础设施清单重叠。
+  const preview = later.length > 3 ? `${later.slice(0, 3).join(" · ")} 等 ${later.length} 项` : later.join(" · ");
+  if (later.length) t(`后面还会加：${preview}`, SX + SW - 20, iy + 20, 14, c.faint, 400, "end");
 
   // Codex：s00 是一轮一个进程的 codex exec，s01 起是常驻的 App Server。
   const CX = 1230, CY = 300, CW = 200, CH = 280;
@@ -267,10 +269,13 @@ const check = process.argv.includes("--check");
 const problems = checkBindings();
 if (problems.length) throw new Error(`总图和代码对不上，请更新 stages/build-architecture.mjs 里的模块绑定：\n${problems.join("\n")}`);
 dirs.forEach((dir, i) => {
-  // s12–s18 独立快照保持原样；全仓登记图由课程资产承载。
-  const file = stageNo[i] >= 12 ? path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`) : path.join(root, dir, "images/architecture.svg"), body = renderArchitecture(stageNo[i]);
-  if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
-  else fs.writeFileSync(file, body);
+  // 每章目录里的图与课程资产用同一份生成结果；s12 起课程资产也放一份，供 Web 课程引用。
+  const body = renderArchitecture(stageNo[i]);
+  const files = [path.join(root, dir, "images/architecture.svg"), ...(stageNo[i] >= 12 ? [path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`)] : [])];
+  for (const file of files) {
+    if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
+    else fs.writeFileSync(file, body);
+  }
 });
 for (const [rel, d] of Object.entries(details)) {
   const file = path.join(root, rel), body = renderDetail(d);

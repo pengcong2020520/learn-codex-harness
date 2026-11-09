@@ -1,45 +1,83 @@
-# s17：分片与路由
+# s17: 分片与路由 — 按用户分到不同节点，从任意入口都能找到他
 
 [导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → `s17` → [s18](../s18-replication/README.md) → [app](../../app/)
 
-对应六个问题：③ 之前聊过什么 ⑥ 谁说了算
+> *"按用户分片，从任意入口都能找到他"* — 用户的历史跟着用户落在一台主节点上；路由表由 control 发布，各节点缓存并订阅变化，缓存过期就刷新重试。
+>
+> **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？
 
-[导论](../introduction.md) · [s16 → s17 增量](../CHANGES.md#s17) · [总架构图](../../app/web/public/course/assets/s17-architecture.svg)
+---
+
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 ## 要回答的问题
 
-一台机器放不下所有用户，怎样让每位用户去正确的机器，又让任意入口都能找到他？本章在 s16 协调面之上只增加 `sharding` 单元。保留 s14 的数值 uid、每用户进程与 CODEX_HOME，保留 s15 Hub 授权，保留成员租约、选举、任期、Watch 对账、自我隔离和重新加入。
+上一章的三个节点是主备：只有 control 干活，所有用户挤在一台机器上，另外两台的算力闲着。用户再多，一台机器总会装不下。
+
+这一章让每台机器都干活：把用户分到不同的节点上。分出去以后，有一串问题要回答：
+
+- 按什么分？按用户、按会话，还是按每一条消息？
+- 一个请求从入口进来，怎么知道这个用户在哪台机器上？
+- "哪个用户在哪台机器"这张表变了，所有节点怎么同时知道？某个节点没及时知道怎么办？
+- alice 分享给 bob 的知识库，在另一台机器上，bob 怎么读到？
+- 想把一个用户从一台机器搬到另一台，怎么搬才不丢数据？
+
+本章只加一个单元：**分片**。s16 的租约、选举、任期，s14 的用户运行环境，s15 的 Hub 权限都原样沿用。三个节点从这一章起**各用各的磁盘**，不再共享数据卷。
 
 ## 核心概念
 
-**分片键是用户 ID，不是消息。** Codex 的原生历史、SQLite 状态和记忆保存在该用户的 CODEX_HOME。同一用户的不同消息若分到不同机器，后续轮次就看不到完整历史。数据库用户 UUID 同时用于分片与 s14 的运行目录映射，用户名只用于 CLI 查找。
+### 分片键是用户，不是消息
 
-**策略和节点归属分开。** `strategy.shardOf(userId, map)` 只回答用户属于哪个分片。默认 `AGENT_SHARD_STRATEGY=slots`：SHA-256 的前 32 位无符号整数取模 **64**，64 个槽按 `slot % 3` 分到 `0/1/2`，槽数分别为 22/21/21。`range` 用用户 ID 去连字符后的首字节：`00–54`、`55–a9`、`aa–ff` 分别映射 `0/1/2`。范围策略直观，但用户 ID 分布不均时会产生热点。所有节点配置必须一致；已有数据不能通过改环境变量迁移策略。
+从 s14 起，每个用户有自己的 Codex 进程和 CODEX_HOME，原生历史、状态库、记忆都在里面。如果按消息分，同一个用户的第一轮在 A 机器、第二轮在 B 机器，B 上的 Codex 根本看不到第一轮聊了什么。所以**分片键是用户 ID**：一个用户的全部数据跟着他落在同一台主节点上。
 
-**归属只有 control 能修改。** etcd 存 `/codex/shards/<id> = {primary, epoch}`、`/codex/slots`、`/codex/overrides/<userId>`。override 优先于两种策略。control 以 s16 `guardedPut` 的选举任期事务发布；初次把三个分片分别放到三个成员，新增成员只填无主分片。节点离开仍保留原 primary，状态成为 `unavailable`，不自动重平衡、不故障切换。
+### "用户属于哪个分片"和"分片在哪台机器"分开
 
-**本地缓存不等于永远正确。** 启动对 `/codex/` 做一次一致性快照并记 revision，再从 revision + 1 Watch。一个整前缀 Watch 同时覆盖 shards、slots、overrides，避免多个 Watch 的进度无法比较。断线、压缩后整表重读；每 **5 秒**对账。读快照期间发生的新事件会重放，不允许 revision 倒退。
+分片分成两步：
 
-**任意健康节点可接入。** Caddy 按 `/ready` 检查，所有已加入且业务栈完成本分片恢复的节点都可返回 200。节点先认证用户，再用 `routeOf` 找主节点；非主保留终端 Bearer，带本节点 ID/独立密钥、用户 ID、路由 revision 转发。主重新认证用户与调用节点，核验归属和自己的 revision 不落后，失败返回 **409 STALE_ROUTE**；转发方刷新并且只重试 **1 次**。无主或主节点离线返回 **503 SHARD_UNAVAILABLE** 和原因。普通转发 **30 秒**超时；SSE 不设时限、保持背压与断开传播。事件只在用户主节点产生，代理不重编 Last-Event-ID。
+1. **用户 → 分片**：由分配策略决定。默认把用户 ID 哈希到 64 个槽，槽再归到 3 个分片；另有一个按 ID 前缀划范围的策略作对照（直观，但容易冷热不均）。
+2. **分片 → 节点**：由 control 决定每个分片的主节点是谁，记在 etcd 的**分片归属表**里，只有 control 能写（带着 s16 的任期检查）。
 
-**数据库隔离按分片。** `user_shards` 将用户映射到分片，`shard_owners` 保存节点和 epoch。每个业务事务设置 `SET LOCAL app.node`、`app.shard_epoch`（代码用事务局部 `set_config(..., true)` 参数化），行触发器从 owner/user 或关联会话、知识库、资源追溯到用户，核对节点角色、owner 与 epoch，否则 **SH001**。同时锁住两张映射表的对应行到提交，迁移不能越过旧事务。最终的 check_shard 还检查迁移操作单：paused 阶段允许在途轮次收尾，用户暂停且单据为 copying、copied、switched 或 failed 时拒写。收到 SH001 按被拒行 owner 诊断；刷新前自认为主且刷新后仍如此或刷新失败时隔离，确认用户已移走则只拒绝当前请求。`cluster_term` 继续保护 control 的元数据写入。全局表规则见 [design.md](docs/design.md)。
+两步分开，换机器只需改第二步，不用重新计算每个用户的归属。个别用户还可以有一条**例外**记录，把他单独放到指定分片，手动迁移就是这样实现的。
 
-**共享知识库只有一份。** 被授权者的主节点先按 s15 Hub 判断，再带节点身份、密钥和终端用户 Authorization 向所有者主节点发内部只读请求。所有者主节点重新认证用户令牌、读取授权表并判断，最后读自己磁盘上的内容。撤销授权即使发生在两次判断之间也不会放行；未授权者看到 404。
+### 路由表：每个节点缓存一份，订阅变化
 
-**手动迁移要经过停写边界。** admin 执行 `npm run cluster -- move <username> <shardId>`，请求交给 control：创建 30 分钟有效的操作单并持久化暂停 → 源节点停止新派发与新媒体轮询 → 等执行中的轮次、索引和已开始的媒体轮询结束 → 关闭用户进程 → 内部 HTTP 流式 tar 复制 CODEX_HOME 与 `workspace/users/<id>`，保留数值 uid/gid → 搬运关联正文和本地索引 → control 事务提交 `user_shards` 与操作单 switched，再发布 override → 刷新并恢复派发。源副本暂留供运维核对，不参与服务。失败将操作单标为 failed 并保持暂停；保留磁盘与已提交的 PG 归属，运维核对副本和操作单后恢复，不自动回退或重放失败操作。没有 SSH 数据传输或后台复制。媒体 tick 在异步准入前登记 pollingOwners，每次 poll 前执行 canDispatch；暂停期间跳过新轮询，drain 的 waitOwner 等待已开始的轮询和准入检查。
+每个请求都去 etcd 查一次太慢。所以每个节点启动时整表读一次，记下版本号（revision），之后用 Watch 订阅变化、增量更新本地缓存；断线或者版本被压缩了，就整表重读；每 5 秒还对一次账。
 
-## 分工
+缓存总有可能慢一步。所以入口可以是**任意一个就绪的节点**：它认证用户以后，按缓存找到这个用户的主节点，把请求连同自己缓存的版本号一起转发过去。主节点再核对一遍："我真的是这个用户的主节点吗？你的版本号不比我的旧吧？"对不上就返回 409 `STALE_ROUTE`，转发方刷新缓存后**重试一次**。主节点不信任转发方的缓存，只信自己。
 
-| 层 | 本章职责 |
+### 数据库按分片隔离写入
+
+s16 的任期号保护的是 control 写的协调信息。分片以后，业务数据也要防"旧主"：一个用户被迁走了，原来的节点不能再替他写。所以每个分片也有自己的任期号（epoch），每一次业务写入都带上"我是哪个节点、我认为的 epoch 是多少"，数据库按用户追溯到他所在的分片，节点或 epoch 对不上就拒绝（SH001）。
+
+### 共享知识库只有一份
+
+alice 把知识库分享给 bob，可他们可能在不同的机器上。我们不复制一份给 bob，而是让 **alice 的主节点提供只读接口**：bob 的节点先按 s15 的 Hub 判断一次，再带着 bob 的登录令牌去问 alice 的节点；alice 的节点重新认证 bob、再查一次授权，才把内容交给他。判断做两次，中途撤销授权也不会被放行。
+
+### 迁移：先停写，再搬家
+
+把一个用户从一台机器搬到另一台，关键是搬的时候数据不能还在变：
+
+1. 暂停这个用户的新任务派发；
+2. 等执行中的轮次做完，关掉他的进程；
+3. 把他的 CODEX_HOME 和工作目录完整拷到目标节点，保留系统账号的数值属主；
+4. control 先在数据库里改归属，再在 etcd 里发布例外记录；
+5. 恢复派发，之后的请求都去新的主节点。
+
+中途失败就保持暂停，等人核对，不自动回退、不自动重来。
+
+### 一台坏了，只影响它那一片
+
+分片以后，一个节点停了，只有它负责的那个分片暂时不可用（返回 503 和原因），其他分片照常服务。可这一片的用户只能等它恢复，因为他们的数据只在那台机器的磁盘上。让别的节点接手，是下一章的事。
+
+## 分工：Codex 做什么，我们做什么
+
+| Codex 做什么 | 我们做什么 |
 |---|---|
-| coordination | TTL **10 秒**、etcd3 自动 KeepAlive（约 TTL/3）、Election、create revision 任期、失联隔离与 Rejoin |
-| sharding | 64 槽 / 范围策略、归属缓存、控制放置、路由、双重授权读、手动迁移 |
-| PostgreSQL | 全局账号和 Hub 授权；业务行按用户分片隔离；任务与迁移暂停状态持久化 |
-| Redis | 各节点自己的唤醒集合；PG 仍决定归属、任务次序和派发 |
-| Caddy | 任一健康节点接入；节点再按用户路由 |
-| 节点磁盘 | 各自独立的 `.data`、`workspace`、`.runs`；`backups/node-a|b|c` 分开备份 |
-
-s16 的共享卷在本章改为独立磁盘。三个节点只有部署 identity UUID 相同；文件内容没有共享挂载。节点坏了，它负责的分片就不可用，其他分片照常工作。**s18 才解决副本与故障接管。**
+| 在用户所在的主节点上照常执行，历史留在他自己的 CODEX_HOME | 分配策略、分片归属表与例外记录（只有 control 能写） |
+| | 每个节点的路由缓存：整表读取、Watch 增量、定时对账 |
+| | 任意入口转发到主节点；过期就 409，刷新后重试一次 |
+| | 数据库按分片和 epoch 拒绝越界写入；跨分片只读共享知识 |
+| | 手动迁移：停写、拷贝、切换归属、恢复 |
 
 ## 跑起来看看
 
@@ -82,50 +120,9 @@ npm run cluster -- status
 
 入口只发布 `127.0.0.1:4335`，节点内部端口 `4340–4342`，不同 Compose 项目的网络隔离。数据库 `agent_s17`，项目与 systemd 单元 `codex-harness-s17`，服务器固定目录 `APP_DIR=/opt/s17-sharding`，示例域名 `example.com`。镜像 digest 沿用上一章已核实值。
 
-三个节点挂载共享的 `.data/gateway` 目录，运行时只读取服务商清单；`deploy/configure.sh` 的一次性生成器通过该目录写入配置。目录挂载保持可写，避免生成清单时触发只读单文件挂载的 EROFS。
+可以按这个顺序观察：多建几个用户，看他们分布到不同分片；从三个节点分别进入，请求都会到同一个主节点；让 bob 把知识库分享给 carol，二者分在不同节点时 carol 也能读，dave 读不到；停掉一个节点，只有它那一片不可用；最后把 bob 迁到另一个分片，历史、记忆、知识库都完整。每一步的具体命令、外部验收、路由诊断接口与远程部署，见 [设计说明](docs/design.md#关键数值与实现细节)。
 
-etcd 使用独立的 `health` 用户和同名角色，**只能读取精确的 `health` 键**，不能写入，也不能读取 `/codex/` 或其他键。`init-env` 随机生成 `ETCD_HEALTH_PASSWORD`，Compose 将其直接代入 `etcdctl --user health:… endpoint health`，不依赖镜像内的 shell。先启动 etcd（不等待健康），再运行 `etcd-init`，最后等待 etcd 和其余服务健康；初始化遇到连接失败会重试，最多 60 秒，并支持已有用户、角色及已开启认证的数据卷。
-
-已有服务器升级时，保留 `.env` 中原有的 root、节点、数据库等密码，只补充随机的 `ETCD_HEALTH_PASSWORD`（例如用 `openssl rand -hex 24` 生成后写入 `.env`）。不要重新生成整份 `.env`。按上述流程或 `remote.sh deploy` 重新部署后，初始化脚本使用原 root 凭据补建 health 用户和角色，随后健康检查通过；数据卷无需删除，认证无需关闭。
-
-1. **新用户分布**：重复执行下面命令创建几个示例账号，control 在 5 秒内分配，首次认证业务请求也会要求 control 补齐映射。用 `cluster status` 观察分片、槽数、每节点用户数和路由 revision。随机 UUID 不保证三个样本恰好各占一个分片，多建几个观察即可。
-
-   ```bash
-   docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts add alice
-   docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts add bob
-   docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts add carol
-   ```
-
-2. **从任意节点进入**：用 Caddy 登录并聊天。另在容器网络内分别从 `http://node-a:4340`、`http://node-b:4341`、`http://node-c:4342` 请求同一用户会话，应到同一主节点。使用 [端口集成测试](tests/sharding-http.integration.mjs) 检查 HTTP 转发、SSE 和 STALE_ROUTE；不要把节点端口发布到公网。
-3. **共享知识**：bob 创建知识库并授予 carol；将二者放到不同主节点，carol 的 `kb_read`/`kb_search` 成功，未授权 dave 返回 404。撤销后再次读也应 404。正文只来自 bob 的主节点。
-4. **节点故障**：先在状态中确认 node-b 所有的分片，然后执行 `docker compose kill node-b`。租约至多约 10 秒后成员消失；它的分片 503，另外两个分片仍可对话。`docker compose up -d node-b` 后原主恢复并将未确认轮次标为待核对，不自动重跑。也可用 `docker compose pause node-b`，等待 15 秒再 `docker compose unpause node-b`，观察旧代次隔离并重新加入；用 `docker network disconnect codex-harness-s17_default "$(docker compose ps -q node-b)"` 模拟分区，再用 `docker network connect --alias node-b ...` 恢复网络。
-5. **迁移**：确认源、目标都在线，**在客户端**设置 `AGENT_SERVER_URL` 指向 SSH 隧道入口（例如 `http://127.0.0.1:4335`），运行 `npm run login` 并使用 admin 账号登录，然后执行 `npm run cluster -- move <user> <shard>`，例如 `npm run cluster -- move bob 2`。若 bob 已在 2，选择其他分片。源节点不接新派发，等正在执行的轮次结束才拷贝。重新查询会话、原生历史、记忆和知识库，应与迁移前一致；用 `stat -c '%u:%g'` 比较两端目录和原生文件，数值属主不变。CODEX_HOME 的顶层 `tmp/` 是 Codex 运行时临时目录，不复制；workspace 由服务身份通过组 1000 读写，保留 root 或用户 uid 的数值属主。若中途失败，核对操作单、PG 暂停与归属、etcd override 及两端副本；beginMove 拒绝已暂停用户，重复 move 不会自动恢复失败操作，不要手工只修改 etcd 键。
-
-外部验收（需相应服务，沙箱未执行）：
-
-```bash
-npm run test:data              # 临时真实 PG + Redis；含 sharding-pg.integration.mjs
-npm run test:ports             # 监听回环端口的 HTTP/CLI/SSE 测试
-npm run test:runtimes:uid      # Linux 0:1000 + 专用 PG/Redis；含双节点迁移、模拟模型续聊与旧主 SH001
-npm run test:hub:pg
-npm run test:hub:uid
-# 使用独立、带认证的测试 etcd，不指向正在服务的 /codex/。
-ETCD_TEST_ENDPOINT=http://127.0.0.1:2379 \
-ETCD_TEST_NODE_A_PASSWORD="$TEST_NODE_A_PASSWORD" \
-ETCD_TEST_NODE_B_PASSWORD="$TEST_NODE_B_PASSWORD" \
-ETCD_TEST_NODE_C_PASSWORD="$TEST_NODE_C_PASSWORD" \
-DATA_TEST_DATABASE_URL="$TEST_DATABASE_URL" \
-DATA_TEST_REDIS_URL="$TEST_REDIS_URL" npm run test:sharding:etcd
-npm run test:coordination     # 同样需要上述 ETCD_TEST_*；使用空测试实例
-```
-
-etcd 集成测试验证 `guardedPut` 的动态 control 权限、1 秒内 Watch、错误凭据及 `/codex/` 外 ACL 拒绝。节点均可参加选举，静态 etcd RBAC 无法表达“当前 elected”；它限定凭据的键空间，**应用写入口**实施任期检查。拥有节点密钥/数据库角色的节点属于可信服务端，不能将其发给最终用户。
-
-配置上述全部测试变量时，还会启动三个独立目录的节点，共用测试 PG/Redis 和带认证 etcd，经过固定转发到非目标 node-c 的 HTTP 入口迁移 dave，再立即请求 `/sessions`，要求 200。缺少变量时该用例明确跳过；测试 PG 的任期不能超前于测试 etcd 的选举 revision。入口由测试内置反向代理提供，无需安装 Caddy。
-
-运维可用 admin token 请求 `GET /cluster/route?username=dave`。响应按节点列出 `routeOf`、原始 `override` 及类型、`localPaused`、PG `user_shards` 行、`owns`、`shardMatches` 和 `canDispatch`；无法联系的节点单独返回 `error`。诊断不会刷新缓存，保留 Watch 延迟现场，各节点结果是独立采样。override 写入 JSON 字符串；旧的数字值仍可读取，路由统一为字符串分片 ID，以便与 PG 严格比较。
-
-远程操作：`DEPLOY_HOST=example.com bash deploy/remote.sh check|init-env|deploy|auth-init|status|tunnel`。服务器 deploy 自动核对并分发相同 identity，安装 `codex-harness-s17.service`。`bash deploy/backup.sh` 停三个节点、逐节点备份；`bash deploy/restore.sh <timestamp> --yes` 校验三份备份后恢复。下载保留 `backups/node-a|b|c` 层级。PG 恢复后还需核对 etcd override 与磁盘备份属于同一业务时点，不能把单个分片的旧磁盘直接接到新路由上。
+运行之后多了这些：etcd 里的分片归属表、槽表和例外记录；数据库里的用户—分片映射、分片—主节点与 epoch，以及迁移操作单；三个节点各自的 `nodes/node-a|b|c` 目录，各有一份 `.data`、`workspace`、`.runs`。
 
 ## 关键代码
 
@@ -160,21 +157,24 @@ export function validateRoute(cache, userId, nodeId, revision) {
 
 ## 限制
 
-- 节点使用独立的 `AGENT_NODE_KEY_A/B/C`（`init-env` 生成）；每个运行容器只有自己的明文密钥和三个节点的 SHA-256 验证哈希。内部请求以 `x-node-id` 和该节点密钥确定调用节点；迁移六个接口还必须提供 30 分钟有效的 `move_operations` 操作单，校验 control/源/目标角色、用户、接收节点和步骤状态。节点仍共享业务数据库与控制面信任，不能把被攻陷的节点当作隔离租户；这仍是教学级部署，没有 mTLS，内部 HTTP 不提供传输加密，须限制在可信网络。
-- 全局账号表对节点只开放 `UPDATE(plan_id)`，不授予建号、改用户名/角色/密码或禁用权限；`auth:init` 与 CLI `user:add/passwd/disable` 使用 maintenance 运维连接。`auth_sessions` 仅允许 INSERT 和 UPDATE(last_seen_at, revoked_at)，无 DELETE；`agent_versions` 允许 INSERT，不允许修改或删除。已有安装通过 018 迁移收紧权限，部署仍需执行节点角色 provision。
-- 跨分片知识读取携带终端用户 Authorization；所有者节点通过全局账号/会话表重新认证，再取新的 Hub 权限快照。同一节点后续工具调用只复用内存中该用户最近已认证的终端令牌，不写入任务、磁盘或操作单；节点重启或迁移后须先收到新的已认证请求，缺令牌时拒绝跨分片读取。请求正文中的 requester 一律拒绝；无有效终端令牌、会话撤销或用户禁用均不能以节点密钥代替授权。
+- 节点坏了，它的分片就不可用：本章没有副本，也没有自动接管和自动再平衡。
+- PostgreSQL、Redis、模型网关仍是单实例，教学用的 etcd 也是单节点。
+- etcd 与 PostgreSQL 之间没有跨库的原子提交：迁移时先在数据库提交归属，再发布 etcd；发布失败就保持暂停，等人核对。
+- 节点之间用各自独立的节点密钥互相认证，但没有 mTLS 和传输加密，只能放在可信网络里。
+- 手动迁移要求源和目标都在线、部署路径一致；单次传输有大小上限，它不是磁盘损坏的恢复工具。
 
-- 节点坏了，其分片不可用；本章无副本、复制位点、自动接管或自动再平衡。
-- PostgreSQL、Redis、模型网关仍为单实例；教学 etcd 也是单节点，控制存储存在单点。control 进程可重新选举，这不能消除单节点 etcd 的故障点。etcd 不可用时超过 TTL 会停止服务；生产升级见 [production.md](docs/production.md)。
-- etcd 与 PG 没有跨库原子提交。control 持有 PG 任期锁，先提交映射与操作单 switched，再发布 etcd override；映射锁阻止越过切换的旧写入。etcd 发布失败会报警、将操作单标为 failed 并保持暂停，不把旧副本恢复为主。对账仅采纳有 switched/resumed 操作单的目标 override；无操作单、未复制完成或 failed 的 override 会被记录并忽略。不要把此流程称为分布式原子事务。
-- 手动迁移要求源和目标在线、同一固定绝对 APP_DIR、同一数值 uid 映射。tar 拒绝链接、设备文件、路径穿越、不匹配属主和 setuid；普通文件清除全部特殊权限位，目录只保留 setgid。tar、正文和索引的单次接收上限为 1 GiB，`AGENT_TRANSFER_MAX_BYTES` 只可下调；超限中止并删除临时文件，写入前目标卷须有至少两倍上限的可用空间，否则返回 507；一次目录拷贝超过 30 秒会失败并保留源。迁移不是损坏磁盘恢复工具。
-- SSE 序号在当前主节点进程内连续；迁移或重启之后新事件代次让客户端回到快照，不承诺跨主节点的永久全局序号。
-- s16 使用的 etcd3 **1.1.2** Election 共享 lease 适配依赖固定版本内部调用顺序；升级必须重跑认证集成测试。依赖与 s16 完全一致，未增加库。
+节点密钥与数据库列级权限、跨分片读取的令牌处理、传输上限与 SSE 序号等完整说明，见 [设计说明](docs/design.md#限制的完整说明)。
 
 ## 小结
 
-用户的历史随用户分片留在同一主节点。入口通过带 revision 的缓存定位，数据库用 owner 与 epoch 守住写入边界，跨分片读取继续通过 Hub，手动迁移在暂停后切换归属。
+- 分片键是用户：一个用户的历史、状态、记忆都跟着他落在同一台主节点。
+- 用户 → 分片由策略决定，分片 → 节点由 control 发布；两步分开，个别用户可以有例外。
+- 每个节点缓存路由表并订阅变化；主节点不信任转发方的缓存，过期就 409，刷新后重试一次。
+- 数据库按分片和 epoch 拒绝越界写入；共享知识库只有一份，由所有者的主节点提供只读接口。
+- 迁移先停写再搬家；一台坏了只影响它那一片。
 
-## 从这里往哪里走
+## 下一章
+
+分片让每台机器都干活了，可也带来了新的风险：每个用户的数据只在一台机器的磁盘上。这台机器坏了，它那一片的用户就只能干等。要让别的节点接手，就得提前把数据复制过去；复制总会慢一步，主节点突然坏掉时，最后那一点没来得及复制的内容怎么办，也要说清楚。
 
 下一章：[s18 副本与故障接管](../s18-replication/README.md)。

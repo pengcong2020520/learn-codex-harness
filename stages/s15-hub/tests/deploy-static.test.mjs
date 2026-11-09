@@ -52,9 +52,9 @@ test('static: 版本回滚、下载限速与服务器 flock；不走 HTTP', () =
 });
 test('docs: Hub 教学标题、五个离线实验、两幅泳道与三段真实源码', () => {
   const chapter = read('README.md');
-  assert.match(chapter, /^# s15：/); assert.match(chapter, /^对应六个问题：⑤ 能用什么 ⑥ 谁说了算$/m);
+  assert.match(chapter, /^# s15: /); assert.match(chapter, /^> \*\*对应六个问题\*\*：⑤\ 能用什么？\ ⑥\ 谁说了算？$/m);
   let previous = -1;
-  for (const heading of ['要回答的问题', '核心概念', '分工', '跑起来看看', '关键代码', '限制', '小结']) {
+  for (const heading of ['要回答的问题', '核心概念', '分工：Codex 做什么，我们做什么', '跑起来看看', '关键代码', '限制', '小结']) {
     const index = chapter.indexOf(`## ${heading}\n`); assert.ok(index > previous, heading); previous = index;
   }
   assert.match(chapter, /下一章：\[s16 协调面\]/);

@@ -76,6 +76,6 @@
 
 长文的五章最初用 [zarazhangrui/codebase-to-course](https://github.com/zarazhangrui/codebase-to-course) 这个 Skill 生成。该仓库没有开源协议，所以长文阅读器的样式、脚本与页面模板（`handbook.css`、`handbook.js`、`_handbook.html`）已由本项目重新编写，不含来源代码；章节正文与课程模块均为本项目内容。
 
-本轮教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s18 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。52 节本地课程按 s01–s18 十八个源码阶段组织，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
+教学方法参考 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)，固定快照 `ce8f9f186058939da54c9d6fead78dfb5d0fd6c3`（MIT）。已逐章核对 s01–s18 的讲解和源码，采用“一节一个机制、正常与异常路径、最小实验和增量对照”的组织方法。52 节本地课程按 s01–s18 十八个源码阶段组织，不表示已实现参考项目的 17 项功能；不会将其 Claude 执行循环搬入 Codex 脚手架。差异记录见 `curriculum/reference-review.md`。
 
 课程链接支持 `/course/#sNN`；旧的 `#module-1` 至 `#module-5` 依次映射到 s01、s02、s05、s08、s09。工作台使用真实阶段 ID；s05 / s06 实验入口分别打开 s05 / s06。s00 尚无机制课，完整阅读器保留请求阶段并显示空态，project 对应 s11。旧工作台 demo1–5 依次映射到 s01、s02、s07、s08、s09；未知或缺省目标回落 s09。桌面导航列出十九个阶段和当前开发项目，窄屏导航支持横向滚动。

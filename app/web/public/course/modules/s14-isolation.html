@@ -1,26 +1,17 @@
 <section class="module" id="module-s14">
 <div class="module-content">
-<header class="module-header animate-in"><span class="module-number">s14</span><h2 class="module-title">用户隔离：让 owner 落到进程与文件权限</h2><p class="module-subtitle">请求确定身份，运行环境池提供连接，系统 uid/gid 约束文件访问；每次启动、读取和回收都有明确的用户范围。</p></header>
+<header class="module-header animate-in"><span class="module-number">s14</span><h2 class="module-title">用户隔离：每个用户一个运行环境</h2><p class="module-subtitle">接口之外，原生状态也要分开；独立进程和目录承接用户身份，操作系统权限兜底。</p></header>
 <div class="module-body">
 <section class="screen animate-in" id="s14-screen-1">
-<h2 class="screen-heading">接口有归属之后，原生状态也需要边界</h2>
-<p>登录让服务知道请求来自谁，owner 检查让资源查询只返回这个用户的数据。但一个 Codex App Server 还管理原生历史、索引、记忆和 Skill 副本。即使 HTTP 接口已经检查归属，这些底层状态仍需要说明：它们属于哪个用户，保存在哪个目录，由哪个进程读取。s14 把用户边界落实到运行环境，让每个 owner 拥有自己的 App Server、CODEX_HOME、工作目录和系统身份。</p>
+<h2 class="screen-heading">接口挡得住请求，挡不住底层文件</h2>
+<p>上一章让云端 Agent 认出每个用户，API 层彼此看不见。但 Codex 自己读写的历史、索引、记忆和 Skill 副本不经过 API，仍由同一个进程打开。要避免底层串话，不同用户的原生状态必须放在不同目录、由不同进程读取。</p>
 <figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1416" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
-<p><span class="term" data-definition="由可信 owner 绑定的 Codex 进程、原生状态目录、工作目录、系统 uid/gid 和生命周期。进程按需启动，身份与持久状态不会随回收消失。">用户运行环境</span>不等于一个请求，也不等于一条 Thread。一个用户可以有多个会话，它们进入同一用户的连接；不同用户不会因为使用相同 Agent 配置而共用原生状态。服务仍维护全局业务队列和模型预算，所有用户合计最多执行 2 轮。池中允许 4 个进程常驻，表达的是另一种容量。</p>
-<table><thead><tr><th>组件</th><th>负责的边界</th><th>不能代替什么</th></tr></thead><tbody>
-<tr><td>RuntimeStore</td><td>事务中分配 uid，持久化用户与目录映射，监听禁用通知。</td><td>映射存在不代表进程已经启动。</td></tr>
-<tr><td>RuntimePool</td><td>控制 4 个名额、启动 Promise、租约、超时与回收。</td><td>池容量不代替轮次并发和预算。</td></tr>
-<tr><td>RuntimeRouter</td><td>使用认证上下文或持久任务 owner 选连接，隔离通知和工具回调。</td><td>用户提交的 owner 字符串不能作为授权凭据。</td></tr>
-<tr><td>CodexConnection</td><td>执行 stdio JSON-RPC，按 uid/gid、固定 umask 和白名单环境启动。</td><td>执行循环不决定 HTTP 身份和资源权限。</td></tr>
-<tr><td>SessionService / MessageService</td><td>核对会话与任务归属，派发轮次，按 owner 恢复不确定状态。</td><td>进程退出不意味着已经执行的任务可以安全重发。</td></tr>
-</tbody></table>
-<p>用户 uid 从 10001 顺序分配，gid 与 uid 同号，不依赖系统账号文件。user_runtimes 保存 user_id、uid、codex_home、created_at，并由 instance_id 区分数据实例。第一个 admin 保留既有原生目录的绝对位置；后续用户使用各自的原生目录。进程被回收后，映射、原生历史和业务记录仍然存在，下一次访问可以重新启动并恢复会话。</p>
-<p>路径属于系统映射的一部分，不能从聊天参数里随意覆盖。工具目录继续作为受信配置；Skill 的安装位置、核验结果和记忆对象属于各用户。启动时会同步 Agent 包 Skill 到当前用户目录，并向这个用户的 Codex 核验。真正的 Skill 输入和会话 cwd 都使用当前用户目录，避免一次用户切换影响另一个用户的运行状态。</p>
+<p>一个<span class="term" data-definition="由可信 owner 绑定的 Codex 进程、原生状态目录、工作目录、系统 uid/gid 和生命周期。进程按需启动，身份与持久状态不会随回收消失。">用户运行环境</span>包含独立 Codex App Server、CODEX_HOME、工作目录和系统身份。同一个用户的多个会话共用自己的进程，不同用户不因 Agent 配置相同而共用状态。</p>
+<p>用户映射持久化保存 uid 和目录，uid 从 10001 顺序分配，gid 同号；首个 admin 保留既有原生目录的绝对位置。进程回收不删除映射与历史，下次可以重新启动。Skill 安装、核验与会话工作目录也随用户分开。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-2">
-<h2 class="screen-heading">首次请求：预留名额，再共享同一次启动</h2>
-<p>假设同一个账号的两个客户端几乎同时发起首次请求。服务不能只检查“现在有没有 ready 连接”，否则两个请求都会看到没有连接，各启动一个进程。池要把 starting 也作为已经占用名额的状态：第一个请求创建池项并保存启动 Promise，后来的同 owner 请求找到这个池项，等待同一份结果。这就是 <span class="term" data-definition="同一个 owner 的并发请求复用同一个正在进行的启动 Promise。只有首次请求创建进程，后续请求增加租约并等待。">single-flight</span>。</p>
-<p>withOwner 首先要求存在可信 owner，再处理当前上下文内的同 owner 嵌套调用。外层请求通过 serial 进入 admission：检查池是否关闭、账号是否禁用，再查已有池项。串行区域保护名额和租约，耗时的启动与核验则在锁外等待。这样一个用户启动较慢时，其他用户仍可申请自己的运行环境。</p>
+<h2 class="screen-heading">按需启动，同一个用户只启动一次</h2>
+<p>按需启动让进程数取决于活跃用户，而不是注册用户总数。同一用户同时发来几个首次请求时，不能各启动一个进程：先占位，后来的请求等待同一份启动结果，这就是<span class="term" data-definition="同一个 owner 的并发请求复用同一个正在进行的启动 Promise。只有首次请求创建进程，后续请求增加租约并等待。">single-flight</span>。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/pool.mjs · 第 60–93 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/pool.mjs" data-start="60" data-end="93">  async withOwner(owner, operation) {
     if (!owner) throw new Error('运行环境缺少可信 owner。');
     const nested = this.context.getStore();
@@ -55,20 +46,14 @@
       return await this.context.run(entry, () =&gt; operation(value));
     } finally {
       entry.refs--; entry.lastUsed = this.now();</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>身份与上下文</strong>：owner 为空直接拒绝。同 owner 的 ready 嵌套调用复用当前 value；池关闭或账号禁用时不能沿用这个快捷路径。</p><p class="tl"><strong>串行 admission</strong>：先调用 assertEnabled 核对账号，再读取 entries。closing 项不能借用，等待清理时仍应返回繁忙。</p><p class="tl"><strong>占位与 Promise</strong>：entries.set 发生在请求等待之前。entry.ready 只在新项创建时赋值，同用户的请求自然汇合到一个 Promise。</p><p class="tl"><strong>请求租约</strong>：refs 在等待前增加，覆盖启动等待和业务执行。try / finally 确保成功、异常都减少租约并更新 lastUsed。</p><p class="tl"><strong>连接路由</strong>：await entry.ready 之后还检查 state；通过 context.run 才把 operation 放入当前用户运行环境。取得旧引用不等于可以使用已关闭连接。</p></div></div></div>
-
-<p>启动有 30 秒期限。create 必须响应 AbortSignal，并在发布连接前再次检查是否已中止。超时后不能让一个晚到的进程重新成为可用对象：请求应失败，池项进入 closing，随后等待创建收尾并关闭晚到进程。清理完成才删除池项；否则旧进程尚未退出、新进程已经启动的瞬间，会突破最多 4 个进程的约束。</p>
-<p>服务级 /ready 与用户连接 ready 也要分开看。运行环境按需启动，服务就绪并不意味着所有用户都完成了 Codex 初始化、Skill、工具和记忆核验。首次用户请求才会触发自己的启动链路。部署探测通过可以说明服务具备接入条件，不能替用户的实际启动结果作保证。</p>
-<p>HTTP 使用认证后的 owner；后台派发使用持久任务记录的 owner；通知带上连接启动时绑定的 owner。工具回调还要比较 connectionOwner、task.userId 和 session.ownerId。只有这些身份一致，才继续执行账号状态、轮次和 PermissionGate 检查。参数里自称的身份不进入授权链，后台任务也不能因为复用了异步回调而借到别人的请求上下文。</p>
+<p>启动上限为 30 秒。超时后即使进程迟到，也不能发布为可用连接；必须等待清理完成才释放名额，避免旧进程没退出又开一份。</p>
+<p>请求按认证身份路由，后台按任务记录路由。工具回调要同时核对连接 owner、任务用户和会话 owner，一致后再检查轮次与工具权限；参数里自称的身份不参与授权。</p>
+<p>服务的 <code>/ready</code> 不表示所有用户进程已启动。首次请求才触发该用户的 Codex、Skill、工具与记忆核验，就绪探测不能提前保证这次启动成功。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-3">
-<h2 class="screen-heading">容量到顶：先证明空闲，再等待旧进程退出</h2>
-<p>池满时，第 5 个用户不能拿一个正在执行任务的进程让位。候选必须 ready，refs 为 0，且没有执行中轮次和排队任务。lastUsed 只决定检查顺序，并不能单独证明对象空闲。池按时间从旧到新逐个检查，找到第一个满足条件的对象才回收；忙碌状态查询出错时保守跳过本轮回收。</p>
-<table><thead><tr><th>触发条件</th><th>回收判断</th><th>结果</th></tr></thead><tbody>
-<tr><td>第 5 个 owner 申请名额</td><td>按 lastUsed 寻找无租约、无轮次、无排队任务的 ready 项。</td><td>不必等 10 分钟；关闭完成后为新人占位。</td></tr>
-<tr><td>定时 sweep</td><td>上述空闲条件成立，且距最后请求达到 10 分钟。</td><td>释放不用的进程，下次请求重新启动。</td></tr>
-<tr><td>4 个对象全部忙</td><td>不存在符合条件的 victim。</td><td>503 RUNTIME_BUSY，Retry-After: 10，不受理消息。</td></tr>
-<tr><td>启动失败但尚未清理完成</td><td>closing 项仍计入 entries.size。</td><td>清理结束才能重新使用名额。</td></tr>
-</tbody></table>
+<h2 class="screen-heading">进程有限：空闲回收，全忙就拒绝</h2>
+<p>每人一个进程也不能无限增长。池最多保留 4 个进程；满了先回收最久未用且确实空闲的一个，全都忙就返回 503 RUNTIME_BUSY，提示 10 秒后再试。这延续了 s12 的背压。</p>
+<p>“空闲”要同时满足 ready、没有请求租约、没有执行中轮次和排队任务。定时回收还要求闲置 10 分钟，容量满时则不必等满 10 分钟；查不清忙闲时保守地不回收。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/pool.mjs · 第 28–36 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/pool.mjs" data-start="28" data-end="36">  async idle(entry) {
     if (entry.state !== 'ready' || entry.refs) return false;
     try { return !await this.isBusy(entry.owner); }
@@ -94,15 +79,13 @@
     return entry.removing;
   }
   crash(entry, error) { return this.serial(() =&gt; this.entries.get(entry.owner) === entry ? this.remove(entry, error) : undefined); }</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>共用清理</strong>：entry.removing 存在时直接返回，避免同一对象并发清理。设置 closing 并中止启动后，其他请求不能继续取得它。</p><p class="tl"><strong>先停止</strong>：已有 value 就 await closeValue；启动尚未返回则等待 creating 收尾并关闭结果。关闭前不能释放名额。</p><p class="tl"><strong>再收尾</strong>：带 error 时调用 onLost 核对该 owner 的任务状态，然后 onRemoved 清理缓存。最后确认 Map 中仍是当前 entry 才删除。</p></div></div></div>
-
-<p>closeValue 同样按对象共享一次清理 Promise。它先尝试正常关闭；如果关闭抛错或超过 10 秒，进入强制终止兜底。隔离模式没有额外增加 KILL capability，而是用 SETUID/SETGID 启动同 uid/gid 的短命信号发送器。连接直接 exec 原生 Codex，可减少只杀掉包装器而留下孙进程的风险。</p>
-<p>这里的“4 个进程”不能读成“4 轮同时执行”。进程池决定哪些用户的原生运行环境保持活动，MessageService 仍在全局最多派发 2 轮。一个 ready 进程可以暂时没有轮次，也可以有排队任务等待预算或并发名额。只要存在这些任务，就不能仅凭当前没有输出把它当成空闲对象。</p>
-<p>回收只改变活动进程与内存缓存。下一次请求重新进入 withOwner，读取相同用户映射，使用自己的原生状态恢复。对使用者而言可能增加一次启动延迟，但不会因为池满而把会话转给其他用户的进程，也不会用另一个用户的 HOME 继续执行。</p>
+<p>回收先等待进程退出，再释放名额；关闭异常或超过 10 秒时执行强制终止兜底。回收只影响活动进程和缓存，下次仍从同一用户的历史恢复。</p>
+<p>4 个进程不等于 4 轮并发。全局同时执行仍最多 2 轮；一个进程即使没有输出，也可能有排队任务，不能直接当成空闲。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-4">
-<h2 class="screen-heading">最终 spawn 与文件读取共同守住系统边界</h2>
-<p>系统权限必须在最终创建进程的位置生效，不能只停留在目录名称里。用户目录由用户 uid 所有，服务共享组为 gid 1000，模式为 2770。setgid 让目录内新文件继承共享组；用户子进程不加入这个共享组，因此不能靠共享组身份读取别人的目录。父目录只开放必要的穿越权限，用户边界目录不开放其他用户访问。</p>
-<p>容器服务以 0:1000 运行，删除全部 capability 后只加回 SETUID、SETGID、CHOWN、FOWNER，并设置 no-new-privileges。没有 DAC_OVERRIDE，服务自身的读写也受权限位约束。独立数值 uid/gid 不需要为每个应用用户创建系统账号，但要求真正以这些身份启动子进程。非 root 本机运行会明确警告未启用系统用户隔离；容器内切换身份失败则拒绝启动。</p>
+<h2 class="screen-heading">操作系统兜底：每人一个系统身份</h2>
+<p>只分目录还依赖代码把路径写对。再给每个用户进程独立 uid，并让目录归这个 uid，操作系统就能拒绝跨用户读取：即使知道别人的路径，也没有权限打开。</p>
+<p>这里使用独立数值 uid/gid，不需要系统账号文件中的条目。服务进程能切换身份和调整归属，但没有无视权限位的能力；用户进程只继承白名单环境，不拿数据库或服务商密钥。最终 spawn 才是这些约束真正生效的位置。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · codex/launch.mjs · 第 199–211 行</span><pre><code data-source="stages/s14-isolation/server/modules/codex/launch.mjs" data-start="199" data-end="211">export function userEnvironment(environment, home) {
   const env = {};
   for (const name of ['CODEX_BASE_URL', 'CODEX_API_KEY', 'PATH', 'LANG']) {
@@ -116,8 +99,7 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
     command: '/bin/sh',
     args: ['-c', 'umask 0007 &amp;&amp; exec "$0" "$@"', executable, ...args],
     options: isolated ? { uid, gid } : {},</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>正向白名单</strong>：只选择 CODEX_BASE_URL、CODEX_API_KEY、PATH、LANG，再设置属于用户自己的 HOME、CODEX_HOME、CODEX_SQLITE_HOME。数据库、Redis、服务商凭据和 Node 注入变量不会被整体继承。</p><p class="tl"><strong>固定 umask</strong>：shell 脚本文本保持固定，可执行文件和参数逐项传入。umask 0007 阻止其他用户取得新文件权限。</p><p class="tl"><strong>系统身份</strong>：isolated 时传 uid/gid。Node/libuv 清空继承的补充组；本机非隔离模式不传这些选项，不能将此模式当作权限验收结果。</p></div></div></div>
-
-<p>即使模型进程已经降权，服务代读文件仍可能扩大权限。因此读取产物、原生状态或用户文件时，需要明确“以谁的权限读取”。readAsUser 在隔离模式创建指定 uid 的短命辅助进程，使用固定 PATH 与 LANG，不继承服务密钥。正文经 stdout 返回，单独的 fd 3 传递有大小上限的元数据；读取还受超时和字节上限约束。</p>
+<p>服务代读文件也要按用户权限进行，否则会成为绕过隔离的通道。隔离模式用同 uid 辅助进程读取，检查属主、文件类型、链接和大小；不能只校验一次路径字符串就放行。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · runtimes/user-files.mjs · 第 78–84 行</span><pre><code data-source="stages/s14-isolation/server/modules/runtimes/user-files.mjs" data-start="78" data-end="84">export async function readAsUser(uid, file, { maxBytes, isolated = process.getuid?.() === 0 &amp;&amp; uid !== process.getuid(), metadata = false, truncate = false, metadataOnly = false } = {}) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes &lt; 0 || maxBytes &gt; 16 * 1024 * 1024) throw new Error('必须指定有效的读取上限。');
   const options = { maxBytes, truncate, metadataOnly };
@@ -131,32 +113,20 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
     if (!stat.isFile() || stat.nlink !== 1) throw new Error('读取产物必须是独立普通文件。');
     if (stat.uid !== uid) throw new Error('读取产物属主不匹配。');
     const chunks = []; let length = 0;</code></pre></div><div class="translation-english"><span class="translation-label">逐段解读</span><div class="translation-lines"><p class="tl"><strong>打开标志</strong>：O_NOFOLLOW 拒绝最终路径的符号链接；O_NONBLOCK 避免特殊文件造成阻塞，随后还要核对类型。父目录也逐级检查是真实目录。</p><p class="tl"><strong>绑定描述符</strong>：fstat 与后续 readSync 使用同一 fd，要求独立普通文件、单个硬链接且 uid 匹配。通过路径字符串的检查不能代替这些条件。</p></div></div></div>
-
-<p>这些检查仍有明确边界。secureTree 使用 fd 校验和修改条目，但目录遍历依赖父路径，存在父目录被替换的残余竞态；权限修复应在用户进程停止后进行。文件 API 归属与工具权限检查仍然必要。独立 uid 约束文件访问，并不提供 CPU、内存、网络或内核隔离，不能据此宣称拥有按用户容器的全部保护。</p>
+<p>独立 uid 提供文件级保护，不隔离 CPU、内存、网络和内核，API 归属与工具权限仍必需。非 root 本机模式没有系统用户隔离，容器内切换身份失败则拒绝启动。目录遍历还有父路径被替换的残余竞态，权限修复应在用户进程停止后做。</p>
 </section>
 <section class="screen animate-in" id="s14-screen-5">
-<h2 class="screen-heading">故障只收口到当前 owner，证据按验证层次核对</h2>
-<p>用户进程的 fatal 通知带有连接归属。池先停止这个连接，再在该 owner 上下文调用 recoverOwner：starting、running、steering 等执行中状态变为 unconfirmed，相关会话暂停。因为进程可能已经完成了部分操作，服务不能把断线当成“尚未执行”，再自动重发同一轮。清理用户会话缓存后，下次访问从该用户的原生历史核对结果；其他用户的连接、failure 和任务状态保持不变。</p>
-<p>账号禁用也必须到达活动进程。数据库事务同时吊销令牌并发出通知；通知到达就关闭对应进程并中止启动。每次取得运行环境和每次工具调用仍查询账号状态，覆盖通知与请求交叉的窗口。如果通知连接丢失，执行器会停止，避免继续使用无法及时吊销的进程。这种全局停止是控制通道失效的处理，不能混同于普通单用户 Codex 崩溃。</p>
-<p>第一个 admin 被禁用后，保留的原生目录映射不会转移给另一个账号。原生记忆虽按用户物理分开，是否开启仍服从服务端总开关、读取与贡献语义，账号数量不再决定开关。开启也不代表摘要生成成功：固定版本禁用原生写工具时，后台合并仍不能写出最终摘要；知识库挂载策略对记忆的限制继续生效。</p>
-<table><thead><tr><th>验证层次</th><th>运行方式</th><th>能证明什么</th></tr></thead><tbody>
-<tr><td>离线路由</td><td>npm run lesson -- routing</td><td>真实池、路由与业务模块在模拟连接下按 owner 选连接、过滤通知；不监听端口。</td></tr>
-<tr><td>离线容量</td><td>npm run lesson -- pool</td><td>名额、租约、single-flight、回收和全忙 503 等断言；不证明 OS 权限。</td></tr>
-<tr><td>离线崩溃</td><td>npm run lesson -- crash</td><td>单个 owner 的连接失败不会停止其他用户轮次；不切换 uid。</td></tr>
-<tr><td>真实 PostgreSQL</td><td>npm run test:runtimes:pg</td><td>真实数据结构、并发 uid 分配、数据库通知与 owner 恢复。</td></tr>
-<tr><td>Linux 容器</td><td>npm run test:runtimes:uid</td><td>指定 capability 下的真实 uid、私有组、跨用户不可读、umask 与环境白名单。</td></tr>
-<tr><td>端口回归</td><td>npm run test:ports</td><td>需要监听端口的继承链路；与不监听端口的 npm test 分开。</td></tr>
-</tbody></table>
-<p>在 stages/s14-isolation 目录可先运行下面三个离线实验。它们执行真实测试并以退出码判断，不调用模型、不访问 PostgreSQL、不要求 root。课程中的泳道、状态卡片和答案是固定教学推演，不能替代命令输出。尤其是 crash 实验，它验证故障影响范围，不能因为与文件边界同在一章，就被视为 readAsUser 或 Linux 权限的运行证据。</p>
-<pre><code>npm run lesson -- routing
-npm run lesson -- pool
-npm run lesson -- crash</code></pre>
-<p>s14 保持独立部署，默认端口 4328。运行 remote.sh tunnel 建立 SSH 隧道后，CLI 连接本机回环地址并登录。工作台只提供本章教材和部署说明，不把这个阶段加入共享 stages 容器，也不代理它的实时会话。部署后还要按本章验收说明检查容器、数据库和真实模型；静态 Compose 检查不能证明远程环境已经运行。</p>
+<h2 class="screen-heading">一个人的进程崩溃，不连累别人</h2>
+<p>用户进程崩溃只能说明结果不确定，不能说明工具没有执行。服务按连接 owner 关闭该进程，把他的执行中任务标为 unconfirmed、暂停相关会话待核对；其他用户继续工作，下次请求可重新拉起他的进程。</p>
+<p>禁用账号同样会关闭对应进程，并在取得运行环境和工具调用时复查账号状态。若接收禁用通知的控制通道丢失，执行器会停止；这与单用户进程崩溃的影响范围不同。</p>
+<p>原生记忆已按用户物理分开，但开启不代表摘要生成成功：固定版本禁用原生写工具时，后台合并仍不能写出最终摘要，知识库挂载策略的限制也继续生效。</p>
+<p>离线路由、容量和崩溃实验分别验证身份、回收与故障范围；真实 uid 文件隔离、数据库通知和模型运行需另外验证。部署与实验入口见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s14-isolation/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>，权限及已知限制见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s14-isolation/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 <div class="callout callout-accent"><div class="callout-content"><p class="callout-title">判断隔离时，分别寻找三类证据</p><p>业务层看认证与任务 owner；进程层看连接归属、租约和生命周期；系统层看真实 uid/gid、目录权限和有界读取。三层互相补充。只看到 HTTP 返回 404，不能证明底层文件不可跨读；只看到用户进程分开，也不能省略工具与资源归属检查。</p></div></div>
 <div class="quiz-container" id="s14-quiz">
 <div class="quiz-question-block" data-correct="1" data-explanation-right="owner 是池项键，启动 Promise 与租约一起保证 single-flight 和使用期间不回收。" data-explanation-wrong="owner 是池项键，启动 Promise 与租约一起保证 single-flight 和使用期间不回收。"><h3 class="quiz-question">同 owner 第二个请求在 starting 时到来，应怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>另开一个进程</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>等待同一个 entry.ready，并持有租约</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>借用任意 ready 进程</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="2" data-explanation-right="容量回收不要求等待 10 分钟，但必须逐项证明空闲。" data-explanation-wrong="容量回收不要求等待 10 分钟，但必须逐项证明空闲。"><h3 class="quiz-question">第 5 个用户触发容量回收，候选还必须满足哪项？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>启动最早即可</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>必须先满 10 分钟</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>ready、无租约、无执行中轮次和排队任务</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="catalog 的 crash 实验使用模拟连接，不切 uid；文件读取源码与 OS 权限必须分别核对。" data-explanation-wrong="catalog 的 crash 实验使用模拟连接，不切 uid；文件读取源码与 OS 权限必须分别核对。"><h3 class="quiz-question">离线 crash 实验通过，能证明真实 Linux uid 文件隔离吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>能，所有隔离都已验证</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不能；它检验故障范围，系统权限需容器验收</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>能，只要有 ownerId</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s14-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s14-quiz">重新作答</button></div></div>
+<p>每个用户有了自己的运行环境，团队却还需要一起用资料：知识库能分享给谁，接收者能否修改，谁能用哪些工具，又能用多少？下一章 s15 用权限与资源 Hub 统一回答这些问题。</p>
 <p><a href="/course/changes.html#s14">→ 打开 s14 阶段演示</a> · <a href="/course/#s14">→ 打开 s14 机制课堂</a></p>
 </section></div></div></section>

@@ -1,48 +1,72 @@
-# s15：权限与资源 Hub
+# s15: 权限与资源 Hub — 谁能用、谁能改，只在一个地方判定
 
 [导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → `s15` → [s16](../s16-coordination/README.md) → [s17](../s17-sharding/README.md) → [s18](../s18-replication/README.md) → [app](../../app/)
 
-对应六个问题：⑤ 能用什么 ⑥ 谁说了算
+> *"谁能用、谁能改，只在一个地方判定"* — 知识库、Skill、工具、Agent 都有资源范围；可以分享给指定的人；能用多少由权益决定；每一次授权变更都留下审计。
+>
+> **对应六个问题**：⑤ 能用什么？ ⑥ 谁说了算？
+
+---
+
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 ## 要回答的问题
 
-多个用户共用 Agent 服务时，谁能看到、使用、修改、分享和删除资源？授权撤销后什么时候生效？一个用户用完今天的 token，其他用户还能继续吗？
+到上一章，每个用户都有了自己的账号和运行环境，彼此看不见。可团队里的人还需要"一起用"：
 
-本章只引入权限与资源 Hub。每用户进程、uid、CODEX_HOME、同 uid 辅助读写、全局队列继续承担各自职责。
+- alice 整理了一个知识库，想给 bob 用，但不想让 dave 看到。bob 能用，能不能改？alice 收回授权以后，什么时候生效？
+- 有人只该用写作 Agent 和基本工具，有人可以用全部；这些规定写在哪里？
+- 用户能不能上传自己的 Skill？想分享给别人，要不要有人把关？
+- 一个用户用完了今天的 token，其他人还能继续吗？
+
+这些判断如果散在各个模块里，工具管工具的，知识库管知识库的，迟早会出现一个地方放行、另一个地方拦截的情况。本章只加一个单元：**权限与资源 Hub**。所有"能不能"的判断都交给它。
 
 ## 核心概念
 
-`hub.can(user, action, resource)` 统一处理 `use | read | modify | share | delete`。看不见返回 404；看得见但不能执行动作返回 403。`GET /hub` 返回可见资源的类型、scope、所有者用户名与可执行动作。会话、普通文件仍是个人隔离对象，admin 不能借分享接口进入别人的会话。
+### 一个地方回答"能不能"
 
-| scope | 可用者 | 可修改者 |
-| --- | --- | --- |
-| private | 所有者、admin | 所有者、admin |
-| shared | 所有者、指定被授权者、admin | 所有者、admin |
-| system | 所有用户，受权益限制 | admin |
+Hub 只回答一个问题：**这个用户，能不能对这个资源做这个动作？**动作有五种：使用、读取、修改、分享、删除。工具、知识库、Skill、Agent、配额，所有模块都来问它，不再各自判断。
 
-知识库分享无需审批；每个资源最多授权 20 人，不能授权给自己、不存在或已禁用账号。禁用账号的授权记录保留但不生效。有授权时为 shared，最后一条撤销后回 private。发布为 system 会清除指定授权；取消发布回 private。两者的 publish 审计在同一事务写入 `detail.revokedGrantees`，保留被清除的用户 ID 名单。
+回答也有讲究，和 s13 一样：看不见的资源返回 404，当它不存在；看得见但没有这个权限，比如被分享者想修改，返回 403。
 
-| 权益 | Agent | 工具组 | 每日 token | 同时轮次 | 知识库 | 私有 Skill |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| basic | writing | files、knowledge | 200,000 | 1 | 3 | 3 |
-| pro | 全部系统 Agent | 全部系统工具组 | 1,000,000 | 2 | 20 | 20 |
+### 资源范围：私有、分享、系统
 
-新用户默认 basic。admin 不受权益限制，但管理操作仍写审计；全局最多 2 轮继续有效。`pro` 在表中以 `['*']` 表示全部系统集合。部署中的 `writing` 对应 `agents/writing/`，Agent ID 为 `writing-assistant`。
+每个资源都有一个**范围**：
 
-有效工具 = Agent 白名单 ∩ 权益工具组 ∩ 工具组可见范围。原生联网搜索也受 web 工具组限制。工具组与 Agent 只允许 system，不接受用户上传工具代码。
+| 范围 | 谁能用 | 谁能改 |
+|---|---|---|
+| 私有 | 只有所有者 | 所有者、管理员 |
+| 分享 | 所有者，以及他指定的人 | 所有者、管理员 |
+| 系统 | 所有用户，受权益限制 | 只有管理员 |
 
-Skill 上传后是 private，仅同步到所有者的 CODEX_HOME/skills。所有者提出共享名单形成 pending，另一位 admin approve 后写授权并同步；reject 不授予权限。撤销立即移除被授权者的安装副本。已有轮次保留启动时的权限快照，下一轮核对新规则；Skill 集合变化需要空闲边界重启该用户进程，并按已有兼容规则新建会话。
+分享是**给指定的人**，不是公开：所有者把知识库授权给 bob，bob 只能读和用，不能改、不能删、不能再转给别人。收回最后一个授权，资源就回到私有。
 
-## 分工
+### 权益决定能用多少
 
-| 单元 | 职责 |
-| --- | --- |
-| Hub | 资源可见性、动作、权益、授权审批、配额判定、审计 |
-| PermissionGate | 可信轮次上下文、Agent 挂载、workflow 临时授权、输出范围 |
-| sessions / messages | 会话绑定、下一轮重验共享知识库、保留超额排队任务、全局与用户并发 |
-| knowledge / resources / RAG | 先经 Hub 授权，再查版本、来源与索引；共享原文按原 owner 的 uid 读取 |
-| runtimes / Codex | 每用户进程和目录、同 uid Skill 同步、发现核验、空闲受控重启 |
-| PostgreSQL | plans、授权唯一与数量约束、scope 联动、只追加 permission_events |
+每个用户有一份**权益**：能用哪些 Agent、哪些工具组，每天多少 token，同时跑几轮，能建几个知识库、几个私有 Skill。内置两档：basic 和 pro，新用户默认 basic，由管理员调整。
+
+一个用户最终能用的工具，是三份清单的交集：**Agent 允许的工具 ∩ 权益里的工具组 ∩ 这个工具组对他是否可见**。s06 埋下的白名单，到这里和用户的权益接上了。
+
+一个用户用完了当天的 token，只停派他自己的新任务，排队的任务保留到第二天；正在执行的那一轮照样做完。其他人不受影响。
+
+### 用户的 Skill：可以提议，不能自批
+
+用户可以上传自己的 Skill（只能是指令文本，不能带代码），默认只装进他自己的 CODEX_HOME。想分享给别人，要提一个申请，由**另一位**管理员审阅正文后批准。这是 s10"可以提议，不能自批"在用户之间的延续：Skill 会改变别人的 Agent 怎么工作，不能由提议者自己说了算。分享自己的知识库不需要审批，因为那是他自己的资料。
+
+### 权限在轮次边界生效，变更留下审计
+
+权限会变：授权被收回，权益被降级。可一轮执行到一半，突然换掉它的权限，结果就说不清了。所以**每一轮开始时拍一张权限快照**，这一轮都按快照执行；变化从下一轮开始生效。
+
+每一次分享、收回、发布、调整权益、审批 Skill，都写一条只能追加、不能修改的审计记录：谁，对什么，从什么改成什么，什么时候。
+
+## 分工：Codex 做什么，我们做什么
+
+| Codex 做什么 | 我们做什么 |
+|---|---|
+| 在每个用户的运行环境里发现并使用 Skill | Hub：资源范围、指定授权、权益与配额、Skill 审批、审计 |
+| 调用工具、读取挂载的知识 | 每轮开始拍权限快照；工具回调时按快照再判一次 |
+| | 授权的 Skill 装进被授权者的 CODEX_HOME，收回时移除 |
+| | 超额只停派新任务，不打断正在执行的一轮 |
 
 ## 跑起来看看
 
@@ -75,15 +99,7 @@ npm run hub -- publish general
 npm run hub -- unpublish general
 ```
 
-普通用户可以自行创建知识库：`npm run knowledge -- create my-notes "我的资料"`，对应 `POST /knowledge {kbId,title}`。所有者由登录身份确定，初始为 private；kbId 是 1–64 位小写字母、数字或连字符，在实例内全局唯一，重复返回 409。标题为 1–200 字。原文与 Wiki 分别放在 `workspace/users/<owner>/inputs/<kbId>` 和 `workspace/users/<owner>/research/<kbId>/wiki`，与 `knowledge:init` 共用目录准备实现。
-
-basic 最多拥有 3 个知识库、pro 最多 20 个，admin 不限；配置注册的库也计入所有者数量。Hub 在同一事务取得实例锁后计数并创建，并发也不会超额，超出返回 403 `PLAN_LIMIT`。降级保留已有资料，超额时拒绝新增。可信 Agent 配置仍可注册默认归部署初始 owner 的库，修改绑定路径不会覆盖既有库。
-
-用户自建库采用 Agent **第一个 knowledge 挂载项**的默认模式和动作，再与 Hub 可见权限取交集；没有 knowledge 项的 Agent 不挂载。静态库仍按显式 kbId 匹配，不能借此访问未声明的静态库。原文只读；任务 update/index 仍需 `knowledge.update` workflow 授权，受分享者只有 read。新建库立即支持 Wiki；默认 rag 时先以 Wiki 工作，构建索引后按原有重启边界启用 RAG。
-
-所有者或 admin 可调用 `DELETE /knowledge/:id`：撤销全部授权，删除 Wiki/索引登记、Chroma/BM25 索引及两处目录，原文资源记录标为 revoked。有执行中任务挂载或索引正在执行时返回 409 `KNOWLEDGE_BUSY`。目录操作遵守 s14：Linux 隔离模式使用所有者 uid 的辅助进程；本机模式使用服务端受限工具路径。创建、删除分别记录 `knowledge:create`、`knowledge:delete` 审计。
-
-准备仅含 `SKILL.md` 与 `references/` 下 `.md/.txt` 的目录。正文及附件合计最多 128 KiB，不接受代码、链接、路径穿越。`SKILL.md` 的 frontmatter 使用 Codex 原生格式；发现与解析继续由 Codex 完成。
+普通用户也可以自己建知识库，例如 `npm run knowledge -- create my-notes "我的资料"`；建好时是私有的，数量受权益限制。上传一份只含指令文本的 Skill，再申请分享给别人：
 
 ```bash
 npm run hub -- skill:upload notes ./examples/private-skill
@@ -97,23 +113,9 @@ npm run hub -- skill:reject <id>
 npm run hub -- skill:unshare <id> carol
 ```
 
-接口与命令对应如下：
-
-| CLI 子命令 | 接口 |
-| --- | --- |
-| knowledge -- create `<kbId> <title>` | POST /knowledge `{kbId,title}` |
-| 删除知识库（HTTP） | DELETE /knowledge/:id |
-| hub / plan | GET /hub、GET /me/plan |
-| share / grants / unshare | POST、GET /hub/knowledge/:id/grants；DELETE /hub/knowledge/:id/grants/:username |
-| publish / unpublish | POST、DELETE /hub/knowledge/:id/publish |
-| skill:upload | POST /hub/skills `{name,files:{"SKILL.md":"...","references/a.md":"..."}}` |
-| skill:read | GET /hub/skills/:id，审批前读取文本与申请；不会安装到 admin 目录 |
-| skill:share | POST /hub/skills/:id/share `{usernames:[]}` |
-| skill:approve / skill:reject | POST /hub/skills/:id/approve、reject `{}` |
-| skill:unshare | DELETE /hub/skills/:id/grants/:username |
-| plan:assign | POST /hub/plans/assign `{username,plan}`，admin |
-
 `POST /sessions` 可带 `{agent:"writing-assistant"}`，只能选择当前部署的已授权 Agent；其他 Agent 使用各自部署配置。本章不引入动态 Agent 上传。
+
+知识库数量上限、删除流程、Skill 的格式要求，以及全部命令与接口的对照，见 [设计说明](docs/design.md#关键数值与实现细节)。
 
 ```bash
 npm test
@@ -126,6 +128,8 @@ npm run lesson -- revocation
 ```
 
 离线实验不需要端口、PostgreSQL、docker 或 uid 切换。真实约束、端口和容器验收见 [hub-acceptance.md](docs/hub-acceptance.md)；未执行的集成测试不能计为通过。
+
+运行之后多了这些：数据库里的权益表（`plans`）、授权表（`resource_grants`）和只追加的权限事件表（`permission_events`）；被授权的 Skill 会安装进被授权者自己的 CODEX_HOME。
 
 ## 关键代码
 
@@ -174,8 +178,14 @@ export function effectiveTools(user, agent, groups) {
 
 ## 小结
 
-Hub 统一回答资源能否看、用、改和分享，运行环境继续隔离用户的进程与原生状态。权限变化在下一轮执行前落实，用量按 owner 归集，审计保存每次管理决定。
+- 所有"能不能"都交给 Hub 一处判定：看不见返回 404，看得见不能做返回 403。
+- 资源分私有、分享、系统三种范围；分享只给指定的人，只能读和用。
+- 权益决定能用哪些 Agent、工具，能用多少；能用的工具是三份清单的交集。
+- 用户上传的 Skill 可以提议分享，要由另一位管理员批准。
+- 权限按轮次快照执行，变化从下一轮生效；每次变更都留下只追加的审计。
+
+## 下一章
+
+到这里，一台服务器上的云端 Agent 已经能让多个用户各用各的、按权限共享。可它终究只有一台：这台机器停了，所有人一起停；用户越来越多，一台机器也装不下。要扩展到多台机器，第一个要回答的问题是：几台机器之间，怎么知道谁还活着、谁说了算？
 
 下一章：[s16 协调面](../s16-coordination/README.md)。
-
-离线验证在本阶段目录执行 `npm test`。`npm run test:data` 启动临时 PostgreSQL、Redis，运行 data、knowledge 与 hub-share 集成测试；需要本机可监听端口、`initdb`、`pg_ctl`、`redis-server` 和既有 Codex CLI。hub-share 使用普通用户 Bob 经 HTTP 自建库、导入并生成 Wiki、分享给 Carol，核对 Carol 读取成功、写入 403、Dave 404、撤权后下一轮拒绝，以及并发额度和删除清理。模型响应由本地 fixture 提供，不调用真实模型；`npm run test:rag` 另需 Chroma。

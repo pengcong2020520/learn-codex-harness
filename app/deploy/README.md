@@ -111,7 +111,7 @@ STAGES_MEMORY_LIMIT=1800m
 | s10-skill-workflow | 4316 | agent_s10 | 3 |
 | s11-model-gateway | 4318 | agent_s11 | 4 |
 
-s12、s13 使用各自独立 Compose 与数据卷，不在上面的共享 stages 容器清单中。s13 的部署与登录见 [账号与认证 README](../../stages/s13-auth/README.md)。
+s12–s18 使用各自独立的 Compose 与数据卷，不在上面的共享 stages 容器清单中；部署方式见各章 README（例如 [s12](../../stages/s12-deploy/README.md)、[s13 的登录](../../stages/s13-auth/README.md)）。
 
 app 继续使用 `agent` 库与 Redis DB 0。四个阶段复用 PostgreSQL 用户 `agent`，数据库和 Redis 库提供数据分隔，不是安全租户隔离。缺失库通过阶段自己的 `pg` 依赖连接 `agent` 管理库创建；已有库不重建。每次阶段服务重启前重新运行 `data:migrate`。s10 与 s11 还会在启动服务前执行 `npm run agent:init`：该脚本只创建配置声明的缺失资料目录，不覆盖已有文件，因此每次启动都执行，失败则不启动该阶段。s09–s11 的 `knowledge:init` 成功后在各自 `workspace/.stages-knowledge-initialized` 写标记，避免重复覆盖 s09 的知识 Skill；删除 workspace 或恢复不带该标记的 workspace 会使首次初始化重新执行。升级知识模板需先停 stages，人工核对并合并已有 Skill，再删除相应标记并重启。`agent:init` 不使用该标记。
 

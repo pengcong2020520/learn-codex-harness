@@ -52,17 +52,6 @@ for (const [name, kind] of docs) {
   const file = path.join(root, name), doc = fs.readFileSync(file, "utf8");
   if (kind === "chapter") {
     const stage = name.split("/")[0], id = stage.slice(0, 3);
-    if (["s15", "s16", "s17", "s18"].includes(id)) {
-      // 独立快照保留原有文档结构；登记不改写章节正文。
-      assert.ok(doc.startsWith(`# ${id}：`), `${name} 缺少阶段标题`);
-      for (const heading of ["要回答的问题", "核心概念", "分工", "跑起来看看", "关键代码", "小结"]) assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
-      assert.match(doc, id === "s15" ? /对应六个问题：⑤ 能用什么 ⑥ 谁说了算/ : ["s17", "s18"].includes(id) ? /对应六个问题：③ 之前聊过什么 ⑥ 谁说了算/ : /对应六个问题：⑥ 谁说了算/);
-      if (id === "s18") {
-        assert.match(doc, /主线最后一章/);
-        assert.ok(doc.includes("[app](../../app/)"));
-      } else assert.match(doc, new RegExp(`下一章：\\[?s${Number(id.slice(1)) + 1}`));
-      assertExcerpts(stage, doc, name);
-    } else {
       assert.ok(doc.startsWith(`# ${id}: `), `${name} 标题应以「${id}: 」开头`);
       assert.ok(doc.includes(`\`${id}\` → `) || doc.includes(`→ \`${id}\``), `${name} 缺少章节导航`);
       for (const heading of CHAPTER_HEADINGS) {
@@ -70,8 +59,11 @@ for (const [name, kind] of docs) {
       }
       assert.match(doc, /^> \*\*对应六个问题\*\*：/m, `${name} 缺少「对应六个问题」`);
       assert.ok(doc.includes("[导论](../introduction.md)"), `${name} 的章节导航缺少导论`);
+      if (id === "s18") {
+        assert.match(doc, /主线最后一章/, `${name} 应说明这是主线最后一章`);
+        assert.ok(doc.includes("[app](../../app/)"), `${name} 应指回 app`);
+      }
       assertExcerpts(stage, doc, name);
-    }
   }
   if (kind === "introduction") {
     assert.ok(doc.startsWith("# 导论："), `${name} 标题应以「导论：」开头`);

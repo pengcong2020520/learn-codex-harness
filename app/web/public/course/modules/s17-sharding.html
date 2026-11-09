@@ -1,23 +1,18 @@
 <section class="module" id="module-s17">
-<div class="module-content">
-<header class="module-header animate-in">
-<span class="module-number">s17</span>
-<h2 class="module-title">分片与路由：用户的历史留在自己的主节点</h2>
-<p class="module-subtitle">用用户分片定位独立磁盘，用 revision 核对缓存，用 SH001 保护写入；迁移先暂停、等轮次、拷贝，再切换与恢复。</p>
+<div class="module-content"><header class="module-header animate-in">
+<span class="module-number">s17</span><h2 class="module-title">分片与路由：按用户分布，从任意入口找到他</h2>
+<p class="module-subtitle">用户先归分片，分片再归节点；请求核对路由，数据库核对写权，搬家前先停写。</p>
 </header><div class="module-body">
-<section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">把用户放在一个主节点，让任意入口找到他</h2>
-<p>一台机器放不下所有用户时，首先要决定搬走什么。请求只是一次通信，用户的原生历史才是后续对话的依据。Codex 将 SQLite 状态、JSONL 历史和记忆保存在这个用户的 CODEX_HOME；如果把连续两条消息随机发往不同磁盘，下一轮未必看得到上一轮的上下文。本章因此按用户分片，以数据库用户 UUID 作为稳定分片键，用户名只用于管理命令的查找。</p>
-<p>本章唯一新增单元是 sharding。它接入 HTTP、后台 worker、数据库事务和用户运行环境，回答三个问题：这个用户现在属于哪个分片，哪个节点负责这个分片，切换节点时怎样保持一份可继续使用的历史。协调模块仍管理 lease、Election、任期和失权重入；Hub 仍决定能读哪些知识、能用哪些工具。分片不会代替授权，也不会改变 Codex 的执行循环。</p>
+<section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">分片键是用户，不是消息</h2>
+<p>上一章的云端 Agent 有三个节点，却只有 control 干活，用户多了仍是一台装不下。本章把用户分到不同节点，让每台都工作；入口还要能找到用户，不能把请求随意交给一块没有他历史的磁盘。</p>
+<p>从 s14 起，历史、索引和记忆都保存在用户自己的 CODEX_HOME。若第一轮在 A、第二轮在 B，B 看不到前文。所以分片键取稳定的用户 ID，一个人的全部会话与原生状态跟着他落在同一主节点。</p>
 <figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1752" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
-<p><span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>与节点是两层不同的关系。一个用户先得到分片 ID，再用 shards 表找到 primary 和 epoch。<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>负责用户业务，control 负责放置与更新元数据。所有存活且完成业务恢复的成员都能服务自己的用户，各自承担所属用户的业务。</p>
-<p>三个节点各自挂载独立的 .data、workspace 和 .runs；只有部署 identity UUID 相同。PG 保存全局账号、Hub 授权和业务记录，Redis 唤醒任务，各节点本地保存自己的原生历史和文件。共享配置目录中的模型网关清单不等于共享用户数据。读取 PG 会话索引能知道会话存在，却不能替代丢失的原生文件。</p>
-<p>独立部署入口为 4335，内部 node-a、node-b、node-c 分别使用 4340、4341、4342。Compose 项目网络隔离后，内部端口可以相同，宿主入口必须区分。工作台的本阶段卡片只提供课程和 README 链接；通过 remote.sh tunnel 保持 SSH 隧道，在阶段目录设置本机入口并登录 CLI，才进入真实集群。</p>
-<table><thead><tr><th>对象</th><th>权威位置与职责</th><th>边界</th></tr></thead><tbody><tr><td>成员与 control</td><td>etcd lease / Election</td><td>进程存在不能代替有效租约。</td></tr><tr><td>shards / slots / overrides</td><td>etcd，control 按选举任期发布</td><td>本地缓存可能短暂落后。</td></tr><tr><td>user_shards / shard_owners</td><td>PG 映射、paused 与 epoch</td><td>写入还要验证节点 SQL 角色。</td></tr><tr><td>用户历史与工作区</td><td>用户所属节点的独立磁盘</td><td>没有后台副本和自动故障接管。</td></tr><tr><td>Codex</td><td>Thread、Turn、工具循环与原生历史</td><td>不决定分片归属或管理员迁移。</td></tr></tbody></table>
-<p>阅读后面的流程时，要把“有权接收”“有权执行”和“有权写入”分开观察。Caddy 的 ready 检查只选择可接入节点；入口随后按用户定位，主节点继续检查暂停与映射，SQL 最后检查实际行归属。前一个检查通过，不能提前替后一个检查作承诺。</p>
+<p>用户先属于一个<span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>，再由分片找到<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>。control 发布归属，主节点运行用户业务；两种职责不同。三个节点各用自己的磁盘，仅部署身份一致，PG 中有会话索引不等于其他节点已有原生文件。</p>
+<p>租约、任期、用户隔离和 Hub 权限继续生效。分片负责放置与寻找数据，不替代认证授权，也不改变 Codex 的执行循环。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-2"><h2 class="screen-heading">策略只算分片，override 优先于两种策略</h2>
-<p>默认 slots 策略先对用户 ID 做 SHA-256，取前 32 位无符号整数，再对 64 取模。64 个槽按 slot % 3 分给分片 0、1、2，槽数为 22、21、21。槽数量是固定规则，不意味着任意三个用户正好一人占一个分片。示例账号的 UUID 随机生成，观察分布时应看实际映射，而不是用用户名猜测。</p>
-<p>range 策略便于直观看到边界：去掉 UUID 的连字符，取第一个十六进制字节，00–54 归 0，55–a9 归 1，aa–ff 归 2。这是对照策略，不是对哈希槽算法的另一种写法。用户 ID 分布不均时会产生热点；所有节点必须选择一致的策略，已有数据不能通过改一个环境变量就当作完成搬迁。</p>
+<section class="screen animate-in" id="s17-screen-2"><h2 class="screen-heading">用户归分片，分片归机器，两步分开</h2>
+<p>分配策略只决定用户属于哪个分片，control 再决定分片在哪台机器。两步分开，换机器不必重新计算每个用户的归属；个别用户还能有 override 例外记录，供手动迁移使用。</p>
+<p>默认把用户 ID 哈希到 64 个槽，再按 slot % 3 分到三个分片，槽数为 22、21、21，不保证任意三个用户正好均匀。范围策略按 ID 前缀划分，直观但易冷热不均；改变策略本身不会搬走已有数据。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/strategy.mjs · 第 3–14 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/strategy.mjs" data-start="3" data-end="14">export const SLOT_COUNT = 64;
 export const defaultSlots = () =&gt; Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) =&gt; [n, SHARDS[n % 3]]));
 export const slotOf = id =&gt; createHash(&#x27;sha256&#x27;).update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;
@@ -30,8 +25,7 @@ export const strategies = {
     return n &lt; 0x55 ? &#x27;0&#x27; : n &lt; 0xaa ? &#x27;1&#x27; : &#x27;2&#x27;;
   } },
 };</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>slots 与 range 都返回分片 ID；完整策略对象不包含节点选择。</p></div></div>
-<p>策略不关心 node-a 或 node-b，它只返回分片 ID。RouteCache 再查询 /codex/shards 下的归属记录，取得 primary 和 epoch。管理员对单个用户的调整通过 /codex/overrides/&lt;userId&gt; 表达，优先级高于槽和范围。override 的值是 JSON 编码的分片字符串；兼容旧数字值时，计算结果仍统一为文本 ID，避免与 PG 的 text 列比较失败。</p>
-<p>这份兼容处理保留了诊断所需的原始值。routeStatus 可以同时显示 override 的值与类型、归一化后的 shardId、PG shard_id、本地暂停和 canDispatch。若某个非法 override 无法解释，代码不会悄悄回退到 slots，否则管理员看见一份指定映射，请求却走另一条默认规则，故障会被隐藏。</p>
+<p>override 优先于默认策略，合法数字值也统一成文本分片 ID；非法值不能悄悄回退，否则指定的归属与实际请求会不一致。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/cache.mjs · 第 67–74 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/cache.mjs" data-start="67" data-end="74">  routeOf(userId) {
     // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.
     // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.
@@ -40,14 +34,12 @@ export const strategies = {
     const owner = this.shards[shardId];
     return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>override 优先；合法数字值归一化为文本分片 ID，非法值不回退到默认策略。</p></div></div>
-<p>control 初始化时按当前成员排序，把三个分片放到三个成员。没有成员可选时保留空主，后续新增成员只填无主分片。已有主节点离开时保留原 primary，状态变为 unavailable；它的磁盘尚未复制到另一台机器，不能只改一个节点名称就声称完成接管。成员列表变化与分片数据归属变化是两件事。</p>
-<p>缓存通过一次 /codex/ 整前缀快照读取 shards、slots 和 overrides，三张表共享同一个 MVCC revision；随后从 revision+1 Watch。一个整前缀 Watch 比三个独立 Watch 更容易判断跨表进度。路由 apply 只处理需要的键，revision 用十进制字符串与 BigInt，不把可能很大的版本号转为不精确的 Number。</p>
-<p>快照与事件会交错到达。读快照期间收到的更新不能被旧快照覆盖，代码重放比快照新的后缀；断线或压缩后整表重读，再接新的 revision+1。每五秒对账作为兜底。Watch 提供快速传播，但“路由发布了”不等于“所有进程已经同时应用”，请求协议仍需要版本核对与有限重试。</p>
-<table><thead><tr><th>输入与状态</th><th>处理结果</th><th>不能推断的结论</th></tr></thead><tbody><tr><td>没有 override</td><td>使用所选 shardOf 策略</td><td>不能据此跳过 PG 用户映射。</td></tr><tr><td>合法 override</td><td>优先采用指定分片</td><td>不能据此认定主节点在线。</td></tr><tr><td>缓存落后</td><td>等待 Watch、对账或显式 refresh</td><td>不能保证请求立即成功。</td></tr><tr><td>原 primary 离线</td><td>503 SHARD_UNAVAILABLE</td><td>不能自动读取另一节点的磁盘。</td></tr></tbody></table>
+<p>每个节点缓存一份路由表，避免每次请求都查 etcd。启动整表读取 shards、slots、overrides，记录共同 revision，再用 Watch 增量更新；断线或版本压缩后重读，每 5 秒对账。快照期间的新事件要重放，不能被旧快照覆盖。</p>
+<p>Watch 快不等于所有节点同时更新，请求仍要核对版本。主节点离线时保留它的归属并返回不可用；磁盘没有复制过去，改个节点名不能完成接管。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-3"><h2 class="screen-heading">入口转发带版本，目标主节点再做一次判断</h2>
-<p>Caddy 根据 /ready 选择任意可服务成员。入口先验证 Bearer，从认证和资源记录确定路由用户，不能接受客户端随意提供的 x-route-user 作为可信归属。非主入口转发原用户令牌，并写入自己的 x-node-id、x-node-key、路由用户 ID 与 revision；目标重新认证用户和调用节点，节点密钥不代替用户身份。</p>
-<p>目标的 validateRoute 同时检查自己是否是用户主节点，以及自己的缓存 revision 是否不落后于请求。前者防止旧入口把用户送到已经失去归属的节点，后者防止较新的入口把请求交给尚未应用新信息的接收方。任一条件不通过都返回 409 STALE_ROUTE，这只是路由状态不一致，不授权任何节点绕过检查。</p>
+<section class="screen animate-in" id="s17-screen-3"><h2 class="screen-heading">任意入口转发，主节点再核对一次</h2>
+<p>路由让用户不必知道自己在哪台机器。任意就绪节点都可作为入口，先认证用户，再按缓存转发给主节点；接收方重新认证用户与调用节点，不能因为“来自集群”就信任身份和权限。</p>
+<p>接收方核对两件事：自己仍是该用户的主节点，自己的缓存 revision 不落后于请求携带的 revision。任一不满足返回 409 STALE_ROUTE；不是无条件拒绝版本较旧的转发请求。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/routing.mjs · 第 22–39 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/routing.mjs" data-start="22" data-end="39">export function validateRoute(cache, userId, nodeId, revision) {
   if (!/^\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) &lt; BigInt(revision)) throw staleRoute();
 }
@@ -66,11 +58,8 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     }
   }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>主节点核对归属与 revision；仅 STALE_ROUTE 允许 refresh 后再试一次，普通业务 409 不触发重试。</p></div></div>
-<p>routedRequest 最多进入两次循环：第一次请求，发生 STALE_ROUTE 后 refresh，再进行最后一次尝试。HTTP 返回还必须带 x-cluster-error: STALE_ROUTE，普通业务 409 不触发这条路径。刷新不会保证远端立刻追上；第二次仍不一致就向客户端返回错误。无限重试会让持续故障放大成请求风暴，也让用户无法知道任务是否进入执行。</p>
-<p>可以按两个例子理解同一个 409。第一种是入口的路由旧了，用户已经切到新主，旧主明确拒绝；入口刷新后改投新主。第二种是入口较新而目标 revision 落后，目标暂时不能确认请求；入口刷新重试时，目标还需要通过 Watch 或对账赶上。这两个窗口都不能靠伪造 revision 或忽略归属消除。</p>
-<p>普通 HTTP 转发有 30 秒超时，连接失败或超时返回不可用。SSE 不设同样的总时限，代理保留背压和断开传播，不把长连接当成卡死请求。事件在用户主节点产生，代理不重编 Last-Event-ID；迁移或重启之后事件代次改变，客户端回到快照，不承诺跨节点永久连续的全局事件序号。</p>
-<p>转发地址只来自已选择的 etcd 成员。即使外部请求采用 HTTP 绝对形式 URL，也只取 pathname 和 query 拼到成员地址，不能把内部节点密钥发送到请求者指定的外部域名。forwardHeaders 过滤跳跃头和来路中的 x-node-id、x-node-key、x-route-user、x-route-revision，再由服务端写入本次转发值。</p>
-<p>每个节点持有独立的 AGENT_NODE_KEY_A/B/C 中属于自己的明文密钥，以及全部节点的 SHA-256 验证哈希。authenticateNode 用 x-node-id 选择预置哈希，再以 timingSafeEqual 核对来钥的哈希，验证通过才返回调用节点身份。仅自报 node-a 或知道自己的节点密钥，不能冒充另一个节点；内部接口还要按具体操作检查权限，不能把“来自集群”当作管理员授权。</p>
+<p>入口只在 STALE_ROUTE 时刷新缓存并重试一次，普通业务 409 不触发重试。旧入口可能投错主，或较新的入口遇到尚未更新的接收方；第二次仍不一致就返回错误，不无限重试放大故障。</p>
+<p>节点凭据证明调用来自哪个节点，用户令牌证明代表谁，两者不能互相代替。转发过滤客户端自带的内部身份头，目标地址只来自集群成员，防止把节点密钥送往任意外部地址。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/routing.mjs · 第 9–16 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/routing.mjs" data-start="9" data-end="16">export function authenticateNode(headers, keyHashes) {
   const nodeId = headers[&#x27;x-node-id&#x27;], key = headers[&#x27;x-node-key&#x27;];
   const expected = keyHashes?.[nodeId];
@@ -79,18 +68,18 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     throw new AppError(&#x27;节点认证失败。&#x27;, 403, &#x27;NODE_AUTH&#x27;);
   return nodeId;
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>节点身份必须由对应密钥证明；身份头只用于选择待验证的节点，不直接授予权限。</p></div></div>
-<p>GET /cluster/route?username=… 是管理员诊断入口。它按成员内容里的 nodeId 查询每个节点，观察各自缓存、原始 override 类型、本地暂停和 PG 映射，不自动 refresh，以免消除 Watch 滞后证据。成员 Map 的键是完整 etcd 路径，节点身份应取 value.nodeId。</p>
-<table><thead><tr><th>观察到的错误</th><th>可能位置</th><th>下一步核对</th></tr></thead><tbody><tr><td>409 STALE_ROUTE</td><td>归属已变或目标 revision 落后</td><td>比较各节点缓存 revision，再看一次重试结果。</td></tr><tr><td>503 SHARD_UNAVAILABLE</td><td>未知主、离线主或暂停准入</td><td>检查成员、primary、PG paused 与 canDispatch。</td></tr><tr><td>诊断只有某节点报错</td><td>成员不可达或内部请求失败</td><td>保留其他节点结果，分别核对成员 nodeId 与地址。</td></tr><tr><td>SSE 重新回到快照</td><td>主节点事件代次改变</td><td>核对持久会话状态，不拼接不同代次的事件序号。</td></tr></tbody></table>
+<p>普通 HTTP 转发上限 30 秒；SSE 长连接保留背压和断开传播，不套用相同总时限。迁移或重启使事件代次变化时，客户端回到持久快照核对，不拼接不同节点的事件序号。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-4"><h2 class="screen-heading">准入挡住新派发，SH001 挡住错误的行写入</h2>
-<p>入场检查不能只看“这个容器 ready”。同一个节点可以负责许多用户，其中一个正在迁移时，其余用户还应继续服务。ShardRuntime.owns 要求本节点租约有效且缓存 primary 等于本节点；canDispatch 再看本地暂停，并查询 PG 的 paused 和 shard_id。只有两边映射一致且都未暂停，才允许继续派发；admit 将不满足条件的请求转成不可用错误。</p>
+<section class="screen animate-in" id="s17-screen-4"><h2 class="screen-heading">数据库按分片隔离写入</h2>
+<p>路由决定请求往哪走，数据库决定谁有权写。用户迁走后，旧节点可能还有后台任务，因此业务写入也要携带节点身份与分片任期 epoch；不匹配就以 SH001 拒绝。</p>
+<p>派发前还要同时确认租约、缓存归属和 PG 用户映射，并且用户未暂停。一个用户迁移时，只暂停他，其他用户继续工作。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/runtime.mjs · 第 18–23 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/runtime.mjs" data-start="18" data-end="23">  async canDispatch(userId) {
     if (!this.owns(userId) || this.paused.has(userId)) return false;
     const row = (await this.pool.query(&#x27;SELECT paused,shard_id FROM agent_data.user_shards WHERE user_id=$1&#x27;, [userId])).rows[0];
     return this.owns(userId) &amp;&amp; !this.paused.has(userId) &amp;&amp; row &amp;&amp; !row.paused &amp;&amp; row.shard_id === this.cache.routeOf(userId).shardId;
   }
   async admit(userId) { if (!await this.canDispatch(userId)) throw unavailable(&#x27;用户正在迁移、归属尚未初始化或本节点不是分片主节点。&#x27;); }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>查询 PG 前后都核对本地租约、主归属与暂停，避免异步查询期间状态变化后放行。</p></div></div>
-<p>后台任务也要服从同一归属规则。任务扫描、恢复、媒体轮询、知识索引和用户目录初始化都过滤本节点用户。Redis 的 ready key 带 nodeId，但 Redis 只负责唤醒。媒体 tick 在每次 poll 前调用 canDispatch；暂停期间不启动新轮询。pollingOwners 在异步准入检查完成前就登记该次工作，drain 通过 waitOwner 等待已经开始的检查与轮询结束，避免复制期间又有媒体结果写盘。</p>
+<p>后台扫描、媒体轮询和知识索引也按归属派发。暂停后不启动新工作，搬文件前等已进入的异步工作结束，避免刚检查空闲就又有结果写盘。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/media/index.mjs · 第 159–175 行</span><pre><code data-source="stages/s17-sharding/server/modules/media/index.mjs" data-start="159" data-end="175">  async waitOwner(userId) { await this.pollingOwners.get(userId); }
   tick() {
     if (this.running || this.controller.signal.aborted) return this.running;
@@ -108,7 +97,7 @@ export async function routedRequest({ cache, userId, nodeId, members, local, rem
     })().finally(() =&gt; { this.running = null; });
     return this.running;
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>tick 逐项登记并等待媒体工作；paused 用户跳过新 poll，drain 等待既有工作退出。</p></div></div>
-<p>真正落库时，fencePool 为业务连接的事务设置 app.node 和 app.shard_epoch；普通单条 query 也包在事务中。身份来自认证上下文或持久任务 owner，资源管理请求可以在保持 actor 授权身份的同时，将 shard 上下文切到目标资源 owner。不能为了写资源而把请求者伪装成所有者。</p>
+<p>写入事务设置节点与 epoch，数据库从实际行追溯用户和分片，核对真实 SQL 角色。跨用户资源操作保留请求者的授权身份，只把写入分片定位到资源所有者。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 24–29 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/fence.mjs" data-start="24" data-end="29">export async function setShard(client, generation) {
   generation.assert();
   const user = shardUser(), route = user &amp;&amp; generation.routes.routeOf(user);
@@ -130,8 +119,7 @@ BEGIN
     &#x27;nodeId&#x27;,supplied,&#x27;suppliedEpoch&#x27;,current_setting(&#x27;app.shard_epoch&#x27;,true))::text;
  END IF;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>两张映射持锁到提交；核对真实 SQL 角色与 epoch，并在暂停且操作单处于 copying、copied、switched 或 failed 时拒写。</p></div></div>
-<p>check_shard 从 user_shards 联到 shard_owners，锁住用户映射与分片归属行直到提交；切换必须等待已持锁的事务。它比较真实 current_user 与 app.node 对应的节点角色，并核对 epoch。操作单为 paused 时，已开始的轮次可以完成收尾写入；进入 copying、copied、switched 或 failed 且用户仍暂停时，数据库拒绝该用户业务写入。这样停写边界同时约束后台迟到写入。</p>
-<p>行 owner 可能直接在 owner_id 或 user_id，也可能通过会话、知识库、资源引用追溯。UPDATE 同时检查 OLD 和 NEW，防止把别人的数据改成自己的 owner 后绕过保护。全局账号和登录令牌表服务所有节点，但节点角色校验之外还有列级权限：users 只允许 UPDATE(plan_id)；auth_sessions 允许 INSERT 与 UPDATE(last_seen_at, revoked_at)，无 DELETE；agent_versions 只允许 INSERT。建号、用户名、角色、密码和禁用状态由 maintenance 运维连接管理，plans、imports 也不向节点开放业务写入。</p>
+<p>用户映射与分片归属锁到事务提交，切换必须等旧事务完成。暂停阶段允许在途轮次收尾，进入复制阶段就拒绝该用户业务写入。UPDATE 同时检查修改前后的 owner，防止先改归属再绕过保护。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/data/migrations/018-move-security.sql · 第 17–27 行</span><pre><code data-source="stages/s17-sharding/server/modules/data/migrations/018-move-security.sql" data-start="17" data-end="27">DO $$ DECLARE r text; BEGIN
  FOREACH r IN ARRAY ARRAY[&#x27;agent_node_a&#x27;,&#x27;agent_node_b&#x27;,&#x27;agent_node_c&#x27;] LOOP
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
@@ -164,7 +152,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
   END IF;
  END LOOP;
 END $$;</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>业务表挂逐行 shard_owner_guard；全局表挂节点校验，映射表保留 control 任期保护。</p></div></div>
-<p>SH001 表示缺失、外来或过期的分片写入。诊断先取实际被拒行的 owner，不能只用当前 requester 猜测，因为跨用户资源操作的写入目标可能不同。刷新前认为自己是主，刷新后确认用户已移走，只让这一请求失败并保留本节点其他分片；如果仍认为自己是主，或刷新失败，则隔离这个代次并记录诊断。旧 control 的元数据写入仍由 CT001 任期规则保护。</p>
+<p>SH001 后用被拒行的真实 owner 刷新归属。确认用户已移走，只拒绝该请求；仍认为自己是主或刷新失败，则隔离当前代次。control 的协调写入继续由 CT001 保护。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/fence.mjs · 第 7–23 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/fence.mjs" data-start="7" data-end="23">export async function shardFailure(error, generation, origin, statement) {
   if (error.code !== &#x27;SH001&#x27; || error.shardDiagnostic) return;
   // The rejected ROW is authoritative. Requester identity alone cannot identify its shard.
@@ -182,11 +170,11 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
   });
   if (isolate) generation.isolate?.(refreshFailed ? &#x27;shard-refresh-failed&#x27; : &#x27;database-stale-shard&#x27;);
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>使用数据库错误里的实际行 owner 诊断；刷新结果决定隔离当前代次还是仅拒绝此请求。</p></div></div>
-<p>这些锁与触发器保护 PostgreSQL 的写入。已经发生的工具副作用、磁盘写入和外部模型调用不在 SQL 事务里，不能因为数据库拒绝就声称其他动作已撤销。迁移还需要停止新派发、等待在途工作，并明确处理不确定的提交结果。离线测试可以验证错误分支与隔离决策，实际触发器和锁等待必须用真实 PostgreSQL 验收。</p>
+<p>数据库拒写不能撤销模型请求、工具副作用或磁盘写入，所以迁移仍需要停派发、等在途工作，并保留不确定结果待核对。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-5"><h2 class="screen-heading">迁移先等旧轮次结束，再移动文件与发布新归属</h2>
-<p>管理员执行 cluster move 时，请求由 control 编排；跨节点交给 control 时还要重新验证终端用户令牌的 admin 角色。control 持有单用户 advisory lock，beginMove 在任期保护的 PG 事务里创建 move_operations 操作单并将 paused 设为 true。操作单绑定用户、源/目标分片、control/源/目标节点及 30 分钟有效期，状态依次为 paused、copying、copied、switched、resumed，失败记为 failed。</p>
-<p>操作单限定内部调用能做哪一步。pause、drain、copy、resume 必须由单据中的 control 节点调用；transfer、content 必须由源节点发给目标节点，用户、接收节点、目标与状态都要匹配。接收端在发布目录或正文前再次检查操作单和暂停，拒绝过期或迟到传输。仅持有节点密钥，不能任意指定用户或写入另一节点的目录。</p>
+<section class="screen animate-in" id="s17-screen-5"><h2 class="screen-heading">迁移：先停写，再搬家</h2>
+<p>搬家时数据不能还在变化。手动迁移先暂停新任务，等执行中的轮次结束并关闭用户进程，再复制 CODEX_HOME 和工作目录，切换归属后才恢复派发。</p>
+<p>control 创建持久操作单，绑定用户、源目标、调用节点和 30 分钟有效期。内部步骤按单据核对身份与状态，节点密钥不能授权任意搬动他人的目录。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/operations.mjs · 第 3–13 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/operations.mjs" data-start="3" data-end="13">export async function authorizeMove(pool, { operationId, userId, caller, receiver, step, target }) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(operationId || &#x27;&#x27;)) throw denied();
   const op = (await pool.query(&#x27;SELECT * FROM agent_data.move_operations WHERE id=$1 AND expires_at &gt; now()&#x27;, [operationId])).rows[0];
@@ -198,7 +186,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
       (target !== undefined &amp;&amp; target !== op.target_node)) throw denied();
   return op;
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>检查单据有效期、用户、步骤状态、调用者和接收者；resume 只接受 switched，数据传输只接受 copying。</p></div></div>
-<p>PG 持久暂停覆盖进程重启，本地暂停及时关闭入场。已进入 starting、running 或 steering 的轮次允许完成；drain 等待在途 HTTP、进程引用、任务、索引及已开始的媒体轮询，再关闭用户进程。暂停时关闭用户 SSE。管理员编排可以等长轮次，但操作单有效期仍是 30 分钟；过期须核对状态，不能跳过 drain 或自动恢复已暂停的用户。</p>
+<p>暂停写入 PG，重启后也不会丢；drain 等待在途请求、轮次、索引和媒体轮询，关闭该用户 SSE 与进程。单据过期或任何一步失败都保持暂停，不跳过等待、不自动重做。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/move.mjs · 第 3–24 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/move.mjs" data-start="3" data-end="24">export async function moveUser({ userId, shardId, control, pause, drain, copy, resume }) {
   if (!SHARDS.includes(shardId)) throw new Error(&#x27;分片必须是 0、1、2。&#x27;);
   const term = control.coordination?.term();
@@ -221,7 +209,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
     throw error;
   }
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>beginMove 创建操作单并持久暂停；所有内部步骤携带 op.id，复制完成才切换；finishMove 收尾，失败则 failMove 保持暂停。</p></div></div>
-<p>copy 使用内部 HTTP 流式 tar，没有额外 SSH 数据通道，也没有后台持续复制。CODEX_HOME 由该用户数值 uid/gid 导出；workspace 由服务身份读取，因为工作区可能同时含用户与服务拥有的合法文件。迁移保留数值属主，不能只按用户名猜权限。源和目标必须采用同一 uid 映射与固定绝对部署目录，原生历史里的路径才有一致解释。</p>
+<p>拷贝保留数值 uid/gid，源目标使用同一用户映射和固定绝对路径，原生历史才能接着用。传输通过内部 HTTP 流式 tar；home 按用户身份导出，workspace 按服务身份读取合法文件。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer.mjs · 第 41–60 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer.mjs" data-start="41" data-end="60">export function exportTree(root, record, kind) {
   const directory = transferPath(root, record, kind); assertRealPath(directory);
   const identity = kind === &#x27;home&#x27; ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };
@@ -242,7 +230,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
     await done.catch(() =&gt; {});
   } };
 }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>home 以用户 uid/gid，workspace 以服务身份导出；辅助进程只接收最小环境，导出错误与终止均被等待。</p></div></div>
-<p>CODEX_HOME 的顶层 tmp/ 是运行时临时目录，可能有 arg0 辅助符号链接，启动时会重建。它不属于用户历史，因此导出检查和 tar 都跳过这一个顶层目录。其他位置的符号链接、硬链接、特殊文件、越界路径与不匹配属主仍然拒绝，不能为了绕开一个临时链接而放宽整棵目录的验证。workspace 不套用 home 的 tmp 排除规则。</p>
+<p>home 顶层 tmp 是运行时临时目录，启动可重建，因此不复制；其他位置的链接、特殊文件、越界路径和错误属主仍拒绝，不能放宽整棵目录验证。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer-worker.mjs · 第 9–25 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer-worker.mjs" data-start="9" data-end="25">const skipTop = process.argv[3] === &#x27;home&#x27; ? new Set([&#x27;tmp&#x27;]) : new Set();
 function inspect(target, top = false) {
   const s = fs.lstatSync(target);
@@ -260,7 +248,7 @@ try {
   child.once(&#x27;error&#x27;, e =&gt; { console.error(e.message); process.exitCode = 1; });
   child.once(&#x27;exit&#x27;, code =&gt; { process.exitCode = code ?? 1; });
 } catch (e) { console.error(e.message); process.exitCode = 1; }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>完整检查函数与导出流程：仅跳过 home 顶层 tmp，拒绝链接、特殊文件、不合法属主和文件名。</p></div></div>
-<p>接收端按单次传输计量：tar、正文 blob 和 BM25 索引的接收上限均为 1 GiB，AGENT_TRANSFER_MAX_BYTES 只允许下调。创建文件前检查目标卷至少有两倍配置上限的可用空间；tar 还检查临时归档所在卷。空间不足返回 507，流超限返回 413，并清理临时文件。此上限约束每次接收，不是整个用户目录总量的配额。</p>
+<p>每次接收默认最多 1 GiB，只能下调；落盘前检查至少两倍配置上限的空间。空间不足返回 507，流超限返回 413，清理临时文件。归档先校验，再在同挂载的暂存目录恢复权限和属主，最后发布，避免混合 SQLite 文件。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/transfer.mjs · 第 14–33 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/transfer.mjs" data-start="14" data-end="33">export const MAX_TRANSFER_BYTES = 1024 ** 3;
 export function transferLimit(env = process.env) {
   const value = env.AGENT_TRANSFER_MAX_BYTES === undefined ? MAX_TRANSFER_BYTES : Number(env.AGENT_TRANSFER_MAX_BYTES);
@@ -281,8 +269,7 @@ export function limitTransfer(limit = transferLimit()) {
   } });
 }
 export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o2777 : 0o777);</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>流经过 limitTransfer 逐块计数；空间检查先于落盘。普通文件只恢复 0777 内权限，目录只额外保留 setgid。</p></div></div>
-<p>tar 先落临时归档，再列举并校验条目，拒绝链接、设备文件、路径穿越、重复条目、不匹配属主与 setuid。提取到目标目录同一挂载内的暂存目录，以免 rename 跨设备失败。按清单从下往上恢复属主，并用 restoredMode 清除普通文件全部特殊权限位，目录仅保留 setgid；校验完成后才发布，避免混合残留 SQLite 文件。旧目标与源副本保留供运维核对。</p>
-<p>用户工作区和 CODEX_HOME 都复制成功还不够。关联不可变 blob 根据 PG 用户关系选择，BM25 根据用户知识库索引选择，不能把其他用户数据一起打包。外部向量库仍是既有单实例，不在节点间复制；.runs 属于节点本地日志，不是迁移后会话历史的来源。全部内容就绪后才进入 switchUser。</p>
+<p>home、workspace、用户关联的不可变正文与 BM25 索引全部到位后，先在 PG 事务提交用户归属，再向 etcd 发布 override。外部向量库仍是单实例，运行日志不作为会话历史搬迁。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/control.mjs · 第 110–126 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/control.mjs" data-start="110" data-end="126">  async switchUser(userId, shardId, operationId) {
     const term = this.coordination.term();
     try {
@@ -300,13 +287,11 @@ export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o27
       throw error;
     }
   }</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>copied → switched 与 PG 用户归属在同一任期事务内提交，之后才发布 etcd override；失败记录操作单并保持暂停。</p></div></div>
-<p>switchUser 先在 PG 事务中核对操作单的用户、源分片、目标和暂停，将 copied 推进为 switched 并更新 user_shards；locked 返回代表 COMMIT 完成，此后才 guardedPut 发布 etcd override。这个顺序避免先发布路由、数据库却仍为旧归属。两库没有原子提交，仍可能出现 PG 已提交而 etcd 未发布的窗口；paused 持续阻止新派发，操作单与行触发器约束写入。两端刷新并解除本地暂停后，finishMove 在同一事务将单据推进为 resumed 并解除 PG 暂停。</p>
-<p>失败统一进入 failMove：用原任期受 PG 锁保护地记录 failed 并保持 paused，不自动把 PG 或 override 改回源分片。copy 失败时归属仍在源，但也不自动恢复；切换或收尾 COMMIT 回复丢失时，以数据库实际状态为准，保留两份磁盘供运维核对。若较新 control 已取得任期锁，旧 control 的失败记录也会被拒绝，调用方标记 rollbackFailed 表示无法确认收尾。此字段不是自动回滚成功的承诺。</p>
-<p>control 对账只采纳最新操作单处于 switched/resumed 且目标匹配的 override，更新也只针对暂停用户；缺单、未复制完成或 failed 的 override 会被记录并忽略。beginMove 拒绝已暂停用户，重复 move 不能充当自动恢复。管理员需核对操作单、PG、etcd 与两端副本后再安排恢复。</p>
-<p>迁移成功后的验收是用同一用户继续同一会话。先查 cluster route 看各节点缓存与 PG 映射，再通过任意入口续聊，确认请求到新主且历史可读。只看到 tar 成功或 override 改变，不足以证明整条流程完成。节点磁盘已损坏或源节点离线时，这套手动迁移也不能凭空恢复数据。</p>
+<p>PG 与 etcd 没有跨库原子提交。发布或收尾失败就保持暂停，保留两份磁盘，以实际数据库状态为准核对，不自动回退；即使 COMMIT 回复丢失，也不能推断提交没发生。</p>
+<p>迁移成功要用同一用户继续同一会话来验证。源目标必须在线，源磁盘已坏时，手动迁移不能凭空恢复历史。传输与故障核对细节见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s17-sharding/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
-<section class="screen animate-in" id="s17-screen-6"><h2 class="screen-heading">授权、故障与实验：分别核对每一层证据</h2>
-<p>共享知识库仍只有所有者主节点的一份权威内容。被授权者节点先按 kb、mount 与 Hub 检查，再携带节点凭据和终端用户 Authorization 发内部只读请求。所有者节点拒绝正文中的 requester 字段，通过全局账号与会话表重新认证令牌，取得真实 requester，并获取新的 Hub 权限快照后读取自己的文件或不可变 blob。节点密钥不能替代有效用户令牌，自报用户 ID 也不能代替授权。</p>
+<section class="screen animate-in" id="s17-screen-6"><h2 class="screen-heading">共享知识只有一份，一台坏了只影响它那一片</h2>
+<p>用户分开存放后，共享知识库仍只有所有者主节点上的一份权威内容。接收者节点先问 Hub，再带着用户令牌访问所有者主节点；后者重新认证并检查授权，才通过只读接口交出内容，中途撤销也不能被缓存放行。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · server/modules/sharding/knowledge.mjs · 第 31–42 行</span><pre><code data-source="stages/s17-sharding/server/modules/sharding/knowledge.mjs" data-start="31" data-end="42">  runtime.readKnowledge = async (body, authorization) =&gt; {
     if (Object.hasOwn(body, &#x27;requester&#x27;)) throw new AppError(&#x27;不接受自报 requester。&#x27;, 403);
     const { action, args, revision } = body;
@@ -319,25 +304,13 @@ export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o27
       return local(action, args, owner);
     }))));
   };</code></pre></div><div class="translation-english"><span class="translation-label">源码解读</span><p>先拒绝自报 requester，再认证终端用户令牌；以认证身份取得新的 Hub 快照，并核对路由、暂停和读取权限。</p></div></div>
-<p>后续工具调用可以从本节点内存复用最近认证的用户令牌；令牌不写入任务、磁盘或操作单。节点重启或用户迁到新节点后，需要新的已认证请求建立该上下文，缺少令牌时拒绝跨分片读取。会话撤销、用户禁用和授权撤销都由所有者节点重新判断；不能切换成 owner 身份跳过检查。</p>
-<p>内部知识接口只允许 read、search、pages 和 resource。跨分片 RAG 查询在请求者节点生成 query embedding 并按请求者计费，内容读取仍由所有者主节点执行。未授权者看到 404，失效来源和未挂载知识库仍被拒绝。迁移不会让一份被撤销的授权恢复，也不会因为文件复制到了新节点就改变 Hub 的资源所有者。</p>
-<p>离线实验先验证策略与流程，再安排外部验收。运行以下命令不会监听端口，也不调用真实模型；界面的泳道和状态卡是固定教学推演，不意味着系统正在执行迁移。命令输出的断言与退出码才是这次本地运行的证据。</p>
-<pre class="terminal">npm run lesson -- list
-npm run lesson -- strategies
-npm run lesson -- stale-route
-npm run lesson -- shard-fence
-npm run lesson -- move</pre>
-<table><thead><tr><th>实验</th><th>离线可验证</th><th>仍需外部验证</th></tr></thead><tbody><tr><td>strategies</td><td>槽、范围、override 优先级</td><td>真实用户负载是否均衡。</td></tr><tr><td>stale-route</td><td>409 刷新一次、503 与事件字节透传</td><td>认证 etcd Watch 时延、真实 HTTP/SSE 断开。</td></tr><tr><td>shard-fence</td><td>SH001 诊断和隔离决策</td><td>真实 PG 触发器、节点角色与事务互锁。</td></tr><tr><td>move</td><td>操作单状态、暂停、复制、提交顺序与失败保留</td><td>Linux uid、tar 权限、跨挂载发布和原生会话续聊。</td></tr></tbody></table>
-<p>真实数据库测试使用专用临时实例，验证旧节点 SQL 被 SH001 拒绝，更新 owner 的 OLD 与 NEW 都受约束，映射切换必须等待旧事务结束。etcd 集成测试使用独立认证实例，核对快照、Watch、控制任期和键空间权限。节点凭据的静态 RBAC 限制 /codex/ 前缀，“只有 control 写归属”由受信任节点的 guardedPut API 动态实现；不能将 API 拒绝等同于原始节点凭据完全没有 put 能力。</p>
-<p>Linux UID 集成测试需要能切换 uid/gid 的 0:1000 容器。原生历史是用户私有文件，服务进程不依赖 DAC_OVERRIDE 直接打开；辅助进程以用户身份读写。知识维护完成后还要执行 Workflow 验收，验收拿到的 runtime.workspaceDir 已是用户目录，不能再追加 users/&lt;id&gt;。否则文件产物会查错位置，知识维护即使已生成有效 Wiki 也会因目录访问失败进入 needs-review。</p>
-<p>部署操作按 README 初始化账号与模型网关，再启动 etcd、PG、Redis、各节点和入口。etcd 健康检查使用只读 health 键的独立账号，不复用 root；升级已有部署保留原凭据与数据卷，只补所需配置。备份按节点保留各自磁盘，停机操作覆盖全部节点，不能只停 control 后让其他成员继续写。这里的配置和启动不是课程网页自动替用户执行的动作。</p>
-<p>故障实验先用 cluster status 确认分片归属，再停止选定节点。成员租约约十秒到期以后，该节点负责的分片返回不可用，其他分片继续服务；重启后原主恢复并核对未确认任务，不自动重放可能已产生副作用的轮次。暂停进程超过 TTL 后再恢复，也需要隔离旧代并按重新加入规则建立新租约，不能延续过期的服务权。</p>
-<p>本章没有副本、复制位点、自动提升、故障切换或自动重平衡。etcd、PostgreSQL、Redis 与模型网关在教学部署中仍是单实例，三个业务节点不能消除这些依赖的单点。手动迁移要求源目标在线；失去主磁盘就失去该用户的原生历史，PG 会话索引不是它的备份。系统能证明的是归属、有限重试、数据库拒写和停写后的手动搬迁，不能把这些能力扩展成无损自动恢复承诺。</p>
+<p>后续读取可复用内存中的最近认证令牌，但令牌不写入任务或磁盘；重启后缺令牌就拒绝跨分片读取。RAG 查询在请求者节点生成 embedding 并按请求者计费，内容仍由所有者节点读取。</p>
+<p>一台节点停止，只让它负责的分片返回 503 和原因，其他分片照常服务。重启要核对不确定任务，不自动重跑。策略、路由、拒写与迁移实验见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s17-sharding/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>；真实 PG、etcd、Linux uid 和原生续聊需分别验收。</p>
 <div class="quiz-container" id="s17-quiz">
 <div class="quiz-question-block" data-correct="0" data-explanation-right="一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。" data-explanation-wrong="一次刷新修复缓存窗口；持续不一致需要返回错误，不放大故障。"><h3 class="quiz-question">收到 409 STALE_ROUTE 后应该怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>整表刷新路由，最多再试一次</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>绕过主节点校验直接执行</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>无限重试直到成功</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="1" data-explanation-right="迁移和后台任务存在并发窗口，数据库写入时必须再次校验。" data-explanation-wrong="迁移和后台任务存在并发窗口，数据库写入时必须再次校验。"><h3 class="quiz-question">只在 HTTP 入口核对主归属，足以阻止旧节点写库吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>足够，缓存永远一致</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>不够，SQL 还要核对 owner、节点角色与 epoch</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>只检查用户名称即可</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="2" data-explanation-right="目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。" data-explanation-wrong="目标可能已经开始执行；恢复源会让两份原生历史同时接受新轮次。"><h3 class="quiz-question">解除暂停的 COMMIT 回复丢失，可以立即恢复旧磁盘吗？</h3><div class="quiz-options"><button class="quiz-option" data-value="0"><div class="quiz-option-radio"></div><span>可以，旧副本还在</span></button><button class="quiz-option" data-value="1"><div class="quiz-option-radio"></div><span>可以，同时让两边服务</span></button><button class="quiz-option" data-value="2"><div class="quiz-option-radio"></div><span>不可以，重新暂停并保留目标归属，核对后恢复</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s17-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s17-quiz">重新作答</button></div></div>
+<p>分片让每台机器都干活，但用户数据仍只在一台磁盘上，主节点坏了只能等。下一章 s18 提前把数据复制给副本，让别的节点接手，同时说清最后一点没来得及复制的内容会怎样。</p>
 <p><a href="/course/changes.html#s17">→ 打开 s17 阶段演示</a> · <a href="/course/#s17">→ 打开 s17 机制课堂</a></p>
-</section>
-</div></div></section>
+</section></div></div></section>

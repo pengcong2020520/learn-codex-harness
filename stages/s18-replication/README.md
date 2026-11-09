@@ -1,64 +1,94 @@
-# s18：副本与故障接管
+# s18: 副本与故障接管 — 主节点坏了有人接手，丢多少说得清
 
 [导论](../introduction.md) → [s00](../s00-sdk-quickstart/) → [s01](../s01-single-turn/) → [s02](../s02-multi-turn/) → [s03](../s03-service/) → [s04](../s04-events-messages/) → [s05](../s05-agent-assembly/) → [s06](../s06-tools/) → [s07](../s07-memory/) → [s08](../s08-data-layer/) → [s09](../s09-knowledge-layer/) → [s10](../s10-skill-workflow/) → [s11](../s11-model-gateway/) → [s12](../s12-deploy/) → [s13](../s13-auth/README.md) → [s14](../s14-isolation/README.md) → [s15](../s15-hub/README.md) → [s16](../s16-coordination/README.md) → [s17](../s17-sharding/README.md) → `s18` → [app](../../app/)
 
-对应六个问题：③ 之前聊过什么 ⑥ 谁说了算
+> *"主节点坏了有人接手，丢多少说得清"* — 在轮次边界把用户目录异步复制到副本；主节点的租约过期后，已追平的副本接手；最后一次复制之后的内容，如实标为丢失。
+>
+> **对应六个问题**：③ 之前聊过什么？ ⑥ 谁说了算？
+
+---
+
+![本阶段在整体架构中的位置](images/architecture.svg)
 
 ## 要回答的问题
 
-用户 bob 的主节点坏了，谁接着服务？接手节点能看到哪些历史，哪些轮次必须由用户核对？本阶段只增加 `replication` 单元：沿用用户分片、路由、迁移、uid 进程隔离和 hub 权限，在每个分片旁边放一份异步副本。
+上一章把用户分到了不同的节点，每台机器都在干活。代价是：每个用户的数据只在一台机器的磁盘上。这台机器坏了，它那一片的用户就只能干等。
+
+这一章让别的节点能接手。要回答：
+
+- 数据要提前复制到哪里？什么时候复制，才不会拷到写了一半的文件？
+- 复制总会慢一步。主节点突然坏掉时，最后那一点没来得及复制的内容怎么办？怎么告诉用户？
+- 谁来决定由谁接手？接手的节点数据不全，能不能上？
+- 坏掉的旧主节点恢复以后，会不会和新主节点抢着写？
+
+本章只加一个单元：**副本**。s17 的分片与路由、s16 的租约与任期、s14 的用户隔离、s15 的 Hub 权限都原样沿用。
 
 ## 核心概念
 
-| 分片 | 初始主节点 | 初始从节点 |
+### 每个分片一主一从，环形放置
+
+每个分片除了主节点，再放一个**副本**（从节点），三个节点环形错开：
+
+| 分片 | 主节点 | 副本 |
 |---|---|---|
 | 0 | node-a | node-b |
 | 1 | node-b | node-c |
 | 2 | node-c | node-a |
 
-etcd 的 `/codex/shards/<id>` 保存 `{ primary, replica, epoch }`，PG `shard_owners` 保存同一归属和 `replica_ready`。用户仍经 64 个哈希槽映射到三个分片；范围策略、用户例外表和手动迁移操作单保留。磁盘是三份独立目录。
+每个节点既是一个分片的主，又是另一个分片的副本。任何一台坏了，它负责的分片都有另一台可以接手。
 
-**边界快照 → 异步发送。** 用户一轮结束后等待 5 秒，同用户连续请求合并。暂停新轮次，等待已经进入边界的请求，检查该用户全部会话无 `starting/running/steering`，关闭该用户空闲 Codex 进程。复用 transfer 的导出身份、1 GiB 上限和拒绝链接等校验，把 CODEX_HOME、workspace 导出到 `.runs/replication-spool/<userId>/<token>/{home,workspace}.tar`，同时确定内容哈希、附属内容文件清单和边界 sequence。暂存目录 0700、文件 0600，属主为服务进程。**暂停新轮次只到本地快照完成**，随后立即 release，再排队异步发送暂存文件；成功、失败、正常关闭都删除本 token，启动时清理异常退出的遗留暂存。后台调用显式 `runOwner`；会话边界继续通过 `pool.withOwner`、hub `withUser`。
+### 只在轮次边界复制
 
-为什么只在轮次边界复制？运行中的 Codex 正在修改 SQLite、JSONL 和工具产物；目录能被读取，不表示它是一个一致的会话快照。本地快照期间的新任务留在 PG/Redis 排队，快照完成即可派发，网络发送不再暂停该用户。发送期间有新边界时记脏标记，本次复制无论成功或失败，结束后都再等 5 秒调度一次，不等 60 秒兜底。一个用户的其他会话仍在执行时，本轮不复制。
+Codex 执行一轮的时候，会不断修改 CODEX_HOME 里的状态库、会话记录和工具产物。这时去拷贝，拿到的可能是一半新一半旧的文件：目录读得到，不代表它是一份一致的会话。所以只在**轮次边界**复制：用户的一轮结束，而且他的所有会话都没有执行中的轮次。
 
-每个目标节点同一时刻只发送一个用户，不同目标可并行；所有目标的 tar 发送共享本节点 `AGENT_REPLICATION_RATE_LIMIT`（字节/秒，非负整数，默认 0 不限速，非法值启动失败）。发送每写出一个分块重置 30 秒进度计时，连续 30 秒无字节进展才中止，没有整体 30 秒上限；接收 tree 同样按无活动超时，publish/settle/content 等小请求保留原超时。
+### 先拍快照，再慢慢发
 
-从节点逐次核对调用方节点密钥、PG 当前主节点、replica、epoch 和复制操作单。两个目录与附属内容全部暂存并校验后才成对发布；两个目录的 rename 连续执行，任一失败则回滚已发布目录。发布使用快照时确定的内容清单，主节点随后以 SH001 保护写入快照时的 sequence 与哈希到 `replication_positions(user_id, shard_id, epoch, last_task_sequence, replicated_at)`。`replicated_at` 也取快照边界时间，避免把发送期间新建的会话误判为已经复制。未完成传输操作单会阻止提升，避免提升半份目录。旧目录保留到 PG 位点提交成功后才删除；提交失败恢复旧副本。本地操作记录与 PG 提交 token 用于重试或重启时核对，未完成操作禁止哈希短路。
+复制分两步：
 
-**空闲兜底与延迟。** 每 60 秒检查空闲用户；以用户 uid 计算 CODEX_HOME 内容哈希，workspace 以服务身份计算，排除顶层 `tmp/`，内容、属主和权限未改变且位点一致则跳过。`/cluster` 按分片、用户显示未复制的已完成轮次数量和最早未复制轮次的等待秒数。空闲且已同步的用户不会因长时间未说话被误报。任何用户等待超过 300 秒，分片标记 `replica_lagging`；复制错误和未追平也显示副本落后。`/ready` 仍为 200，附 `degraded.replica_lagging`，主节点继续服务。
+1. **边界快照**：短暂暂停这个用户的新轮次，把他的 CODEX_HOME 和工作目录打包成一份本地快照，记下这时完成到第几个任务，然后**立即放行**。
+2. **异步发送**：把快照慢慢发给副本。发送期间用户照常对话；发送期间又有新的一轮结束，当前这次发完以后再复制一次。
 
-**故障接管。** 成员 TTL 固定 10 秒，客户端约 TTL/3 续约。control Watch 到主成员键消失，确认副本在线、`replica_ready=true`、所有用户有当前 epoch 的基线位点且没有未完成复制，再在 `cluster_term` 事务中推进归属：主改为原从、从设 null、epoch+1、ready=false。PG 提交后才 guardedPut etcd。发布失败时 `publishing=true`，新旧节点都不能派发；control 对账补发。新主完成恢复后才清除 `recovering`。
+暂停只持续到本地打包完成，网络再慢，用户也不会被卡住。一轮结束后等 5 秒再复制，把连续的几轮合并成一次；另外每 60 秒检查一次空闲用户，内容没变就跳过。
 
-| 故障时的任务 | 接管后 | 是否自动重跑 |
-|---|---|---|
-| 已发给 Codex、仍在执行 | `unconfirmed`，会话暂停，待核对 | 否 |
-| `completed` 且 sequence 大于最后复制位点 | `replica_missing`；保留 PG 任务，提示「该轮结果在故障接管时丢失，请核对」 | 否 |
-| `queued`，且会话创建于最后成功复制之前 | 保留 queued，由新主 outbox 唤醒 | 是正常首次派发；同会话有待核对任务时先核对并继续 |
+### 复制位点：副本上一定有的内容
 
-会话创建于最后一次成功复制之后（副本没有该会话 rollout），或整个用户 home 缺失时，持久标记整会话丢失。读、恢复、发消息均返回 `409 REPLICA_MISSING`，不调用 Codex 恢复；列表带 `replicaMissing:true`。这类会话的 queued 任务转为 `needs-review`，原因是会话在故障接管中丢失。新建会话可正常使用。
+副本收齐 home 和工作目录两部分、确认无误以后，主节点才在数据库里记下**复制位点**：这个用户复制到了第几个任务，用的是哪一次快照。位点说的是"副本上一定有的内容"，接管时就用它划线。
 
-会话创建于复制之前、只是尾部已完成任务超过位点时，保留副本上的 rollout 前缀，允许恢复续聊；只把超出位点的 completed 任务标为 `replica_missing`，会话快照带 `missingTurns`（taskId、turnId、message）。该会话 queued 任务保持 queued，由新主派发；执行中任务仍按 s08 转 unconfirmed。原生恢复报错仅在整会话丢失条件成立时映射为 REPLICA_MISSING。升级须运行迁移，包括 `020-replica-missing.sql` 和 `021-replication-error.sql`。
+`/cluster` 会按分片显示副本落后几轮、最早没复制的那一轮等了多久；超过 5 分钟标为"副本落后"。主节点照常服务，只是提醒你：这时接管，会丢得更多。
 
-PG 复制位点提交成功后删除本次替换的旧目录；私有 home 由用户 uid 清空，服务再删除外层目录，清理失败只记日志。迁移仍默认保留 `.before-move-*` 供恢复；此次修改不会扫描或删除历史遗留目录。
+### 故障接管：租约过期，已追平的副本接手
 
-接受的丢失窗口是**最后一次复制之后**。5 秒是合并等待时间，不是数据零丢失承诺；长轮次、网络故障和复制耗时都会扩大窗口。`replica_ready` 表示已建立完整基线，并不代表与正在服务的主节点逐字节同步。
+主节点的租约过期（s16），control 先确认它的副本在线、所有用户都有基线、没有正在进行的传输，然后在数据库事务里把副本设为新的主，分片的 epoch 加一，再发布到 etcd。各节点经 Watch 更新路由，新主完成恢复后开始服务。副本数据不全，就宁可让这个分片暂时不可用，也不接管。
 
-**epoch 隔离与回归。** epoch 增加后，旧主的业务写入和复制位点写入由 PG 返回 SH001。旧主刷新缓存，发现自己不是主，只停止该分片用户的进程；它仍可服务其他分片。成员租约失效的整个节点仍沿用原有隔离与 rejoin 流程。旧主重新加入，control 将其设为从节点、ready=false；新主全量推送该分片全部用户，全部成功后 ready=true。不会自动切回。
+### 尾部丢失：明确接受，如实告诉用户
 
-**手动切换。** `npm run cluster -- promote 0` 需要 admin，任意入口转交当前 control。要求 ready=true；PG 持久化暂停分片 → 等待执行中轮次结束 → 最后一次全量同步 → PG 切换 → etcd 发布 → 新主恢复派发。复制失败会保留暂停，可以修复原因后重试同一命令；禁止人工回滚 epoch。
+最后一次复制之后完成的内容，在新主上看不到。这叫**尾部丢失**。本章明确接受它，但必须说清楚丢了什么：
 
-## 分工
-
-| 部件 | 负责什么 |
+| 接管时的情况 | 接管后 |
 |---|---|
-| `replication/worker.mjs` | 轮次边界、5 秒去抖、60 秒兜底、失败记录 |
-| `replication/store.mjs` | 位点、落后统计、三类任务恢复 |
-| `replication/control.mjs` | 环形放置、CT001 切换、发布对账、旧主回归 |
-| `replication/index.mjs` | 生产运行环境、认证传输、显式用户身份与恢复 |
-| 原 sharding / transfer | SH001、Watch 缓存、每节点密钥、路由和安全 tar |
+| 会话在最后一次复制之前就有了，只是最后几轮没复制 | 会话照样能续聊；没复制的那几轮标为"副本缺失"，并在会话里提示用户核对 |
+| 会话是最后一次复制之后才新建的，副本上根本没有它 | 访问返回 409 `REPLICA_MISSING`，提示新建会话；它排队的任务转为待核对 |
+| 正在执行的轮次 | 按 s08 记为待核对，不自动重跑 |
+| 排队中的任务（会话在副本上存在） | 保留，由新主接着派发 |
 
-uid 隔离、hub 双侧授权、跨分片只读请求携带用户令牌、任期 CT001、分片 SH001、迁移操作单均继续执行。节点只持有自己的 SQL 角色、etcd 凭据、节点密钥及网关访问密钥；服务商密钥留在 gateway。
+任务记录一直留在 PostgreSQL 里，丢的只是副本上的文件。丢失的窗口就是"最后一次复制之后"：5 秒去抖、长轮次、网络慢都会让它变大，这不是零丢失的承诺。
+
+### 旧主回来：先当副本，追平了才能当主
+
+epoch 加一以后，旧主写的每一行业务数据都带着旧 epoch，数据库直接拒绝（SH001），醒来的旧主写不进去。它发现自己不再是主，就停掉这个分片的用户进程，其他分片照常服务。
+
+旧主恢复后以**副本**身份重新加入：新主把这个分片所有用户全量推给它，全部追平才标为就绪。系统不会自动切回；需要时，管理员用 `cluster promote` 手动切换，目标副本必须已经追平，切换前会暂停分片、等轮次结束、做最后一次同步。
+
+## 分工：Codex 做什么，我们做什么
+
+| Codex 做什么 | 我们做什么 |
+|---|---|
+| 在主节点上照常执行，历史写进用户的 CODEX_HOME | 轮次边界的快照、异步发送与复制位点 |
+| 在新主上从复制过来的 CODEX_HOME 恢复会话 | 租约过期后确认副本可用、推进 epoch、发布新归属 |
+| | 尾部丢失按会话粒度标记，并如实告诉用户 |
+| | 旧主以副本回归、全量追平；手动切换 |
+
+节点只拿自己的数据库角色、etcd 账号、节点密钥和网关访问密钥；各家模型的密钥仍只在网关。各部件的职责划分见 [设计说明](docs/design.md#部件职责)。
 
 ## 跑起来看看
 
@@ -117,27 +147,9 @@ npm run test:replication:etcd      # 全新 PG 测试库 + 真实认证 etcd
 npm run test:ports                # 允许绑定本机端口时执行
 ```
 
-uid 测试设置 `DATA_TEST_DATABASE_URL`、`DATA_TEST_REDIS_URL`，只给 CHOWN/FOWNER/SETUID/SETGID，不能给 DAC_OVERRIDE。新增三节点 uid 用例会创建并删除专用临时数据库；三实例共用它，各自独立目录。etcd 用例设置 `ETCD_TEST_ENDPOINT` 和 `ETCD_TEST_NODE_A_PASSWORD`、`ETCD_TEST_NODE_B_PASSWORD`、`ETCD_TEST_NODE_C_PASSWORD`，用 node-a/b/c 认证，验证真实租约自然过期而非主动删除。etcd 前缀 `/codex/` 必须属于独立测试实例。
+外部测试对环境的要求（只给最小 capability、专用测试库与测试 etcd）见 [设计说明](docs/design.md#外部测试的环境要求)。
 
-### Docker 中的外部测试
-
-下面创建独立 `codex-s18-accept` 项目和两个测试数据库，不连接正在服务的项目。测试镜像先通过 `docker compose build node-a` 构建；测试环境的 `.env` 只需教学凭据。另选子网避免与三节点演示网络冲突。
-
-```bash
-export REMOTE_BRIDGE_SUBNET=172.29.19.0/24 REMOTE_BRIDGE_GATEWAY=172.29.19.1
-accept() { docker compose -p codex-s18-accept -f compose.yaml -f deploy/acceptance.compose.yaml --profile acceptance "$@"; }
-accept up -d postgres redis etcd
-accept run --rm --no-deps etcd-init
-accept up -d --wait postgres redis etcd
-accept exec -T postgres createdb -U agent agent_s18_test
-accept exec -T postgres createdb -U agent agent_s18_etcd_test
-accept run --rm uid-tests node --test tests/replication-pg.integration.mjs
-accept run --rm uid-tests
-accept run --rm etcd-tests
-# 保留失败日志；完成核对后仅删除这个一次性项目。
-accept down -v
-unset REMOTE_BRIDGE_SUBNET REMOTE_BRIDGE_GATEWAY
-```
+运行之后多了这些：每个分片在数据库里多了副本节点和"副本已追平"标记，每个用户一条复制位点；三个节点的磁盘上，各自保存着自己作为副本的那个分片的用户目录。
 
 ## 两台服务器
 
@@ -145,62 +157,7 @@ unset REMOTE_BRIDGE_SUBNET REMOTE_BRIDGE_GATEWAY
 
 网络路径：远程 node-b → 本机 SSH `-L` 回环端口 → 控制机 `remote-access` 回环端口 → Docker 内基础服务。node-b 访问 node-a/c，通过本机 4340/4342 隧道。控制机节点访问 `host.docker.internal:4341` → bridge 网关 relay → 控制机回环 14341 → SSH `-R` → 第二台回环 4341。所有对宿主发布的基础服务端口都绑定 127.0.0.1；bridge relay 必须显式设置 `RELAY_BIND`；绑定 Docker 网桥网关地址，是为了让 compose 网络内的节点访问宿主回环反向隧道。该入口仅在 compose 网络内可达，不绑定宿主公网接口；同网桥其他容器也可连接，因此应用层仍需节点密钥与有效操作单。容器内的 remote-access 显式绑定 0.0.0.0，仅通过宿主回环发布端口。
 
-1. 两台 Linux 都装 Docker Compose（支持 `!override`），代码都放在 `/opt/s18-replication`。先设置控制机 `.env`，额外加入：
-
-```dotenv
-COMPOSE_FILE=compose.yaml:deploy/two-host.compose.yaml
-COMPOSE_PROFILES=remote-access
-AGENT_NODE_ADDRESS_B=http://host.docker.internal:4341
-AGENT_REPLICATION_RATE_LIMIT=262144
-AGENT_REQUEST_TIMEOUT_MS=120000
-NODE_B_UPSTREAM=host.docker.internal:4341
-```
-
-控制机 `.env` 还要加入 `AGENT_REQUEST_TIMEOUT_MS=120000`；第二台需要的放宽值由 `deploy/remote-env.mjs` 生成，原因见下文「跨地域实测」。
-
-2. 控制机首次初始化使用以下步骤。两台模式不要调用会显式启动本地 node-b 的 `server-setup.sh` / `remote.sh deploy`；也不要同时启动第二个 node-b。
-
-```bash
-cd /opt/s18-replication
-docker compose build node-a
-bash deploy/configure.sh
-docker compose up -d etcd
-docker compose run --rm --no-deps -T etcd-init
-docker compose up -d --wait etcd postgres redis gateway
-docker compose run --rm --no-deps --user 0 -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/cluster-migrate.mjs
-docker compose run --rm --no-deps -T node-a npm run -s agent:init
-cp nodes/node-a/.data/identity.json nodes/node-c/.data/identity.json
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts init
-docker compose up -d node-a node-c caddy remote-access remote-node-link
-bash deploy/enable-service.sh
-# 只导出 node-b 最小凭据，绝不复制控制机整个 .env。
-umask 077
-node deploy/remote-env.mjs > .remote.env
-scp .remote.env worker.example.com:/opt/s18-replication/.remote.env
-scp nodes/node-a/.data/identity.json worker.example.com:/opt/s18-replication/.remote-identity.json
-# 无密钥的启用模型提供方清单；在第二台先 mkdir -p 对应目录。
-ssh worker.example.com 'mkdir -p /opt/s18-replication/nodes/node-b/.data/gateway'
-scp .data/gateway/enabled-providers.json worker.example.com:/opt/s18-replication/nodes/node-b/.data/gateway/
-```
-
-3. 第二台准备独立 SSH 密钥 `/var/lib/codex-tunnel/.ssh/s18-tunnel`，在控制机创建专用系统用户 `codex-tunnel`（shell 为 `/usr/sbin/nologin`），核对控制机 host key 后写入 known_hosts。无需开启 `GatewayPorts`：反向监听只需控制机回环。先生成并打印限制公钥行供控制机管理员粘贴到该账号的 `authorized_keys`：
-
-```bash
-SSH_KEY=/var/lib/codex-tunnel/.ssh/s18-tunnel bash deploy/remote-node.sh --authorized-key
-# 输出形如 restrict,port-forwarding,permitopen="127.0.0.1:12379",permitopen=...,permitlisten="127.0.0.1:14341",command="/bin/false" ssh-ed25519 ...
-```
-
-该账号只允许隧道，不提供交互 shell；`permitopen` 限定基础服务及其他节点目的端口，`permitlisten` 限定反向回环监听。安装脚本也会打印同一行。随后运行：
-
-```bash
-cd /opt/s18-replication
-CONTROL_HOST=control.example.com SSH_USER=codex-tunnel bash deploy/remote-node.sh
-systemctl status codex-harness-s18-tunnel codex-harness-s18-remote
-```
-
-脚本在第二台创建无 shell 的本地 `codex-tunnel` 系统用户，并以该身份运行 systemd 自动重连 SSH 隧道（密钥和已核验的 known_hosts 须让该用户可读）。另安装一个节点容器，不部署第二份控制面。`NODE_ID`、`NODE_PORT`、`REVERSE_PORT`、`CONTROL_HOST`、`SSH_USER`、`SSH_KEY` 可配置；更换远程角色时需相应调整控制机禁用的本地节点、relay 端口、广告地址和 Caddy upstream，不能保留两个同名成员。脚本按 NODE_ID 转发另外两个节点端口；控制机 relay 和 two-host override 也应对应调整。更换子网时同时设置 `REMOTE_BRIDGE_SUBNET` 和 `REMOTE_BRIDGE_GATEWAY`。
-
-4. `/cluster` 确认三成员和副本 ready。让 bob 在分片 0 完成两轮，等复制为零落后后在控制机停 node-a；node-b 应接管。恢复 node-a 后观察全量追平，再用 admin promote 验证手动切换。备份/恢复时同时停第二台节点与隧道相关业务；原单机备份脚本不包含第二台磁盘，应分别备份并核对同一业务时点，不能把旧磁盘直接挂到新 epoch。
+两台机器的具体部署步骤见 [设计说明](docs/design.md#两台服务器的部署步骤)。
 
 ### 跨地域实测：同一份代码为什么在跨洋时变慢
 
@@ -247,18 +204,25 @@ export const LAG_MS = 5 * 60 * 1000;
 
 ## 限制
 
-PG、Redis、etcd 和 gateway 仍是控制面单点；副本不等于整个服务高可用。没有自动再平衡，每分片只配置一个副本；从节点离线、未建好基线、存在未完成传输时不接管，分片 unavailable 并记录原因。
+- PostgreSQL、Redis、etcd 和模型网关仍是单点；副本只解决节点磁盘，不等于整个服务高可用。每个分片只有一个副本，也没有自动再平衡。
+- 成员身份只认节点名，不核对磁盘是哪一次复制的结果：把旧磁盘挂回同名节点，它会被当作现任节点接着服务（两台实测换回单机时，测试账号在第二台上跑的最后一轮就因此丢失）。换盘、恢复备份前，必须先核对复制位点，或者让它以副本身份全量追平。
+- 旧主从假死醒来到被隔离之间，已经发出的模型和工具调用撤不回；数据库写入会被 SH001 挡住，副作用只落在它本地已经不作数的磁盘上。
+- 每次复制都打包整个用户目录，目录越大越占磁盘、网络和暂存空间；单个用户目录超过上限会一直复制失败，分片显示副本落后、不能接管。
 
-成员身份只认节点名，不核对磁盘是哪一次复制的结果：把旧磁盘挂回同名节点时，它会被当作现任节点接着服务（两台实测换回单机时，测试账号在第二台上跑的最后一轮因此丢失）。换盘、恢复备份前必须先核对复制位点，或者让该节点以副本身份全量追平。
-
-旧主假死醒来到被隔离之间，已发出的 Codex 轮次可能继续调用模型与工具。PG 写入由 SH001 阻止，副作用只落在旧主本地、已非权威的磁盘；epoch 隔离不能撤销已经发出的模型或工具调用。
-
-每轮边界全量 tar，以及每 60 秒空闲检查的快照与目录哈希，都会读取整个目录，大目录会占磁盘 IO、网络与暂存空间。跨地域实测单用户 20 MB / 约 3 Mbit/s ≈ 1 分钟一次；限速为 262144 字节/秒时发送更久，但用户只在本地快照期间暂停。限速按本节点所有 tar 发送合计，建议不超过实测链路带宽约 70%，为 etcd 续约与请求转发留余量。单次上限默认 1 GiB，可通过 `AGENT_TRANSFER_MAX_BYTES` 下调；接收端检查两倍上限的可用空间。单用户目录超过上限会持续复制失败，`/cluster` 显示 `replica_lagging` 和「目录过大」原因，该分片不可视为 ready、不可接管；需先减少目录体积再重试。迁移保留的旧目录、升级前的复制旧目录或清理失败残留，需停服核对后人工归档清理。副本是可核对的异步历史窗口，不提供零丢失或自动重跑保证。
+完整说明见 [设计说明](docs/design.md#限制的完整说明)。
 
 ## 小结
 
-③ 的答案由原生 CODEX_HOME 加复制位点共同给出；⑥ 的答案由 etcd control 任期、PG CT001 与逐分片 epoch SH001 共同给出。任务记录留存，副本缺失必须明确展示给用户。
+- 每个分片一主一从，环形放置；只在轮次边界复制，避免拷到写了一半的文件。
+- 先拍本地快照、立即放行，再异步发送；复制位点记下"副本上一定有的内容"。
+- 主节点的租约过期后，已追平的副本接手，epoch 加一，醒来的旧主写不进去。
+- 最后一次复制之后的内容会丢：按会话粒度标出来，如实告诉用户，任务记录永远保留。
+- 旧主先当副本，追平了才能被手动切回。
 
-## 从这里往哪里走
+到这里，六个问题里的"③ 之前聊过什么"一路从 Thread 历史（s02）、服务端恢复（s03）、原生记忆（s07）、部署持久化（s12）、按用户隔离（s14）、跟着用户分片（s17），走到了"主节点坏了还能从副本接着聊"；"⑥ 谁说了算"也从服务端开关走到了多台机器之间的租约、任期和 epoch。
 
-下一章：无。这是主线最后一章。回到 [app](../../app/) 查看完整项目、Web 工作台与互动课程。生产化可以继续建设三节点 etcd、PG 高可用、独立对象存储和增量复制；再根据真实恢复时间、目录规模与允许丢失窗口设定服务目标。
+## 下一章
+
+下一章：无。这是主线最后一章。回到 [app](../../app/) 查看完整项目、Web 工作台与互动课程。
+
+如果要把它真正推向生产，还可以继续：三节点 etcd 和高可用的 PostgreSQL，把文件放进独立的对象存储，把整包复制换成增量复制；再根据真实的恢复时间、目录规模和能接受的丢失窗口，定下服务目标。如果节点要跨地域部署，每个地域应当有自己的一套控制面（见上文「跨地域实测」）。
