@@ -17,7 +17,7 @@ import { cleanup,installToolFixture,tempRoot,until } from './helpers.mjs';
 import { answer,responsesFixture } from './responses-fixture.mjs';
 import { startClusterNode,scriptedCoordination } from './fixtures/sharding-cluster.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
-test('Linux 三节点：bob 两轮→复制→停主接管→续聊看到两轮→旧主回归追平',{
+for (const missingHome of [false, true]) test(missingHome ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
  skip:process.platform!=='linux'||process.getuid?.()!==0?'需要 Linux 0:1000、真实 PG/Redis 和 Codex':false,timeout:240000
 },async t=>{
  assert.equal(process.getgid(),1000);
@@ -53,6 +53,7 @@ test('Linux 三节点：bob 两轮→复制→停主接管→续聊看到两轮�
   return startClusterNode({root,nodeRoot:roots[index],databaseUrl,redisUrl,password,provider,cache,coordination,term,logs,isolations,replication:true});
  };
  for(let i=0;i<3;i++)nodes.push(await start(i));
+ if(missingHome)await nodes[0].app.replication.worker.close();
  const api=async(index,route,body,expected,token)=>{
   const response=await fetch(nodes[index].address+route,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(90000)});
   const value=await response.json();assert.equal(response.status,expected,JSON.stringify({route,value,logs}));return value;
@@ -67,9 +68,39 @@ test('Linux 三节点：bob 两轮→复制→停主接管→续聊看到两轮�
  await complete(0,'one','FIRST remember cobalt');await complete(0,'two','SECOND remember amber');
  const record=(await admin.query('SELECT * FROM agent_data.user_runtimes WHERE user_id=$1',[bob.id])).rows[0];
  const homes=roots.map(dir=>path.join(dir,'.data/users',bob.id,'codex'));
- const created=spawnSync(process.execPath,['-e',`const fs=require('fs'),p=require('path'),h=process.argv[1];fs.mkdirSync(p.join(h,'tmp/arg0/test'),{recursive:true});fs.symlinkSync('/bin/true',p.join(h,'tmp/arg0/test/apply_patch'));fs.writeFileSync(p.join(h,'private-marker'),'two rounds',{mode:384});`,homes[0]],{uid:record.uid,gid:record.uid,cwd:'/',encoding:'utf8'});assert.equal(created.status,0,created.stderr);
+ if(missingHome) {
+  assert.equal(fs.existsSync(homes[1]),false);
+  assert.equal((await admin.query('SELECT 1 FROM agent_data.replication_positions WHERE user_id=$1',[bob.id])).rowCount,0);
+  await nodes[0].app.close();nodes[0].generation.active=false;
+  await new Promise(resolve=>{nodes[0].server.close(resolve);nodes[0].server.closeAllConnections();});members.delete('node-a');
+  // Seed the already-promoted state reported by the server demo. Current controller guards
+  // refuse a missing baseline; this regression must not weaken that separate safety gate.
+  await admin.query("UPDATE agent_data.shard_owners SET previous_primary=node_id,node_id=replica,replica=NULL,epoch=2,replica_ready=false,recovering=true,publishing=true WHERE shard_id='0'");
+  await nodes[2].control.publish();await nodes[1].app.replication.tick();
+  for(const route of ['/state?threadId='+session.id,'/sessions/resume']) {
+   const result=await api(2,route,route.includes('resume')?{threadId:session.id}:undefined,409,token);
+   assert.equal(result.error.code,'REPLICA_MISSING');assert.match(result.error.message,/原会话无法恢复，请新建会话；任务记录已标记待核对/);
+  }
+  assert.deepEqual((await admin.query('SELECT status FROM agent_data.tasks WHERE instance_id=$1 ORDER BY sequence',[scope.instanceId])).rows.map(r=>r.status),['replica_missing','replica_missing']);
+  const fresh=await api(2,'/sessions',{},201,token);
+  await api(2,'/state?threadId='+fresh.id,undefined,200,token);
+  await api(2,'/messages',{threadId:fresh.id,clientMessageId:'after-loss',text:'new conversation'},202,token);
+  let job;await until(async()=>{job=await runOwner(bob.id,()=>nodes[1].app.data.jobs.get('after-loss'));return ['completed','failed'].includes(job?.status);},60000);
+  assert.equal(job.status,'completed',JSON.stringify({job,logs}));
+  await api(2,'/state?threadId='+session.id,undefined,409,token);
+  // The marker survives a native runtime restart and the newly created home.
+  await runOwner(bob.id,()=>nodes[1].app.runtimes.pool.remove(nodes[1].app.runtimes.pool.entries.get(bob.id)));
+  await api(2,'/state?threadId='+session.id,undefined,409,token);
+  assert.deepEqual(isolations,[]);assert.deepEqual(provider.errors,[]);
+  return;
+ }
+ const created=spawnSync(process.execPath,['-e',`const fs=require('fs'),p=require('path'),h=process.argv[1];fs.mkdirSync(p.join(h,'tmp/arg0/test'),{recursive:true});fs.symlinkSync('/bin/true',p.join(h,'tmp/arg0/test/apply_patch'));fs.mkdirSync(p.join(h,'private'),{mode:448});fs.chmodSync(p.join(h,'private'),448);fs.writeFileSync(p.join(h,'private/history'),'private history',{mode:384});fs.writeFileSync(p.join(h,'private-marker'),'two rounds',{mode:384});`,homes[0]],{uid:record.uid,gid:record.uid,cwd:'/',encoding:'utf8'});assert.equal(created.status,0,created.stderr);
  const relative=path.join('workspace/users',bob.id,'output.txt');fs.writeFileSync(path.join(roots[0],relative),'service data');fs.chownSync(path.join(roots[0],relative),0,1000);fs.chmodSync(path.join(roots[0],relative),0o660);
- await until(()=>nodes[0].app.replication.worker.sync(bob.id,{force:true}),30000);
+ for(let copy=0;copy<3;copy++) {
+  await until(()=>nodes[0].app.replication.worker.sync(bob.id,{force:true}),30000);
+  for(const target of [homes[1],path.join(roots[1],'workspace/users',bob.id)])
+   assert.equal(fs.readdirSync(path.dirname(target)).some(name=>name.startsWith(path.basename(target)+'.before-move-')),false);
+ }
  await nodes[2].control.ready('0',1,'node-a');
  assert.equal(fs.existsSync(path.join(homes[1],'tmp')),false);
  const stat=spawnSync(process.execPath,['-e',`const fs=require('fs'),s=fs.statSync(process.argv[1]);console.log(JSON.stringify([s.uid,s.gid,s.mode&511]));`,path.join(homes[1],'private-marker')],{uid:record.uid,gid:record.uid,encoding:'utf8'});

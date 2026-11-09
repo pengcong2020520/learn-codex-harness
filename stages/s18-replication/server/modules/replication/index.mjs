@@ -1,4 +1,5 @@
 import { hasMember, takeoverReason } from './control.mjs';
+import fs from 'node:fs';
 import { businessQuery } from '../data/write.mjs';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -16,6 +17,11 @@ import { AppError } from '../../../shared/errors.mjs';
 import { ReplicationStore } from './store.mjs';
 import { ReplicationWorker } from './worker.mjs';
 const exec=promisify(execFile);
+export function replicaHomeMissing(root, record) {
+  if (!record) return true;
+  try { fs.lstatSync(transferPath(root, record, 'home')); return false; }
+  catch (error) { if (error.code === 'ENOENT') return true; throw error; }
+}
 export async function directoryHash(root,record) {
   const hash=createHash('sha256');
   for(const kind of ['home','workspace']) {
@@ -109,7 +115,7 @@ export function attachReplication(app,runtime,control) {
           await businessQuery(db,'SELECT s.shard_id FROM agent_data.shard_owners s JOIN agent_data.user_shards u USING(shard_id) WHERE u.user_id=$1 FOR SHARE OF s,u',[userId]);
           await check();
           if(kind==='content') return receiveContent(app,req,json,check);
-          const result=await importTree(app.config.root,record,q.get('kind'),req,check);return json(200,result);
+          const result=await importTree(app.config.root,record,q.get('kind'),req,check,{keepPrevious:false,log:app.config.generation?.log});return json(200,result);
         });
       });
       received.set(userId,work);try{return await work;}finally{received.delete(userId);}
@@ -135,7 +141,11 @@ export function attachReplication(app,runtime,control) {
           if(row.node_id!==runtime.nodeId) {await stopShard(row.shard_id);continue;}
           if(row.publishing)continue;
           if(row.recovering) {
-            for(const userId of await store.users(row.shard_id)) await runOwner(userId,()=>store.recover(userId,row.epoch));
+            for(const userId of await store.users(row.shard_id)) await runOwner(userId,async()=>{
+              const missingHome=replicaHomeMissing(app.config.root,await recordFor(userId));
+              await store.recover(userId,row.epoch,{missingHome});
+              app.sessions.invalidateOwner(userId);
+            });
             await controlCall('recovered',{shardId:row.shard_id,epoch:row.epoch});
             for(const userId of await store.users(row.shard_id))runtime.paused.delete(userId);
           }

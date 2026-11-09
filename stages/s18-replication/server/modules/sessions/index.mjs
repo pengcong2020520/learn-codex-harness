@@ -7,6 +7,7 @@ import { EventEmitter } from "node:events";
 import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from "./history.mjs";
 import { AppError, requireId } from "../../../shared/errors.mjs";
 import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
+import { MISSING_SESSION_MESSAGE } from '../replication/store.mjs';
 
 // 每个会话在内存里最多保留的轮次。快照只发最后 SESSION_TURN_LIMIT 轮；完成的轮次结果已持久化，完整历史在 Codex 原生记录里。
 // 多留一些，给追加消息定位较早的目标轮次。
@@ -123,7 +124,8 @@ export class SessionService extends EventEmitter {
   async ensure(threadId) {
     if (this.rpc.pool && !this.rpc.current()) return this.rpc.pool.withOwner(currentIdentity().userId, () => this.ensure(threadId));
     requireId(threadId, "会话 ID");
-    if (this.repository) await this.repository.conversation(threadId);
+    if ((await this.repository?.conversation(threadId))?.replica_missing)
+      throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
     if (this.sessions.has(threadId)) { await this.assertCompatible(threadId); return this.snapshot(threadId); }
     if (!this.loading.has(threadId)) {
       const promise = this.load(threadId).finally(() => this.loading.delete(threadId));
@@ -136,6 +138,7 @@ export class SessionService extends EventEmitter {
     const selected = this.repository ? await this.repository.conversation(threadId) :
       (await listProjectThreads(this.rpc.request.bind(this.rpc), this.config.root, "", this.runtime.workspaceDir)).find(thread => thread.id === threadId);
     if (!selected) throw new AppError("未找到本项目的这个会话。", 404, "THREAD_NOT_FOUND");
+    if (selected.replica_missing) throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
     return this.atBoundary(async () => {
       await this.assertCompatible(threadId);
       const legacyPath = this.tools && !this.repository ? await importLegacyThread(this.config.root, selected) : undefined;

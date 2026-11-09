@@ -112,4 +112,14 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  assert.equal(placed.node_id,'node-b');assert.equal(Number(placed.epoch),5);assert.equal(placed.replica,null);assert.equal(placed.replica_ready,false);assert.equal(placed.previous_primary,null);
  await admin.query("UPDATE agent_data.shard_owners SET previous_primary=node_id WHERE shard_id='0'");
  await ctl.place();assert.equal((await ctl.rows()).find(r=>r.shard_id==='0').replica,null,'stale previous_primary must not reattach the current primary');
+ // Missing local CODEX_HOME persists loss at conversation scope, without affecting new sessions.
+ await admin.query('UPDATE agent_data.replication_positions SET epoch=4 WHERE user_id=$1',[user]);
+ await runOwner(user,()=>sb.recover(user,5,{missingHome:true}));
+ const lost=(await admin.query("SELECT replica_missing,paused FROM agent_data.conversations WHERE instance_id=$1 AND id='replica-thread'",[instance])).rows[0];
+ assert.deepEqual(lost,{replica_missing:true,paused:true});
+ assert.equal((await admin.query("SELECT status FROM agent_data.tasks WHERE instance_id=$1 AND id='pending'",[instance])).rows[0].status,'needs-review');
+ assert.equal((await admin.query("SELECT status FROM agent_data.tasks WHERE instance_id=$1 AND id='copied'",[instance])).rows[0].status,'replica_missing','missing home loses even tasks at the saved position');
+ await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,'fresh-after-loss',$2,'/tmp')",[instance,user]);
+ assert.deepEqual((await admin.query("SELECT replica_missing,paused FROM agent_data.conversations WHERE instance_id=$1 AND id='fresh-after-loss'",[instance])).rows[0],{replica_missing:false,paused:false});
+
 });

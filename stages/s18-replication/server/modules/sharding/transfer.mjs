@@ -93,7 +93,30 @@ function restoreOwners(stage, entries) {
   visit(stage, '.');
   if (visited !== entries.size) throw new Error('解包条目缺失。');
 }
-export async function importTree(root, record, kind, input, beforePublish = async () => {}) {
+async function removePreviousTree(previous, record, kind) {
+  if (kind === 'home' && process.getuid() === 0) {
+    // The service has no DAC_OVERRIDE, and the user cannot unlink from the root-owned parent.
+    await exec(process.execPath, [fileURLToPath(new URL('./transfer-cleanup.mjs', import.meta.url)), previous], {
+      uid: record.uid, gid: record.uid, cwd: '/', env: { PATH: '/usr/bin:/bin' },
+    });
+    fs.rmdirSync(previous);
+  } else await fs.promises.rm(previous, { recursive: true, force: true });
+}
+
+export async function publishTree(stage, target, { keepPrevious = true, removePrevious = directory => fs.promises.rm(directory, { recursive: true, force: true }), log = console.warn } = {}) {
+  const previous = target + '.before-move-' + randomUUID();
+  fs.renameSync(target, previous);
+  try { fs.renameSync(stage, target); } catch (error) { fs.renameSync(previous, target); throw error; }
+  if (!keepPrevious) {
+    try { await removePrevious(previous); }
+    catch (error) {
+      // Publication has committed: cleanup (including a failing logger) cannot undo its acknowledgement.
+      try { log(`旧复制目录清理失败 path=${previous} code=${error.code || 'CLEANUP_FAILED'}`); } catch {}
+    }
+  }
+}
+
+export async function importTree(root, record, kind, input, beforePublish = async () => {}, { keepPrevious = true, log = console.warn } = {}) {
   const target = transferPath(root, record, kind);
   const limit = transferLimit();
   assertTransferSpace(path.dirname(target), limit);
@@ -117,10 +140,7 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
     await beforePublish();
     prepareDirectories(root, record, { isolated: process.getuid() === 0 });
     // Keep any previous destination until this copy is complete. Never merge stale SQLite files.
-    const previous = target + '.before-move-' + id;
-    fs.renameSync(target, previous);
-    try { fs.renameSync(stage, target); } catch (error) { fs.renameSync(previous, target); throw error; }
-    // Previous copy is deliberately retained for operator recovery; no automatic destructive cleanup.
+    await publishTree(stage, target, { keepPrevious, log, removePrevious: previous => removePreviousTree(previous, record, kind) });
     return { copied: kind };
   } finally { fs.rmSync(archive, { force: true }); fs.rmSync(stage, { recursive: true, force: true }); }
 }

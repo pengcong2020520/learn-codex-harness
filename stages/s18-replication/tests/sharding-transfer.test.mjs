@@ -1,7 +1,12 @@
 import { nodeAuth, authHeaders } from './fixtures/node-auth.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateTarListing, transferPath } from '../server/modules/sharding/transfer.mjs';
+import { validateTarListing, transferPath, publishTree } from '../server/modules/sharding/transfer.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { stderrCollector, subprocessFailure, STDERR_LIMIT } from '../server/modules/sharding/transfer-diagnostics.mjs';
 import { errorSummary } from '../server/modules/data/diagnostics.mjs';
 import { runtimeHome } from '../server/modules/runtimes/directories.mjs';
@@ -10,6 +15,53 @@ import { Readable } from 'node:stream';
 
 const uid = 10004, user = '00000000-0000-4000-8000-000000000017';
 const entry = (owner, group, name = './history.txt', mode = '-rw-rw----') => `${mode} ${owner}/${group} 20 2026-01-01 00:00 ${name}\n`;
+
+test('复制连续发布三次不保留旧目录；迁移默认保留；发布失败恢复旧副本', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's18-publish-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'codex'), stage = path.join(root, 'stage');
+  fs.mkdirSync(target); fs.writeFileSync(path.join(target, 'value'), 'old');
+  for (let n = 1; n <= 3; n++) {
+    fs.mkdirSync(stage); fs.writeFileSync(path.join(stage, 'value'), String(n));
+    await publishTree(stage, target, { keepPrevious: false });
+    assert.equal(fs.readFileSync(path.join(target, 'value'), 'utf8'), String(n));
+    assert.deepEqual(fs.readdirSync(root), ['codex']);
+  }
+  await assert.rejects(publishTree(stage, target, { keepPrevious: false }), { code: 'ENOENT' });
+  assert.equal(fs.readFileSync(path.join(target, 'value'), 'utf8'), '3');
+  assert.deepEqual(fs.readdirSync(root), ['codex']);
+  fs.mkdirSync(stage); fs.writeFileSync(path.join(stage, 'value'), 'migration');
+  await publishTree(stage, target);
+  const previous = fs.readdirSync(root).find(name => name.startsWith('codex.before-move-'));
+  assert.ok(previous); assert.equal(fs.readFileSync(path.join(root, previous, 'value'), 'utf8'), '3');
+});
+
+test('旧副本清理失败只记日志，仍确认新目录发布成功', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 's18-cleanup-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'codex'), stage = path.join(root, 'stage'), logs = [];
+  fs.mkdirSync(target); fs.mkdirSync(stage); fs.writeFileSync(path.join(stage, 'value'), 'new');
+  await publishTree(stage, target, { keepPrevious: false,
+    removePrevious: async () => { throw Object.assign(new Error('private content'), { code: 'EACCES' }); }, log: line => logs.push(line) });
+  assert.equal(fs.readFileSync(path.join(target, 'value'), 'utf8'), 'new');
+  assert.equal(logs.length, 1); assert.match(logs[0], /before-move-.*code=EACCES/); assert.doesNotMatch(logs[0], /private content/);
+});
+
+test('home 清理辅助仅清空指定旧副本，支持私有只读目录，不追随软链接', t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's18-cleanup-worker-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const previous = path.join(root, 'codex.before-move-' + user), privateDir = path.join(previous, 'private');
+  const outside = path.join(root, 'keep'); fs.writeFileSync(outside, 'keep');
+  fs.mkdirSync(privateDir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(privateDir, 'history'), 'private', { mode: 0o600 });
+  fs.symlinkSync(outside, path.join(privateDir, 'scratch-link')); fs.chmodSync(privateDir, 0o500);
+  const worker = fileURLToPath(new URL('../server/modules/sharding/transfer-cleanup.mjs', import.meta.url));
+  const result = spawnSync(process.execPath, [worker, previous], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(fs.readdirSync(previous), []);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'keep');
+  fs.rmdirSync(previous);
+});
 
 test('迁移属主矩阵：home 只接受用户；workspace 接受 root/用户和 1000/用户组', () => {
   for (const kind of ['home', 'workspace']) for (const owner of [0, uid, uid + 1]) for (const group of [0, 1000, uid, uid + 1]) {
