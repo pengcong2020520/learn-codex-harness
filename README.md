@@ -13,6 +13,7 @@ OpenAI 的 Codex 在 Web、CLI、IDE 扩展和桌面应用里，底层都是同�
   服务与客户端、排队与推送            agent loop、原生历史
   Agent 定义、工具与资料边界    ◀──工具回调──  Skills、工具调用、沙箱
   记忆开关、数据、知识、门禁
+  部署、账号与隔离、多台机器
 ```
 
 > 想先弄清 harness 里有什么、App Server 怎么用、一个 Agent 要回答哪六个问题，读 [导论](stages/introduction.md)。
@@ -68,9 +69,9 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 
 ## 学习路线
 
-![学习路线：s00–s11 分四组；阶段 5 走向生产，s12–s18 已完成](docs/images/learning-roadmap.svg)
+![学习路线：s00–s18 分六组，从跑起来到多台机器](docs/images/learning-roadmap.svg)
 
-**s00–s18 已上线，每个阶段只加一个单元，每个单元一句话。**
+**s00–s18 共十九个阶段，每个阶段只加一个单元，每个单元一句话。**
 
 **阶段 1 · 跑起来**
 
@@ -94,7 +95,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 >
 > **[s07 记忆](stages/s07-memory/)** &nbsp; *"记忆交给 Codex 提炼，开不开、谁能参与由服务端说了算"* — 原生记忆默认关闭，三道开关都在服务端
 
-**阶段 4 · 上生产**
+**阶段 4 · 靠得住、守得住**
 
 > **[s08 数据层](stages/s08-data-layer/)** &nbsp; *"PostgreSQL 记事实，Redis 只负责叫醒"* — 任务和唤醒写在同一个事务里；不确定的事不猜，交给人决定
 >
@@ -104,24 +105,25 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 >
 > **[s11 模型网关](stages/s11-model-gateway/)** &nbsp; *"Codex 只认一个地址"* — 网关统一协议、协调多个模型、记账并按预算停派
 
-**阶段 5 · 走向生产**
+**阶段 5 · 上云与多用户**
 
-> **[s12 上云部署](stages/s12-deploy/)** &nbsp; *"一台没人看着的服务器，也能自己起来、自己恢复"* — Compose 交付、健康与就绪、容量限制、备份与回滚；SSH 隧道进入
+> **[s12 上云部署](stages/s12-deploy/)** &nbsp; *"一台没人看着的服务器，也能自己起来、自己恢复"* — 容器交付、健康与就绪、容量限制、备份与回滚；经 SSH 隧道进入
 >
-> **[s13 账号与认证](stages/s13-auth/README.md)**（已完成） &nbsp; *"每个用户登录自己的账号，会话和任务都有归属"*
+> **[s13 账号与认证](stages/s13-auth/)** &nbsp; *"身份由登录决定，不由请求自称"* — 账号、令牌与吊销；会话、任务、知识库都有归属，别人的一律看不见
 >
-> **[s14 用户隔离](stages/s14-isolation/README.md)**（已完成） &nbsp; *"每个用户一个独立的运行环境，互不可见"*
+> **[s14 用户隔离](stages/s14-isolation/)** &nbsp; *"接口隔离之外，进程和文件也要隔离"* — 每个用户一个 Codex 进程、一份 CODEX_HOME、一个系统 uid
 >
-> **[s15 权限与资源 Hub](stages/s15-hub/README.md)**（已完成） &nbsp; *"角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改"*
->
->
-> **[s16 协调面](stages/s16-coordination/README.md)**（已完成） &nbsp; *"节点是否存活变成租约是否过期"*
->
-> **[s17 分片与路由](stages/s17-sharding/README.md)**（已完成） &nbsp; *"用户按分片落到节点，路由表变了大家同时知道"*
->
-> **[s18 副本与故障接管](stages/s18-replication/README.md)**（已完成） &nbsp; *"主节点坏了，从节点接手，丢多少说得清"*
+> **[s15 权限与资源 Hub](stages/s15-hub/)** &nbsp; *"谁能用、谁能改，只在一个地方判定"* — 资源范围、指定用户授权、权益与配额，每次变更都留审计
 
-完整项目 [app/](app/README.md) 在 s11 之上继续开发，已经包含 Docker 部署、Web 工作台和互动课程。
+**阶段 6 · 多台机器**
+
+> **[s16 协调面](stages/s16-coordination/)** &nbsp; *"节点是否存活，看租约是否过期"* — etcd 成员租约、Watch 与选举；任期号挡住醒来的旧 control
+>
+> **[s17 分片与路由](stages/s17-sharding/)** &nbsp; *"按用户分片，从任意入口都能找到他"* — 分片归属表、路由缓存与过期重试；数据库按分片隔离写入
+>
+> **[s18 副本与故障接管](stages/s18-replication/)** &nbsp; *"主节点坏了有人接手，丢多少说得清"* — 轮次边界异步复制、复制位点；接管后尾部丢失如实标出
+
+完整项目 [app/](app/README.md) 在 s11 之上持续开发，包含 Docker 部署、Web 工作台和互动课程；s12–s18 不并入 app，各自是一份可以独立部署的快照，用来讲清上云、多用户和多台机器各自要解决什么。
 
 每章 README 都按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织；关键代码逐行摘自该阶段源码（`npm test` 会校验）。
 
@@ -143,7 +145,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 
 ```text
 learn-codex-harness/
-├── stages/                 # s00–s11：每个阶段一份独立、可运行的代码快照
+├── stages/                 # s00–s18：每个阶段一份独立、可运行的代码快照
 │   ├── introduction.md     #   导论：Codex harness、App Server 与六个问题
 │   ├── sNN-*/              #   README（章节）、docs/design.md、images/、lessons/（离线实验）、tests/
 │   └── verify.mjs          #   阶段文档、结构与测试的统一检查

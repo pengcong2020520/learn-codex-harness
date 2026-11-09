@@ -68,3 +68,55 @@ PostgreSQL/Redis 使用命名卷，正文、原生历史与运行记录挂载宿
 ## 机制实验
 
 [实验目录](../lessons/README.md) 提供就绪与存活、全局容量、HTTP 防护、备份保留四组离线实验。每组说明问题、预期、证据与边界。外部验收单独列出，没有运行的检查明确记为未验证。
+
+## 关键数值与实现细节
+
+章节 README 只讲概念；部署单元的具体数值、默认值和实现细节集中在这里。
+
+| 五个问题 | 本章的回答 |
+| --- | --- |
+| 交付什么 | 固定 Node 版本和 digest 的镜像，锁文件 `npm ci --omit=dev`，node 非 root 用户；安装 lsof、bubblewrap。数据库备份在宿主机通过 postgres 容器执行。支持 NPM_REGISTRY/APT_MIRROR。 |
+| 数据放哪 | PostgreSQL/Redis 用独立数据卷；`.data`、`.runs`、`workspace`、`backups` 挂载宿主目录。代码与数据分离。 |
+| 密钥放哪 | 宿主 `.env` 权限 600；Compose 按服务列出变量。agent 只拿网关访问密钥和自身数据库凭据，gateway 持有服务商密钥与验证调用者所需的网关密钥。 |
+| 谁启动、谁重启 | systemd 开机执行 Compose；每个服务 `restart: unless-stopped`、`stop_grace_period: 30s`，依赖健康后才启动后续服务。 |
+| 谁能进来 | 只发布 `127.0.0.1:4326`，其余三个服务没有宿主端口。客户端通过 SSH 隧道进入。 |
+
+**固定路径是持久化契约。** `CONTAINER_APP_DIR` 必须等于宿主部署路径。本机体验用当前目录的绝对路径，服务器默认部署位置见 remote.sh。Codex 原生历史保存绝对路径；更换路径后旧会话无法直接恢复。回滚在固定路径替换代码，不改成带时间戳的容器工作目录。若迁移已有历史，连同原路径保持一致；本章不实现跨路径历史改写。
+
+### 中间件也用容器封装
+
+PostgreSQL、Redis、模型网关在本阶段都以容器方式运行，写在同一份 `compose.yaml` 里。服务名是 `postgres`、`redis`、`gateway`：`postgres` 把数据放进命名卷 `postgres-data`（容器内 `/var/lib/postgresql/data`），`redis` 放进 `redis-data`（容器内 `/data`）。好处是版本固定、数据卷外置、随服务一起启停。
+
+图片与视频这类大文件，生产环境通常放对象存储桶，可以用 MinIO 等 S3 兼容服务同样以容器运行。本教程里生成的文件仍放在 `workspace`。文件量大、要多台机器共享、或要直接给前端下载时，再换成存储桶。
+
+`/health` 只表明 HTTP 进程存活，返回 `alive`；`/ready` 检查数据库、网关健康、已加载模型目录，并检查调度状态，不能接任务时返回 503。两个接口都返回 `version`，读取 REVISION，没有文件时为 `dev`。它们不需连接令牌、不计入请求限流，也不暴露连接凭据。
+
+全局最多同时执行 **2** 个轮次，多余任务按数据库顺序排队；全局最多 **200** 条 queued，单会话仍是 **100**。超过容量返回 `429 QUEUE_FULL`。已有轮次的追加不新增并发轮次；仍沿用已有会话内追加优先语义。暂停的会话和预算不足的任务不阻塞其他可执行会话。
+
+按“连接令牌 + 实际来源地址”每分钟最多 **120** 次 HTTP 请求，超出返回 429 与 `Retry-After` 秒数。无效令牌合并到同一来源桶，防止换令牌绕过。全局 SSE 最多 **20** 个，预留名额发生在异步读取会话之前，断开后释放。四个默认值分别可用 AGENT_MAX_CONCURRENT_TURNS、AGENT_MAX_QUEUED、AGENT_RATE_LIMIT_PER_MINUTE、AGENT_MAX_SSE 覆盖。
+
+每个服务轮转 json-file 日志，`max-size=10m`、`max-file=3`。内存默认 PostgreSQL **256m**、Redis **128m**、gateway **256m**、agent **768m**，通过对应 `*_MEMORY_LIMIT` 覆盖。镜像不带 `.env` 或运行数据；命令参数不携带密钥。网关配置只有环境变量引用，agent 通过不含密钥的服务商清单选择模型。
+
+收到 SIGTERM，先停止派发，再把执行状态标为 `unconfirmed`（待核对），关闭连接，30 秒内结束；queued 保留且不自动重发不确定任务。启动失败尚未打开 HTTP 时，健康探测表现为连接失败。
+
+备份与恢复由宿主机 Bash + docker compose 编排，不依赖宿主 Node/npm。备份时 agent 短暂停止：宿主通过 postgres 容器执行 pg_dump，gzip 写入 `backups/.<时间>.partial/database.sql.gz`；再启动一次性 agent 容器，用镜像内的 Node 打包 workspace、`.data/codex`、实例身份与不可变文件正文，生成含大小、SHA-256 和版本的 manifest，原子改名后只保留最近 **7** 份。退出 trap 尝试重启 agent。下载使用 SSH + rsync，限速 **200 KB/s**；备份、恢复和下载共用同一个 flock 文件锁，冲突立即拒绝。备份不经 HTTP 提供。
+
+### 备份、下载与恢复的执行细节
+
+下载到运行命令时的 `./backups/`。manifest 可按 SHA-256 校验。备份、恢复和实际 rsync sender 全程持有 `backups/.download.lock` 的排他 flock，冲突退出码为 75，不排队。进程退出后内核自动释放锁；锁文件留在原处，不要删除它。
+
+服务器直接运行以下 Bash 入口，无需安装 Node/npm：
+
+```bash
+bash deploy/backup.sh
+# 将名称替换为备份输出的目录名
+bash deploy/restore.sh 2026-01-01T00-00-00-000Z
+# 无交互终端时必须显式确认覆盖
+bash deploy/restore.sh 2026-01-01T00-00-00-000Z --yes
+```
+
+`remote.sh backup` 调用同一个 `deploy/backup.sh`。已有 npm 的开发机也可使用 `npm run backup` / `npm run restore -- <名称> [--yes]`，它们只是 Bash 入口的别名。备份先取锁、停止 agent，再运行 `docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exists --no-owner --no-privileges agent_s12`，gzip 写入 partial 目录。随后 `docker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --partial <名称>` 完成打包、manifest、改名和保留最近 7 份。无论成功失败，trap 都尝试 `docker compose up -d --wait agent`；失败的 partial 会清理。
+
+恢复先取锁、停止 agent，再从 `/dev/tty` 读取 `RESTORE` 确认；非交互且没有 `--yes` 会拒绝。一次性 agent 容器执行 `restore.mjs --verify <名称>`，校验通过后宿主用 `gunzip -c | docker compose exec -T postgres psql` 重放纯 SQL（`ON_ERROR_STOP=1`、单事务），再由 `restore.mjs --files <名称>` 恢复目录。最后启动 agent 并检查 `/ready`。取消或任一步失败都会保持 agent 停止；就绪检查失败也会再次停服并提示。修复后重新执行完整恢复。
+
+postgres 容器需保持运行；agent 镜像须先构建。Compose 的 `.data`、`workspace`、`backups` 挂载同时用于服务和一次性容器，目录须对 uid 1000 可写。服务器 root 创建的 partial 与 SQL 文件会交给 uid 1000；非 root 执行用户须具备对应目录权限。先保留当前数据的备份；恢复仅接受受信任备份，manifest 校验不是数字签名。

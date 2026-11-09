@@ -1,10 +1,9 @@
-# 数据层升级工程文档
+# 数据层设计与运行说明
 
-> **适用版本**：s08 数据层（单机单用户）
-> **文档位置**：`app/docs/data-layer.md`，同步至 `stages/s08-data-layer/docs/data-layer.md`
-> **读者**：略懂代码的初学者，需理解本期边界、改法原理及如何复现排查
+> **适用阶段**：s11，数据持久化、资源版本与任务调度
+> **读者**：略懂代码的初学者，需理解本阶段的数据层边界、设计原理及如何复现排查
 
-> **知识层设计基线**：[知识层架构方案](knowledge-layer-design.md)。复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。s09 已实现的具体范围见 [知识层实现说明](knowledge-implementation.md)，设计中的扩展项不等于已实现。
+> **知识层**复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。接口与运行方式见本阶段 [README](../README.md)。
 
 ---
 
@@ -18,13 +17,13 @@
 - **关系约束**：资源版本、来源声明、派生关系无法在文件层面强制
 - **持久调度交接**：旧实现能恢复 JSON 中的任务并暂停待核对执行，但缺少跨存储调度所需的事务 outbox 与补投机制
 
-PostgreSQL 解决的是这几个结构性缺陷，**不解决文件系统、模型存储、Redis 之间的跨系统原子性**——那类问题需要跨介质补偿机制，本期通过 outbox + PG 兜底处理。
+PostgreSQL 解决的是这几个结构性缺陷，**不解决文件系统、模型存储、Redis 之间的跨系统原子性**——那类问题需要跨介质补偿机制，本阶段通过 outbox + PG 兜底处理。
 
 Redis 不替代文件，而是加速任务调度唤醒：已落 PG 的 Thread ID 投入 Redis Set，消费者每 200ms 取出，真正的任务状态以 PG 为准。
 
-### 本期新增能力
+### 数据层能力
 
-除数据层替换外，本期也新增了以下能力：
+本阶段数据层提供以下能力：
 
 - 资源永久 ID（resourceId）和版本/谱系追踪（versionId、revision）
 - 来源声明与失效传播（read_file 返回版本 ID，write_file 接收 source_versions）
@@ -86,7 +85,7 @@ Redis 不替代文件，而是加速任务调度唤醒：已落 PG 的 Thread ID
 
 schema 中全部表：`users`（含 local-owner 占位）、`agent_versions`、`conversations`、`tasks`、`outbox`、`notifications`（任务终态记录）、`resources`、`resource_versions`、`dependencies`、`artifacts`、`preferences`、`imports`、`migrations`。
 
-企业外部订单等数据仍以外部系统为权威，受控连接器本期未接入。
+企业外部订单等数据仍以外部系统为权威，本阶段未接入受控连接器。
 
 ### 数据模块文件职责
 
@@ -323,10 +322,9 @@ async function writeFileWithProvenance(db, path, content, sourceVersions):
 
 ### 环境要求
 
-以下命令在项目目录执行；若运行 s08，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
+以下命令在本阶段目录执行。已有 `.env` 请保留，只补充数据库配置。
 
 ```bash
-cd app
 npm ci
 ```
 
@@ -383,11 +381,11 @@ npm run db:down    # 只停止容器，保留数据卷
 不要运行 `docker compose down -v`，这会删除数据库 volume。容器没有设置自动重启：重启电脑或 `colima stop` 之后，先 `colima start` 再 `npm run db:up`。
 
 ```bash
-# 建表与校验（app 目录）
+# 建表与校验（本阶段目录）
 npm run data:migrate   # 显式建表，仅此命令才执行 migration
 npm run data:check     # 确认 PG + Redis 连通，不访问模型
 
-# 启动服务（按各自 .env 模板：app 4317，s08 4314）
+# 启动服务（端口以本阶段 .env 模板为准）
 npm run server         # 后端
 npm start              # 在另一个终端执行：CLI 客户端
 ```
@@ -399,8 +397,6 @@ npm start              # 在另一个终端执行：CLI 客户端
 ---
 
 ## 数据迁移
-
-2026-10-31 本机切换记录：最初按方案 A 用了本机 Homebrew PostgreSQL 16 与 Redis，随后改用方案 B——容器映射到 55432 / 56379，因为 5432 / 6379 被本机其他项目的 Homebrew 服务占用；Homebrew 里为此建的 `agent` 库和角色已删除。迁移在 Docker 数据库上完成。旧 JSON 中的 23 条任务全部已完成，7 个会话里只有 1 个有 Agent 绑定，严格导入拒绝继续；按下文"无法导入时"的做法归档到 `.data/legacy-json-2026-10-31/`，没有导入、没有删除。
 
 ### 从旧 JSON 迁移
 
@@ -454,7 +450,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 | 命令 | 覆盖内容 |
 |---|---|
-| `npm test` | 单元/集成测试，project 和 s08 均已通过，具体数目以最终验收输出为准 |
+| `npm test` | 本阶段单元与离线回归；通过情况以实际命令输出为准 |
 | `npm run test:data` | 真实 PG/Redis/Codex/MCP/文件链路，新建临时集群、随机回环端口、不读 `.env`；含外部更新/删除按需失效、Redis 故障注入补投、JSON 迁移预检/幂等/冲突回滚 |
 | `npm run test:codex-tools` | Codex 工具，使用显式 test double 替代真实存储，不证明 PG 链路 |
 | `npm run test:codex-memory` | 原生记忆，原生合并功能仍 blocked |
@@ -463,24 +459,24 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `test:data` 为本机模拟，不声称真实网络断网演练，无真实 DeepSeek 端到端，无真实存量导入验收。
 
-演进目录的 `node verify.mjs --integration` 会执行 s01 至 s09 的测试及 s08 / s09 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
+演进目录的 `node verify.mjs --integration` 会执行各阶段测试及数据、工具和记忆集成检查；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
 
 ---
 
-## 方案审查与对抗审查
+## 能力与运行边界
 
-### 本期能力边界
+### 本阶段能力边界
 
-| 维度 | 本期已做 | 暂缓/未做 |
+| 维度 | 本阶段能力 | 能力边界 |
 |---|---|---|
 | 持久化 | PG 保存业务状态、任务输入、资源版本、偏好、通知终态 | 聊天正文全文搜索（仍原生）|
 | 调度 | outbox + Redis Set + CAS claim，重启可从 PG 补投 | 分布式多 worker |
-| 资源追踪 | resourceId/versionId/revision，按需失效传播 | Wiki 后台生成、自动索引构建、向量 RAG |
+| 资源追踪 | resourceId/versionId/revision，按需失效传播；版本化 Wiki 与可选 Chroma + BM25 | 无后台自动 Wiki 更新或自动索引重建 |
 | 来源声明 | write_file source_versions 可选登记 | 自动捕获所有依赖 |
-| 身份 | instanceId/ownerId 应用层隔离 | 账号注册/密码登录/Redis 登录态（另期设计）|
-| 多用户安全 | 资源归属校验（owner/instance）| DB RLS、OS 级隔离、多用户执行环境独立（另期设计）|
-| 外部连接器 | 本期未接入 | 外部订单等继续保持原系统权威（另期接入）|
-| 原生记忆生成 | 测试用例存在 | 功能仍 blocked，非本期验收 |
+| 身份 | instanceId/ownerId 应用层隔离 | 账号注册/密码登录/Redis 登录态（本阶段不提供）|
+| 多用户安全 | 资源归属校验（owner/instance）| DB RLS、OS 级隔离、多用户执行环境独立（本阶段不提供）|
+| 外部连接器 | 本阶段未接入 | 外部订单等数据以原系统为权威 |
+| 原生记忆生成 | 测试用例存在 | 完整生成链路未验收 |
 
 ### 风险、实际处理与尚存边界
 
@@ -492,8 +488,8 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 | advisory lock 丢失 | heartbeat 专用连接检测到断开，立即停调度并关闭 Codex | 合作式锁，DB 管理员可绕过 |
 | 旧数据导入不兼容 | 导入设 paused，unconfirmed 需人工核查，不自动继续 | 旧会话可能与新代码 hash 不兼容，需 /new |
 | 孤立 blob 积累 | 保留不删；`reconcile` 只处理已登记 pending | 未登记 blob 需要另行盘点，不提供自动垃圾回收 |
-| 多用户/多租户访问 | 当前仅单用户 local-owner，应用层 owner 校验 | 多用户安全、RLS、账号体系均另期设计 |
-| 索引/Wiki/RAG | 文件版本与声明依赖可供后续复用 | 尚无检索后端或索引构建任务 |
+| 多用户/多租户访问 | 当前仅单用户 local-owner，应用层 owner 校验 | 本阶段不提供账号体系、数据库 RLS 或独立用户运行环境 |
+| 索引/Wiki/RAG | Wiki 与可选 Chroma + BM25 复用文件版本和来源依赖 | 索引需手动构建；语义质量需单独验收 |
 
 ### 数据备份分类
 
@@ -523,7 +519,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `DATABASE_URL`、`REDIS_URL`、`AGENT_DB_PASSWORD`、`REDIS_PASSWORD` 和 `PG*` 凭据不传给 Codex。`GET/POST /preferences` 保存显式偏好，但返回 `injectedIntoContext: false`，不自动拼入 prompt。原生长期记忆完整生成链路仍未验收；通知目前只记录任务终态，不包含推送中心。
 
-本次代码升级没有改动用户真实 `.env`、存量 workspace 或 Codex 历史，也没有代替用户执行存量导入、启动长期数据库服务或配置自动备份。
+存量数据导入、数据库服务启动和自动备份配置均需由操作者显式执行。
 
 ### 旧兼容层
 

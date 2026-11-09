@@ -123,3 +123,25 @@ auth:init 停服执行：保留原 owner UUID，创建首个 admin，移动旧 i
 ## 机制实验
 
 [四个离线实验](../lessons/README.md) 分别观察哈希验证、登出后的 401、跨用户 404，以及缺少 ownerId 的事件不推送。实验运行实际断言，不把预期输出当成通过记录。
+
+## 关键数值与实现细节
+
+章节 README 只讲概念；账号、令牌、限流的具体数值与实现细节集中在这里。
+
+**账号与角色。** 管理员通过本机命令创建账号，没有注册、邮箱、找回密码或 Web 登录页。用户名规范化为小写，技术角色只有 `admin` / `user`。admin 也不能读取其他用户的资源；资源范围与权益留到 s15。
+
+**密码与令牌分开。** 密码使用 Node 内置 scrypt：`N=2^15, r=8, p=1`，每次生成 16 字节盐，验证使用恒定时间比较。未知用户名也执行一次 scrypt，登录失败统一返回“用户名或密码错误”。不添加依赖，不实现 JWT。
+
+登录成功后返回 `randomBytes(32)` 生成的 base64url 不透明令牌，数据库只存它的 SHA-256。令牌绝对有效期为 **7 天**，闲置 **12 小时**失效；每次请求最多每 **1 分钟**更新一次 last_seen_at。没有 refresh。登出、改密码、禁用账号都会吊销该用户的**全部令牌**，下一次请求查库时立即生效。
+
+**身份随执行传递。** HTTP 验证令牌后，AsyncLocalStorage 携带 `{ userId, role, authSessionId }`。数据库查询按当前 owner 过滤，缓存命中也要核对归属。后台 outbox、worker 和工具回调从任务或会话记录取得 owner，不从触发调度的请求猜身份。资源不存在与不属于当前用户统一返回 **404 NOT_FOUND**。
+
+**事件与文件也要有归属。** SSE 订阅绑定用户，事件必须带 ownerId；缺少 ownerId 就丢弃并警告。实时推送和断线补发都过滤 owner。文件工具的物理根是 `workspace/users/<ownerId>/`，目录按需创建、权限 0700；数据库 locator 仍是相对路径，同名路径可以分别属于不同用户。Codex 进程 cwd 不变。
+
+**限流。** 登录接口按“用户名+实际来源”限制 **5 次失败/15 分钟**，按来源限制 **20 次/15 分钟**；超出返回 429 和 Retry-After。已登录业务请求按 userId 限制 **120 次/分钟**，未认证请求按来源。`/health`、`/ready` 免认证；带 Origin 的请求仍拒绝。认证响应使用 `Cache-Control: no-store`。
+
+### 首次部署与账号初始化
+
+首次 `deploy` 只启动 PostgreSQL、Redis 和 gateway，用 agent 镜像的一次性容器迁移数据库、准备目录并查询账号状态。没有启用账号时不启动 agent，以 0 退出并清除 `.deploy-pending`，此时尚无 `/ready`。`auth-init` 成功后才启动 agent 并注册开机启动，输出包含 `"status":"ready"` 的 JSON。后续 `deploy` 检测到启用账号后会正常启动 agent 并检查 `/ready`。
+
+`auth-init` 通过 SSH TTY 在一次性容器里运行 `npm run auth:init`，把 identity.json 中原 owner 设为第一个 admin。旧会话与知识库归属不变，顶层 inputs/research/drafts/outputs 移入该 admin 的用户目录。已初始化时拒绝重入，远程命令仍确保 agent 已启动并输出 `/ready`；其他错误不会忽略。已有数据升级时，先停服、备份，再执行迁移与初始化；不要先在目标用户目录填入同名资料。

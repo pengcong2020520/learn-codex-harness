@@ -1,10 +1,9 @@
-# 数据层升级工程文档
+# 数据层设计与运行说明
 
 > **适用版本**：s14 数据层与账号作用域；数据库基础结构沿用既有数据层。
-> **文档位置**：`app/docs/data-layer.md`，同步至 `stages/s08-data-layer/docs/data-layer.md`
-> **读者**：略懂代码的初学者，需理解本期边界、改法原理及如何复现排查
+> **读者**：略懂代码的初学者，需理解本阶段的数据层边界、设计原理及如何复现排查
 
-> **知识层设计基线**：[知识层架构方案](knowledge-layer-design.md)。复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。s09 已实现的具体范围见 [知识层实现说明](knowledge-implementation.md)，设计中的扩展项不等于已实现。
+> **知识层**复用本文数据层与 Codex 原生执行，通过通用权限门禁统一授权；资源模块负责版本与来源，Wiki 更新校验通过后自动生效，可选 RAG。接口与运行方式见本阶段 [README](../README.md)。
 
 ---
 
@@ -18,13 +17,13 @@
 - **关系约束**：资源版本、来源声明、派生关系无法在文件层面强制
 - **持久调度交接**：旧实现能恢复 JSON 中的任务并暂停待核对执行，但缺少跨存储调度所需的事务 outbox 与补投机制
 
-PostgreSQL 解决的是这几个结构性缺陷，**不解决文件系统、模型存储、Redis 之间的跨系统原子性**——那类问题需要跨介质补偿机制，本期通过 outbox + PG 兜底处理。
+PostgreSQL 解决的是这几个结构性缺陷，**不解决文件系统、模型存储、Redis 之间的跨系统原子性**——那类问题需要跨介质补偿机制，本阶段通过 outbox + PG 兜底处理。
 
 Redis 不替代文件，而是加速任务调度唤醒：已落 PG 的 Thread ID 投入 Redis Set，消费者每 200ms 取出，真正的任务状态以 PG 为准。
 
-### 本期新增能力
+### 数据层能力
 
-除数据层替换外，本期也新增了以下能力：
+本阶段数据层提供以下能力：
 
 - 资源永久 ID（resourceId）和版本/谱系追踪（versionId、revision）
 - 来源声明与失效传播（read_file 返回版本 ID，write_file 接收 source_versions）
@@ -86,7 +85,7 @@ Redis 不替代文件，而是加速任务调度唤醒：已落 PG 的 Thread ID
 
 schema 中全部表：`users`（含 local-owner 占位）、`agent_versions`、`conversations`、`tasks`、`outbox`、`notifications`（任务终态记录）、`resources`、`resource_versions`、`dependencies`、`artifacts`、`preferences`、`imports`、`migrations`。
 
-企业外部订单等数据仍以外部系统为权威，受控连接器本期未接入。
+企业外部订单等数据仍以外部系统为权威，本阶段未接入受控连接器。
 
 ### 数据模块文件职责
 
@@ -321,86 +320,13 @@ async function writeFileWithProvenance(db, path, content, sourceVersions):
 
 ## 安装与运行
 
-### 环境要求
+本阶段使用独立部署配置。环境变量、数据库与 Redis、启动和备份命令见 [生产部署说明](production.md)；章节运行入口见 [README](../README.md)。
 
-以下命令在项目目录执行；若运行 s08，改为进入它自己的目录。已有 `.env` 请保留，只补充数据库配置。
-
-```bash
-cd app
-npm ci
-```
-
-- Node.js 24+，`npm ci` 安装依赖
-- PostgreSQL 16 + Redis 7.4（本机二进制或 Docker）
-
-PG 和 Redis 必须在 Codex 启动之前可连接，否则服务报错退出。
-
-### 方案 A：本机已安装 PostgreSQL / Redis（如 Homebrew）
-
-装好并启动服务（`brew services start postgresql@16 redis`）只解决了"有数据库"，服务还需要知道连哪个库。为本项目单独建角色和库，不要用超级用户：
-
-```bash
-pg_isready && redis-cli ping            # 确认两个服务都在运行
-createuser --login --pwprompt agent     # 设置 agent 的密码
-createdb -O agent agent
-```
-
-编辑 `.env`，补充两行（密码含特殊字符时要 percent-encoding，如 `@` → `%40`；Redis 已被其他项目占用 db0 时可以换一个库号）：
-
-```dotenv
-DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:5432/agent
-REDIS_URL=redis://127.0.0.1:6379/1
-```
-
-然后执行下文的 `npm run data:migrate` 与 `npm run data:check`。
-
-只想跑数据层集成测试时不需要这些配置：`npm run test:data` 会用本机的 `initdb` / `pg_ctl` / `redis-server` 新建临时集群，不读 `.env`，测试结束即删除。
-
-### 方案 B：Docker Compose（推荐）
-
-先启动 Docker Desktop 或 Colima（`colima start`）。`compose.yaml` 的项目名固定为 `codex-harness-app`，数据卷为 `codex-harness-app_postgres-data` 等，不会和其他同名目录混用。
-
-> Homebrew 安装的 `docker` 默认不带 `docker compose` 插件。若提示 `unknown command: docker compose`，在 `~/.docker/config.json` 里加 `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`。
-
-`docker compose` 会自动读取本目录的 `.env` 做变量替换，所以容器密码和端口都写在 `.env` 里（尖括号内容为占位说明）：
-
-```dotenv
-AGENT_DB_PASSWORD=<你自己设置的强密码>
-# 本机 5432 / 6379 已被其他服务占用时改端口；不设置就用默认值
-AGENT_PG_PORT=55432
-AGENT_REDIS_PORT=56379
-DATABASE_URL=postgresql://agent:<URL编码后的密码>@127.0.0.1:55432/agent
-REDIS_URL=redis://127.0.0.1:56379/0
-```
-
-> 如果密码含特殊字符，需对密码部分做 percent-encoding（如 `@` → `%40`）。`AGENT_DB_PASSWORD` 只在数据卷第一次初始化时生效，之后改它不会改变已有数据库的密码。
-
-```bash
-npm run db:up      # docker compose up -d --wait postgres redis，等到健康检查通过
-npm run db:down    # 只停止容器，保留数据卷
-```
-
-不要运行 `docker compose down -v`，这会删除数据库 volume。容器没有设置自动重启：重启电脑或 `colima stop` 之后，先 `colima start` 再 `npm run db:up`。
-
-```bash
-# 建表与校验（app 目录）
-npm run data:migrate   # 显式建表，仅此命令才执行 migration
-npm run data:check     # 确认 PG + Redis 连通，不访问模型
-
-# 启动服务（按各自 .env 模板：app 4317，s08 4314）
-npm run server         # 后端
-npm start              # 在另一个终端执行：CLI 客户端
-```
-
-`app/` 和 `s08-data-layer/` 可共享同一组 PG/Redis，但不要各自启动独立 Compose 争抢 5432/6379 端口。各目录分别执行 `data:migrate`/`data:check`，instanceId 自动独立。
-
-已运行的服务请先停止并备份，再执行迁移；不要在运行中服务上自动迁移。
+数据迁移前停止业务服务并备份；不要在运行中的服务上自动迁移。
 
 ---
 
 ## 数据迁移
-
-2026-10-31 本机切换记录：最初按方案 A 用了本机 Homebrew PostgreSQL 16 与 Redis，随后改用方案 B——容器映射到 55432 / 56379，因为 5432 / 6379 被本机其他项目的 Homebrew 服务占用；Homebrew 里为此建的 `agent` 库和角色已删除。迁移在 Docker 数据库上完成。旧 JSON 中的 23 条任务全部已完成，7 个会话里只有 1 个有 Agent 绑定，严格导入拒绝继续；按下文"无法导入时"的做法归档到 `.data/legacy-json-2026-10-31/`，没有导入、没有删除。
 
 ### 从旧 JSON 迁移
 
@@ -454,7 +380,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 | 命令 | 覆盖内容 |
 |---|---|
-| `npm test` | 单元/集成测试，project 和 s08 均已通过，具体数目以最终验收输出为准 |
+| `npm test` | 本阶段单元与离线回归；通过情况以实际命令输出为准 |
 | `npm run test:data` | 真实 PG/Redis/Codex/MCP/文件链路，新建临时集群、随机回环端口、不读 `.env`；含外部更新/删除按需失效、Redis 故障注入补投、JSON 迁移预检/幂等/冲突回滚 |
 | `npm run test:codex-tools` | Codex 工具，使用显式 test double 替代真实存储，不证明 PG 链路 |
 | `npm run test:codex-memory` | 原生记忆，原生合并功能仍 blocked |
@@ -463,24 +389,24 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `test:data` 为本机模拟，不声称真实网络断网演练，无真实 DeepSeek 端到端，无真实存量导入验收。
 
-演进目录的 `node verify.mjs --integration` 会执行 s01 至 s09 的测试及 s08 / s09 数据集成验收；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
+演进目录的 `node verify.mjs --integration` 会执行各阶段测试及数据、工具和记忆集成检查；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
 
 ---
 
-## 方案审查与对抗审查
+## 能力与运行边界
 
-### 本期能力边界
+### 本阶段能力边界
 
-| 维度 | 本期已做 | 暂缓/未做 |
+| 维度 | 本阶段能力 | 能力边界 |
 |---|---|---|
 | 持久化 | PG 保存业务状态、任务输入、资源版本、偏好、通知终态 | 聊天正文全文搜索（仍原生）|
 | 调度 | outbox + Redis Set + CAS claim，重启可从 PG 补投 | 分布式多 worker |
-| 资源追踪 | resourceId/versionId/revision，按需失效传播 | Wiki 后台生成、自动索引构建、向量 RAG |
+| 资源追踪 | resourceId/versionId/revision，按需失效传播；版本化 Wiki 与可选 Chroma + BM25 | 无后台自动 Wiki 更新或自动索引重建 |
 | 来源声明 | write_file source_versions 可选登记 | 自动捕获所有依赖 |
-| 身份 | instanceId/ownerId 应用层隔离 | 账号注册/密码登录/Redis 登录态（另期设计）|
-| 多用户安全 | 资源归属校验（owner/instance）| DB RLS、OS 级隔离、多用户执行环境独立（另期设计）|
-| 外部连接器 | 本期未接入 | 外部订单等继续保持原系统权威（另期接入）|
-| 原生记忆生成 | 测试用例存在 | 功能仍 blocked，非本期验收 |
+| 身份 | accounts 密码登录，PG 保存登录令牌哈希与会话，按认证 owner 访问资源 | 无公开自助注册；账号由管理命令创建 |
+| 多用户安全 | 认证 owner、独立 CODEX_HOME/App Server 与 Linux uid 文件隔离 | 无数据库 RLS；不隔离 CPU、内存和网络 |
+| 外部连接器 | 本阶段未接入 | 外部订单等数据以原系统为权威 |
+| 原生记忆生成 | 测试用例存在 | 完整生成链路未验收 |
 
 ### 风险、实际处理与尚存边界
 
@@ -492,8 +418,8 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 | advisory lock 丢失 | heartbeat 专用连接检测到断开，立即停调度并关闭 Codex | 合作式锁，DB 管理员可绕过 |
 | 旧数据导入不兼容 | 导入设 paused，unconfirmed 需人工核查，不自动继续 | 旧会话可能与新代码 hash 不兼容，需 /new |
 | 孤立 blob 积累 | 保留不删；`reconcile` 只处理已登记 pending | 未登记 blob 需要另行盘点，不提供自动垃圾回收 |
-| 多用户/多租户访问 | accounts 登录、应用层 owner 校验、SSE 和工具目录隔离 | DB RLS、按用户的运行环境仍未实现 |
-| 索引/Wiki/RAG | 文件版本与声明依赖可供后续复用 | 尚无检索后端或索引构建任务 |
+| 多用户/多租户访问 | accounts 登录、owner 校验、独立用户运行环境与 uid 文件隔离 | 无数据库 RLS；不隔离 CPU、内存与网络 |
+| 索引/Wiki/RAG | Wiki 与可选 Chroma + BM25 复用文件版本和来源依赖 | 索引需手动构建；语义质量需单独验收 |
 
 ### 数据备份分类
 
@@ -519,11 +445,11 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 ## 安全边界与旧兼容层
 
-当前 users 记录账号与角色，auth_sessions 保存登录令牌哈希；登录 Session 不存 Redis，没有数据库 RLS。Compose 中的 PG 用户是本地引导管理员，Redis 无认证且只映射回环端口；不能直接当成公网生产配置。数据库超级管理员、同 OS 用户或恶意工具模块不受应用层范围检查保护。
+当前 users 记录账号与角色，auth_sessions 保存登录令牌哈希；登录 Session 不存 Redis，没有数据库 RLS。Compose 的认证、网络与运维连接边界见 [生产部署说明](production.md)。数据库超级管理员、同 OS 用户或恶意工具模块不受应用层范围检查保护。
 
 `DATABASE_URL`、`REDIS_URL`、`AGENT_DB_PASSWORD`、`REDIS_PASSWORD` 和 `PG*` 凭据不传给 Codex。`GET/POST /preferences` 保存显式偏好，但返回 `injectedIntoContext: false`，不自动拼入 prompt。原生长期记忆完整生成链路仍未验收；通知目前只记录任务终态，不包含推送中心。
 
-本次代码升级没有改动用户真实 `.env`、存量 workspace 或 Codex 历史，也没有代替用户执行存量导入、启动长期数据库服务或配置自动备份。
+存量数据导入、数据库服务启动和自动备份配置均需由操作者显式执行。
 
 ### 旧兼容层
 

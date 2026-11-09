@@ -49,4 +49,4 @@
 .rail-course-links{display:flex;gap:18px;padding:0 4px;font-size:11px;line-height:18px}.rail-course-links a{color:#cbd7c8;text-decoration:none}.rail-course-links a:hover{text-decoration:underline}
 @media(min-width:741px){.rail-bottom{height:84px;min-height:84px;max-height:84px}}
 /* 十九个阶段在较矮桌面窗口中保留全部导航与底部课程入口。 */
-@media(min-width:741px){.stages .stage{height:24px;min-height:24px;max-height:24px;line-height:24px;margin:1px 0}.stages .stage>span:last-child,.stages .stage strong{height:24px;line-height:24px}.stages .stage-no{height:22px}}
+@media(min-width:741px){.stages .stage{height:24px;min-height:24px;max-height:24px;line-height:24px;margin:0}.stages .stage>span:last-child,.stages .stage strong{height:24px;line-height:24px}.stages .stage-no{height:22px}}

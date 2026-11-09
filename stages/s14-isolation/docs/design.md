@@ -101,3 +101,22 @@ onTool(connectionOwner, thread, turn):
 ## 机制实验
 
 运行 `npm run lesson -- list`。三个离线实验分别检验 owner 路由（包括后台通知）、第 5 个运行环境的回收与全忙 503、用户进程崩溃隔离。实验执行实际测试并以退出码判断，模拟部分和外部验收边界写在每个实验中。
+
+## 关键数值与实现细节
+
+章节 README 只讲概念；用户运行环境的具体约定集中在这里。
+
+| 概念 | 本章约定 |
+| --- | --- |
+| 身份映射 | `user_runtimes` 保存 user_id、uid、codex_home、created_at；以 instance_id 区分数据实例 |
+| 系统用户 | uid 从 10001 顺序分配，gid 与 uid 同号；不依赖 `/etc/passwd` |
+| 原生状态 | 新用户 `.data/users/<id>/codex`；第一个 admin 保留 `.data/codex` 的绝对路径 |
+| 工作区与日志 | `workspace/users/<id>`、`.runs/users/<id>/app-server-*` |
+| 文件边界 | 用户目录为该用户 uid 所有，服务共享组 gid 1000，模式 2770；用户子进程不加入共享组 |
+| 池容量 | 最多 4 个进程，启动中的进程也占名额 |
+| 空闲 | 没有执行中轮次、没有排队任务，且 10 分钟无请求；处理中请求持有租约 |
+| 容量不足 | 回收最久未用且空闲的进程；全部忙则 503 `RUNTIME_BUSY`，`Retry-After: 10` |
+| 启动与失败 | 同一用户 single-flight，启动超时 30 秒；失败不成为可用连接 |
+| 故障处理 | 崩溃或禁用只关闭该用户进程，其执行中任务待核对；不自动重发 |
+
+`2770` 中的 setgid 使新文件继承服务共享组。容器服务以 `0:1000` 运行，删除全部 capability 后只加回 SETUID、SETGID、CHOWN、FOWNER，并设置 no-new-privileges。没有 DAC_OVERRIDE，服务读写仍须满足权限位。系统父目录只开放穿越，用户边界目录不开放其他用户访问。

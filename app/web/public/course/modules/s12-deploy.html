@@ -2,26 +2,23 @@
 <div class="module-content">
 <header class="module-header animate-in">
 <span class="module-number">s12</span>
-<h2 class="module-title">部署单元：健康、就绪与可恢复状态</h2>
-<p class="module-subtitle">用独立 Compose 交付运行环境，用就绪探测和容量限制守住入口，用固定路径与停服备份保留恢复依据。</p>
+<h2 class="module-title">上云部署：没人看着，也能启动与恢复</h2>
+<p class="module-subtitle">交付固定的运行环境，分清活着与就绪；接不过来就拒绝，关闭和恢复都有依据。</p>
 </header>
 <div class="module-body">
 <section class="screen animate-in" id="s12-screen-1">
-<h2 class="screen-heading">交付一个部署单元，明确进程与数据的归属</h2>
-<p>已有的 Agent 可以组织任务、使用工具和知识、执行 Workflow，并通过模型网关选择模型。让它在服务器上持续工作，还需要回答几件具体的事：运行环境怎样复现，服务什么时候能接任务，退出后由谁重新启动，数据库和原生历史放在哪里，升级失败以后能恢复到什么状态。本章把这些责任收进一套独立部署，不改变 Codex 的推理与工具执行循环。</p>
+<h2 class="screen-heading">交付物是镜像，代码和数据分开放</h2>
+<p>上一章，云端 Agent 已能聊天、使用工具和知识、执行工作流，并由模型网关管理模型。但它还依赖你的电脑：电脑合上，服务就停了。本章把它交给没人看着的服务器，补上启动、持久化、容量和恢复的责任。</p>
 <figure class="architecture-figure"><a href="/course/assets/s12-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S12 总架构 SVG 大图"><img src="/course/assets/s12-architecture.svg" width="1600" height="1192" alt="S12 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>部署层增加就绪检查、容量限制与关闭机制；已有任务、数据和模型执行仍各自承担原有职责。点击查看大图。</figcaption></figure>
-<p><span class="term" data-definition="把固定镜像、容器依赖、持久化挂载、启动与关闭、备份恢复共同作为可交付的运行单位。">部署单元</span> 包含 postgres、redis、gateway、agent 四个服务。PostgreSQL 保存业务事实，Redis 承担队列唤醒，Bifrost 承接模型请求，agent 运行既有服务。只有 agent 发布宿主回环端口；客户端使用 SSH 隧道进入。它不加入 app 的共享 stages 容器，也不登记为工作台默认实时目标。</p>
-<table><thead><tr><th>边界</th><th>本章负责什么</th><th>仍需保留的依据</th></tr></thead><tbody><tr><td>Codex</td><td>管理 Thread、Turn、上下文与工具执行。</td><td>原生 SQLite / JSONL 历史与固定路径。</td></tr><tr><td>Agent 服务</td><td>判断就绪，限制排队、执行和连接，关闭时保存不确定状态。</td><td>PostgreSQL 任务记录、执行器与队列状态。</td></tr><tr><td>Compose / Docker</td><td>固定服务版本、依赖健康、挂载与退出重启。</td><td>镜像、锁文件、卷与宿主目录。</td></tr><tr><td>宿主 Bash / systemd</td><td>开机启动、远程部署、停服备份和恢复。</td><td>部署版本、成功备份、权限与操作结果。</td></tr></tbody></table>
-<p>镜像固定 Node 版本和 digest，按 npm 锁文件安装依赖，使用非 root 的 node 用户。Agent 镜像额外安装 lsof 和 bubblewrap；数据库转储使用正在运行的 postgres 容器，不要求在 Agent 镜像里安装 PostgreSQL 客户端。构建可以配置 NPM_REGISTRY 与 APT_MIRROR，配置改变镜像下载来源，不改变服务的责任。</p>
-<p>PostgreSQL 和 Redis 使用命名卷；<code>.data</code>、<code>.runs</code>、<code>workspace</code> 和 <code>backups</code> 使用宿主目录挂载。代码和镜像可以替换，持久状态需要保留。正文、产物与原生历史都不应该因为容器重建而消失。部署脚本不会把镜像当成数据备份，也不会把删除数据卷作为日常停止方式。</p>
-<p><span class="term" data-definition="CONTAINER_APP_DIR 与宿主部署目录一致且保持不变；Codex 原生历史中的绝对路径依赖这一约定。">固定路径</span> 是恢复契约。<code>CONTAINER_APP_DIR</code> 必须等于宿主部署目录，容器内工作位置保持一致。使用带时间戳的新目录运行下一版代码，看起来便于保留版本，却会改变历史引用的位置。本章在固定位置替换代码与镜像；要转移原生历史，需要连同原路径保持一致，没有实现跨路径历史改写。</p>
-<p>密钥保存在权限为 600 的宿主 .env，Compose 按服务列出变量。服务商密钥只交给 gateway；agent 获得访问网关的凭据和自己的数据库配置，通过不含密钥的服务商名称清单判断模型可用范围。生成配置保存环境变量引用，镜像和命令参数不包含密钥正文。实例身份和正文属于恢复数据，服务商密钥则需要另行妥善保管。</p>
-<p>每个服务采用 json-file 日志轮转，单文件 10m、保留 3 个。默认内存分别为 PostgreSQL 256m、Redis 128m、gateway 256m、agent 768m，可通过对应的 MEMORY_LIMIT 变量覆盖。这些是容器资源边界，不能替代应用层的任务并发和请求限制。文件产物仍在 workspace；本章没有接入对象存储。</p>
+<p>在本机能跑，依赖的是本机的 Node、依赖和系统工具。镜像把这些固定下来，换机器也能得到同一运行环境。<span class="term" data-definition="把固定镜像、容器依赖、持久化挂载、启动与关闭、备份恢复共同作为可交付的运行单位。">部署单元</span>把 PostgreSQL、Redis、网关和 Agent 的镜像与依赖关系写进同一份 Compose 配置；Codex 仍负责每轮执行，Compose 与 systemd 负责启动和退出后的恢复。</p>
+<p>镜像可以替换，数据不能跟着消失。数据库和 Redis 使用独立数据卷；会话历史、运行目录、资料产物和备份挂载在宿主机上。升级换代码与镜像，持久状态原地保留。</p>
+<p><span class="term" data-definition="CONTAINER_APP_DIR 与宿主部署目录一致且保持不变；Codex 原生历史中的绝对路径依赖这一约定。">固定路径</span>是一份持久化契约：Codex 原生历史记录绝对路径，容器内与宿主机的部署路径必须一致。回滚也在同一路径替换代码，否则旧会话找不到历史记录的位置。</p>
+<p>密钥只放在权限为 600 的宿主 .env 中，镜像不带密钥。各服务只取自己需要的凭据：服务商密钥留在网关，Agent 只取网关访问密钥和自己的数据库配置。构建、资源与部署参数见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
 </section>
-
 <section class="screen animate-in" id="s12-screen-2">
-<h2 class="screen-heading">依赖健康决定启动顺序，/ready 判断当前能否接任务</h2>
-<p>启动顺序解决的是“后续进程什么时候开始”，就绪检查解决的是“现在是否可以工作”。gateway 等待 postgres 健康，agent 等待 postgres、redis 和 gateway 健康。数据库、Redis、网关各有自己的探针，agent 的探针执行 <code>deploy/ready.mjs</code>。下面是 agent 的依赖与 healthcheck 原文。</p>
+<h2 class="screen-heading">活着，不等于能接活</h2>
+<p>健康检查问“进程还活着吗”，就绪检查问“依赖与执行器能接任务吗”。数据库或网关断开时，HTTP 仍可能响应；把这两个问题分开，入口才能停止向暂时不能工作的服务派发请求。</p>
+<p>Compose 按依赖健康决定启动顺序。下面的配置让 Agent 等依赖就绪后启动，但运行途中依赖失效，还需要服务持续检查自己的状态。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/compose.yaml · 第 110–118 行</span>
 <pre><code data-source="stages/s12-deploy/compose.yaml" data-start="110" data-end="118">    depends_on:
       postgres: { condition: service_healthy }
@@ -33,8 +30,7 @@
       timeout: 10s
       retries: 20</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">gateway 的依赖条件是 service_healthy；同一 depends_on 段还包含 postgres 和 redis。</p><p class="tl">agent 的探针执行 Node 脚本，周期 5 秒、超时 10 秒、最多重试 20 次。</p><p class="tl">这些条件约束启动时机。依赖在运行途中失效时，Compose 不会持续按依赖图重新排布全部服务。</p></div></div></div>
-<p>四个服务都采用 <code>restart: unless-stopped</code> 和 30 秒停止宽限。systemd 负责开机执行 Compose；Docker restart policy 处理进程退出后的重新启动。容器标为 unhealthy 并不等于进程已经退出，也不会仅凭这个标记自动重启。排障时要分别查看进程、健康结果和业务就绪结果，不能把它们当成同一个状态。</p>
-<p><code>/health</code> 只返回 HTTP 进程的存活事实，状态为 alive；<code>/ready</code> 核对数据库、网关、模型目录以及执行相关状态，不能接任务时返回 503。两个接口都返回 version，读取 REVISION，没有文件时为 dev；它们不需要连接令牌，不扣请求额度，也不输出凭据。</p>
+<p><code>/health</code>只报告存活；<code>/ready</code>核对数据库、网关、模型目录和调度状态，任一条件不满足就返回 503。进程退出由重启策略处理，容器标记 unhealthy 本身不会触发重启。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 24–34 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="24" data-end="34">export function createReadiness({ config, data, messages, tools, fetcher = fetch, stopping = () =&gt; false }) {
   const version = revision(config.root);
@@ -53,29 +49,26 @@
         const result = await ready();
         return json(result.status === &#x27;ready&#x27; ? 200 : 503, result);</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">HTTP handler 等待就绪检查，并把 ready 映射为 200、其余映射为 503。</p><p class="tl">这个分支在入口请求限流之前；健康诊断不会因普通请求额度用完而被挡住。</p></div></div></div>
-<table><thead><tr><th>运行情形</th><th>/health</th><th>/ready</th><th>能得出的结论</th></tr></thead><tbody><tr><td>依赖与执行器都正常</td><td>200</td><td>200</td><td>本次探测满足已实现的就绪条件。</td></tr><tr><td>网关不可用，HTTP 仍存活</td><td>200</td><td>503</td><td>进程仍能响应，模型依赖尚未就绪。</td></tr><tr><td>Redis 队列不健康</td><td>200</td><td>503</td><td>任务事实仍在数据库，需要恢复调度通道。</td></tr><tr><td>启动失败，HTTP 尚未打开</td><td>连接失败</td><td>连接失败</td><td>没有可用的 HTTP 探测入口。</td></tr></tbody></table>
-<p>外部验收可以停止 gateway，确认 /ready=503 而 /health=200，再恢复网关并重查。离线实验通过真实 handler 和依赖夹具验证分支，不能证明容器网络、实际数据库、模型服务商和部署机器已经可用。就绪检查也不保证供应商余额充足、指定模型开通或下一轮一定成功。</p>
+<p>例如停掉网关，HTTP 仍存活时应看到 <code>/health=200</code>、<code>/ready=503</code>；恢复依赖后再核对就绪。就绪只说明本次探测满足条件，不保证模型额度、响应质量或下一轮成功。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">不要把一次健康检查扩大成服务质量承诺</p><p>Compose 的依赖健康是启动条件；/ready 是当前运行状态检查；真实模型调用还要验证鉴权、额度和响应。三种证据分别保留，故障时才能知道是哪一层不满足条件。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-3">
-<h2 class="screen-heading">接多少、做多少、连多少：四个容量边界</h2>
-<p>服务长期运行后，一次请求所占的资源并不一样。普通 HTTP 请求可能很快结束；SSE 可以保持连接；数据库中的 queued 任务等待执行；一个运行中的模型轮次可能持续较久。只限制请求频率不能限制活动轮次数，只限制轮次又挡不住连接耗尽。因此部署配置分别给出四个上限。</p>
+<h2 class="screen-heading">接不过来就明确拒绝</h2>
+<p>背压是在资源耗尽前限制工作进入，避免把所有请求都接下后一起变慢、一起失败。执行轮次、排队任务、请求频率和长连接占用不同资源，因此需要分别设上限。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 13–16 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="13" data-end="16">    maxConcurrentTurns: integer(&#x27;AGENT_MAX_CONCURRENT_TURNS&#x27;, 2),
     maxQueued: integer(&#x27;AGENT_MAX_QUEUED&#x27;, 200),
     rateLimit: integer(&#x27;AGENT_RATE_LIMIT_PER_MINUTE&#x27;, 120),
     maxSse: integer(&#x27;AGENT_MAX_SSE&#x27;, 20),</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">每个配置值先经过正整数校验；非法值会在启动配置阶段报错。</p><p class="tl">maxConcurrentTurns 限制新轮次派发，maxQueued 限制进入排队，rateLimit 约束每个来源窗口，maxSse 限制全局连接名额。</p><p class="tl">修改一项不意味着其余三项跟着改变。容量应按实际资源分别安排。</p></div></div></div>
-<table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后的行为</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued，等待执行名额。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>新入队操作返回 429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>超频返回 429 RATE_LIMITED 与 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>满额返回 429 SSE_FULL，Retry-After 为 5 秒。</td></tr></tbody></table>
-<p>任务创建、用户确认和 Workflow 再排队都会进入同一个数据库容量门禁。仓储在事务里先获取实例级 advisory lock，再检查全局和本会话 queued 数量。检查与写入共享事务边界，避免两个并发请求都看到“还剩一个位置”，最后同时入队。等待确认和提议没有算入 queued 容量；确认进入队列时才需要重新过门禁。</p>
-<p>调度器全局串行扫描，按 tasks.sequence 查找可执行任务，并保留已有的会话内追加优先语义。跨会话的活动轮次达到默认 2 个时，不继续开启新轮次。已有活动 Turn 的追加走 steer，不额外占用新轮次名额。暂停会话和预算不足的任务不阻塞其他可执行会话，因此这里不承诺一个阻塞所有会话的严格总 FIFO。</p>
+<table><thead><tr><th>资源</th><th>默认上限</th><th>达到上限后</th></tr></thead><tbody><tr><td>活动轮次</td><td>跨会话 2 个</td><td>后续任务保持 queued。</td></tr><tr><td>排队任务</td><td>全局 200；单会话 100</td><td>429 QUEUE_FULL。</td></tr><tr><td>HTTP 请求</td><td>每个令牌与实际来源组合每 60 秒 120 次</td><td>429 RATE_LIMITED，附 Retry-After。</td></tr><tr><td>SSE 连接</td><td>全局 20 个</td><td>429 SSE_FULL，5 秒后再试。</td></tr></tbody></table>
+<p>入队检查和写入在同一数据库事务中串行完成，防止并发请求抢到同一个空位。新建、确认、Workflow 再排队都过这道门禁；Workflow 遇到满队列会等待用户确认。执行名额满了只停止新轮次派发，已持久化的任务仍在。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/messages/index.mjs · 第 255–256 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/messages/index.mjs" data-start="255" data-end="256">    const maxConcurrentTurns = this.config.deployment?.maxConcurrentTurns ?? 2;
     if (running.size &gt;= maxConcurrentTurns) return;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">running 统计当前占用执行名额的会话；达到上限直接停止这次新轮次派发。</p><p class="tl">任务仍在持久队列中，后续扫描可以在容量释放后继续；这个 return 没有把任务标为失败。</p></div></div></div>
-<p>Workflow 自动进入下一步时若队列已满，会停在等待确认，容量释放后由用户确认继续，不能绕过门禁超额排队。执行器仍依赖 PostgreSQL 独占锁，这里的并发限制针对服务派发的对话轮次，不限制 Codex 内部工具并行。看到多个工具活动，不能直接推断轮次上限失效。</p>
-<p><span class="term" data-definition="在每次请求时删除距当前时刻至少 60 秒的记录，再统计仍在窗口中的请求。">滑动窗口</span> 以连接令牌和实际 socket peer 为键。实现不信任 X-Forwarded-For，无效令牌合并到同一来源桶，不能通过不断换无效令牌绕过限制。代理后看到的是代理的实际地址；本章没有用户身份系统，也没有跨进程共享的限流账本。</p>
+<p>调度按任务顺序寻找可执行会话，暂停或预算不足的会话不阻塞其他会话；已有轮次的追加走 steer，不另占新轮次名额。这是服务派发上限，不限制 Codex 内部工具并行。</p>
+<p><span class="term" data-definition="在每次请求时删除距当前时刻至少 60 秒的记录，再统计仍在窗口中的请求。">滑动窗口</span>按令牌与实际 socket 来源计数，不信任转发头；无效令牌合并到同一来源桶，避免换令牌绕过限制。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 45–59 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="45" data-end="59">  request(token, address) {
     const now = this.now();
@@ -93,13 +86,11 @@
     values.push(now);
     this.windows.set(key, values);</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">每次请求清理过期记录，空桶也会删除；仍在 60 秒窗口内的记录参与计数。</p><p class="tl">令牌和 socket peer 组合后计算摘要作为键；无效认证由 HTTP 层传入统一的 unauthenticated 标识。</p><p class="tl">达到额度时创建 429 RATE_LIMITED。等待时间由最早请求到期的剩余毫秒向上取整，最少为 1 秒。</p><p class="tl">未超限才追加当前时间。因此拒绝的第 121 次请求不会延长已有窗口。</p></div></div></div>
-<p>假设窗口内已有 120 次请求，最早一条发生在一秒前，下一次请求会被拒绝，并建议等待 59 秒。HTTP handler 把 error.retryAfter 写入 Retry-After 响应头。等待是客户端重试的依据，不能把 429 当成模型已经执行失败；这次请求可能根本没有进入业务处理。进程重启会清空内存窗口，这是当前实现的范围。</p>
-<p>SSE 使用独立名额：在异步读取会话数据前先 acquireSse，连接 close 时释放。释放函数带有 released 标记，即使清理路径重复调用，也只减一次计数。满额错误与请求超频错误都使用 429，但错误码和等待时间不同。健康接口绕过限流，让运维仍然能检查进程和依赖。</p>
+<p>429 表示入口拒绝或要求稍后再试，不代表模型已经执行失败。SSE 断开时释放名额，健康探测不占请求额度。限流窗口在内存中，重启会清空；本章尚无按用户的身份与配额。</p>
 </section>
-
 <section class="screen animate-in" id="s12-screen-4">
-<h2 class="screen-heading">关闭先停止派发，重启保留不确定事实</h2>
-<p>一次轮次可能已经执行了外部操作，但尚未来得及把最终结果完整持久化。进程此时收到停止信号，不能把未收到终态等同于“模型完全没做事”，也不能把残留任务直接再发一次。部署的关闭逻辑要先阻止新增工作，再保存已经确定的状态，并给未确认的执行留下人工核对入口。</p>
+<h2 class="screen-heading">关闭先停派发，结果不明就待核对</h2>
+<p>关闭时最难的不是退出进程，而是保留执行事实：模型可能已经调用工具，却没来得及保存终态。不能把“没收到结果”当成“什么也没做”，自动重发可能造成重复操作。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/server/modules/deployment/index.mjs · 第 74–80 行</span>
 <pre><code data-source="stages/s12-deploy/server/modules/deployment/index.mjs" data-start="74" data-end="80">export function gracefulShutdown({ stopDispatch, markUnconfirmed, close, exit = code =&gt; process.exit(code), timer = setTimeout, clear = clearTimeout }) {
   let pending;
@@ -109,18 +100,13 @@
     try { await markUnconfirmed(); await close(); }
     finally { clear(deadline); }</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">pending 让多次关闭请求共享一次流程，避免重复关闭资源。</p><p class="tl">stopDispatch 同步执行，收到信号后先停止继续派发。</p><p class="tl">随后保存 unconfirmed，再关闭 HTTP、SSE、RPC 和数据资源；30 秒定时器是资源卡住时的退出截止。</p><p class="tl">正常清理结束后取消截止定时器；无法在截止前落库的残留执行状态，交给启动恢复再次处理。</p></div></div></div>
-<p>SIGTERM 到达后，关闭入口按这个顺序组织服务：同步停止派发，把执行中的不确定状态持久化为 unconfirmed，然后关闭连接和资源。queued 任务仍保留。重启时沿用已有 recover 处理残余 starting、running、steering，不会自动重发需要核对的任务。这个设计保留了事实的不确定程度。</p>
-<table><thead><tr><th>停止前状态</th><th>停止或恢复后的含义</th><th>下一步动作</th></tr></thead><tbody><tr><td>queued</td><td>尚未派发的持久任务仍在。</td><td>服务恢复后按队列机制处理。</td></tr><tr><td>starting / running / steering</td><td>可能已发生执行，结果需要核对。</td><td>恢复为 unconfirmed，先查看任务结果与产物。</td></tr><tr><td>完成且已落库</td><td>保留已有完成事实。</td><td>根据已保存结果继续业务流程。</td></tr><tr><td>资源关闭卡住</td><td>30 秒截止后强制退出。</td><td>启动恢复检查残留状态，不能推断外部操作未发生。</td></tr></tbody></table>
-<p>优雅关闭并不是跨模型、数据库和文件系统的原子事务。执行器依赖 PostgreSQL 独占锁，服务停止后重建连接与锁仍需验证；模型工具内部的行为也不是部署模块重新实现的。真实 SIGTERM 验收应观察派发停止、任务状态、进程退出时间和重启后的恢复结果。离线断言能验证调用顺序，不能取代服务器上的完整故障过程。</p>
-<p>代码回滚同样要区分事实。remote.sh 保留上一版目录和 previous 镜像标签，回滚替换代码与镜像，数据目录维持原路径。它不恢复 .env 的历史版本，也不会自动倒转数据库和 workspace。如果升级包含破坏性 schema 变化，需要兼容代码或升级前的完整备份，不能只切换镜像就宣称业务数据已恢复。</p>
-<p>部署失败会留下 pending 标记，下一次部署前需要先处理回滚。首次部署没有上一版，排除故障并确认没有部署进程后，才能清除 pending 再重试。这个标记记录的是未完成的交付事实；它和 flock 锁文件不是同一概念。flock 在进程退出后释放，不需要通过删除锁文件来解锁。</p>
+<p>收到 SIGTERM 后，先停止派发新任务，再把执行中状态标为 <code>unconfirmed</code>，最后关闭连接，整个关闭过程以 30 秒为截止。queued 保留，重启后继续派发；残留 starting、running、steering 也按待核对处理，不自动重跑。</p>
+<p>回滚解决代码版本的问题：保留上一版代码与镜像，在固定路径换回去。它不倒转数据库、workspace 或凭据；破坏性 schema 变化还需要兼容代码或升级前的完整备份。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">先核对结果，再决定是否重做</p><p>unconfirmed 表示证据尚不足。查看任务、产物和外部系统后再继续；直接重发可能重复已经发生的操作。部署模块保留这种不确定性，而不是替使用者猜测结果。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-5">
-<h2 class="screen-heading">同一停服窗口完成备份，失败路径也有确定行为</h2>
-<p>完整恢复需要数据库与目录相互对应。数据库记录任务和资源版本，workspace 和不可变正文保存文件，.data/codex 保存原生历史。若 agent 一边写入，一边分别复制数据库和目录，两份数据可能来自不同时间。本章采用短暂停止 agent 的办法，把备份组织在一个没有业务写入的窗口里。</p>
-<p>宿主 Bash 负责流程编排，真正的数据库工具在 postgres 容器内运行。宿主不依赖 Node/npm，但需要 Docker、Compose、Bash、flock、gzip/gunzip 等工具；打包程序在一次性 agent 容器内使用已有 Node 和 tar。agent 镜像不额外安装 postgresql-client。</p>
+<h2 class="screen-heading">备份要对应同一时刻，恢复失败就保持停止</h2>
+<p>备份是数据库记录与文件历史的一组恢复依据。若两者在持续写入时分别复制，可能一份新、一份旧，所以本章短暂停止 Agent，在同一个停服窗口导出数据库并打包目录。</p>
 <div class="translation-block"><div class="translation-code"><span class="translation-label">源码 · stages/s12-deploy/deploy/backup.sh · 第 9–34 行</span>
 <pre><code data-source="stages/s12-deploy/deploy/backup.sh" data-start="9" data-end="34">partial=&#x27;&#x27;
 cleanup() {
@@ -149,41 +135,14 @@ docker compose exec -T postgres pg_dump --no-password -U agent --clean --if-exis
 if [ &quot;$(id -u)&quot; = 0 ]; then chown 1000:1000 backups &quot;$partial&quot; &quot;$partial/database.sql.gz&quot;; fi
 docker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --partial &quot;$name&quot;</code></pre></div>
 <div class="translation-english"><span class="translation-label">源码解读 · 对照运行边界</span><div class="translation-lines"><p class="tl">脚本此前已用文件描述符 9 获取共享非阻塞 flock；冲突立即返回 75。</p><p class="tl">cleanup 保存原始退出码并清理未发布 partial，无论成功还是失败都尝试 up -d --wait agent；重启失败也保留非零结果。</p><p class="tl">EXIT trap 安装在 stop 之前，停止操作失败或被中断时仍尝试恢复 agent。INT 和 TERM 被转为明确退出码。</p><p class="tl">pg_dump 在 postgres 容器内执行，gzip 将纯 SQL 写入隐藏 partial；pipefail 让转储失败可以传播。</p><p class="tl">root 创建的目录与 SQL 交给 uid 1000；一次性 agent 容器用 --no-deps 避免重新拉起依赖，并执行打包发布。</p></div></div></div>
-<p>备份、恢复和实际 rsync sender 共用 <code>backups/.download.lock</code>，锁持续覆盖整个操作。锁文件保留同一 inode，进程退出后自动释放。删除再创建锁文件可能让不同操作持有不同 inode，破坏互斥；因此流程不把删除锁文件当成清理动作。下载通过 SSH 与 rsync，限速 200 KB/s，备份不会经 HTTP 提供。</p>
-<p>SQL 先写入隐藏的 <code>.partial</code> 目录，再由 backup.mjs 打包 workspace、原生历史、实例身份和不可变文件正文。manifest 包含大小、SHA-256 与版本。目录归档和校验完成后原子重命名为正式备份，只保留最近 7 份成功备份。partial 不存在或缺少 SQL 时拒绝发布，失败包不能占用成功备份的名额。</p>
-<table><thead><tr><th>内容</th><th>是否包含</th><th>恢复含义</th></tr></thead><tbody><tr><td>数据库 gzip 纯 SQL</td><td>包含</td><td>用运行中的 postgres 容器重放。</td></tr><tr><td>workspace、原生历史、实例身份与不可变正文</td><td>包含</td><td>与 SQL 在同一停服窗口内保存。</td></tr><tr><td>Redis 缓存、.runs 日志</td><td>不包含</td><td>不作为完整业务恢复的事实来源。</td></tr><tr><td>.env、服务商密钥、镜像</td><td>不包含</td><td>需要另行保管凭据与可运行代码镜像。</td></tr></tbody></table>
-<p>SHA-256 可以发现文件被修改或损坏，但 manifest 本身不是数字签名；攻击者如果能同时替换包和 manifest，摘要无法证明来源。恢复只接受管理员信任的备份。恢复还要求相同部署路径与兼容数据库 schema，不能把完整包理解成任意机器、任意版本之间的自动转移格式。</p>
-<p>restore.sh 先持有同一个锁并停止 agent，再从 /dev/tty 确认；非交互运行且未提供 --yes 时拒绝。确认后，一次性 agent 容器先校验 manifest；宿主使用 gunzip 与 postgres 容器里的 psql 重放 SQL，开启单事务和 ON_ERROR_STOP；之后恢复目录，保留 bind mount 根目录，最后启动 agent 并检查 /ready。</p>
-<p>恢复取消或任何一步失败都保持 agent 停止；启动或就绪失败也再次停止，避免继续提供数据库与文件混合的数据。备份失败则尝试重启 agent，因为原业务数据仍是工作的依据。两种失败策略不同，不能把备份 cleanup 机械地复制给恢复。恢复跨数据库和文件系统，不是一个总原子事务，失败后应继续停服并重新恢复完整备份。</p>
+<p>数据库、workspace、原生历史、实例身份与不可变正文一并保存；Redis 缓存、运行日志、密钥和镜像不在备份中。清单记录大小、SHA-256 与版本，全部完成才发布为成功备份，只保留最近 7 份。备份失败会清理未完成包，并尝试重启原服务。</p>
+<p>恢复先校验，再重放数据库和恢复目录，最后检查就绪。任一步失败都保持 Agent 停止，避免用混合状态继续服务。跨数据库与文件系统没有总原子事务，失败后需重新恢复完整备份；具体互斥、下载与恢复步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/docs/design.md" target="_blank" rel="noopener noreferrer">设计说明</a>。</p>
+<p>校验和能发现损坏，不能认证备份来源；恢复只接受可信备份，并要求固定路径和兼容 schema。一个备份包存在，也不能证明整套服务已恢复。</p>
 <div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">成功备份与可恢复部署分别验收</p><p>离线测试可以验证真实 tar 打包、manifest、保留策略、篡改拒绝和 Bash 成败分支。真实数据库备份恢复、权限、固定路径与就绪重查仍要在 Docker 环境完成。只有包存在，还不足以证明整套服务能恢复。</p></div></div>
 </section>
-
 <section class="screen animate-in" id="s12-screen-6">
-<h2 class="screen-heading">运行步骤、离线证据与外部验收</h2>
-<p>本机体验需要 Node.js 24+、Docker 和 Compose v2。进入 stages/s12-deploy，按 README 安装锁定依赖、复制 .env.example 并生成网关访问密钥。实际凭据只写入本机 .env，设置权限 600；CONTAINER_APP_DIR 使用部署目录的实际绝对路径，不把真实路径写进教学材料。模型和数据库配置完成后再构建运行。</p>
-<pre><code>cd stages/s12-deploy
-npm ci
-cp .env.example .env
-npm run gateway:key
-# 按 README 填写 .env，再执行以下步骤
-docker compose build agent
-bash deploy/configure.sh
-docker compose up -d --wait postgres redis gateway
-docker compose run --rm --no-deps -T agent npm run data:migrate
-docker compose run --rm --no-deps -T agent npm run agent:init
-docker compose up -d --wait agent
-curl --fail http://127.0.0.1:4326/ready</code></pre>
-<p>预期 /ready 返回 ready，checks 全部为 true；没有 REVISION 时版本为 dev。Linux 的 bind mount 目录需要 uid 1000 可读写，管理员可按 README 的 configure 步骤初始化权限。普通停止使用 docker compose stop，保留数据卷。实际部署要记录代码版本、检查结果与未完成项，不把预期输出当作已经运行成功的证据。</p>
-<p>远程目标使用 systemd 的 Linux 服务器，准备 Docker、Compose、rsync、flock、tar、gzip 和 sha256sum。SSH 用户需要管理 Docker 与安装 systemd 单元的权限。remote.sh init-env 通过固定版本的 Node 容器准备远端配置，重新生成数据库与网关凭据，拒绝覆盖已有文件；deploy 交付当前工作区并记录基准版本与工作区部署时间，不执行 Git 提交。</p>
-<pre><code>export DEPLOY_HOST=example.com
-bash deploy/remote.sh check
-bash deploy/remote.sh init-env
-bash deploy/remote.sh deploy
-bash deploy/remote.sh status
-bash deploy/remote.sh tunnel</code></pre>
-<p>s12 是一套独立部署，用 remote.sh tunnel 经 SSH 隧道连接本机 http://127.0.0.1:4326。工作台提供课程、机制演示和 README 入口，不直接代理这个部署。生产域名、HTTPS、Basic 口令和路径白名单见 s12 的 production 文档；这些不属于教学启动步骤，也不等于完整用户身份系统。</p>
-<table><thead><tr><th>离线实验</th><th>观察什么</th><th>仍需外部验证</th></tr></thead><tbody><tr><td>npm run lesson -- s12-health</td><td>就绪与存活、配置默认值、关闭顺序。</td><td>真实依赖失效和 Docker 健康状态。</td></tr><tr><td>npm run lesson -- s12-queue</td><td>跨会话轮次限制、全局和会话容量、持久状态。</td><td>真实 PostgreSQL 排队事务竞争。</td></tr><tr><td>npm run lesson -- s12-protection</td><td>429 与 Retry-After、窗口恢复、SSE 释放。</td><td>代理后的实际来源与连接行为。</td></tr><tr><td>npm run lesson -- s12-backup</td><td>manifest、保留 7 份、篡改拒绝、编排失败路径。</td><td>真实数据库与目录恢复、权限和路径一致性。</td></tr></tbody></table>
-<p>这些命令运行真实模块与离线夹具，不启动 Docker、不监听端口、不调用真实模型。npm run test:deploy 汇总部署离线测试；外部 npm run test:deploy:integration 检查真实 Compose 资源配置与网关停止后的健康分离，需要已配置环境并初始化数据库。Linux 还可以单独检查真实 flock；远程传输、SIGTERM 和回滚需要按 delivery.md 完成。</p>
+<h2 class="screen-heading">用故障理解部署的边界</h2>
+<p>部署能力要在依赖失效、容量耗尽和恢复失败时检验，不能只看一次启动成功。离线实验验证就绪、队列、限流和备份分支；真实容器、数据库、SIGTERM 与回滚仍需外部验收，步骤见<a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/README.md" target="_blank" rel="noopener noreferrer">本章 README</a>。</p>
 <div class="quiz" id="s12-quiz"><h3>检查理解</h3><div class="quiz-questions">
 <div class="quiz-question-block" data-correct="b" data-explanation-right="存活接口不探测业务依赖；/ready 也不保证模型额度和质量。" data-explanation-wrong="存活接口不探测业务依赖；/ready 也不保证模型额度和质量。"><h3 class="quiz-question">/health=200 能证明什么？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>所有模型都一定可用</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>HTTP 进程存活，业务就绪还需 /ready</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>数据库和网关永远不会出错</span></button></div><div class="quiz-feedback"></div></div>
 <div class="quiz-question-block" data-correct="c" data-explanation-right="接收容量与执行并发分开；HTTP 超频又是独立门禁。" data-explanation-wrong="接收容量与执行并发分开；HTTP 超频又是独立门禁。"><h3 class="quiz-question">已有两个活动轮次，队列尚有容量时，新任务怎样处理？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>自动取消最早的轮次</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>必定拒绝 HTTP 请求</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>保留 queued，等待执行名额</span></button></div><div class="quiz-feedback"></div></div>
@@ -191,9 +150,6 @@ bash deploy/remote.sh tunnel</code></pre>
 <div class="quiz-question-block" data-correct="b" data-explanation-right="恢复跨多个存储，失败后保持停服；摘要校验不认证来源。" data-explanation-wrong="恢复跨多个存储，失败后保持停服；摘要校验不认证来源。"><h3 class="quiz-question">恢复目录时出错，为什么不能照备份流程直接重启？</h3><div class="quiz-options"><button class="quiz-option" data-value="a"><div class="quiz-option-radio"></div><span>因为 Compose 不支持重启</span></button><button class="quiz-option" data-value="b"><div class="quiz-option-radio"></div><span>数据库与目录可能已处于混合状态，应保持停服</span></button><button class="quiz-option" data-value="c"><div class="quiz-option-radio"></div><span>因为 SHA-256 已证明包来自可信来源</span></button></div><div class="quiz-feedback"></div></div>
 </div><div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s12-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s12-quiz">重新作答</button></div></div>
 <p><a href="/course/changes.html#s12">→ 打开 s12 阶段演示</a> · <a href="/course/#s12">→ 打开 s12 机制课堂</a></p>
-<p>部署把运行环境、持久状态和故障处理连接起来：就绪检查判断当前依赖，容量门禁限制资源进入，关闭保留不确定事实，备份提供可以核对的恢复材料。每一项都有独立的证据边界；未运行的服务器验收继续标为未验证。</p>
+<p>服务器上的 Agent 能自己启动、恢复了，但进来的人仍共用一个连接令牌，在服务看来都是同一个用户。要让几个人共用，先得认清每个请求是谁发的，以及会话和任务属于谁。下一章进入 s13 账号与认证。</p>
 </section>
-
-</div>
-</div>
-</section>
+</div></div></section>

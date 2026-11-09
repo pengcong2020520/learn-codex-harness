@@ -9,7 +9,7 @@ test('路线图包含全部十九个已完成阶段并生成链接', () => {
   const links = [...svg.matchAll(/<a href="([^"]+)"/g)].map(match => match[1]);
   assert.deepEqual(links, dirs.map(dir => `${repositoryUrl}/stages/${dir}/README.md`));
   assert.equal((svg.match(/<\/a>/g) || []).length, dirs.length);
-  assert.match(svg, /s12–s18 已完成/);
+  assert.match(svg, /s00 到 s18 分六组/);
   assert.ok(links.some(link => link.includes('/s18-replication/README.md')));
   assert.doesNotMatch(svg, /规划中/);
 });

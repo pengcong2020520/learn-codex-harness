@@ -1,4 +1,4 @@
-// 学习路线图：根 README 顶部那张图。按"跑起来 → 变成服务 → 装配 Agent → 上生产 → 走向生产"分组，每张卡片一个阶段。
+// 学习路线图：根 README 顶部那张图。按"跑起来 → 变成服务 → 装配 Agent → 靠得住、守得住 → 上云与多用户 → 多台机器"分组，每张卡片一个阶段。
 // 运行：node stages/build-roadmap.mjs 生成 docs/images/learning-roadmap.svg；加 --check 只检查是否最新。
 import fs from "node:fs";
 import { repositoryUrl } from "../app/web/course-data.mjs";
@@ -15,16 +15,14 @@ const phases = [
     ["s03", "服务化", "服务端常驻，关掉客户端照样跑完"], ["s04", "事件与消息", "服务端排队，状态经 SSE 推送"]] },
   { name: "装配 Agent", sub: "它是谁、能做什么", fill: "#FFF3EC", line: "#D9622B", ink: "#9A3F14", stages: [
     ["s05", "Agent 装配", "一份 JSON 决定角色与 Skills"], ["s06", "工具", "白名单、资料边界、MCP 回调"], ["s07", "记忆", "Codex 提炼，服务端管控"]] },
-  { name: "上生产", sub: "靠得住、守得住", fill: "#F3EEF8", line: "#7A54A8", ink: "#4F2E7A", stages: [
+  { name: "靠得住、守得住", sub: "落库、门禁、流程、模型", fill: "#F3EEF8", line: "#7A54A8", ink: "#4F2E7A", stages: [
     ["s08", "数据层", "PostgreSQL 记事实，Redis 唤醒"], ["s09", "知识层", "可信门禁，Wiki / RAG"], ["s10", "Skill 与 Workflow", "可以提议，不能自批"], ["s11", "模型网关", "统一协议、多模型、管住花费"]] },
-  { name: "走向生产", sub: "从部署到多主机", fill: "#F4F5F6", line: "#B8C0C6", ink: "#6B7780", stages: [
-    ["s12", "上云部署", "一台没人看着的服务器，也能自己起来、自己恢复", "已完成"],
-    ["s13", "账号与认证", "每个用户登录自己的账号，会话和任务都有归属", "已完成"],
-    ["s14", "用户隔离", "每个用户一个独立的运行环境，互不可见", "已完成"],
-    ["s15", "权限与资源 Hub", "角色、权益与资源范围：知识库、工具、Skill、Agent 谁能用、谁能改", "已完成"],
-    ["s16", "协调面", "节点是否存活变成租约是否过期", "已完成"],
-    ["s17", "分片与路由", "用户按分片落到节点，路由表变了大家同时知道", "已完成"],
-    ["s18", "副本与故障接管", "主节点坏了，从节点接手，丢多少说得清", "已完成"]] },
+  { name: "上云与多用户", sub: "部署、账号、隔离、权限", fill: "#E8F4F3", line: "#2F8C86", ink: "#1D5E5A", stages: [
+    ["s12", "上云部署", "容器交付、就绪探测、备份与回滚"], ["s13", "账号与认证", "登录决定身份，资源各有归属"],
+    ["s14", "用户隔离", "每人一个 Codex 进程与系统 uid"], ["s15", "权限与资源 Hub", "资源范围、指定授权、权益配额"]] },
+  { name: "多台机器", sub: "协调、分片、副本", fill: "#EEF0F8", line: "#5964A8", ink: "#363E7A", stages: [
+    ["s16", "协调面", "etcd 租约判存活，任期挡住旧主"], ["s17", "分片与路由", "用户按分片落到节点，任意入口可达"],
+    ["s18", "副本与故障接管", "异步副本接手，丢多少说得清"]] },
 ];
 
 const esc = s => String(s).replace(/[&<>"]/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[v]));
@@ -101,18 +99,17 @@ export function render() {
         const first = CX + cardWidth(next.layout.rows[next.ri].length) / 2;
         const y1 = cy + ch + 4, mid = rowY + bh + 12;
         const y2 = next.layout.y + next.ri * (next.layout.bh + 24) + 12;
-        const future = next.layout === layouts.at(-1);
-        arrow(`M${last},${y1} L${last},${mid} L${first},${mid} L${first},${y2}`, future ? "#B8C0C6" : "#9AA5B1", future ? "5 4" : "");
+        arrow(`M${last},${y1} L${last},${mid} L${first},${mid} L${first},${y2}`, "#9AA5B1");
       }
     });
   });
 
   // 终点：完整项目
   const H = nextY + 56;
-  t("学完 s11，就是仓库里的 app/：在它之上做成 Docker 部署、Web 工作台和互动课程。", LX, H - 36, 16, "#6B7780");
+  t("app/ 是在 s11 之上持续开发的完整项目（Docker 部署、Web 工作台、互动课程）；s12–s18 是各自独立的部署快照。", LX, H - 36, 16, "#6B7780");
 
   const defs = `<defs>${[...new Set([...colors, "#9AA5B1"])].map(c => `<marker id="arrow-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join("")}</defs>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s11 分四组：跑起来、变成服务、装配 Agent、上生产；s12 到 s18 为第五组：走向生产，s12–s18 已完成。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s18 分六组：跑起来、变成服务、装配 Agent、靠得住守得住、上云与多用户、多台机器。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
