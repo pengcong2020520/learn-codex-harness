@@ -162,6 +162,12 @@ Codex 每次工具调用触发 `item/tool/call` → 02 层回调 → 03 层门�
 
 ---
 
+
+### 本地 Web 外部客户端
+
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
+
+
 ## 技术实现流程
 
 以下步骤与架构图层编号对应，走通一个 Wiki 维护与查询闭环。
@@ -338,6 +344,20 @@ await gate.run(context, async () => {
 
 ---
 
+## 验证
+
+在本章目录运行：
+
+```bash
+npm test                  # 离线单元测试
+npm run test:data         # 真实临时 PostgreSQL / Redis
+npm run test:rag          # 在数据集成测试中另启真实 Chroma
+```
+
+`test:data` 需要 PATH 中可用的 `initdb`、`pg_ctl`、`redis-server`；`test:rag` 还需要 `chroma` 或 `CHROMA_TEST_BIN`。模型与 embedding 使用本地固定模拟，不能据此证明生成质量或语义检索质量。
+
+服务启动后，按 README「跑起来看看」执行知识维护、读取和搜索，并检查普通对话提交 Wiki、普通文件工具访问 Wiki 路径会被门禁拒绝。具体步骤、Codex 工具与记忆集成命令见「技术实现流程」；交互观察不替代门禁回归测试。
+
 ## 限制说明
 
 | 限制项 | 说明 |
@@ -355,10 +375,16 @@ await gate.run(context, async () => {
 | 历史不可撤回 | 收窄权限不能移除旧 Thread 中已读到的知识；需新建 Thread |
 | 语义质量未验收 | 回归测试的 embedding 使用固定模拟向量，未证明真实语义质量 |
 
-## 本地 Web 外部客户端
-
-启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
-
-## 机制课程与逐课实验
+## 机制实验
 
 本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-5)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](../lessons/README.md)。页面推演与终端运行结果分开展示。
+
+表中未标记集成验证的项目为离线实验；集成项目需显式启用相应参数。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- s09-gate` | 伪造上下文与外部 owner 被拒绝；普通任务不能更新 Wiki；合法维护任务可以；旧 turn 结束后上下文失效 |
+| `npm run lesson -- s09-mounts` | 当前 KB 的读取通过；另一 KB 的直接路径读取被拒绝；未挂载 KB 与错误 owner 被拒绝；Wiki 路径不能通过普通 write_file 创建 |
+| `npm run lesson -- s09-wiki --integration` | 集成验证（默认不运行）：Wiki 提交后可读取，两个并发 expectedVersion 只成功一个；来源改写后不能继续返回旧正文；真实本地 Codex 维护任务带服务端知识权限并调用知识工具 |
+| `npm run lesson -- s09-rag --rag` | 集成验证（默认不运行）：真实 Chroma 与 BM25 双索引提交；中文查询经混合召回返回对应来源；失败保留旧索引，源版本变化拒绝陈旧结果 |
+| `npm run lesson -- s09-modes` | 首次期望 RAG、未就绪时实际仍 Wiki；索引就绪后当前实例不自行切换；重新 open 才选择 RAG；已是 RAG 后不可用则报 RAG_NOT_READY，不静默回退 |

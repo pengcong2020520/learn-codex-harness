@@ -110,6 +110,12 @@ owner 来自服务端 `.data/identity.json`；本阶段尚未引入 s09 的统�
 
 ---
 
+
+### 本地 Web 外部客户端
+
+启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
+
+
 ## 技术实现流程
 
 以下步骤与架构图层编号对应，走通一个完整任务闭环。
@@ -227,6 +233,17 @@ async function createTask(db, taskData):
 
 ---
 
+## 验证
+
+在本章目录运行：
+
+```bash
+npm test                  # 离线单元测试，不需要数据库
+npm run test:data         # 真实临时 PostgreSQL / Redis，本地模拟模型
+```
+
+`test:data` 需要 PATH 中可用的 `initdb`、`pg_ctl`、`redis-server`，不读取项目 `.env`。启动后的验证沿用「技术实现流程」：运行 `npm run data:check`，检查持久任务状态；观察 Redis 停止后恢复时的 outbox 补投，以及服务重启后执行中任务变为 `unconfirmed`、不自动重发。Codex 工具与记忆集成命令保留在该节的验证套件中，真实依赖验证不能用离线结果代替。
+
 ## 限制说明
 
 | 限制项 | 说明 |
@@ -240,10 +257,14 @@ async function createTask(db, taskData):
 | 执行不确定不重发 | 重启后执行中任务变 unconfirmed，不自动重发 |
 | 不声称生产验收 | s08 是可靠性基础提升，非已验收生产系统 |
 
-## 本地 Web 外部客户端
-
-启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
-
-## 机制课程与逐课实验
+## 机制实验
 
 本版配套机制课位于 [互动课堂](http://127.0.0.1:4320/course/#module-4)。在本目录运行 `npm run lesson -- list` 查看课时，运行 `npm run lesson -- <id>` 读取问题、执行验证并观察断言结果。依赖与验证边界见 [实验说明](../lessons/README.md)。页面推演与终端运行结果分开展示。
+
+本章没有无需外部服务的离线 lesson；以下三项共用真实临时 PostgreSQL / Redis 集成测试，必须显式加 `--integration`。离线单元测试仍使用 `npm test`。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- s08-persistence --integration` | 集成验证（默认不运行）：迁移重复执行保持幂等，事务失败回滚；归属约束与单实例执行器锁受到真实 PG 断言；真实服务链路重启后仍能检查持久任务状态 |
+| `npm run lesson -- s08-dispatch --integration` | 集成验证（默认不运行）：任务提交与 outbox 同事务；重复投递只成功领取一次；Redis 失败后 outbox 可补投 |
+| `npm run lesson -- s08-versions --integration` | 集成验证（默认不运行）：更新版本保留稳定资源 ID；移动不改变资料 ID，旧版本引用被拒绝；外部改写或删除来源会使派生内容失效 |

@@ -85,9 +85,41 @@ confirm(task):
   排队（proposed）或进入下一步（waiting）
 ```
 
+## 验证
+
+在本章目录运行：
+
+```bash
+npm test                  # 离线单元测试，不调用真实模型
+npm run test:codex-tools  # 真实本地 Codex 与模拟 Responses
+npm run test:data         # 真实临时 PostgreSQL / Redis 与本地 Codex
+```
+
+`test:data` 需要 PATH 中可用的 `initdb`、`pg_ctl`、`redis-server`；集成测试使用本地模拟 Responses，不代表真实模型会主动发现和读取 Skill。
+
+配置真实依赖并启动服务后，按 README「跑起来看看」操作 `/workflow write-article`、`/confirm` 与 `/reject`：观察确认点之前的暂停、补充说明进入后续步骤，以及知识维护提议在确认前不产生写入。用 `npm run check` 核对自定义 Agent 包配置；任务步骤、状态与验收结果在数据库中核对。
+
 ## 限制说明
 
 - **隐式触发的效果未经真实模型评估**：`skill_read` 证明模型能读到 Skill，不证明它会主动去读。角色提示词保留方法说明。
 - **线程目标暂时关闭**：原生目标能让 Codex 跨轮次自主推进，但自动发起的轮次不经过任务队列和权限门。接入之前保持关闭。
 - **提议需要数据层**：`propose_task` 依赖权限门提供的会话身份，只在 PostgreSQL 模式下可用。
 - **Web 工作台与互动课程**：本阶段没有接入工作台和课程；工作台的多步与提议操作在 `app/` 中可用。
+
+## 机制实验
+
+在本章目录运行 `npm run lesson -- list` 查看实验。离线断言使用测试夹具，不代表真实模型或外部服务验收；依赖与边界见 [实验说明](../lessons/README.md)。
+
+
+表中未标记集成验证的项目为离线实验；集成项目需显式启用相应参数。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- s10-package` | Skill 目录只能有 SKILL.md 与 references/ 下的文本，脚本、链接被拒绝；角色和 Skill 落在工作区里时启动失败；新增参考文件也会改变指纹、触发撤销 |
+| `npm run lesson -- s10-declare` | 引用未声明的 Skill、申请没有 update 权限的知识库、授权引用非必填参数都在启动时报错；没有声明 workflows 的旧定义按原行为隐式启用知识维护 |
+| `npm run lesson -- s10-dispatch` | 任务说明放在用户原文之前，Skill 按 id 注入，原文不变；知识维护没有生效的修订时记为 needs-review，不暂停队列；追加消息不能更换 workflow；同一消息 ID 换 workflow 返回 409 |
+| `npm run lesson -- s10-steps` | 第 1 步结束后进入 waiting，期间普通对话照常执行；确认的补充说明进入第 2 步输入，第 2 步不重发原文；每一步把自己的写入范围交给权限门；可以结束等待中的任务 |
+| `npm run lesson -- s10-propose` | 提议只记录为 proposed，不排队、不授权、不执行；用户确认时才在用户身份下核对授权，补充说明进入输入；没有权限门提供的会话身份时不能提议；每个会话最多 3 个待确认提议 |
+| `npm run lesson -- s10-skill-read` | 只能读已核验启用的 Skill；文件限于 SKILL.md 与 references/ 白名单，路径穿越被拒绝 |
+| `npm run lesson -- s10-codex --integration` | 集成验证（默认不运行）：Agent 包里的 Skill 同步到 CODEX_HOME 后注入，工作区里的 Skill 被关闭；自定义 workflow 的任务说明与 Skill 进入模型请求，按真实写入结果验收；两步写文章停在确认点，确认后完成；模型可以按技能清单读取 Skill |
+| `npm run lesson -- s10-e2e --integration` | 集成验证（默认不运行）：普通对话直接提交 Wiki 修订被权限门拒绝；提议带理由入库，知识库没有被改动；用户确认后按 knowledge-maintain 授权执行，修订生效并通过验收 |

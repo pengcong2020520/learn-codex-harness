@@ -337,7 +337,7 @@
       <div class="pattern-desc">
         s01 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
         <strong>s01 → s02</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
-        <strong>s03+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
+        <strong>s03+</strong>：s03 引入常驻的 HTTP 服务层，不再是纯 CLI 模式；s05 再用一份配置装配 Agent。<br>
         本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<a class="term" data-definition="Codex 用来跟模型对话的 OpenAI Responses 接口；提供该接口的第三方模型可以直接连。" href="/course/glossary.html#term-responses-api">Responses API</a> 是执行引擎对远端服务的要求。
       </div>
     </div>
@@ -761,7 +761,7 @@
 <h2 class="screen-heading">这个云端 Agent 还缺什么？一个能一直工作的服务端</h2>
 
 <p>我们已经能在一个 Thread 里连续对话，也能用 /resume 找回历史。现在请它写一份长回答，回答到一半关掉终端：如果终端程序持有 Codex 子进程，这次执行就会跟着结束。要亲手做一个云端 Agent，先让执行拥有独立于用户窗口的生命周期。</p>
-<p>本章要完成的体验很具体：在一个终端启动服务，在另一个终端聊天；关掉聊天窗口，服务继续工作；重新连接同一个 Thread，查看这一轮的结果。先在本机验证这条链路，服务默认只监听 <code>127.0.0.1:4313</code>，本章不提供公网部署或多用户授权。</p>
+<p>本章要完成的体验很具体：在一个终端启动服务，在另一个终端聊天；关掉聊天窗口，服务继续工作；重新连接同一个 Thread，查看这一轮的结果。先在本机验证这条链路，服务默认只监听 <code>127.0.0.1:4313</code>，本章不提供公网部署或多用户授权（上云见 s12，账号与用户隔离见 s13、s14）。</p>
 <figure class="architecture-figure"><a href="/course/assets/s03-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S03 总架构 SVG 大图"><img src="/course/assets/s03-architecture.svg" width="1600" height="754" alt="S03 总架构：客户端经 HTTP 提交，常驻服务持有 Codex 与会话快照。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">服务端持有什么</div><div class="pattern-desc">读取 .env 中的模型配置，启动 Codex App Server，持有会话与执行中的 Turn。服务端接收 Codex 通知，即使此刻没有客户端查看，也会更新状态。</div></div>
@@ -1537,7 +1537,7 @@ npm test</code></pre>
 <tr><td>memory_summary.md</td><td>供后续会话使用的摘要。</td></tr>
 </tbody></table>
 <p>这些文件位于本服务的 <code>.data/codex/memories/</code>。启动配置固定 <code>CODEX_HOME</code> 与 <code>CODEX_SQLITE_HOME</code> 到本项目的状态目录。查看接口只认这三个固定文件名，拒绝符号链接和硬链接，不接受客户端指定任意路径；摘要最多读取 64 KiB，脱敏后返回。</p>
-<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">本阶段不能清空记忆</p><p>服务不提供清空接口。关闭开关或会话贡献设置不会删除已经提炼的内容；现有 Thread 也可能保留之前注入的内容。本阶段是单机单用户的状态目录，不提供多用户记忆隔离。</p></div></div>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">本阶段不能清空记忆</p><p>服务不提供清空接口。关闭开关或会话贡献设置不会删除已经提炼的内容；现有 Thread 也可能保留之前注入的内容。本阶段是单机单用户的状态目录，不提供多用户记忆隔离（每个用户各自的记忆见 s14 用户隔离）。</p></div></div>
 </section>
 
 <section class="screen animate-in" id="s07-screen-2">
@@ -1866,7 +1866,7 @@ npm run test:codex-memory</code></pre>
             <div class="chat-avatar" style="background:var(--color-actor-2)">🌐</div>
             <div class="chat-bubble">
               <div class="chat-sender">01 层 · 交互入口</div>
-              收到请求，校验本地 <span class="term" tabindex="0" data-definition="本地 HTTP 请求携带的访问凭据；它不是多用户登录身份。">Bearer</span> 凭据通过（owner 来自 <code>.data/identity.json</code>；Bearer 是另一个本地服务凭据，无多用户登录）。将请求转交给任务调度器。
+              收到请求，校验本地 <span class="term" tabindex="0" data-definition="本地 HTTP 请求携带的访问凭据；它不是多用户登录身份。">Bearer</span> 凭据通过（owner 来自 <code>.data/identity.json</code>；Bearer 是另一个本地服务凭据，无多用户登录；账号与认证见 s13）。将请求转交给任务调度器。
             </div>
           </div>
 
@@ -2415,7 +2415,7 @@ npm run test:codex-memory</code></pre>
           <tr><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">限制项</th><th scope="col" style="text-align:left;padding:var(--space-3);border-bottom:2px solid var(--color-border);background:var(--color-surface-warm)">说明</th></tr>
         </thead>
         <tbody>
-          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">单机单 owner</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">无多账户、无共享 KB、无多主机</td></tr>
+          <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">单机单 owner</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">无多账户、无共享 KB、无多主机（分别在 s13、s15、s16–s18 中加上）</td></tr>
           <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">原生记忆</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">挂 KB 须 <code>AGENT_MEMORY_ENABLED=false</code>；原生记忆关闭后仍保留原生会话历史。收窄权限后需新建 Thread，旧历史不可撤回</td></tr>
           <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">RAG 不热切换</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">改配置须重启；embedding 维度变化时拒绝启动</td></tr>
           <tr><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">wiki 不引用 wiki</td><td style="vertical-align:top;padding:var(--space-3);border-bottom:1px solid var(--color-border);overflow-wrap:anywhere">来源只能是当前有效原文版本，1–50 条</td></tr>
@@ -2970,7 +2970,7 @@ NODE</code></pre>
 </div>
 <div class="quiz-actions"><button class="btn btn-primary quiz-check-btn" data-quiz="s11-quiz">检查答案</button><button class="btn quiz-reset-btn" data-quiz="s11-quiz">重新作答</button></div>
 <p><a href="/course/changes.html#s11">→ 打开 s11 阶段演示与实践命令</a></p>
-<p>到这里，Workflow 的每一步既有权限与验收边界，也有可解释的模型选择和用量记录。继续把服务放到长期运行环境时，还要把进程、数据库、网关的启动与故障恢复组织起来；本章的离线检查是这些运行验证的前提。</p>
+<p>到这里，Workflow 的每一步既有权限与验收边界，也有可解释的模型选择和用量记录。继续把服务放到长期运行环境时，还要把进程、数据库、网关的启动与故障恢复组织起来；本章的离线检查是这些运行验证的前提：进入 s12 上云部署。</p>
 </section>
 </div>
 </div>

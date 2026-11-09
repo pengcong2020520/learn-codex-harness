@@ -10,7 +10,7 @@
 <h2 class="screen-heading">这个云端 Agent 还缺什么？一个能一直工作的服务端</h2>
 
 <p>我们已经能在一个 Thread 里连续对话，也能用 /resume 找回历史。现在请它写一份长回答，回答到一半关掉终端：如果终端程序持有 Codex 子进程，这次执行就会跟着结束。要亲手做一个云端 Agent，先让执行拥有独立于用户窗口的生命周期。</p>
-<p>本章要完成的体验很具体：在一个终端启动服务，在另一个终端聊天；关掉聊天窗口，服务继续工作；重新连接同一个 Thread，查看这一轮的结果。先在本机验证这条链路，服务默认只监听 <code>127.0.0.1:4313</code>，本章不提供公网部署或多用户授权。</p>
+<p>本章要完成的体验很具体：在一个终端启动服务，在另一个终端聊天；关掉聊天窗口，服务继续工作；重新连接同一个 Thread，查看这一轮的结果。先在本机验证这条链路，服务默认只监听 <code>127.0.0.1:4313</code>，本章不提供公网部署或多用户授权（上云见 s12，账号与用户隔离见 s13、s14）。</p>
 <figure class="architecture-figure"><a href="/course/assets/s03-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S03 总架构 SVG 大图"><img src="/course/assets/s03-architecture.svg" width="1600" height="754" alt="S03 总架构：客户端经 HTTP 提交，常驻服务持有 Codex 与会话快照。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">服务端持有什么</div><div class="pattern-desc">读取 .env 中的模型配置，启动 Codex App Server，持有会话与执行中的 Turn。服务端接收 Codex 通知，即使此刻没有客户端查看，也会更新状态。</div></div>

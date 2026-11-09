@@ -273,7 +273,7 @@
       <div class="pattern-desc">
         s01 是演化序列起点，建立了"主进程编排 + Codex 子进程执行"的解耦结构。<br>
         <strong>s01 → s02</strong>：增加 <span class="term" data-definition="先进先出队列：用户先输入的消息先处理。">FIFO</span> 输入缓冲与 /resume 会话恢复，Thread 可跨启动复用。<br>
-        <strong>s03+</strong>：引入 HTTP 服务层与配置驱动 Agent，不再是纯 CLI 模式。<br>
+        <strong>s03+</strong>：s03 引入常驻的 HTTP 服务层，不再是纯 CLI 模式；s05 再用一份配置装配 Agent。<br>
         本系列模型调用要求 Responses API 规范，基础 chat/completions 接口无法直接适配。<span class="term" data-definition="模型服务提供的请求与响应接口约定；这里需要 Responses API 兼容能力。">Responses API</span> 是执行引擎对远端服务的要求。
       </div>
     </div>

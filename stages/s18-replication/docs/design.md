@@ -2,7 +2,32 @@
 
 本章只增加 replication 单元。每用户 uid 与原生运行环境仍由 runtimes 管理；hub、知识库授权、迁移操作单、每节点认证、CT001 和 SH001 的职责不变。
 
-## 复制边界与提交
+## 设计原理
+
+每个分片增加一个环形放置的副本，使主节点不可用时有另一份用户目录可供接管。执行中的 Codex 会持续改写状态与产物，因此复制只能发生在该用户所有会话都没有执行中轮次的边界，不能把可读取的目录直接当作一致快照。
+
+复制先短暂停派新轮次，将 CODEX_HOME 和工作目录打包为本地快照，完成后立即放行，再异步发送给副本。副本收齐并确认两部分内容后才记录复制位点，位点标明副本确定具备的内容；网络发送期间新增的轮次留待后续复制。
+
+主节点租约过期后，control 检查副本在线、用户基线完整且没有在途传输，再推进 epoch、发布新归属并由新主恢复。位点之后的已完成内容可能丢失，必须标记副本缺失；执行不确定的轮次仍待核对，不自动重跑，副本上存在会话的排队任务由新主继续派发。
+
+旧主恢复后先作为副本全量追平，不能自动切回。旧 epoch 的业务写入由数据库拒绝，节点仅停止失去归属的分片；手动切换也要求副本已追平，并在暂停、等轮次结束和最后同步之后进行。
+
+## 架构改进
+
+在 s17 的分片、路由与手动迁移之上，本章新增 replication，负责轮次边界快照、异步发送、复制位点、故障接管与尾部丢失标记。Codex 仍在主节点执行，并在新主从复制来的 CODEX_HOME 恢复会话；服务负责推进 epoch、发布归属、旧主作为副本回归与手动切换。
+
+### 接口与文件
+
+- `POST /cluster/promote {shardId}`：admin，转发后由 control 再鉴权。
+- `PUT /internal/replication/tree|content`：每节点密钥 + 当前主/从/epoch + PG 操作单；无用户冒名参数。
+- `POST /internal/replication/ready|recovered`：control 核对调用节点和当前 epoch，再在 CT001 事务内确认。
+- `POST /internal/replication/sync`：只接受当前 control，PG 分片必须已暂停。
+- `replication_positions` 与 `replication_transfers`：SH001 行保护，不使用 control 任期代替用户归属。
+- 路由广告地址由 AGENT_NODE_ADDRESS 配置。两机部署只通过 SSH 转发基础服务和节点端口，第二台只拿自身最小凭据。
+
+## 技术实现流程
+
+### 复制边界与提交
 
 ```mermaid
 sequenceDiagram
@@ -34,7 +59,7 @@ sync/schedule 遇到该用户复制进行中时合并为一个脏标记；无论
 
 60 秒 sweep 只检查当前主节点的用户。失败不让主服务隔离；/cluster 同时展示操作单、复制错误和每用户落后。落后轮数计未复制 completed 任务，秒数从其中最早完成时间起算；已同步空闲用户为 0。超过 300 秒标记 replica_lagging，/ready 保持正常健康结果并增加 degraded。
 
-## 控制事务与恢复
+### 控制事务与恢复
 
 ```mermaid
 sequenceDiagram
@@ -66,20 +91,61 @@ PG 是归属权威，etcd 是可 Watch 的发布面。`publishing` 在 PG 提交
 
 原主回归使用 previous_primary，成为 replica，ready=false。当前新主为该分片所有已命名用户建立本 epoch 位点后由 control 验证并设置 ready；新用户尚无基线也会阻止提升。手动 promote 先持久化 paused，等待执行中任务，再完整同步和同样的切换流程；失败保留暂停，重试同一命令。最后同步先等待已有发送结束，再获取暂停后的新快照，不能直接复用暂停前的复制结果。没有自动切回或再平衡。
 
-## 接口与文件
+## 核心代码
 
-- `POST /cluster/promote {shardId}`：admin，转发后由 control 再鉴权。
-- `PUT /internal/replication/tree|content`：每节点密钥 + 当前主/从/epoch + PG 操作单；无用户冒名参数。
-- `POST /internal/replication/ready|recovered`：control 核对调用节点和当前 epoch，再在 CT001 事务内确认。
-- `POST /internal/replication/sync`：只接受当前 control，PG 分片必须已暂停。
-- `replication_positions` 与 `replication_transfers`：SH001 行保护，不使用 control 任期代替用户归属。
-- 路由广告地址由 AGENT_NODE_ADDRESS 配置。两机部署只通过 SSH 转发基础服务和节点端口，第二台只拿自身最小凭据。
+以下摘录与本章 README「关键代码」逐行一致，展示一主一从的环形放置、复制去抖与空闲检查间隔，以及故障接管的丢失提示和副本落后阈值。
 
-## 验证与已知边界
+```javascript
+export const ring = id => ({ primary: `node-${'abc'[Number(id)]}`, replica: `node-${'abc'[(Number(id)+1)%3]}`, epoch: 1 });
+```
+
+```javascript
+export const DEBOUNCE_MS = 5000;
+export const IDLE_SYNC_MS = 60000;
+```
+
+```javascript
+export const MISSING_MESSAGE = '该轮结果在故障接管时丢失，请核对';
+export const MISSING_SESSION_MESSAGE = '会话在故障接管中丢失，原会话无法恢复，请新建会话；任务记录已标记待核对';
+export const LAG_MS = 5 * 60 * 1000;
+```
+
+## 验证
+
+在本章目录运行以下命令；外部验收只连接专用测试库，环境要求见 [外部测试的环境要求](#外部测试的环境要求)。
+
+```bash
+npm test                       # 离线测试
+npm run test:data              # 真实临时 PostgreSQL / Redis，包含接管测试
+npm run test:runtimes:uid      # Linux root:1000、真实 PG/Redis、原生 Codex 与模拟模型
+npm run test:replication:etcd   # 全新 PG 测试库与真实认证 etcd
+npm run test:ports             # 需要允许绑定本机端口
+```
+
+部署后的停机、假死、分区与旧主回归观察沿用 README「跑起来看看」；通过 `npm run cluster -- status` 核对复制位点、落后和归属，再按该节检查已复制历史能否续聊。
 
 离线测试调用生产 worker、control、store、guardedPut 和 RouteCache，不使用总是 JSON.stringify 的假序列化。真实 PG 测试验证触发器拒写、位点和丢失标记。认证 etcd 测试释放续约后等待租约自然过期，验证 ≤15 秒切换和未追平拒绝。Linux uid 测试使用三个完整实例和独立目录，以模拟模型检查真实原生历史中两轮回复。
 
+## 限制说明
+
 控制面单点、全量 tar 成本、有限磁盘空间和异步尾部丢失是明确限制。跨地域实测 20 MB / 约 3 Mbit/s ≈ 1 分钟一次，RTT 217 ms；同一 SSH 连接拥塞时 /health 首字节曾延迟 11.6 秒，etcd TTL 为 10 秒。两台部署的控制机 `.env` 和远程生成环境均设 `AGENT_REPLICATION_RATE_LIMIT=262144`，原则是不超过实测带宽约 70%，给续约和请求转发留余量；限速延长发送时间，但不延长用户暂停到网络发送结束。单机模拟不设置该变量。运行中的目录不做在线 SQLite 备份；为一致性在边界关闭空闲用户进程，下一次对话会重新启动。对象存储和增量复制属于生产化方向。
+
+更多边界见 [关键数值与实现细节](#关键数值与实现细节) 中的 [限制的完整说明](#限制的完整说明)。
+
+## 机制实验
+
+在本章目录运行 `npm run lesson -- list` 查看实验，按以下命令执行离线断言。依赖与验证边界见 [实验说明](../lessons/README.md)。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- strategies` | 槽策略与范围策略 |
+| `npm run lesson -- stale-route` | revision 落后与一次重试 |
+| `npm run lesson -- shard-fence` | SH001 与节点隔离 |
+| `npm run lesson -- move` | 暂停、拷贝、切换、恢复 |
+| `npm run lesson -- replication-boundary` | 检查 Node 测试断言与阶段顺序。；生产 worker 在无执行轮次后合并同用户请求，只有成功传输后写位点；内容 hash 相同跳过。 |
+| `npm run lesson -- replication-lag` | 检查 Node 测试断言与阶段顺序。；从最早未复制 completed 轮次计时；零尾部是零秒，超过300秒才告警。 |
+| `npm run lesson -- replication-recovery` | 检查 Node 测试断言与阶段顺序。；复制位点之外的已完成任务标记 replica_missing；执行中 unconfirmed，queued由新主首次派发。 |
+| `npm run lesson -- replication-fence` | 检查 Node 测试断言与阶段顺序。；生产 shardFailure 刷新后调用 stopShard，不隔离仍持有其他分片的节点。 |
 
 ## 关键数值与实现细节
 

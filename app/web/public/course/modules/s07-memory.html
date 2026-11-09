@@ -17,7 +17,7 @@
 <tr><td>memory_summary.md</td><td>供后续会话使用的摘要。</td></tr>
 </tbody></table>
 <p>这些文件位于本服务的 <code>.data/codex/memories/</code>。启动配置固定 <code>CODEX_HOME</code> 与 <code>CODEX_SQLITE_HOME</code> 到本项目的状态目录。查看接口只认这三个固定文件名，拒绝符号链接和硬链接，不接受客户端指定任意路径；摘要最多读取 64 KiB，脱敏后返回。</p>
-<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">本阶段不能清空记忆</p><p>服务不提供清空接口。关闭开关或会话贡献设置不会删除已经提炼的内容；现有 Thread 也可能保留之前注入的内容。本阶段是单机单用户的状态目录，不提供多用户记忆隔离。</p></div></div>
+<div class="callout callout-accent"><span class="callout-icon">📌</span><div class="callout-content"><p class="callout-title">本阶段不能清空记忆</p><p>服务不提供清空接口。关闭开关或会话贡献设置不会删除已经提炼的内容；现有 Thread 也可能保留之前注入的内容。本阶段是单机单用户的状态目录，不提供多用户记忆隔离（每个用户各自的记忆见 s14 用户隔离）。</p></div></div>
 </section>
 
 <section class="screen animate-in" id="s07-screen-2">

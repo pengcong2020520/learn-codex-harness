@@ -97,6 +97,20 @@ generate_video(prompt):
            提交结果不确定 → 标记失败，不自动重提
 ```
 
+## 验证
+
+在本章目录运行：
+
+```bash
+npm test                  # 离线单元测试，不调用真实模型
+npm run test:data         # 真实临时 PostgreSQL / Redis
+npm run test:gateway      # 真实 Bifrost 容器与本地模拟上游
+```
+
+`test:data` 需要 PATH 中可用的 `initdb`、`pg_ctl`、`redis-server`；`test:gateway` 需要 Docker 与 Compose 锁定的网关镜像，验证鉴权、备用链、token 限流及媒体协议转换，不验证真实模型质量或实际计费。
+
+配置真实服务商并启动网关、数据库和服务后，按 README「跑起来看看」运行 `npm run gateway:check -- --search`，核对模型与搜索能力；用 `/model`、工作流步骤及 `/usage` 观察模型选择来源和用量，再按该节的小额预算示例检查超额停派。网关自检会产生真实用量，与离线和模拟上游测试分开记录。
+
 ## 限制说明
 
 - **备用链触发后的计价**：Codex 上报的用量里没有网关最终用的是哪个模型，备用链触发后仍按提交给网关的模型估算花费。
@@ -104,3 +118,19 @@ generate_video(prompt):
 - **价格表需要自己填**：清单里没有填真实价格；不填时只计 token，不计金额。
 - **能力声明靠实测维护**：服务商升级后，模型自带能力可能变化，用 `npm run gateway:check -- --search` 定期复查。
 - **Web 工作台与部署**：本阶段没有 Web 工作台，也不讲 Docker 部署；它们分别在 `app/` 与后续的 s08 中。
+
+## 机制实验
+
+在本章目录运行 `npm run lesson -- list` 查看实验。离线断言使用测试夹具，不代表真实模型或外部服务验收；依赖与边界见 [实验说明](../lessons/README.md)。
+
+
+表中未标记集成验证的项目为离线实验；集成项目需显式启用相应参数。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- s11-registry` | 用途、路由、能力和价格字段在加载清单时校验，非法值带模型名报错；生成的网关配置只含密钥变量引用；Compose 只给网关传入服务商密钥；Codex 只拿网关访问密钥，服务商密钥不进入子进程环境 |
+| `npm run lesson -- s11-routing` | 场景按用途过滤；needs 约束看图和上下文，搜索开启时跳过不支持 web_search 的候选，全部不满足才报错；任务 model 提交时校验并保存，步骤 > 任务 > 默认；effort 校验清单支持后传给 turn/start；GET /models 按用途展示能力、场景和默认；终端 /model 为当前会话选择后续任务模型，/state 和任务启动显示来源；日/月任一预算达到降级比例时，场景和默认选择改用降级场景；具体模型豁免，能力要求不放宽；生图、生视频 quality 通过 fast/strong 场景选模型，省略时使用各自 routes；写作 Agent 的 fast/strong 在 Kimi 搜索开启和 DeepSeek 搜索关闭时都能配置；备用链只包含已启用服务商；缺原生能力或看图能力时启动提醒，自检展示备用链；RAG 向量按路由经网关访问本地 Ollama，模型与维数来自清单 |
+| `npm run lesson -- s11-native-search` | auto 跟随实际默认模型的 nativeTools；off 与直连模式关闭搜索；搜索是会话配置，消息接口拒绝单轮覆盖；搜索开启时工作流候选也必须支持搜索；假网关自检核对 web_search 工具、调用标记与用量；口头声称搜索不算通过 |
+| `npm run lesson -- s11-budget` | 累计用量用于去重，每次记 last；重复通知与重启不补记历史；按配置时区划分自然日和月，覆盖夏令时及边界；超预算保留 queued，在途轮次与追加消息继续，次日或次月恢复派发；价格决定估算金额；网关每日 token 兜底默认取日预算的 1.5 倍 |
+| `npm run lesson -- s11-media` | 生图走网关并保存产物；视频提交立即返回任务 ID；轮次结束后后台查询与保存，media_status 可查询，按张或秒记账；失败与超时落库，重启继续旧 ID；提交结果不确定时失败并且不重提；预算、目录、格式和权限在收费请求前校验 |
+| `npm run lesson -- s11-gateway --integration` | 集成验证（默认不运行）：缺少或错误的访问密钥均被拒绝，主模型余额不足后请求改走备用服务；Responses 转为 Claude 格式，输出上限取模型参数表；首个请求耗尽 token 额度后，第二个请求返回 429 且不到上游；生图、生视频经真实网关的 byteplus 通道送达火山方舟格式的服务，图片和视频都保存进工作区并记账 |
