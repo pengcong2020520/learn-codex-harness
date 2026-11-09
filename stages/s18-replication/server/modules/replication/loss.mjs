@@ -3,6 +3,9 @@ export function takeoverAdvanced(row) {
   return Boolean(row.previous_primary) && BigInt(row.epoch || 0) > BigInt(row.replication_epoch || 0)
     && BigInt(row.epoch || 0) > 1n;
 }
+export function replicaSessionMissing(row) {
+  return takeoverAdvanced(row) && (!row.replicated_at || row.created_after_replication === true);
+}
 export function replicaTailMissing(row) {
   if (!takeoverAdvanced(row)) return false;
   return !row.replicated_at || row.created_after_replication === true

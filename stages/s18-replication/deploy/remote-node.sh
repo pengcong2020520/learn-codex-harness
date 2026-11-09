@@ -4,15 +4,33 @@ set -euo pipefail
 APP_DIR=${APP_DIR:-/opt/s18-replication}
 NODE_ID=${NODE_ID:-node-b}
 CONTROL_HOST=${CONTROL_HOST:-control.example.com}
-SSH_KEY=${SSH_KEY:-/root/.ssh/s18-tunnel}
-SSH_USER=${SSH_USER:-root}
+SSH_KEY=${SSH_KEY:-/var/lib/codex-tunnel/.ssh/s18-tunnel}
+SSH_USER=${SSH_USER:-codex-tunnel}
+# Pure output mode lets the administrator provision the restricted account before installation.
+if [[ $SSH_USER == root ]]; then echo '隧道必须使用专用非 root 系统账号。' >&2; exit 1; fi
+print_authorized_key() {
+  local public_key options
+  public_key=$(ssh-keygen -y -f "$SSH_KEY")
+  options='restrict,port-forwarding,permitopen="127.0.0.1:12379",permitopen="127.0.0.1:15432",permitopen="127.0.0.1:16379",permitopen="127.0.0.1:18080"'
+  for port in 4340 4341 4342; do
+    if [[ $port != "$default_port" ]]; then options+=",permitopen=\"127.0.0.1:$((port+10000))\""; fi
+  done
+  printf '%s,permitlisten="127.0.0.1:%s",command="/bin/false" %s\n' "$options" "$REVERSE_PORT" "$public_key"
+}
 case $NODE_ID in node-a) default_port=4340;; node-b) default_port=4341;; node-c) default_port=4342;; *) exit 1;; esac
 NODE_PORT=${NODE_PORT:-$default_port}
 REVERSE_PORT=${REVERSE_PORT:-$((default_port+10000))}
+if [[ ${1:-} == --authorized-key ]]; then print_authorized_key; exit 0; fi
 [[ $EUID -eq 0 ]] || { echo '需要 root 安装 systemd 单元和 uid 目录。' >&2; exit 1; }
 [[ $APP_DIR =~ ^/[a-zA-Z0-9_/-]+$ && $APP_DIR != / && $APP_DIR != *..* ]] || exit 1
 [[ $NODE_ID =~ ^node-[abc]$ && $CONTROL_HOST =~ ^[a-zA-Z0-9.-]+$ && $SSH_USER =~ ^[a-z_][a-z0-9_-]*$ && $SSH_KEY =~ ^/[a-zA-Z0-9_./-]+$ ]] || exit 1
 [[ $NODE_PORT =~ ^[0-9]+$ && $REVERSE_PORT =~ ^[0-9]+$ ]] || exit 1
+print_authorized_key
+if ! id codex-tunnel >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/codex-tunnel --shell /usr/sbin/nologin codex-tunnel
+fi
+chown codex-tunnel:codex-tunnel "$SSH_KEY"
+chmod 600 "$SSH_KEY"
 cd "$APP_DIR"
 test -f .remote.env && test -f .remote-identity.json && test -f "$SSH_KEY"
 # Never source dotenv as shell code; verify role against the strictly scoped environment.
@@ -37,6 +55,8 @@ Description=s18 remote node SSH tunnel
 After=network-online.target
 Wants=network-online.target
 [Service]
+User=codex-tunnel
+Group=codex-tunnel
 ExecStart=/usr/bin/ssh -NT -i $SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -L 127.0.0.1:12379:127.0.0.1:12379 -L 127.0.0.1:15432:127.0.0.1:15432 -L 127.0.0.1:16379:127.0.0.1:16379 -L 127.0.0.1:18080:127.0.0.1:18080 $node_forwards -R 127.0.0.1:$REVERSE_PORT:127.0.0.1:$NODE_PORT $SSH_USER@$CONTROL_HOST
 Restart=always
 RestartSec=2

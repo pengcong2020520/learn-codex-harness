@@ -28,7 +28,7 @@ export class ReplicationWorker {
     const route=this.runtime.cache.routeOf(userId);
     if(!this.runtime.owns(userId) || !route.replica || !hasMember(this.runtime.coordination.members,route.replica)) return false;
     if((await this.store.boundary(userId)).busy) return false;
-    let snapshot;
+    let snapshot, receipt, token;
     try {
       // Close admission BEFORE checking again; quiesce waits for admission already in flight.
       if(!await this.quiesce(userId)) return false;
@@ -36,13 +36,18 @@ export class ReplicationWorker {
       if(boundary.busy) return false;
       snapshot=await this.snapshot(userId);
       const previous=await this.store.position(userId);
-      if(!force && previous?.content_hash===snapshot.hash && String(previous.epoch)===String(route.epoch) && previous.shard_id===route.shardId && String(previous.last_task_sequence)===String(boundary.sequence)) return true;
-      const token=randomUUID();
+      if(!force && !await this.store.unfinished(userId) && previous?.content_hash===snapshot.hash && String(previous.epoch)===String(route.epoch) && previous.shard_id===route.shardId && String(previous.last_task_sequence)===String(boundary.sequence)) return true;
+      token=randomUUID();
       await this.store.begin(userId,route,token);
-      await this.send(userId,route,token,snapshot);
+      receipt=await this.send(userId,route,token,snapshot);
       // Both trees and auxiliary content must be acknowledged before SH001-fenced progress is committed.
-      await this.store.finish(userId,route,boundary.sequence,snapshot.hash,token);
+      try { await this.store.finish(userId,route,boundary.sequence,snapshot.hash,token); }
+      finally { await receipt?.settle(); }
       this.errors.delete(userId);return true;
+    } catch (error) {
+      if (!token) await this.store.begin(userId,route,randomUUID()).catch(()=>{});
+      await this.store.fail?.(userId,error).catch(()=>{});
+      throw error;
     } finally { await snapshot?.close?.(); await this.release(userId); }
   }
   async sweep() {

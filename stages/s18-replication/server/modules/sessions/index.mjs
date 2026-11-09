@@ -98,11 +98,11 @@ export class SessionService extends EventEmitter {
     return this.config.agent?.input(text, workflow, step) || [{ type: "text", text, text_elements: [] }];
   }
 
-  register(result) {
+  register(result, missingTurns = []) {
     const thread = result.thread;
     const session = { ownerId: currentIdentity()?.userId || this.repository?.ownerId, id: thread.id, cwd: thread.cwd || this.runtime.workspaceDir,
       name: thread.name || thread.preview || "新会话", model: result.model,
-      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, turns: new Map() };
+      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, missingTurns, turns: new Map() };
     this.sessions.set(session.id, session);
     for (const turn of thread.turns || []) this.recordTurn(session.id, turn);
     this.publish(session.id);
@@ -125,9 +125,10 @@ export class SessionService extends EventEmitter {
   async ensure(threadId) {
     if (this.rpc.pool && !this.rpc.current()) return this.rpc.pool.withOwner(currentIdentity().userId, () => this.ensure(threadId));
     requireId(threadId, "会话 ID");
-    if ((await this.repository?.conversation(threadId))?.replica_missing)
+    const selected = await this.repository?.conversation(threadId);
+    if (selected?.replica_missing)
       throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
-    if (this.sessions.has(threadId)) { await this.assertCompatible(threadId); return this.snapshot(threadId); }
+    if (this.sessions.has(threadId)) { this.sessions.get(threadId).missingTurns = selected?.missingTurns || []; await this.assertCompatible(threadId); return this.snapshot(threadId); }
     if (!this.loading.has(threadId)) {
       const promise = this.load(threadId).finally(() => this.loading.delete(threadId));
       this.loading.set(threadId, promise);
@@ -157,7 +158,7 @@ export class SessionService extends EventEmitter {
         throw error;
       }
       if (result.thread.id !== threadId) throw new AppError("历史文件与 Thread id 不一致。", 409);
-      return this.register(result);
+      return this.register(result, selected.missingTurns || []);
     }, { allowBusy: true });
   }
 
@@ -326,7 +327,7 @@ export class SessionService extends EventEmitter {
     if (!turn) { this.deltas.delete(threadId); return this.hub.publish("session", this.snapshot(threadId), threadId, this.sessions.get(threadId)?.ownerId); }
     this.flushDeltas(threadId, turn.id);
     const session = this.sessions.get(threadId);
-    this.hub.publish("turn", { name: session.name, activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, turn: copyTurn(turn) }, threadId, session.ownerId);
+    this.hub.publish("turn", { name: session.name, activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, missingTurns: session.missingTurns || [], turn: copyTurn(turn) }, threadId, session.ownerId);
   }
 
   snapshot(threadId) {
@@ -334,7 +335,7 @@ export class SessionService extends EventEmitter {
     if (!session) throw new AppError('会话不存在。', 404);
     if (currentIdentity()) can(currentIdentity(), 'read', { ...session, type: 'personal' });
     return { id: session.id, name: session.name, model: session.model, modelProvider: session.modelProvider,
-      activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId,
+      activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, missingTurns: session.missingTurns || [],
       turns: [...session.turns.values()].slice(-SESSION_TURN_LIMIT).map(copyTurn) };
   }
 

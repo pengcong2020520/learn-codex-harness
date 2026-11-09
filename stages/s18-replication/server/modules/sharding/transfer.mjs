@@ -27,7 +27,7 @@ export function limitTransfer(limit = transferLimit()) {
   let bytes = 0;
   return new Transform({ transform(chunk, encoding, callback) {
     bytes += chunk.length;
-    callback(bytes > limit ? new AppError('迁移内容超过接收上限。', 413) : null, bytes > limit ? undefined : chunk);
+    callback(bytes > limit ? new AppError('目录过大：复制或迁移内容超过接收上限。', 413, 'TRANSFER_TOO_LARGE') : null, bytes > limit ? undefined : chunk);
   } });
 }
 export const restoredMode = (mode, directory) => mode & (directory ? 0o2777 : 0o777);
@@ -38,19 +38,23 @@ export function transferPath(root, record, kind) {
   if (kind === 'workspace') return path.join(root, 'workspace/users', record.user_id);
   throw new Error('只允许 CODEX_HOME 与用户 workspace。');
 }
-export function exportTree(root, record, kind) {
+export function exportTree(root, record, kind, { maxBytes } = {}) {
   const directory = transferPath(root, record, kind); assertRealPath(directory);
   const identity = kind === 'home' ? { uid: record.uid, gid: record.uid } : { uid: process.getuid(), gid: process.getgid() };
   const child = spawn(process.execPath, [fileURLToPath(new URL('./transfer-worker.mjs', import.meta.url)), directory, kind, String(record.uid)], {
     ...identity, cwd: '/', env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore','pipe','pipe'],
   });
   const stderr = stderrCollector(); child.stderr.on('data', chunk => stderr.append(chunk));
-  const done = new Promise((resolve, reject) => {
+  const exited = new Promise((resolve, reject) => {
     child.once('error', error => reject(subprocessFailure(error, { kind, phase: 'export', stderr: stderr.text })));
     child.once('close', (code, signal) => code === 0 ? resolve() : reject(subprocessFailure(new Error('用户目录 tar 导出失败。'),
       { kind, phase: 'export', stderr: stderr.text, exitCode: code, signal })));
   });
-  done.catch(() => {}); return { stream: child.stdout, done, async stop() {
+  let failure;
+  const stream = maxBytes === undefined ? child.stdout : limitTransfer(maxBytes);
+  stream.on('error', error => { failure = error; });
+  const done = Promise.all([exited, maxBytes === undefined ? Promise.resolve() : pipeline(child.stdout, stream)]);
+  done.catch(() => {}); return { stream, done, get failure() { return failure; }, async stop() {
     if (child.exitCode === null && child.signalCode === null) {
       child.stdout.destroy();
       if (child.pid) await signalUserProcess(child.pid, 'SIGKILL', { ...identity, env: { PATH: '/usr/bin:/bin' } });
@@ -93,8 +97,8 @@ function restoreOwners(stage, entries) {
   visit(stage, '.');
   if (visited !== entries.size) throw new Error('解包条目缺失。');
 }
-async function removePreviousTree(previous, record, kind) {
-  if (kind === 'home' && process.getuid() === 0) {
+export async function removePreviousTree(previous, record, kind) {
+  if (kind === 'home' && process.getuid() === 0 && fs.lstatSync(previous).uid === record.uid) {
     // The service has no DAC_OVERRIDE, and the user cannot unlink from the root-owned parent.
     await exec(process.execPath, [fileURLToPath(new URL('./transfer-cleanup.mjs', import.meta.url)), previous], {
       uid: record.uid, gid: record.uid, cwd: '/', env: { PATH: '/usr/bin:/bin' },
@@ -116,7 +120,7 @@ export async function publishTree(stage, target, { keepPrevious = true, removePr
   }
 }
 
-export async function importTree(root, record, kind, input, beforePublish = async () => {}, { keepPrevious = true, log = console.warn } = {}) {
+export async function importTree(root, record, kind, input, beforePublish = async () => {}, { keepPrevious = true, log = console.warn, stageOnly = false } = {}) {
   const target = transferPath(root, record, kind);
   const limit = transferLimit();
   assertTransferSpace(path.dirname(target), limit);
@@ -128,6 +132,7 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
   prepareDirectories(root, record, { isolated: process.getuid() === 0 });
   assertRealPath(path.dirname(target));
   fs.mkdirSync(stage, { mode: 0o700 });
+  let staged = false;
   try {
     await pipeline(input, limitTransfer(limit), fs.createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
     const { stdout, stderr } = await tar(kind, 'list', ['--list','--verbose','--numeric-owner','--quoting-style=escape','--file',archive]);
@@ -139,8 +144,12 @@ export async function importTree(root, record, kind, input, beforePublish = asyn
     catch (error) { throw subprocessFailure(error, { kind, phase: 'restore', stderr: extracted.stderr, exitCode: 0 }); }
     await beforePublish();
     prepareDirectories(root, record, { isolated: process.getuid() === 0 });
+    if (stageOnly) { staged = true; return { stage, target, kind }; }
     // Keep any previous destination until this copy is complete. Never merge stale SQLite files.
     await publishTree(stage, target, { keepPrevious, log, removePrevious: previous => removePreviousTree(previous, record, kind) });
     return { copied: kind };
-  } finally { fs.rmSync(archive, { force: true }); fs.rmSync(stage, { recursive: true, force: true }); }
+  } finally { fs.rmSync(archive, { force: true }); if (!staged && fs.existsSync(stage)) {
+    const disposable = target + '.before-move-' + randomUUID();
+    fs.renameSync(stage, disposable); await removePreviousTree(disposable, record, kind);
+  } }
 }

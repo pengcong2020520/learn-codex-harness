@@ -5,14 +5,14 @@ import { currentIdentity } from '../server/modules/accounts/context.mjs';
 import { lagOf,LAG_MS,ReplicationStore } from '../server/modules/replication/store.mjs';
 import { authorizeReplica } from '../server/modules/replication/index.mjs';
 function fixture() {
- const calls=[],timers=new Map();let position,busy=0,hash='a',sendError=false;
+ const calls=[],timers=new Map();let position,busy=0,hash='a',sendError=false,unfinished=false;
  const route={primary:'node-a',replica:'node-b',epoch:1,shardId:'0'};
  const runtime={nodeId:'node-a',cache:{routeOf:()=>route,shards:{0:route}},owns:()=>true,coordination:{members:new Map([['node-b',{}]])}};
  const store={boundary:async()=>({busy,sequence:'2'}),users:async()=>['bob'],position:async()=>position,
- begin:async()=>calls.push('begin'),finish:async(u,r,s,h)=>{calls.push('position');position={content_hash:h,epoch:r.epoch,shard_id:r.shardId,last_task_sequence:s};}};
+ unfinished:async()=>unfinished,begin:async()=>{unfinished=true;calls.push('begin');},finish:async(u,r,s,h)=>{unfinished=false;calls.push('position');position={content_hash:h,epoch:r.epoch,shard_id:r.shardId,last_task_sequence:s};}};
  const worker=new ReplicationWorker({runtime,store,log:()=>{},setTimer:(fn,ms)=>{assert.equal(ms,5000);const id={};timers.set(id,fn);return id;},clearTimer:id=>timers.delete(id),
  quiesce:async()=>{assert.equal(currentIdentity().userId,'bob');calls.push('freeze');return true;},release:async()=>calls.push('release'),snapshot:async()=>({hash}),send:async()=>{calls.push('send');if(sendError)throw Error('offline');}});
- return {worker,calls,timers,setBusy:n=>busy=n,setHash:s=>hash=s,setError:v=>sendError=v,runtime};
+ return {worker,calls,timers,setBusy:n=>busy=n,setHash:s=>hash=s,setError:v=>sendError=v,runtime,setUnfinished:v=>unfinished=v};
 }
 test('轮次边界：执行中不复制，5 秒去抖，同用户合并，先传输后位点',async()=>{
  const f=fixture();assert.equal(DEBOUNCE_MS,5000);assert.equal(IDLE_SYNC_MS,60000);
@@ -46,8 +46,8 @@ test('接管恢复：丢失会话暂停、尾部标记，执行中待核对，�
  await new ReplicationStore({connect:async()=>db},'instance').recover('bob',8);
  assert.equal(queries[0][0],'BEGIN');assert.equal(queries.at(-1)[0],'COMMIT');
  const missing=queries.find(([q])=>q.includes("SET status='replica_missing'"));assert.match(missing[0],/t.status='completed'/);assert.match(missing[0],/t.sequence>\$6::bigint/);assert.equal(missing[1][5],'10');
- assert.ok(queries.some(([q,args])=>q.includes("SET status='needs-review'")&&args[2]==='tail'));
- assert.ok(queries.some(([q])=>q.includes('replica_missing=true,paused=true')));
+ assert.ok(!queries.some(([q])=>q.includes("SET status='needs-review'")));
+ assert.ok(!queries.some(([q])=>q.includes('replica_missing=true,paused=true')));
  assert.ok(queries.some(([q])=>q.includes("SET status='unconfirmed'")&&q.includes("('starting','running','steering')")));
  assert.ok(queries.some(([q])=>q.includes('INSERT INTO agent_data.outbox')&&q.includes("t.status='queued'")));
  assert.ok(!queries.some(([q])=>q.includes("SET status='queued'")));
@@ -66,4 +66,37 @@ test('readiness：副本落后仍返回200，degraded列出分片',async()=>{
 test('轮次边界：冻结之后再检查执行中状态，防止检查/派发竞态',async()=>{
  const f=fixture();f.worker.quiesce=async()=>{f.setBusy(1);return true;};
  assert.equal(await f.worker.sync('bob'),false);assert.deepEqual(f.calls,['release']);await f.worker.close();
+});
+
+test('相同哈希与位点存在未完成操作仍重新发送，finish 后才允许短路',async()=>{
+ const f=fixture();await f.worker.sync('bob');f.setUnfinished(true);f.calls.length=0;
+ await f.worker.sync('bob');assert.deepEqual(f.calls,['freeze','begin','send','position','release']);
+ f.calls.length=0;await f.worker.sync('bob');assert.deepEqual(f.calls,['freeze','release']);await f.worker.close();
+});
+test('提交失败后通知接收端恢复；只有 finish 完成才能清理旧副本',async()=>{
+ const f=fixture();let published=false,old=true;
+ f.worker.send=async()=>{published=true;return {settle:async()=>{published=false;assert.equal(old,true);}};};
+ f.worker.store.finish=async()=>{assert.equal(published,true);assert.equal(old,true);throw Error('commit failed');};
+ await assert.rejects(f.worker.sync('bob'),/commit failed/);assert.equal(published,false);await f.worker.close();
+});
+test('超限连续失败保留操作单与原因，零落后轮次也不能视为 ready',async()=>{
+ const f=fixture();let error;
+ f.worker.snapshot=async()=>{throw Error('目录过大：复制内容超过接收上限。');};
+ f.worker.store.fail=async(user,e)=>{error=e.message;};
+ for(let n=0;n<2;n++)await assert.rejects(f.worker.sync('bob'),/目录过大/);
+ assert.equal(await f.worker.store.unfinished('bob'),true);
+ assert.equal(lagOf({lag_rounds:0,replication_error:error}).replica_lagging,true);
+ assert.ok(!f.calls.includes('position'));await f.worker.close();
+});
+
+test('/cluster 跨节点读取持久化超限原因，已有基线也标记 lagging 且非 ready',async()=>{
+ const {attachReplication}=await import('../server/modules/replication/index.mjs');
+ const app={config:{root:'/unused',generation:{}},data:{pool:{},scope:{instanceId:'test'},jobs:{patch:async()=>{}}},close:async()=>{}};
+ const runtime={nodeId:'node-c',coordination:{members:new Map([['node-a',{}],['node-b',{}]])}};
+ const api=attachReplication(app,runtime,{rows:async()=>[{shard_id:'0',node_id:'node-a',replica:'node-b',epoch:1,replica_ready:true}],reasons:new Map()});
+ try {
+  api.store.status=async()=>[lagOf({shard_id:'0',user_id:'bob',lag_rounds:0,transfer_started_at:new Date(),replication_error:'目录过大：复制内容超过接收上限。'})];
+  const result=await api.status();assert.equal(result.shards[0].replica_ready,false);
+  assert.equal(result.shards[0].replica_lagging,true);assert.match(result.shards[0].reason,/目录过大/);
+ } finally {await api.close();}
 });

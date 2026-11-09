@@ -222,6 +222,7 @@ services:
     mem_limit: 64m
     command: ["node", "deploy/tcp-relay.mjs"]
     environment:
+      RELAY_BIND: 0.0.0.0
       RELAYS: '[[2379,"etcd",2379],[5432,"postgres",5432],[6379,"redis",6379],[8080,"gateway",8080],[4340,"node-a",4340],[4342,"node-c",4342]]'
     ports:
       - "127.0.0.1:12379:2379"

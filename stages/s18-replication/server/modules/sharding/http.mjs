@@ -96,6 +96,8 @@ export function createShardedHandler(coordination, service, runtime, control) {
       })));
     }
     const body = await parse(req);
+    if (pathname === '/internal/replication/publish' || pathname === '/internal/replication/settle')
+      return json(200,await app.replication[pathname.split('/').at(-1)](body,caller));
     if (pathname === '/internal/promote') {
       const identity=await app.accounts.authenticate(body.authorization);
       if(identity.role!=='admin')throw new AppError('需要 admin。',403);
@@ -299,7 +301,7 @@ export async function copyContent(app, runtime, userId, address, operationId, en
     if (!response.ok) throw new Error('内容文件迁移失败。'); await response.arrayBuffer();
   }
 }
-export async function receiveContent(app, req, json, paused) {
+export async function receiveContent(app, req, json, paused, { stageOnly = false } = {}) {
   const q = new URL(req.url, 'http://localhost').searchParams;
   await paused(q.get('user'));
   const entry = (await contentFiles(app, q.get('user'))).find(r => r.file === q.get('file') && r.kind === q.get('kind'));
@@ -308,14 +310,16 @@ export async function receiveContent(app, req, json, paused) {
   const limit = transferLimit();
   assertTransferSpace(path.dirname(target), limit);
   fs.mkdirSync(path.dirname(target), { recursive:true, mode:0o700 });
-  const temp = target + '.moving';
+  const temp = target + '.moving-' + q.get('operationId');
+  let staged = false;
   const hash = createHash('sha256');
   try {
     await pipeline(req, limitTransfer(limit), new Transform({ transform(chunk, encoding, callback) { hash.update(chunk); callback(null, chunk); } }), fs.createWriteStream(temp, { flags:'wx',mode:0o600 }));
     if (hash.digest('hex') !== entry.digest) throw new Error('迁移内容校验失败。');
     app.config.generation?.assert(); await paused(q.get('user'));
+    if (stageOnly) { staged = true; return { stage:temp,target,kind:q.get('kind'),file:q.get('file') }; }
     fs.renameSync(temp,target);
   }
-  finally { fs.rmSync(temp,{force:true}); }
+  finally { if (!staged) fs.rmSync(temp,{force:true}); }
   return json(200,{ copied:true });
 }

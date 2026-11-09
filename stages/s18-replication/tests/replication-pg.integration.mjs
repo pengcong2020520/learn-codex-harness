@@ -57,9 +57,9 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd,created_at) VALUES($1,'empty-tail',$2,'/tmp',clock_timestamp())",[instance,user]);
  await runOwner(user,()=>sb.recover(user,2));
  assert.deepEqual((await admin.query('SELECT id,replica_missing,paused FROM agent_data.conversations WHERE instance_id=$1 ORDER BY id',[instance])).rows,
-  [{id:'copied-empty',replica_missing:false,paused:false},{id:'empty-tail',replica_missing:true,paused:true},{id:'replica-thread',replica_missing:true,paused:true}]);
+  [{id:'copied-empty',replica_missing:false,paused:false},{id:'empty-tail',replica_missing:true,paused:true},{id:'replica-thread',replica_missing:false,paused:true}]);
  assert.deepEqual((await admin.query('SELECT id,status FROM agent_data.tasks WHERE instance_id=$1 ORDER BY sequence',[instance])).rows,
- [{id:'copied',status:'completed'},{id:'tail',status:'replica_missing'},{id:'inflight',status:'unconfirmed'},{id:'pending',status:'needs-review'}]);
+ [{id:'copied',status:'completed'},{id:'tail',status:'replica_missing'},{id:'inflight',status:'unconfirmed'},{id:'pending',status:'queued'}]);
  assert.equal((await admin.query("SELECT error FROM agent_data.tasks WHERE instance_id=$1 AND id='tail'",[instance])).rows[0].error,'该轮结果在故障接管时丢失，请核对');
  const repository=new Repository(sb.pool,{instanceId:instance,ownerId:user});
  await runOwner(user,async()=>{
@@ -68,12 +68,13 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
   assert.equal(listed.find(r=>r.id==='empty-tail').replicaMissing,true);
   assert.equal(await repository.markReplicaMissingAfterResume('copied-empty'),false);
  });
- // Previous releases only marked tasks: reads/listing must still avoid native resume.
+ // Tail loss is task-scoped; reads/listing must allow native resume of the prefix.
  await admin.query("UPDATE agent_data.conversations SET replica_missing=false WHERE instance_id=$1 AND id='replica-thread'",[instance]);
  await runOwner(user,async()=>{
-  assert.equal((await repository.conversation('replica-thread')).replica_missing,true);
-  assert.equal((await repository.listConversations()).find(r=>r.id==='replica-thread').replicaMissing,true);
-  assert.equal(await repository.markReplicaMissingAfterResume('replica-thread'),true);
+  assert.equal((await repository.conversation('replica-thread')).replica_missing,false);
+  assert.equal((await repository.conversation('replica-thread')).missingTurns[0].taskId,'tail');
+  assert.equal((await repository.listConversations()).find(r=>r.id==='replica-thread').replicaMissing,false);
+  assert.equal(await repository.markReplicaMissingAfterResume('replica-thread'),false);
  });
  await ctl.recovered('0',2,'node-b');c.members.set('node-a',{nodeId:'node-a'});await ctl.place();
  assert.equal((await admin.query('SELECT 1 FROM agent_data.user_shards WHERE user_id=$1',[unmapped])).rowCount,0,'placement must not import another instance');

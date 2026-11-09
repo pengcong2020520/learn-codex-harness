@@ -16,6 +16,7 @@ import { provisionNodeRoles } from '../scripts/cluster-migrate.mjs';
 import { cleanup,installToolFixture,tempRoot,until } from './helpers.mjs';
 import { answer,responsesFixture } from './responses-fixture.mjs';
 import { startClusterNode,scriptedCoordination } from './fixtures/sharding-cluster.mjs';
+import { directoryHash } from '../server/modules/replication/index.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
 for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario === 'missing-tail' ? 'Linux uid：旧会话已复制、home 存在，新会话未复制即接管返回 409，新建会话可用' : scenario === 'missing-home' ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
  skip:process.platform!=='linux'||process.getuid?.()!==0?'需要 Linux 0:1000、真实 PG/Redis 和 Codex':false,timeout:240000
@@ -102,6 +103,21 @@ for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario
   for(const target of [homes[1],path.join(roots[1],'workspace/users',bob.id)])
    assert.equal(fs.readdirSync(path.dirname(target)).some(name=>name.startsWith(path.basename(target)+'.before-move-')),false);
  }
+ // A failed workspace rename must leave both replica trees at the preceding snapshot.
+ const beforeHash=await directoryHash(roots[1],record);
+ fs.writeFileSync(path.join(roots[0],relative),'next service data');
+ const rename=fs.renameSync,replicaWorkspace=path.join(roots[1],'workspace/users',bob.id);
+ const fault=t.mock.method(fs,'renameSync',(source,target)=>{
+  if(target===replicaWorkspace && path.basename(source).startsWith('.move-'))throw Object.assign(Error('workspace publication failure'),{code:'EIO'});
+  return rename(source,target);
+ });
+ try { await assert.rejects(nodes[0].app.replication.worker.sync(bob.id,{force:true})); }
+ finally { fault.mock.restore(); }
+ assert.equal(await directoryHash(roots[1],record),beforeHash);
+ assert.equal(fs.readFileSync(path.join(roots[1],relative),'utf8'),'service data');
+ assert.ok(await nodes[0].app.replication.store.unfinished(bob.id));
+ await until(()=>nodes[0].app.replication.worker.sync(bob.id,{force:true}),30000);
+ assert.equal(fs.readFileSync(path.join(roots[1],relative),'utf8'),'next service data');
  await nodes[2].control.ready('0',1,'node-a');
  assert.equal(fs.existsSync(path.join(homes[1],'tmp')),false);
  const stat=spawnSync(process.execPath,['-e',`const fs=require('fs'),s=fs.statSync(process.argv[1]);console.log(JSON.stringify([s.uid,s.gid,s.mode&511]));`,path.join(homes[1],'private-marker')],{uid:record.uid,gid:record.uid,encoding:'utf8'});
@@ -114,6 +130,7 @@ for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario
   // Freeze the completed baseline, then reproduce the crash window deterministically.
   await nodes[0].app.replication.worker.close();
   const before=await nodes[0].app.replication.store.position(bob.id);
+  await complete(0,'old-tail','UNREPLICATED OLD TAIL',session.id);
   lost=await api(2,'/sessions',{},201,token);
   await complete(0,'tail','NEW unreplicated conversation',lost.id);
   empty=await api(2,'/sessions',{},201,token);
@@ -125,9 +142,18 @@ for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario
  }
  await nodes[0].app.close();nodes[0].generation.active=false;
  await new Promise(resolve=>{nodes[0].server.close(resolve);nodes[0].server.closeAllConnections();});members.delete('node-a');
+ if(missingTail)for(const [id,thread,text] of [['old-queued',session.id,'QUEUED OLD PREFIX'],['lost-queued',lost.id,'QUEUED LOST SESSION']])
+  await admin.query("INSERT INTO agent_data.tasks(instance_id,id,thread_id,text,mode,status,created_at) VALUES($1,$2,$3,$4,'enqueue','queued',$5)",[scope.instanceId,id,thread,text,Date.now()]);
  await nodes[2].control.switch('0');await nodes[1].app.replication.tick();
  if(missingTail) {
-  await api(2,'/state?threadId='+session.id,undefined,200,token);
+  const prefix=await api(2,'/state?threadId='+session.id,undefined,200,token);
+  assert.ok(prefix.session.missingTurns.some(turn=>turn.taskId==='old-tail'));
+  await api(2,'/sessions/resume',{threadId:session.id},200,token);
+  let queued;await until(async()=>{queued=await runOwner(bob.id,()=>nodes[1].app.data.jobs.get('old-queued'));return ['completed','failed'].includes(queued?.status);},60000);
+  assert.equal(queued.status,'completed',JSON.stringify({queued,logs}));
+  assert.equal((await admin.query("SELECT status FROM agent_data.tasks WHERE instance_id=$1 AND id='lost-queued'",[scope.instanceId])).rows[0].status,'needs-review');
+  await complete(1,'old-continued','THIRD continue old prefix',session.id);
+
   for(const threadId of [lost.id,empty.id]) {
    for(const [route,body] of [
     ['/state?threadId='+threadId,undefined],['/events?threadId='+threadId,undefined],

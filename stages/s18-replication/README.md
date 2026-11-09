@@ -20,7 +20,7 @@ etcd 的 `/codex/shards/<id>` 保存 `{ primary, replica, epoch }`，PG `shard_o
 
 为什么只在轮次边界复制？运行中的 Codex 正在修改 SQLite、JSONL 和工具产物；目录能被读取，不表示它是一个一致的会话快照。复制期间的新任务留在 PG/Redis 排队，复制结束再派发。一个用户的其他会话仍在执行时，本轮不复制。
 
-从节点逐次核对调用方节点密钥、PG 当前主节点、replica、epoch 和复制操作单。两个目录与附属内容全部成功，主节点才以 SH001 保护写入 `replication_positions(user_id, shard_id, epoch, last_task_sequence, replicated_at)`。未完成传输操作单会阻止提升，避免提升半份目录。导入期间保留原目录用于人工恢复，磁盘空间需要运维关注。
+从节点逐次核对调用方节点密钥、PG 当前主节点、replica、epoch 和复制操作单。两个目录与附属内容全部暂存并校验后才成对发布；两个目录的 rename 连续执行，任一失败则回滚已发布目录。主节点随后以 SH001 保护写入 `replication_positions(user_id, shard_id, epoch, last_task_sequence, replicated_at)`。未完成传输操作单会阻止提升，避免提升半份目录。旧目录保留到 PG 位点提交成功后才删除；提交失败恢复旧副本。本地操作记录与 PG 提交 token 用于重试或重启时核对，未完成操作禁止哈希短路。
 
 **空闲兜底与延迟。** 每 60 秒检查空闲用户；以用户 uid 计算 CODEX_HOME 内容哈希，workspace 以服务身份计算，排除顶层 `tmp/`，内容、属主和权限未改变且位点一致则跳过。`/cluster` 按分片、用户显示未复制的已完成轮次数量和最早未复制轮次的等待秒数。空闲且已同步的用户不会因长时间未说话被误报。任何用户等待超过 300 秒，分片标记 `replica_lagging`；复制错误和未追平也显示副本落后。`/ready` 仍为 200，附 `degraded.replica_lagging`，主节点继续服务。
 
@@ -30,11 +30,13 @@ etcd 的 `/codex/shards/<id>` 保存 `{ primary, replica, epoch }`，PG `shard_o
 |---|---|---|
 | 已发给 Codex、仍在执行 | `unconfirmed`，会话暂停，待核对 | 否 |
 | `completed` 且 sequence 大于最后复制位点 | `replica_missing`；保留 PG 任务，提示「该轮结果在故障接管时丢失，请核对」 | 否 |
-| `queued`，且用户 home 存在 | 保留 queued，由新主 outbox 唤醒 | 是正常首次派发；同会话有待核对任务时先核对并继续 |
+| `queued`，且会话创建于最后成功复制之前 | 保留 queued，由新主 outbox 唤醒 | 是正常首次派发；同会话有待核对任务时先核对并继续 |
 
-接管恢复时若该用户的 `CODEX_HOME` 完全缺失，会持久标记已有会话。读取或恢复原会话返回 `409 REPLICA_MISSING`，提示原会话无法恢复、请新建会话，任务记录已标记待核对；未派发任务转为 `needs-review`，不自动执行。新建会话不继承丢失标记。升级时需执行新增的 `020-replica-missing.sql` 迁移。
+会话创建于最后一次成功复制之后（副本没有该会话 rollout），或整个用户 home 缺失时，持久标记整会话丢失。读、恢复、发消息均返回 `409 REPLICA_MISSING`，不调用 Codex 恢复；列表带 `replicaMissing:true`。这类会话的 queued 任务转为 `needs-review`，原因是会话在故障接管中丢失。新建会话可正常使用。
 
-复制发布成功后删除本次替换的旧目录；私有 home 由用户 uid 清空，服务再删除外层目录，清理失败只记日志。迁移仍默认保留 `.before-move-*` 供恢复；此次修改不会扫描或删除历史遗留目录。
+会话创建于复制之前、只是尾部已完成任务超过位点时，保留副本上的 rollout 前缀，允许恢复续聊；只把超出位点的 completed 任务标为 `replica_missing`，会话快照带 `missingTurns`（taskId、turnId、message）。该会话 queued 任务保持 queued，由新主派发；执行中任务仍按 s08 转 unconfirmed。原生恢复报错仅在整会话丢失条件成立时映射为 REPLICA_MISSING。升级须运行迁移，包括 `020-replica-missing.sql` 和 `021-replication-error.sql`。
+
+PG 复制位点提交成功后删除本次替换的旧目录；私有 home 由用户 uid 清空，服务再删除外层目录，清理失败只记日志。迁移仍默认保留 `.before-move-*` 供恢复；此次修改不会扫描或删除历史遗留目录。
 
 接受的丢失窗口是**最后一次复制之后**。5 秒是合并等待时间，不是数据零丢失承诺；长轮次、网络故障和复制耗时都会扩大窗口。`replica_ready` 表示已建立完整基线，并不代表与正在服务的主节点逐字节同步。
 
@@ -137,7 +139,7 @@ unset REMOTE_BRIDGE_SUBNET REMOTE_BRIDGE_GATEWAY
 
 控制机 `control.example.com` 运行 PG、Redis、etcd、gateway、Caddy、node-a、node-c；第二台 `worker.example.com` 只运行 node-b。仍保留三个分片的环形布局。第二台默认 700m、`AGENT_RUNTIME_LIMIT=2`，可在 `.remote.env` 调整为 1–4。
 
-网络路径：远程 node-b → 本机 SSH `-L` 回环端口 → 控制机 `remote-access` 回环端口 → Docker 内基础服务。node-b 访问 node-a/c，通过本机 4340/4342 隧道。控制机节点访问 `host.docker.internal:4341` → bridge 网关 relay → 控制机回环 14341 → SSH `-R` → 第二台回环 4341。所有对宿主发布的基础服务端口都绑定 127.0.0.1；bridge relay 仅监听配置的 Docker 网关地址，不监听公网地址。
+网络路径：远程 node-b → 本机 SSH `-L` 回环端口 → 控制机 `remote-access` 回环端口 → Docker 内基础服务。node-b 访问 node-a/c，通过本机 4340/4342 隧道。控制机节点访问 `host.docker.internal:4341` → bridge 网关 relay → 控制机回环 14341 → SSH `-R` → 第二台回环 4341。所有对宿主发布的基础服务端口都绑定 127.0.0.1；bridge relay 必须显式设置 `RELAY_BIND`；绑定 Docker 网桥网关地址，是为了让 compose 网络内的节点访问宿主回环反向隧道。该入口仅在 compose 网络内可达，不绑定宿主公网接口；同网桥其他容器也可连接，因此应用层仍需节点密钥与有效操作单。容器内的 remote-access 显式绑定 0.0.0.0，仅通过宿主回环发布端口。
 
 1. 两台 Linux 都装 Docker Compose（支持 `!override`），代码都放在 `/opt/s18-replication`。先设置控制机 `.env`，额外加入：
 
@@ -173,15 +175,22 @@ ssh worker.example.com 'mkdir -p /opt/s18-replication/nodes/node-b/.data/gateway
 scp .data/gateway/enabled-providers.json worker.example.com:/opt/s18-replication/nodes/node-b/.data/gateway/
 ```
 
-3. 第二台准备独立 SSH 密钥 `/root/.ssh/s18-tunnel`，将公钥加入控制机允许端口转发的账号，核对控制机 host key 后写入 known_hosts。无需开启 `GatewayPorts`：反向监听只需控制机回环。随后运行：
+3. 第二台准备独立 SSH 密钥 `/var/lib/codex-tunnel/.ssh/s18-tunnel`，在控制机创建专用系统用户 `codex-tunnel`（shell 为 `/usr/sbin/nologin`），核对控制机 host key 后写入 known_hosts。无需开启 `GatewayPorts`：反向监听只需控制机回环。先生成并打印限制公钥行供控制机管理员粘贴到该账号的 `authorized_keys`：
+
+```bash
+SSH_KEY=/var/lib/codex-tunnel/.ssh/s18-tunnel bash deploy/remote-node.sh --authorized-key
+# 输出形如 restrict,port-forwarding,permitopen="127.0.0.1:12379",permitopen=...,permitlisten="127.0.0.1:14341",command="/bin/false" ssh-ed25519 ...
+```
+
+该账号只允许隧道，不提供交互 shell；`permitopen` 限定基础服务及其他节点目的端口，`permitlisten` 限定反向回环监听。安装脚本也会打印同一行。随后运行：
 
 ```bash
 cd /opt/s18-replication
-CONTROL_HOST=control.example.com SSH_USER=root bash deploy/remote-node.sh
+CONTROL_HOST=control.example.com SSH_USER=codex-tunnel bash deploy/remote-node.sh
 systemctl status codex-harness-s18-tunnel codex-harness-s18-remote
 ```
 
-脚本安装一条由 systemd 自动重连的 SSH 隧道和一个节点容器，不部署第二份控制面。`NODE_ID`、`NODE_PORT`、`REVERSE_PORT`、`CONTROL_HOST`、`SSH_USER`、`SSH_KEY` 可配置；更换远程角色时需相应调整控制机禁用的本地节点、relay 端口、广告地址和 Caddy upstream，不能保留两个同名成员。脚本按 NODE_ID 转发另外两个节点端口；控制机 relay 和 two-host override 也应对应调整。更换子网时同时设置 `REMOTE_BRIDGE_SUBNET` 和 `REMOTE_BRIDGE_GATEWAY`。
+脚本在第二台创建无 shell 的本地 `codex-tunnel` 系统用户，并以该身份运行 systemd 自动重连 SSH 隧道（密钥和已核验的 known_hosts 须让该用户可读）。另安装一个节点容器，不部署第二份控制面。`NODE_ID`、`NODE_PORT`、`REVERSE_PORT`、`CONTROL_HOST`、`SSH_USER`、`SSH_KEY` 可配置；更换远程角色时需相应调整控制机禁用的本地节点、relay 端口、广告地址和 Caddy upstream，不能保留两个同名成员。脚本按 NODE_ID 转发另外两个节点端口；控制机 relay 和 two-host override 也应对应调整。更换子网时同时设置 `REMOTE_BRIDGE_SUBNET` 和 `REMOTE_BRIDGE_GATEWAY`。
 
 4. `/cluster` 确认三成员和副本 ready。让 bob 在分片 0 完成两轮，等复制为零落后后在控制机停 node-a；node-b 应接管。恢复 node-a 后观察全量追平，再用 admin promote 验证手动切换。备份/恢复时同时停第二台节点与隧道相关业务；原单机备份脚本不包含第二台磁盘，应分别备份并核对同一业务时点，不能把旧磁盘直接挂到新 epoch。
 
@@ -204,7 +213,7 @@ export const IDLE_SYNC_MS = 60000;
 
 ```javascript
 export const MISSING_MESSAGE = '该轮结果在故障接管时丢失，请核对';
-export const MISSING_SESSION_MESSAGE = '该用户在最近一次复制之前的故障接管中丢失了数据，原会话无法恢复，请新建会话；任务记录已标记待核对';
+export const MISSING_SESSION_MESSAGE = '会话在故障接管中丢失，原会话无法恢复，请新建会话；任务记录已标记待核对';
 export const LAG_MS = 5 * 60 * 1000;
 ```
 
@@ -214,7 +223,9 @@ export const LAG_MS = 5 * 60 * 1000;
 
 PG、Redis、etcd 和 gateway 仍是控制面单点；副本不等于整个服务高可用。没有自动再平衡，每分片只配置一个副本；从节点离线、未建好基线、存在未完成传输时不接管，分片 unavailable 并记录原因。
 
-每轮边界全量 tar 和目录哈希会读取整个目录，大目录会占磁盘 IO、网络与暂存空间。单次上限默认 1 GiB，可通过 `AGENT_TRANSFER_MAX_BYTES` 下调；接收端检查两倍上限的可用空间。迁移保留的旧目录、升级前的复制旧目录或清理失败残留，需停服核对后人工归档清理。副本是可核对的异步历史窗口，不提供零丢失或自动重跑保证。
+旧主假死醒来到被隔离之间，已发出的 Codex 轮次可能继续调用模型与工具。PG 写入由 SH001 阻止，副作用只落在旧主本地、已非权威的磁盘；epoch 隔离不能撤销已经发出的模型或工具调用。
+
+每轮边界全量 tar，以及每 60 秒空闲检查的目录哈希，都会读取整个目录，大目录会占磁盘 IO、网络与暂存空间。单次上限默认 1 GiB，可通过 `AGENT_TRANSFER_MAX_BYTES` 下调；接收端检查两倍上限的可用空间。单用户目录超过上限会持续复制失败，`/cluster` 显示 `replica_lagging` 和「目录过大」原因，该分片不可视为 ready、不可接管；需先减少目录体积再重试。迁移保留的旧目录、升级前的复制旧目录或清理失败残留，需停服核对后人工归档清理。副本是可核对的异步历史窗口，不提供零丢失或自动重跑保证。
 
 ## 小结
 

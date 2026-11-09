@@ -9,12 +9,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { runOwner, currentIdentity } from '../accounts/context.mjs';
 import { RuntimeStore } from '../runtimes/store.mjs';
 import { prepareDirectories } from '../runtimes/directories.mjs';
-import { exportTree, importTree, transferPath } from '../sharding/transfer.mjs';
+import { exportTree, importTree, transferPath, transferLimit } from '../sharding/transfer.mjs';
 import { nodeHeaders, targetOf } from '../sharding/routing.mjs';
 import { copyContent, receiveContent, contentFiles } from '../sharding/http.mjs';
 import { transaction } from '../data/database.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 import { ReplicationStore } from './store.mjs';
+import { ReplicaPublication } from './publication.mjs';
 import { ReplicationWorker } from './worker.mjs';
 const exec=promisify(execFile);
 export function replicaHomeMissing(root, record) {
@@ -26,8 +27,11 @@ export async function directoryHash(root,record) {
   const hash=createHash('sha256');
   for(const kind of ['home','workspace']) {
     const identity=kind==='home'?{uid:record.uid,gid:record.uid}:{uid:process.getuid(),gid:process.getgid()};
-    const {stdout}=await exec(process.execPath,[fileURLToPath(new URL('./hash-worker.mjs',import.meta.url)),transferPath(root,record,kind),kind],
-      {...identity,cwd:'/',env:{PATH:'/usr/bin:/bin'},timeout:30000});
+    const {stdout}=await exec(process.execPath,[fileURLToPath(new URL('./hash-worker.mjs',import.meta.url)),transferPath(root,record,kind),kind,String(transferLimit())],
+      {...identity,cwd:'/',env:{PATH:'/usr/bin:/bin'},timeout:30000}).catch(error=>{
+        if(error.stderr?.includes('TRANSFER_TOO_LARGE'))throw new AppError('目录过大：复制内容超过接收上限。',413,'TRANSFER_TOO_LARGE');
+        throw error;
+      });
     hash.update(stdout);
   }
   return hash.digest('hex');
@@ -73,14 +77,23 @@ export function attachReplication(app,runtime,control) {
       const address=targetOf({primary:route.replica},runtime.coordination.members);
       for(const kind of ['home','workspace']) {
         app.config.generation?.assert();
-        const archive=exportTree(app.config.root,record,kind);
+        const archive=exportTree(app.config.root,record,kind,{maxBytes:transferLimit()});
         try {
           const query=new URLSearchParams({user:userId,kind,epoch:String(route.epoch),operationId:token});
           const response=await fetch(new URL('/internal/replication/tree?'+query,address),{method:'PUT',headers:nodeHeaders(runtime),body:archive.stream,duplex:'half',redirect:'error',signal:AbortSignal.timeout(30000)});
-          await archive.done;if(!response.ok)throw new Error('从节点拒绝复制目录。');await response.arrayBuffer();
-        }finally{await archive.stop();}
+          if(!response.ok) { const value=await response.json(); throw new AppError(value.error?.message || '从节点拒绝复制目录。',response.status,value.error?.code); }
+          await archive.done;await response.arrayBuffer();
+        }catch(error){throw archive.failure?.code==='TRANSFER_TOO_LARGE'?archive.failure:error;}
+        finally{await archive.stop();}
       }
       await copyContent(app,runtime,userId,address,token,'/internal/replication/content',route.epoch);
+      const body={userId,epoch:route.epoch,token};
+      try { await runtime.call(address,'/internal/replication/publish',body); }
+      catch (error) {
+        // A lost acknowledgement may hide a completed pair of renames. PG has not advanced.
+        await runtime.call(address,'/internal/replication/settle',body).catch(()=>{});throw error;
+      }
+      return {settle:()=>runtime.call(address,'/internal/replication/settle',body)};
     }
   });
   const held=new Set();
@@ -100,7 +113,34 @@ export function attachReplication(app,runtime,control) {
   };
   app.config.generation.stopShard=stopShard;
   const received=new Map();
+  const publicationFor=async userId=>new ReplicaPublication(app.config.root,userId,await recordFor(userId),app.config.generation?.log);
+  const exclusive=async(userId,operation)=>{
+    if(received.has(userId))throw new AppError('副本正在导入。',409);
+    const work=runOwner(userId,operation);received.set(userId,work);
+    try{return await work;}finally{received.delete(userId);}
+  };
   const api={worker,store,stopShard,
+    async publish({userId,epoch,token},caller) {
+      return exclusive(userId,()=>transaction(app.data.pool,async db=>{
+        await businessQuery(db,'SELECT s.shard_id FROM agent_data.shard_owners s JOIN agent_data.user_shards u USING(shard_id) WHERE u.user_id=$1 FOR SHARE OF s,u',[userId]);
+        app.config.generation?.assert();await authorizeReplica(db,{userId,epoch,token,caller,receiver:runtime.nodeId});
+        const publication=await publicationFor(userId);
+        if(publication.batch?.token!==token)throw new AppError('复制暂存操作不匹配。',409);
+        publication.publish(await contentFiles(app,userId));return {published:true};
+      }));
+    },
+    async settle({userId,epoch,token},caller) {
+      return exclusive(userId,()=>transaction(app.data.pool,async db=>{
+        const row=(await businessQuery(db,'SELECT s.* FROM agent_data.shard_owners s JOIN agent_data.user_shards u USING(shard_id) WHERE u.user_id=$1 FOR SHARE OF s,u',[userId])).rows[0];
+        if(row?.node_id!==caller || row.replica!==runtime.nodeId || String(row.epoch)!==String(epoch))throw new AppError('复制确认归属已改变。',403);
+        // Wait for an ambiguous COMMIT before deciding whether to restore the old pair.
+        await businessQuery(db,'SELECT token FROM agent_data.replication_transfers WHERE user_id=$1 FOR UPDATE',[userId]);
+        const position=(await businessQuery(db,'SELECT transfer_token FROM agent_data.replication_positions WHERE user_id=$1',[userId])).rows[0];
+        const publication=await publicationFor(userId);
+        if(publication.batch?.token===token)await publication.settle(position?.transfer_token===token);
+        return {settled:true};
+      }));
+    },
     async receive(req,json,caller,kind) {
       const q=new URL(req.url,'http://localhost').searchParams,userId=q.get('user');
       const check=()=>{app.config.generation?.assert();return authorizeReplica(app.data.pool,{userId,caller,receiver:runtime.nodeId,epoch:q.get('epoch'),token:q.get('operationId')});};
@@ -114,11 +154,15 @@ export function attachReplication(app,runtime,control) {
         return transaction(app.data.pool,async db=>{
           await businessQuery(db,'SELECT s.shard_id FROM agent_data.shard_owners s JOIN agent_data.user_shards u USING(shard_id) WHERE u.user_id=$1 FOR SHARE OF s,u',[userId]);
           await check();
-          if(kind==='content') return receiveContent(app,req,json,check);
-          const result=await importTree(app.config.root,record,q.get('kind'),req,check,{keepPrevious:false,log:app.config.generation?.log});return json(200,result);
+          const publication=await publicationFor(userId),token=q.get('operationId');
+          if(publication.batch && publication.batch.token!==token)await publication.settle((await store.position(userId))?.transfer_token===publication.batch.token);
+          if(!publication.batch)publication.start(token);
+          const result=kind==='content' ? await receiveContent(app,req,json,check,{stageOnly:true}) :
+            await importTree(app.config.root,record,q.get('kind'),req,check,{stageOnly:true});
+          publication.add(result);return {staged:true};
         });
       });
-      received.set(userId,work);try{return await work;}finally{received.delete(userId);}
+      received.set(userId,work);try{return json(200,await work);}finally{received.delete(userId);}
     },
     async finalSync(shardId,epoch) {
       const deadline=Date.now()+10*60*1000;
@@ -142,6 +186,8 @@ export function attachReplication(app,runtime,control) {
           if(row.publishing)continue;
           if(row.recovering) {
             for(const userId of await store.users(row.shard_id)) await runOwner(userId,async()=>{
+              const publication=await publicationFor(userId);
+              if(publication.batch)await publication.settle((await store.position(userId))?.transfer_token===publication.batch.token);
               const missingHome=replicaHomeMissing(app.config.root,await recordFor(userId));
               await store.recover(userId,row.epoch,{missingHome});
               app.sessions.invalidateOwner(userId);
@@ -159,9 +205,9 @@ export function attachReplication(app,runtime,control) {
     },
     async status(){
       const users=await store.status(),rows=await control.rows();
-      return {users,shards:rows.map(row=>({shardId:row.shard_id,primary:row.node_id,replica:row.replica,epoch:Number(row.epoch),replica_ready:row.replica_ready,
+      return {users,shards:rows.map(row=>({shardId:row.shard_id,primary:row.node_id,replica:row.replica,epoch:Number(row.epoch),replica_ready:row.replica_ready&&!users.some(u=>u.shard_id===row.shard_id&&(u.transfer_started_at||u.replication_error)),
         status:!hasMember(runtime.coordination.members,row.node_id)?'unavailable':row.recovering||row.publishing?'recovering':row.paused?'paused':'available',
-        reason:control.reasons.get(row.shard_id)||(!hasMember(runtime.coordination.members,row.node_id)?takeoverReason(row,runtime.coordination.members,users.some(u=>u.shard_id===row.shard_id&&u.transfer_started_at))||'等待 control 接管':null),
+        reason:users.find(u=>u.shard_id===row.shard_id&&u.replication_error)?.replication_error||control.reasons.get(row.shard_id)||(!hasMember(runtime.coordination.members,row.node_id)?takeoverReason(row,runtime.coordination.members,users.some(u=>u.shard_id===row.shard_id&&u.transfer_started_at))||'等待 control 接管':null),
         replica_lagging:!row.replica_ready||users.some(u=>u.shard_id===row.shard_id&&(u.replica_lagging||u.transfer_started_at)),
         users:users.filter(u=>u.shard_id===row.shard_id)})),errors:Object.fromEntries(worker.errors)};
     },

@@ -64,6 +64,8 @@ test('真实 Linux uid/tar：home 私有历史与 tmp、服务 workspace、数�
   const forbidden = exportTree(roots[0], record, 'workspace');
   try { await assert.rejects(importTree(roots[1], record, 'workspace', forbidden.stream), error => error.subprocessDiagnostic.phase === 'validate'); await forbidden.done; }
   finally { await forbidden.stop(); fs.unlinkSync(suid); }
+  const limited=exportTree(roots[0],record,'workspace',{maxBytes:32});limited.stream.resume();
+  try { await assert.rejects(limited.done,{code:'TRANSFER_TOO_LARGE'}); } finally { await limited.stop(); }
   const oldLimit = process.env.AGENT_TRANSFER_MAX_BYTES; process.env.AGENT_TRANSFER_MAX_BYTES = '32';
   try {
     const input = Readable.from([Buffer.alloc(32), Buffer.alloc(1)]);

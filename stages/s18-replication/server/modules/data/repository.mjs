@@ -1,13 +1,13 @@
 import { businessQuery } from './write.mjs';
-import { lossStateSql, takeoverAdvanced } from '../replication/loss.mjs';
+import { lossStateSql, replicaSessionMissing } from '../replication/loss.mjs';
 import { markMissingConversation } from '../replication/store.mjs';
 import { can } from '../hub/policy.mjs';
 import { AppError } from "../../../shared/errors.mjs";
 import { transaction } from "./database.mjs";
 
-// Older recoveries marked tasks but not their conversations. Preserve that PG evidence too.
-const missingConversationSql = `(c.replica_missing OR EXISTS(SELECT 1 FROM agent_data.tasks t
-  WHERE t.instance_id=c.instance_id AND t.thread_id=c.id AND t.status='replica_missing'))`;
+const missingConversationSql = 'c.replica_missing';
+const missingTurnsSql = `(SELECT coalesce(jsonb_agg(jsonb_build_object('taskId',t.id,'turnId',t.turn_id,'message',t.error) ORDER BY t.sequence),'[]'::jsonb)
+  FROM agent_data.tasks t WHERE t.instance_id=c.instance_id AND t.thread_id=c.id AND t.status='replica_missing')`;
 
 export class Repository {
   constructor(pool, scope) {
@@ -47,7 +47,7 @@ export class Repository {
   async conversation(id) {
     const row = (
       await this.query(
-        `SELECT c.*,${missingConversationSql} AS replica_missing FROM agent_data.conversations c WHERE c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3`,
+        `SELECT c.*,${missingConversationSql} AS replica_missing,${missingTurnsSql} AS "missingTurns" FROM agent_data.conversations c WHERE c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3`,
         [id],
       )
     ).rows[0];
@@ -69,8 +69,7 @@ export class Repository {
   async markReplicaMissingAfterResume(id) {
     return transaction(this.pool, async db => {
       const row = (await this.query(lossStateSql + ' AND c.id=$3', [id], db)).rows[0];
-      if (!row || !takeoverAdvanced(row) ||
-          BigInt(row.last_sequence || 0) <= BigInt(row.last_task_sequence || 0)) return false;
+      if (!row || !replicaSessionMissing(row)) return false;
       await markMissingConversation(db, this.instanceId, this.ownerId, row);
       return true;
     });

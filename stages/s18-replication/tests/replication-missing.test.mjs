@@ -113,7 +113,7 @@ test('home 存在：接管事务仅标记未复制的新会话和推进过的旧
     calls.push([sql, args]); return { rows: sql.startsWith('SELECT c.*') ? rows : [], rowCount: 1 };
   }, release() {} };
   await new ReplicationStore({ connect: async () => db }, 'instance').recover('bob', 2);
-  assert.deepEqual(calls.filter(([sql]) => sql.includes('replica_missing=true')).map(([, args]) => args[2]), ['advanced', 'new-empty', 'new-done']);
+  assert.deepEqual(calls.filter(([sql]) => sql.includes('replica_missing=true')).map(([, args]) => args[2]), ['new-empty', 'new-done']);
   assert.equal(calls.at(-1)[0], 'COMMIT');
 });
 
@@ -129,7 +129,7 @@ test('原生恢复兜底：仅已接管且超过位点的 JSON-RPC/thread not fo
     [undefined, 'unknown failure', '11', '2', undefined],
   ]) {
     const calls = [], row = { id: 'tail', owner_id: OWNER_A, cwd: root, previous_primary: 'node-a', epoch,
-      replication_epoch: '1', last_sequence: sequence, last_completed_sequence: sequence, last_task_sequence: '10' };
+      replication_epoch: '1', replicated_at: '2026-01-02', created_after_replication: sequence === '11', last_sequence: sequence, last_completed_sequence: sequence, last_task_sequence: '10' };
     const db = { async query(sql, args) {
       calls.push([sql, args]);
       if (sql.includes('SET replica_missing=true')) row.replica_missing = true;
@@ -154,9 +154,25 @@ test('原生恢复兜底：仅已接管且超过位点的 JSON-RPC/thread not fo
 test('会话列表把 PG 丢失标记映射为 replicaMissing', async () => {
   const repository = new Repository({ async query(sql, args) {
     assert.match(sql, /AS "replicaMissing"/);
-    assert.match(sql, /t.status='replica_missing'/);
+    assert.doesNotMatch(sql, /OR EXISTS/);
     assert.deepEqual(args, ['instance', OWNER_A, '']);
     return { rows: [{ id: 'lost', replicaMissing: true }, { id: 'new', replicaMissing: false }] };
   } }, { instanceId: 'instance', ownerId: OWNER_A });
   assert.deepEqual(await repository.listConversations(), [{ id: 'lost', replicaMissing: true }, { id: 'new', replicaMissing: false }]);
+});
+
+test('旧会话尾部缺失仍恢复续聊并在缓存快照保留 missingTurns',async t=>{
+ const root=tempRoot(t),rpc=new EventEmitter();let resumes=0;
+ rpc.request=async()=>{resumes++;return {thread:{id:'prefix',cwd:root,turns:[]}};};
+ const missingTurns=[{taskId:'lost-tail',turnId:'turn-2',message:'该轮结果在故障接管时丢失，请核对'}];
+ const sessions=new SessionService({rpc,repository:{conversation:async()=>({id:'prefix',cwd:root,replica_missing:false,missingTurns})},
+   config:{root,launch:{}},runtime:{workspaceDir:root},hub:{publish(){}},redact:v=>v});t.after(()=>sessions.close());
+ assert.deepEqual((await sessions.ensure('prefix')).missingTurns,missingTurns);
+ assert.deepEqual((await sessions.ensure('prefix')).missingTurns,missingTurns);assert.equal(resumes,1);
+});
+test('旧会话仅尾部超位点时原生恢复报错仍保留原错误',async()=>{
+ const row={previous_primary:'node-a',epoch:'2',replication_epoch:'1',replicated_at:'2026-01-02',created_after_replication:false,last_sequence:'11',last_task_sequence:'10'};
+ const db={query:async sql=>{assert.ok(!sql.startsWith('UPDATE'));return {rows:[row]};},release(){}};
+ const repo=new Repository({connect:async()=>db},{instanceId:'i',ownerId:OWNER_A});
+ assert.equal(await repo.markReplicaMissingAfterResume('prefix'),false);
 });
