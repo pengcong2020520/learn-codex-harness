@@ -15,7 +15,7 @@ if ([...options].some(option => !["--integration", "--docs-only", "--rag"].inclu
 }
 const report = { verifiedAt: new Date().toISOString(), modelProvider: "local simulated Responses", embeddingProvider: options.has("--rag") ? "local deterministic 3D fixture" : null, semanticQualityVerified: false, docs: [], checks: [] };
 // 章节 README 先讲概念与分工，再动手、看代码：要回答的问题 → 核心概念 → 分工 → 跑起来看看 → 关键代码 → 小结 → 下一章；
-// 每章标出对应导论里"六个问题"中的哪几个。docs/design.md 保留原有的设计原理 → 架构改进 → 技术实现流程 → 核心代码（伪代码）。
+// 每章标出对应导论里"六个问题"中的哪几个。docs/design.md 统一七节，s12 起追加关键数值与实现细节。
 const CHAPTER_HEADINGS = ["要回答的问题", "核心概念", "分工：Codex 做什么，我们做什么", "跑起来看看", "关键代码", "小结", "下一章"];
 const docs = [
   ["README.md", "overview"],
@@ -72,14 +72,23 @@ for (const [name, kind] of docs) {
     }
   }
   if (kind === "design") {
-    const replicationDesign = name === "s18-replication/docs/design.md";
-    const hubDesign = name === "s15-hub/docs/design.md";
-    const shardingDesign = name === "s17-sharding/docs/design.md";
-    const coordinationDesign = name === "s16-coordination/docs/design.md";
-    for (const heading of replicationDesign ? ["复制边界与提交", "控制事务与恢复", "接口与文件", "验证与已知边界"] : shardingDesign ? ["请求与缓存", "元数据与事务", "数据库逐行隔离", "共享知识读取", "手动迁移", "验证边界"] : coordinationDesign ? ["注册、观察与选举", "失权与接任", "HTTP 与数据边界", "验证"] : hubDesign ? ["职责与决策", "数据与一致性", "运行边界", "Skill 同步"] : ["设计原理", "架构改进", "技术实现流程", "核心代码"]) {
-      assert.ok(doc.includes(`## ${heading}\n`), `${name} 缺少 ${heading}`);
+    const stage = name.split("/")[0], number = Number(stage.slice(1, 3));
+    const headings = ["设计原理", "架构改进", "技术实现流程", "核心代码", "验证", "限制说明", "机制实验"];
+    if (number >= 12) headings.push("关键数值与实现细节");
+    let previous = -1;
+    for (const heading of headings) {
+      const index = doc.indexOf(`\n## ${heading}\n`);
+      assert.ok(index > previous, `${name} 缺少 ${heading} 或标题顺序错误`);
+      previous = index;
     }
-    if (!hubDesign && !coordinationDesign && !shardingDesign && !replicationDesign) assert.ok(doc.includes("伪代码"), `${name} 未标明伪代码`);
+    assert.deepEqual([...doc.matchAll(/^## (.+)$/gm)].map(match => match[1]), headings, `${name} 二级标题必须与模板一致，末节不得再追加二级标题`);
+    if (number <= 14) assert.ok(doc.includes("伪代码"), `${name} 未标明伪代码`);
+    if (number >= 15) {
+      assertExcerpts(stage, doc, name);
+      const chapter = fs.readFileSync(path.join(root, stage, "README.md"), "utf8");
+      const excerpts = text => [...text.matchAll(/^```(?:javascript|sql)\n([\s\S]*?)^```/gm)].map(match => match[1]);
+      assert.deepEqual(excerpts(doc), excerpts(chapter), `${name} 核心代码须与本章 README 摘录逐行一致`);
+    }
   }
   assert.equal((doc.match(/^```/gm) || []).length % 2, 0, `${name} 代码块未闭合`);
   for (const match of doc.replace(/^```[^\n]*\n[\s\S]*?^```/gm, "").matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {

@@ -2,7 +2,27 @@
 
 本章仅增加 coordination。固定 TTL 10 秒、etcd3 自动 TTL/3 KeepAlive、`/codex/` 前缀和三个节点。业务数据仍在 PG，Redis 负责唤醒；用户进程、uid 与 Hub 判定沿用既有实现。
 
-## 注册、观察与选举
+## 设计原理
+
+节点没有回应时，无法确定它已经停止还是只是变慢，因此不能仅靠连通性判断谁有权服务。成员注册绑定 etcd 租约，持续续约才保留成员身份；Watch 通知成员变化，定期对账补上可能遗漏的变化。
+
+control 由 etcd 选举决定，任期号用于拒绝醒来的旧主写入。协调信息的写事务检查任期，新的 control 也先把任期推进到 PostgreSQL，让业务数据库拒绝旧任期写入，而不依赖旧主主动放弃。
+
+失去租约的节点立即自我隔离，关闭入口和用户进程，将执行中的轮次按既有语义交由待核对处理。只有 control 运行完整业务；新 control 确认任期并完成恢复后才就绪，入口据此转发请求，热备保持协调并等待接任。
+
+## 架构改进
+
+在 s15 的 Hub 与用户运行环境之上，本章增加 coordination，负责成员租约、Watch 与对账、control 选举、任期保护和失权隔离。etcd 只保存成员、control 与任期等协调信息，业务数据仍在 PostgreSQL；Codex 在 control 节点的用户进程中执行，入口只转发给恢复完成的就绪 control。
+
+### HTTP 与数据边界
+
+Caddy 入口 127.0.0.1:4334；三个后端分别为 node-a:4340、node-b:4341、node-c:4342。`/health` 仅存活；`/ready` 先验证 control 与任期，再沿用数据库、网关、模型与队列检查。其他 HTTP 也经过入口门禁，不能靠 Caddy 健康缓存防止旧节点服务。SSE 不缓冲，关闭业务栈时断开，客户端重新连接新 control。
+
+`/cluster` 是 admin 接口，查询本身不启动用户进程。成员/选举事件最多 20 条，Watch 连断、快照、当选、隔离和选举观察均记录在内存。CLI 使用现有令牌存储和 HTTP 客户端，不直接访问 etcd。
+
+## 技术实现流程
+
+### 注册、观察与选举
 
 ```mermaid
 sequenceDiagram
@@ -31,7 +51,7 @@ etcd3 1.1.2 的 Election 默认建立自己的 lease，并添加 `election/` 命
 
 任期只取选举键 `create_revision`，不用当前全局 revision 或时间戳。所有协调写事务均比较该键 `Create == term`，失败抛 409 `NOT_CONTROLLER`，并同步隔离。`cluster/info` 不绑定成员 lease，保留最近一次控制信息；`GET /cluster` 的实时 control 则通过整读选举前缀并按 create_revision 取最早候选查询，不把陈旧 info 当真。
 
-## 失权与接任
+### 失权与接任
 
 ```mermaid
 sequenceDiagram
@@ -61,17 +81,60 @@ sequenceDiagram
 
 正常停机先关闭业务栈（防止共享文件并发），再 Campaign.resign，最后显式 Lease.revoke 和 Watch.cancel。共享 lease 意味着 resign 本身已经撤销成员键，重复 revoke 为幂等。发生分区时释放本地 KeepAlive，等 etcd 到期；不把无法送达的撤销当作已完成。
 
-## HTTP 与数据边界
+## 核心代码
 
-Caddy 入口 127.0.0.1:4334；三个后端分别为 node-a:4340、node-b:4341、node-c:4342。`/health` 仅存活；`/ready` 先验证 control 与任期，再沿用数据库、网关、模型与队列检查。其他 HTTP 也经过入口门禁，不能靠 Caddy 健康缓存防止旧节点服务。SSE 不缓冲，关闭业务栈时断开，客户端重新连接新 control。
+以下摘录与本章 README「关键代码」逐行一致，依次展示注册键使用的自动续约 lease、带任期条件的协调写入，以及先同步隔离再触发关闭流程。
 
-`/cluster` 是 admin 接口，查询本身不启动用户进程。成员/选举事件最多 20 条，Watch 连断、快照、当选、隔离和选举观察均记录在内存。CLI 使用现有令牌存储和 HTTP 客户端，不直接访问 etcd。
+```javascript
+    const lease = this.client.lease(TTL); // automatic KeepAlive, TTL/3, owned by etcd3
+```
 
-单机共享四个数据目录，绝对路径保持固定。PG、Redis、模型网关和 etcd 单实例是明确限制；多机磁盘、分片、复制和跨系统原子事务不属于本章。docker pause 解冻后子进程仍可立即写共享卷；s17/s18 改为每节点独立磁盘。
+```javascript
+  async guardedPut(key, value) {
+    this.assertController();
+    const epoch = this.generation;
+    const result = await this.client.if(this.electionKey, 'Create', '==', this.ownTerm)
+      .then(this.client.put(key).value(typeof value === 'string' ? value : JSON.stringify(value))).commit();
+    if (epoch !== this.generation) throw notController();
+    if (!result.succeeded) { this.isolate('stale-term'); throw notController(); }
+    this.assertController();
+  }
+```
+
+```javascript
+  isolate(reason) {
+    if (!this.alive && !this.controller) return;
+    this.alive = false; this.controller = false; this.generation++;
+    clearInterval(this.reconcileTimer); clearTimeout(this.watchRetry);
+    clearTimeout(this.timer);
+    this.lease?.release(); // no more automatic renewals after local fencing
+    this.record('isolated', { nodeId: this.nodeId, reason });
+    this.emit('lost', reason); // synchronous admission/result fence before any await
+  }
+```
 
 ## 验证
 
 `tests/coordination.test.mjs` 通过注入 etcd3 接口替身验证分支；替身的 elected 由测试显式发送，不运行候选排序算法。`tests/coordination.integration.mjs` 必须连接独立的空 etcd，验证三成员唯一 control、同 lease、撤销后 12 秒内接任以及旧任期真实事务拒绝。`npm test` 运行离线测试；Docker、PG、Redis、端口、Linux uid、真实 etcd 和模型验收需在支持这些服务的环境执行，不能用替身结果代替。`npm run test:data` 包含 coordination-pg 集成测试，预期旧任期 CT001、节点运维绕过 42501，推进等待旧事务提交；认证 etcd 集成测试另要求 ETCD_TEST_NODE_A/B/C_PASSWORD，并验证前缀外写入被拒。
+
+## 限制说明
+
+单机共享四个数据目录，绝对路径保持固定。PG、Redis、模型网关和 etcd 单实例是明确限制；多机磁盘、分片、复制和跨系统原子事务不属于本章。docker pause 解冻后子进程仍可立即写共享卷；s17/s18 改为每节点独立磁盘。
+
+更多边界见 [关键数值与实现细节](#关键数值与实现细节) 中的 [限制的完整说明](#限制的完整说明)。
+
+## 机制实验
+
+在本章目录运行 `npm run lesson -- list` 查看实验，按以下命令执行离线断言。依赖与验证边界见 [实验说明](../lessons/README.md)。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- lease` | 租约过期与 Watch 删除 |
+| `npm run lesson -- watch` | 断线续读与压缩 |
+| `npm run lesson -- election` | 选举与任期 |
+| `npm run lesson -- fencing` | 旧任期拒写 |
+| `npm run lesson -- isolation` | 自我隔离与迟到结果 |
+| `npm run lesson -- service` | 主备恢复 |
 
 ## 关键数值与实现细节
 

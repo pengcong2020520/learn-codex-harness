@@ -2,7 +2,23 @@
 
 本章唯一新增单元是 `server/modules/sharding/`。数据库、HTTP、后台 worker、uid 目录和部署脚本是该单元的接入点。成员 TTL=10 秒；客户端自动续租约 TTL/3；对账=5 秒；3 节点、3 分片、64 槽；普通转发=30 秒；STALE_ROUTE 最多重试一次；SSE 无总时限。
 
-## 请求与缓存
+## 设计原理
+
+用户的原生历史、状态库和记忆保存在自己的 CODEX_HOME 中，因此分片键选择用户 ID，让同一用户的数据与执行落在同一主节点。用户到分片的分配策略与分片到节点的归属分开，换节点时无需重新计算全部用户的分片，个别用户可通过例外记录迁移。
+
+每个节点缓存路由表，通过 Watch 更新并定期对账，避免每个请求都查询 etcd。缓存可能落后，所以目标主节点仍要核对归属和 revision；遇到 STALE_ROUTE，转发方刷新后只重试一次。业务数据库同时核对节点与分片 epoch，拒绝旧主继续写入。
+
+共享知识库由所有者主节点提供只读访问。请求者节点先检查 Hub，所有者节点再认证用户并重新核对授权，使跨节点读取仍受资源权限约束。
+
+手动迁移先暂停新任务、等待在途轮次结束并关闭用户进程，再完整复制目录、切换归属、恢复派发。失败保持暂停等待核对；本章没有副本，一个节点不可用时，其分片需要等待原节点恢复，其他分片继续服务。
+
+## 架构改进
+
+在 s16 的成员与 control 协调之上，本章新增 sharding，将用户分配到分片并把请求路由到主节点。新增边界包括路由缓存与一次刷新重试、数据库的分片 epoch 检查、跨分片共享知识只读入口，以及停写后复制目录的手动迁移；Codex 继续在用户主节点的独立 CODEX_HOME 中执行。
+
+## 技术实现流程
+
+### 请求与缓存
 
 ```mermaid
 sequenceDiagram
@@ -33,7 +49,7 @@ sequenceDiagram
 
 外部请求先认证，目标主节点再次认证 Bearer，并从资源/用户记录计算路由用户；不能信任客户端自报 `x-route-user`。转发过滤来路中的节点和路由头，再写入本节点可信值。目标只来自 etcd 成员地址，HTTP 绝对形式 URL 也仅取 pathname 与 query。未知主或离线主返回 SHARD_UNAVAILABLE，不向另一台机器试探数据。只有带 STALE_ROUTE 标识的 409 触发一次刷新重试，普通业务冲突不重试。
 
-## 元数据与事务
+### 元数据与事务
 
 | 数据 | 权威位置 | 写规则 |
 |---|---|---|
@@ -52,7 +68,7 @@ control 初始化按当前成员排序，每个节点一个分片；没有成员
 
 etcd RBAC 将候选节点限制到 `/codex/`，动态“仅 control 写”在受信任节点的 guardedPut API 中实施。静态角色不能基于 Election 自动授予写权限；节点凭据不能交给最终用户。集成测试区分 API 的任期拒绝和原始凭据的键空间 ACL。
 
-## 数据库逐行隔离
+### 数据库逐行隔离
 
 所有生产业务连接经 `fencePool`。普通 query 自动包事务，显式 BEGIN 连接在事务起点设置 `app.node`、`app.shard_epoch`。cleanup 的 ROLLBACK/UNLISTEN 仍允许失效代次执行。身份来自认证 AsyncLocalStorage 或任务持久化 owner；资源管理请求使用单独 shard 上下文，保留 actor 授权身份，同时设置目标 owner 的 epoch。
 
@@ -73,7 +89,7 @@ etcd RBAC 将候选节点限制到 `/codex/`，动态“仅 control 写”在受
 
 SH001 诊断以错误中实际被拒行的 owner 为准。刷新前自认为主、刷新后确认用户已移走时，仅当前请求失败，其他分片继续服务；刷新后仍认为自己是主或刷新失败时隔离当前代次。CT001 保护 control 任期。SQL 无法撤销已发生的文件写入、外部工具或模型副作用，因此迁移仍需停写边界。
 
-## 共享知识读取
+### 共享知识读取
 
 被授权者节点的 KnowledgeService / Resources 先做 kb、mount、Hub 判断，再携带节点凭据与终端用户 Authorization 请求所有者节点 `/internal/knowledge`。只允许 read/search/pages/resource。所有者拒绝正文中的 requester，使用全局账号和会话表重新认证令牌，按认证得到的用户取得新的 Hub 快照，再核对归属、暂停与授权后读盘。节点密钥或自报用户 ID 都不能替代终端令牌；不能切成 owner 身份绕过权限。
 
@@ -81,7 +97,7 @@ SH001 诊断以错误中实际被拒行的 owner 为准。刷新前自认为主�
 
 数据从所有者 workspace 或不可变 blob 读取，私有文件仍以数值 uid 辅助进程访问。跨分片 RAG 查询在请求者节点生成 query embedding 并按请求者计费，权威内容读取仍发生在所有者主节点。
 
-## 手动迁移
+### 手动迁移
 
 ```mermaid
 sequenceDiagram
@@ -126,13 +142,53 @@ tar、正文 blob、BM25 每次接收上限均为 **1 GiB**；`AGENT_TRANSFER_MA
 
 任一步失败都尝试以原任期执行 failMove，记录 failed 并持久暂停，不自动补偿 PG 或 etcd 为源归属。切换或 finishMove 的 COMMIT 回复丢失时，保留已提交状态和两份磁盘；目标可能已派发，不能盲目启用源。failMove 不推进任期，较新 control 取得 PG fence 后旧 control 无权继续记录；记录失败会标记 rollbackFailed，运维须核对真实状态。重复 move 会拒绝暂停用户，不能充当失败操作单的自动恢复。
 
-## 验证边界
+## 核心代码
+
+以下摘录与本章 README「关键代码」逐行一致，分别展示槽策略、带 epoch 与 revision 的路由结果，以及主节点对归属与 revision 的校验。
+
+```javascript
+export const slotOf = id => createHash('sha256').update(String(id)).digest().readUInt32BE(0) % SLOT_COUNT;
+```
+
+```javascript
+  routeOf(userId) {
+    // Older controls wrote bare 0/1/2: JSON.parse turns those bytes into numbers.
+    // Keep the raw override for diagnostics, but all routing/PG comparisons use text IDs.
+    const raw = this.overrides[userId] ?? this.strategy.shardOf(userId, this);
+    const shardId = ['string', 'number'].includes(typeof raw) && SHARDS.includes(String(raw)) ? String(raw) : null;
+    const owner = this.shards[shardId];
+    return { shardId, primary: owner?.primary ?? null, epoch: owner?.epoch ?? null, revision: this.revision };
+  }
+```
+
+```javascript
+export function validateRoute(cache, userId, nodeId, revision) {
+  if (!/^\d+$/.test(String(revision)) || cache.routeOf(userId).primary !== nodeId || BigInt(cache.revision) < BigInt(revision)) throw staleRoute();
+}
+```
+
+## 验证
 
 离线：`npm test` 与四个 lessons，覆盖策略、override、缓存竞态、一次重试、503、SSE 字节透传、SH001 诊断、节点身份、操作单授权、双重授权、传输上限、权限掩码、媒体暂停及迁移顺序和失败保留。
 
 外部：`test:data` 的真实 PG 触发器、列级权限和事务互锁；`test:sharding:etcd` 的认证 Watch 和选举任期；`test:ports` 的真实 HTTP/SSE；Linux uid/tar、跨节点迁移及模型会话续聊。离线替身不能证明实际 SQL 权限、文件属主或 etcd 传播时延。
 
+## 限制说明
+
 没有副本、复制位点、自动提升或故障切换。主磁盘丢失意味着对应分片不可用，PG 会话索引不能凭空恢复 Codex 原生历史。PG、Redis、模型网关与教学 etcd 仍为单实例。
+
+更多边界见 [关键数值与实现细节](#关键数值与实现细节) 中的 [限制的完整说明](#限制的完整说明)。
+
+## 机制实验
+
+在本章目录运行 `npm run lesson -- list` 查看实验，按以下命令执行离线断言。依赖与验证边界见 [实验说明](../lessons/README.md)。
+
+| 命令 | 验证内容 |
+| --- | --- |
+| `npm run lesson -- strategies` | 槽策略与范围策略 |
+| `npm run lesson -- stale-route` | revision 落后与一次重试 |
+| `npm run lesson -- shard-fence` | SH001 与节点隔离 |
+| `npm run lesson -- move` | 暂停、拷贝、切换、恢复 |
 
 ## 关键数值与实现细节
 
