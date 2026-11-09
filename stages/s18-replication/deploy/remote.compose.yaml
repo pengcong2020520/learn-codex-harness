@@ -1,0 +1,36 @@
+name: codex-harness-s18-remote
+services:
+  node:
+    build:
+      context: ..
+      args:
+        CONTAINER_APP_DIR: ${APP_DIR:-/opt/s18-replication}
+    image: codex-harness-s18:current
+    restart: unless-stopped
+    stop_grace_period: 30s
+    user: "0:1000"
+    cap_drop: [ALL]
+    cap_add: [SETUID,SETGID,CHOWN,FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    init: true
+    network_mode: host
+    extra_hosts: ["node-a:127.0.0.1", "node-c:127.0.0.1", "host.docker.internal:127.0.0.1"]
+    mem_limit: ${REMOTE_MEMORY_LIMIT:-700m}
+    env_file: ../.remote.env
+    environment:
+      AGENT_RUNTIME_LIMIT: ${AGENT_RUNTIME_LIMIT:-2}
+      AGENT_LISTEN_HOST: 127.0.0.1
+      AGENT_DEPLOYED: "true"
+    volumes:
+      - "${APP_DIR:-/opt/s18-replication}/nodes/${AGENT_NODE_ID:-node-b}/.data:${APP_DIR:-/opt/s18-replication}/.data"
+      - "${APP_DIR:-/opt/s18-replication}/nodes/${AGENT_NODE_ID:-node-b}/.runs:${APP_DIR:-/opt/s18-replication}/.runs"
+      - "${APP_DIR:-/opt/s18-replication}/nodes/${AGENT_NODE_ID:-node-b}/workspace:${APP_DIR:-/opt/s18-replication}/workspace"
+      - "${APP_DIR:-/opt/s18-replication}/backups/${AGENT_NODE_ID:-node-b}:${APP_DIR:-/opt/s18-replication}/backups"
+    healthcheck:
+      test: ["CMD", "node", "deploy/ready.mjs", "--alive"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
