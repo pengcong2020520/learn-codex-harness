@@ -1,3 +1,4 @@
+import { configureReplicationTimeouts } from '../replication/request-timeout.mjs';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -38,7 +39,7 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
   const service = new ShardedService(coordination, generation => start({ config: { ...config, sharding: runtime }, generation, externalHttp: true, log }), runtime, log);
   const handler = createShardedHandler(coordination, service, runtime, control);
   const server = createServer((req, res) => { void handler(req, res).catch(() => res.destroy()); });
-  server.requestTimeout = 30000; server.headersTimeout = 10000;
+  configureReplicationTimeouts(server);
   let updating = false;
   const tick = async () => {
     if (updating || !coordination.checkLease()) return;

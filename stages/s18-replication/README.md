@@ -16,11 +16,13 @@
 
 etcd 的 `/codex/shards/<id>` 保存 `{ primary, replica, epoch }`，PG `shard_owners` 保存同一归属和 `replica_ready`。用户仍经 64 个哈希槽映射到三个分片；范围策略、用户例外表和手动迁移操作单保留。磁盘是三份独立目录。
 
-**异步复制与位点。** 用户一轮结束后等待 5 秒，同用户连续请求合并。复制前暂停本地派发，等待已经进入边界的请求，检查该用户全部会话无 `starting/running/steering`，关闭该用户空闲 Codex 进程，再导出 CODEX_HOME、workspace 和知识库不可变正文。全量 tar 直接复用分片迁移 transfer 模块。后台调用显式 `runOwner`；会话边界继续通过 `pool.withOwner`、hub `withUser`。
+**边界快照 → 异步发送。** 用户一轮结束后等待 5 秒，同用户连续请求合并。暂停新轮次，等待已经进入边界的请求，检查该用户全部会话无 `starting/running/steering`，关闭该用户空闲 Codex 进程。复用 transfer 的导出身份、1 GiB 上限和拒绝链接等校验，把 CODEX_HOME、workspace 导出到 `.runs/replication-spool/<userId>/<token>/{home,workspace}.tar`，同时确定内容哈希、附属内容文件清单和边界 sequence。暂存目录 0700、文件 0600，属主为服务进程。**暂停新轮次只到本地快照完成**，随后立即 release，再排队异步发送暂存文件；成功、失败、正常关闭都删除本 token，启动时清理异常退出的遗留暂存。后台调用显式 `runOwner`；会话边界继续通过 `pool.withOwner`、hub `withUser`。
 
-为什么只在轮次边界复制？运行中的 Codex 正在修改 SQLite、JSONL 和工具产物；目录能被读取，不表示它是一个一致的会话快照。复制期间的新任务留在 PG/Redis 排队，复制结束再派发。一个用户的其他会话仍在执行时，本轮不复制。
+为什么只在轮次边界复制？运行中的 Codex 正在修改 SQLite、JSONL 和工具产物；目录能被读取，不表示它是一个一致的会话快照。本地快照期间的新任务留在 PG/Redis 排队，快照完成即可派发，网络发送不再暂停该用户。发送期间有新边界时记脏标记，本次复制无论成功或失败，结束后都再等 5 秒调度一次，不等 60 秒兜底。一个用户的其他会话仍在执行时，本轮不复制。
 
-从节点逐次核对调用方节点密钥、PG 当前主节点、replica、epoch 和复制操作单。两个目录与附属内容全部暂存并校验后才成对发布；两个目录的 rename 连续执行，任一失败则回滚已发布目录。主节点随后以 SH001 保护写入 `replication_positions(user_id, shard_id, epoch, last_task_sequence, replicated_at)`。未完成传输操作单会阻止提升，避免提升半份目录。旧目录保留到 PG 位点提交成功后才删除；提交失败恢复旧副本。本地操作记录与 PG 提交 token 用于重试或重启时核对，未完成操作禁止哈希短路。
+每个目标节点同一时刻只发送一个用户，不同目标可并行；所有目标的 tar 发送共享本节点 `AGENT_REPLICATION_RATE_LIMIT`（字节/秒，非负整数，默认 0 不限速，非法值启动失败）。发送每写出一个分块重置 30 秒进度计时，连续 30 秒无字节进展才中止，没有整体 30 秒上限；接收 tree 同样按无活动超时，publish/settle/content 等小请求保留原超时。
+
+从节点逐次核对调用方节点密钥、PG 当前主节点、replica、epoch 和复制操作单。两个目录与附属内容全部暂存并校验后才成对发布；两个目录的 rename 连续执行，任一失败则回滚已发布目录。发布使用快照时确定的内容清单，主节点随后以 SH001 保护写入快照时的 sequence 与哈希到 `replication_positions(user_id, shard_id, epoch, last_task_sequence, replicated_at)`。`replicated_at` 也取快照边界时间，避免把发送期间新建的会话误判为已经复制。未完成传输操作单会阻止提升，避免提升半份目录。旧目录保留到 PG 位点提交成功后才删除；提交失败恢复旧副本。本地操作记录与 PG 提交 token 用于重试或重启时核对，未完成操作禁止哈希短路。
 
 **空闲兜底与延迟。** 每 60 秒检查空闲用户；以用户 uid 计算 CODEX_HOME 内容哈希，workspace 以服务身份计算，排除顶层 `tmp/`，内容、属主和权限未改变且位点一致则跳过。`/cluster` 按分片、用户显示未复制的已完成轮次数量和最早未复制轮次的等待秒数。空闲且已同步的用户不会因长时间未说话被误报。任何用户等待超过 300 秒，分片标记 `replica_lagging`；复制错误和未追平也显示副本落后。`/ready` 仍为 200，附 `degraded.replica_lagging`，主节点继续服务。
 
@@ -69,7 +71,7 @@ npm run lesson -- replication-recovery
 npm run lesson -- replication-fence
 ```
 
-单机 Docker 三节点沿用部署脚本。先复制 `.env.example` 为 `.env`，填模型网关、数据库、Redis、etcd 和三个节点的独立凭据，运行 `bash deploy/configure.sh` 生成配置。完整远程安装入口：
+单机 Docker 三节点沿用部署脚本。先复制 `.env.example` 为 `.env`，填模型网关、数据库、Redis、etcd 和三个节点的独立凭据，运行 `bash deploy/configure.sh` 生成配置。单机模拟不设置 `AGENT_REPLICATION_RATE_LIMIT`。完整远程安装入口：
 
 ```bash
 DEPLOY_HOST=example.com bash deploy/remote.sh check
@@ -147,8 +149,11 @@ unset REMOTE_BRIDGE_SUBNET REMOTE_BRIDGE_GATEWAY
 COMPOSE_FILE=compose.yaml:deploy/two-host.compose.yaml
 COMPOSE_PROFILES=remote-access
 AGENT_NODE_ADDRESS_B=http://host.docker.internal:4341
+AGENT_REPLICATION_RATE_LIMIT=262144
 NODE_B_UPSTREAM=host.docker.internal:4341
 ```
+
+控制机 `.env` 也必须加入上面的 `AGENT_REPLICATION_RATE_LIMIT=262144`；`deploy/remote-env.mjs` 为第二台生成同样数值。原则是不超过实测链路带宽的约 70%，给同一 SSH 连接上的 etcd 续约和请求转发留余量。实测约 3 Mbit/s（约 360 KB/s）、RTT 217 ms；未留余量时 `/health` 首字节曾延迟 11.6 秒，超过 10 秒租约 TTL。三个节点通过 compose 的共享环境配置继承该变量。
 
 2. 控制机首次初始化使用以下步骤。两台模式不要调用会显式启动本地 node-b 的 `server-setup.sh` / `remote.sh deploy`；也不要同时启动第二个 node-b。
 
@@ -225,7 +230,7 @@ PG、Redis、etcd 和 gateway 仍是控制面单点；副本不等于整个服�
 
 旧主假死醒来到被隔离之间，已发出的 Codex 轮次可能继续调用模型与工具。PG 写入由 SH001 阻止，副作用只落在旧主本地、已非权威的磁盘；epoch 隔离不能撤销已经发出的模型或工具调用。
 
-每轮边界全量 tar，以及每 60 秒空闲检查的目录哈希，都会读取整个目录，大目录会占磁盘 IO、网络与暂存空间。单次上限默认 1 GiB，可通过 `AGENT_TRANSFER_MAX_BYTES` 下调；接收端检查两倍上限的可用空间。单用户目录超过上限会持续复制失败，`/cluster` 显示 `replica_lagging` 和「目录过大」原因，该分片不可视为 ready、不可接管；需先减少目录体积再重试。迁移保留的旧目录、升级前的复制旧目录或清理失败残留，需停服核对后人工归档清理。副本是可核对的异步历史窗口，不提供零丢失或自动重跑保证。
+每轮边界全量 tar，以及每 60 秒空闲检查的快照与目录哈希，都会读取整个目录，大目录会占磁盘 IO、网络与暂存空间。跨地域实测单用户 20 MB / 约 3 Mbit/s ≈ 1 分钟一次；限速为 262144 字节/秒时发送更久，但用户只在本地快照期间暂停。限速按本节点所有 tar 发送合计，建议不超过实测链路带宽约 70%，为 etcd 续约与请求转发留余量。单次上限默认 1 GiB，可通过 `AGENT_TRANSFER_MAX_BYTES` 下调；接收端检查两倍上限的可用空间。单用户目录超过上限会持续复制失败，`/cluster` 显示 `replica_lagging` 和「目录过大」原因，该分片不可视为 ready、不可接管；需先减少目录体积再重试。迁移保留的旧目录、升级前的复制旧目录或清理失败残留，需停服核对后人工归档清理。副本是可核对的异步历史窗口，不提供零丢失或自动重跑保证。
 
 ## 小结
 

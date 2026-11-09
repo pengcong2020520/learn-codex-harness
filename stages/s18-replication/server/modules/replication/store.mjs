@@ -16,8 +16,9 @@ export class ReplicationStore {
       WHERE u.shard_id=$1 AND a.instance_id=$2 AND a.username IS NOT NULL ORDER BY u.user_id`, [shardId, this.instanceId])).rows.map(r => r.user_id);
   }
   async boundary(userId) {
+    // Keep PG microseconds: a JS Date would truncate and misclassify same-ms conversations.
     return (await businessQuery(this.pool,`SELECT count(*) FILTER(WHERE t.status IN ('starting','running','steering'))::int AS busy,
-      coalesce(max(t.sequence) FILTER(WHERE t.status IN ('completed','failed','interrupted','needs-review','cancelled','replica_missing')),0)::text AS sequence
+      coalesce(max(t.sequence) FILTER(WHERE t.status IN ('completed','failed','interrupted','needs-review','cancelled','replica_missing')),0)::text AS sequence, clock_timestamp()::text AS captured_at
       FROM agent_data.tasks t JOIN agent_data.conversations c ON c.instance_id=t.instance_id AND c.id=t.thread_id
       WHERE c.instance_id=$1 AND c.owner_id=$2`, [this.instanceId,userId])).rows[0];
   }
@@ -30,13 +31,13 @@ export class ReplicationStore {
     await businessQuery(this.pool,`INSERT INTO agent_data.replication_transfers(user_id,owner_id,shard_id,epoch,token) VALUES($1,$1,$2,$3,$4)
       ON CONFLICT(user_id) DO UPDATE SET shard_id=$2,epoch=$3,token=$4,started_at=now(),error=NULL`,[userId,route.shardId,route.epoch,token]);
   }
-  async finish(userId, route, sequence, hash, token) {
+  async finish(userId, route, sequence, hash, token, capturedAt) {
     await transaction(this.pool, async db => {
       const found = await businessQuery(db,'DELETE FROM agent_data.replication_transfers WHERE user_id=$1 AND epoch=$2 AND token=$3 RETURNING user_id',[userId,route.epoch,token]);
       if (!found.rowCount) throw new Error('复制操作已失效。');
-      await businessQuery(db,`INSERT INTO agent_data.replication_positions(user_id,owner_id,shard_id,epoch,last_task_sequence,content_hash,transfer_token)
-        VALUES($1,$1,$2,$3,$4,$5,$6) ON CONFLICT(user_id) DO UPDATE SET shard_id=$2,epoch=$3,last_task_sequence=$4,content_hash=$5,transfer_token=$6,replicated_at=now()`,
-      [userId,route.shardId,route.epoch,sequence,hash,token]);
+      await businessQuery(db,`INSERT INTO agent_data.replication_positions(user_id,owner_id,shard_id,epoch,last_task_sequence,content_hash,transfer_token,replicated_at)
+        VALUES($1,$1,$2,$3,$4,$5,$6,coalesce($7::timestamptz,now())) ON CONFLICT(user_id) DO UPDATE SET shard_id=$2,epoch=$3,last_task_sequence=$4,content_hash=$5,transfer_token=$6,replicated_at=EXCLUDED.replicated_at`,
+      [userId,route.shardId,route.epoch,sequence,hash,token,capturedAt]);
     });
   }
   async recover(userId, epoch, { missingHome = false } = {}) {

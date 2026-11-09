@@ -61,7 +61,7 @@ test('真实 worker/store 事务边界：COMMIT 前旧副本仍在，COMMIT 失�
   const {p,value}=fixture(t);let committed=false;const queries=[];
   const db={release(){},async query(sql,args){
    queries.push(sql);
-   if(sql.startsWith('INSERT INTO agent_data.replication_positions'))assert.equal(args[5],p.batch.token);
+   if(sql.startsWith('INSERT INTO agent_data.replication_positions')){assert.equal(args[5],p.batch.token);assert.equal(args[6],'2026-01-01T00:00:00.000Z');assert.match(sql,/replicated_at=EXCLUDED.replicated_at/);}
    if(sql==='COMMIT') {
     for(const e of p.batch.entries)assert.ok(fs.existsSync(e.previous),'backup retained until PG COMMIT');
     if(fail)throw Error('PG COMMIT failed');committed=true;
@@ -69,7 +69,7 @@ test('真实 worker/store 事务边界：COMMIT 前旧副本仍在，COMMIT 失�
    return {rows:[],rowCount:1};
   }};
   const store=new ReplicationStore({connect:async()=>db,query:db.query},'instance');
-  store.boundary=async()=>({busy:0,sequence:'2'});store.position=async()=>null;store.unfinished=async()=>null;
+  store.boundary=async()=>({busy:0,sequence:'2',captured_at:'2026-01-01T00:00:00.000Z'});store.position=async()=>null;store.unfinished=async()=>null;
   const route={primary:'node-a',replica:'node-b',epoch:1,shardId:'0'};
   const worker=new ReplicationWorker({runtime:{owns:()=>true,cache:{routeOf:()=>route},coordination:{members:new Map([['node-b',{}]])}},store,
    snapshot:async()=>({hash:'new'}),quiesce:async()=>true,release:async()=>{},log(){},
@@ -84,4 +84,22 @@ test('内容文件发布失败也恢复两棵目录和上一版内容',t=>{
  t.mock.method(fs,'renameSync',(source,target)=>{if(source.endsWith('blob-stage'))throw Error('content failed');return rename(source,target);});
  assert.throws(()=>p.publish([{kind:'blob',file:'content'}]),/content failed/);t.mock.restoreAll();
  for(const kind of ['home','workspace','blob'])assert.equal(value(kind),'old');
+});
+
+test('发布固定边界内容清单：发送期间新增内容不阻塞旧快照，未授权清单拒绝',async t=>{
+ const {attachReplication}=await import('../server/modules/replication/index.mjs');
+ const {root,value}=fixture(t),files=[{file:'content',kind:'blob',digest:'old-digest'}];
+ const db={release(){},async query(sql){
+  if(sql.includes('SELECT s.*,x.token'))return {rows:[{node_id:'node-a',replica:'node-b',epoch:1,token:'token'}]};
+  if(sql.includes('SELECT v.blob'))return {rows:[...files,{file:'new-file',kind:'blob',digest:'new-digest'}]};
+  return {rows:[{}]};
+ }};
+ const app={config:{root,generation:{assert(){}}},data:{pool:{query:db.query,connect:async()=>db},scope:{instanceId:'test'},jobs:{patch:async()=>{}}},close:async()=>{}};
+ const api=attachReplication(app,{nodeId:'node-b'},{});
+ try {
+  await assert.rejects(api.publish({userId:'user',epoch:1,token:'token',files:[{file:'foreign',kind:'blob'}]},'node-a'),/未授权/);
+  assert.equal(value('home'),'old');
+  await api.publish({userId:'user',epoch:1,token:'token',files},'node-a');
+  assert.equal(value('home'),'new');assert.equal(value('blob'),'new');
+ } finally {await api.close();}
 });

@@ -18,7 +18,7 @@ import { answer,responsesFixture } from './responses-fixture.mjs';
 import { startClusterNode,scriptedCoordination } from './fixtures/sharding-cluster.mjs';
 import { directoryHash } from '../server/modules/replication/index.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
-for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario === 'missing-tail' ? 'Linux uid：旧会话已复制、home 存在，新会话未复制即接管返回 409，新建会话可用' : scenario === 'missing-home' ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
+for (const scenario of ['copied', 'missing-home', 'missing-tail', 'slow-send']) test(scenario === 'slow-send' ? 'Linux uid：慢发送期间新一轮开始并完成，脏标记自动追平最新 sequence' : scenario === 'missing-tail' ? 'Linux uid：旧会话已复制、home 存在，新会话未复制即接管返回 409，新建会话可用' : scenario === 'missing-home' ? 'Linux uid：无首次用户副本的已接管节点返回 REPLICA_MISSING，新建会话可继续' : 'Linux 三节点：bob 两轮→连续复制三次→停主接管→续聊看到两轮→旧主回归追平',{
  skip:process.platform!=='linux'||process.getuid?.()!==0?'需要 Linux 0:1000、真实 PG/Redis 和 Codex':false,timeout:240000
 },async t=>{
  const missingHome=scenario==='missing-home', missingTail=scenario==='missing-tail';
@@ -68,6 +68,37 @@ for (const scenario of ['copied', 'missing-home', 'missing-tail']) test(scenario
   assert.equal(job.status,'completed',JSON.stringify({job,logs}));
  };
  await complete(0,'one','FIRST remember cobalt');await complete(0,'two','SECOND remember amber');
+ if(scenario==='slow-send') {
+  const worker=nodes[0].app.replication.worker,store=nodes[0].app.replication.store;
+  await worker.pending.get(bob.id);
+  const original=worker.send,entered=Promise.withResolvers(),gate=Promise.withResolvers();let sends=0,finished=false;
+  worker.send=async(...args)=>{
+   sends++;
+   if(sends===1){entered.resolve();await gate.promise;}
+   const result=await original(...args);finished=true;return result;
+  };
+  const before=(await store.boundary(bob.id)).sequence;
+  const work=until(()=>worker.sync(bob.id,{force:true}),30000);work.catch(()=>{});
+  try {
+   await Promise.race([entered.promise,work.then(()=>{throw Error('copy did not start');})]);
+   const spool=path.join(roots[0],'.runs/replication-spool',bob.id);
+   const [tokenDir]=fs.readdirSync(spool);assert.ok(tokenDir);
+   for(const name of ['home.tar','workspace.tar']){
+    const st=fs.statSync(path.join(spool,tokenDir,name));assert.equal(st.uid,0);assert.equal(st.mode&0o777,0o600);
+   }
+   assert.equal(fs.statSync(path.join(spool,tokenDir)).mode&0o777,0o700);
+   await complete(0,'during-send','THIRD during slow replication');
+   assert.equal(finished,false,'new round finishes before the first network copy');
+   const latest=(await store.boundary(bob.id)).sequence;assert.ok(BigInt(latest)>BigInt(before));
+   gate.resolve();await work;
+   assert.equal(String((await store.position(bob.id)).last_task_sequence),String(before));
+   assert.equal(fs.existsSync(path.join(spool,tokenDir)),false);
+   // No explicit sync: terminal-job schedule must trigger the dirty follow-up in 5s.
+   await until(async()=>String((await store.position(bob.id))?.last_task_sequence)===String(latest),30000);
+   assert.ok(sends>=2);assert.deepEqual(isolations,[]);assert.deepEqual(provider.errors,[]);
+  } finally {gate.resolve();await work.catch(()=>{});worker.send=original;}
+  return;
+ }
  const record=(await admin.query('SELECT * FROM agent_data.user_runtimes WHERE user_id=$1',[bob.id])).rows[0];
  const homes=roots.map(dir=>path.join(dir,'.data/users',bob.id,'codex'));
  if(missingHome) {

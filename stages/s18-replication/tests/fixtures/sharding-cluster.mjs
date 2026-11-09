@@ -3,6 +3,7 @@ import { attachReplication } from '../../server/modules/replication/index.mjs';
 import { nodeAuth, authHeaders } from './node-auth.mjs';
 // Shared s18 cluster boot: real node SQL roles, shard fencing and external HTTP.
 import assert from 'node:assert/strict';
+import { configureReplicationTimeouts } from '../../server/modules/replication/request-timeout.mjs';
 import { createServer } from 'node:http';
 import { startAgentServer } from '../../server/main.mjs';
 import { loadServerConfig } from '../../server/modules/config/index.mjs';
@@ -44,7 +45,7 @@ export async function startClusterNode({ root, nodeRoot, databaseUrl, redisUrl, 
   const control = new (replication ? ReplicationControl : ShardControl)(coordination, cache, controlPool, app.data.scope.instanceId); control.log = line => logs.push(line);
   const handler = createShardedHandler(coordination, { app, isReady: () => generation.active }, runtime, control);
   if(replication) runtime.replication=attachReplication(app,runtime,control);
-  server ||= createServer();
+  if (!server) server = configureReplicationTimeouts(createServer());
   server.on('request', (req, res) => { void handler(req, res); });
   if (!server.listening) await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   cleanup(root, () => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));

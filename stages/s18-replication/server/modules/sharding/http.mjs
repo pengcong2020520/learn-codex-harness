@@ -293,8 +293,8 @@ function contentPath(root, kind, file) {
   if (!(kind === 'blob' ? /^[a-f0-9]{64}\.(txt|bin)$/ : /^[a-f0-9-]{36}\.json$/).test(file)) throw new Error('无效内容文件。');
   return path.join(root, kind === 'blob' ? '.data/files/objects' : '.data/knowledge/bm25', file);
 }
-export async function copyContent(app, runtime, userId, address, operationId, endpoint = '/internal/content', epoch = '') {
-  for (const { file, kind } of await contentFiles(app, userId)) {
+export async function copyContent(app, runtime, userId, address, operationId, endpoint = '/internal/content', epoch = '', files) {
+  for (const { file, kind } of files ?? await contentFiles(app, userId)) {
     const target = contentPath(app.config.root, kind, file), stat = fs.lstatSync(target);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('不安全的内容文件。');
     const response = await fetch(new URL(`${endpoint}?operationId=${operationId}&user=${userId}&kind=${kind}&file=${file}&epoch=${epoch}`, address), { method:'PUT', headers: { ...nodeHeaders(runtime) }, body:fs.createReadStream(target), duplex:'half', redirect:'error', signal:AbortSignal.timeout(30000) });

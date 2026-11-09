@@ -30,3 +30,18 @@ test('隧道打印限制公钥行，默认专用账号，拒绝 root',t=>{
  assert.match(result.stdout,/permitlisten="127.0.0.1:14341",command="\/bin\/false" ssh-ed25519 AAAATEST/);
  assert.notEqual(spawnSync('bash',[file('deploy/remote-node.sh'),'--authorized-key'],{env:{...env,SSH_USER:'root'}}).status,0);
 });
+
+test('两台部署：remote-env 输出 262144 字节/秒，compose 三节点继承限速变量',t=>{
+ const root=tempRoot(t);fs.mkdirSync(path.join(root,'deploy'));
+ fs.copyFileSync(file('deploy/remote-env.mjs'),path.join(root,'deploy/remote-env.mjs'));
+ fs.writeFileSync(path.join(root,'.env'),[
+  'AGENT_NODE_B_DB_PASSWORD=test-password','REDIS_PASSWORD=test-redis','AGENT_NODE_KEY_B=test-node-key',
+  'ETCD_NODE_B_PASSWORD=test-etcd','AGENT_GATEWAY_KEY=test-gateway',
+  ...['A','B','C'].map(n=>`AGENT_NODE_KEY_${n}_HASH=${'a'.repeat(64)}`),
+ ].join('\n'));
+ const result=spawnSync(process.execPath,[path.join(root,'deploy/remote-env.mjs')],{env:{...process.env,NODE_ID:'node-b'},encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/^AGENT_REPLICATION_RATE_LIMIT=262144$/m);
+ const compose=fs.readFileSync(file('compose.yaml'),'utf8');
+ assert.match(compose,/AGENT_REPLICATION_RATE_LIMIT: \$\{AGENT_REPLICATION_RATE_LIMIT:-0\}/);
+ for(const node of ['node-b','node-c'])assert.match(compose,new RegExp(`  ${node}:[\\s\\S]*?environment:\\n      <<: \\*node-env`));
+});

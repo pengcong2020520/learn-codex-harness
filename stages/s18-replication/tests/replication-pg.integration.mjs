@@ -43,7 +43,10 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  const sequence=(await admin.query("SELECT sequence FROM agent_data.tasks WHERE instance_id=$1 AND id='copied'",[instance])).rows[0].sequence;
  await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd) VALUES($1,'copied-empty',$2,'/tmp')",[instance,user]);
  const route={shardId:'0',epoch:1};let token=randomUUID();
- await runOwner(user,async()=>{await sa.begin(user,route,token);await sa.finish(user,route,sequence,'hash',token);});
+ const capturedAt=(await sa.boundary(user)).captured_at;
+ // Created during a slow send, before the position commit: absent from the snapshot.
+ await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd,created_at) VALUES($1,'empty-tail',$2,'/tmp',clock_timestamp())",[instance,user]);
+ await runOwner(user,async()=>{await sa.begin(user,route,token);await sa.finish(user,route,sequence,'hash',token,capturedAt);});
  await runOwner(user,()=>assert.rejects(sb.begin(user,route,randomUUID()),{code:'SH001'}));
  const term=String(BigInt((await admin.query('SELECT term FROM agent_data.cluster_term WHERE id=1')).rows[0].term)+1n);
  const c=scriptedCoordination({client:etcd,nodeId:'node-a',members:new Map([['node-b',{nodeId:'node-b'}]]),term,isolations:[]});
@@ -53,8 +56,7 @@ test('真实 PG：接管事务、SH001 位点与旧主隔离、三类任务、�
  assert.equal(taken.node_id,'node-b');assert.equal(taken.replica,null);assert.equal(taken.replica_ready,false);assert.equal(taken.previous_primary,'node-a');
  await runOwner(user,()=>assert.rejects(sa.begin(user,route,randomUUID()),{code:'SH001'}));
  await runOwner(user,()=>assert.rejects(sa.pool.query("UPDATE agent_data.tasks SET error='old result' WHERE instance_id=$1",[instance]),{code:'SH001'}));
- // An empty post-snapshot conversation is also absent from the copied home.
- await admin.query("INSERT INTO agent_data.conversations(instance_id,id,owner_id,cwd,created_at) VALUES($1,'empty-tail',$2,'/tmp',clock_timestamp())",[instance,user]);
+ // The post-snapshot conversation must still be missing even though commit happened later.
  await runOwner(user,()=>sb.recover(user,2));
  assert.deepEqual((await admin.query('SELECT id,replica_missing,paused FROM agent_data.conversations WHERE instance_id=$1 ORDER BY id',[instance])).rows,
   [{id:'copied-empty',replica_missing:false,paused:false},{id:'empty-tail',replica_missing:true,paused:true},{id:'replica-thread',replica_missing:false,paused:true}]);

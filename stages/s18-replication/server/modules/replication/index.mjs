@@ -9,7 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { runOwner, currentIdentity } from '../accounts/context.mjs';
 import { RuntimeStore } from '../runtimes/store.mjs';
 import { prepareDirectories } from '../runtimes/directories.mjs';
-import { exportTree, importTree, transferPath, transferLimit } from '../sharding/transfer.mjs';
+import { importTree, transferPath, transferLimit } from '../sharding/transfer.mjs';
 import { nodeHeaders, targetOf } from '../sharding/routing.mjs';
 import { copyContent, receiveContent, contentFiles } from '../sharding/http.mjs';
 import { transaction } from '../data/database.mjs';
@@ -17,6 +17,8 @@ import { AppError } from '../../../shared/errors.mjs';
 import { ReplicationStore } from './store.mjs';
 import { ReplicaPublication } from './publication.mjs';
 import { ReplicationWorker } from './worker.mjs';
+import { ReplicationSpool } from './spool.mjs';
+import { ReplicationRateLimiter, replicationRateLimit, sendArchive } from './transport.mjs';
 const exec=promisify(execFile);
 export function replicaHomeMissing(root, record) {
   if (!record) return true;
@@ -45,6 +47,8 @@ export async function authorizeReplica(db,{userId,caller,receiver,epoch,token}) 
   return row;
 }
 export function attachReplication(app,runtime,control) {
+  const limiter=new ReplicationRateLimiter(app.config.replicationRateLimit ?? replicationRateLimit());
+  const spool=new ReplicationSpool(app.config.root);
   const store=new ReplicationStore(app.data.pool,app.data.scope.instanceId);
   const recordFor=async userId=>(await businessQuery(app.data.pool,'SELECT * FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$2',[app.data.scope.instanceId,userId])).rows[0];
   const controlCall=async (action,body)=>{
@@ -66,28 +70,25 @@ export function attachReplication(app,runtime,control) {
       return true;
     },
     release:async userId=>{if(held.delete(userId)){runtime.paused.delete(userId);app.runtimes.pool.blocked.delete(userId);}},
-    snapshot:async userId=>{
+    snapshot:async (userId,token,unchanged)=>{
       let record=await recordFor(userId);
       if(!record) record=await new RuntimeStore(app.data.pool,app.data.scope.instanceId,app.config.root).ensure(userId);
       prepareDirectories(app.config.root,record,{isolated:process.getuid()===0});
-      const hash=createHash('sha256').update(await directoryHash(app.config.root,record)).update(JSON.stringify(await contentFiles(app,userId))).digest('hex');
-      return {hash,record};
+      return spool.capture(record,token,async()=>{
+        const files=await contentFiles(app,userId);
+        const hash=createHash('sha256').update(await directoryHash(app.config.root,record)).update(JSON.stringify(files)).digest('hex');
+        return {hash,files};
+      },unchanged);
     },
-    send:async(userId,route,token,{record})=>{
+    send:async(userId,route,token,{archives,files},signal)=>{
       const address=targetOf({primary:route.replica},runtime.coordination.members);
       for(const kind of ['home','workspace']) {
         app.config.generation?.assert();
-        const archive=exportTree(app.config.root,record,kind,{maxBytes:transferLimit()});
-        try {
-          const query=new URLSearchParams({user:userId,kind,epoch:String(route.epoch),operationId:token});
-          const response=await fetch(new URL('/internal/replication/tree?'+query,address),{method:'PUT',headers:nodeHeaders(runtime),body:archive.stream,duplex:'half',redirect:'error',signal:AbortSignal.timeout(30000)});
-          if(!response.ok) { const value=await response.json(); throw new AppError(value.error?.message || '从节点拒绝复制目录。',response.status,value.error?.code); }
-          await archive.done;await response.arrayBuffer();
-        }catch(error){throw archive.failure?.code==='TRANSFER_TOO_LARGE'?archive.failure:error;}
-        finally{await archive.stop();}
+        const query=new URLSearchParams({user:userId,kind,epoch:String(route.epoch),operationId:token});
+        await sendArchive(new URL('/internal/replication/tree?'+query,address),archives[kind],{headers:nodeHeaders(runtime),limiter,signal});
       }
-      await copyContent(app,runtime,userId,address,token,'/internal/replication/content',route.epoch);
-      const body={userId,epoch:route.epoch,token};
+      await copyContent(app,runtime,userId,address,token,'/internal/replication/content',route.epoch,files);
+      const body={userId,epoch:route.epoch,token,files};
       try { await runtime.call(address,'/internal/replication/publish',body); }
       catch (error) {
         // A lost acknowledgement may hide a completed pair of renames. PG has not advanced.
@@ -120,13 +121,18 @@ export function attachReplication(app,runtime,control) {
     try{return await work;}finally{received.delete(userId);}
   };
   const api={worker,store,stopShard,
-    async publish({userId,epoch,token},caller) {
+    async publish({userId,epoch,token,files},caller) {
       return exclusive(userId,()=>transaction(app.data.pool,async db=>{
         await businessQuery(db,'SELECT s.shard_id FROM agent_data.shard_owners s JOIN agent_data.user_shards u USING(shard_id) WHERE u.user_id=$1 FOR SHARE OF s,u',[userId]);
         app.config.generation?.assert();await authorizeReplica(db,{userId,epoch,token,caller,receiver:runtime.nodeId});
         const publication=await publicationFor(userId);
         if(publication.batch?.token!==token)throw new AppError('复制暂存操作不匹配。',409);
-        publication.publish(await contentFiles(app,userId));return {published:true};
+        // New turns may add files after this boundary. Authorize the captured subset,
+        // never require newer content to be present in an older snapshot.
+        const allowed=await contentFiles(app,userId);
+        if(!Array.isArray(files) || !files.every(file=>allowed.some(entry=>entry.file===file.file && entry.kind===file.kind && entry.digest===file.digest)))
+          throw new AppError('复制内容清单未授权。',403);
+        publication.publish(files);return {published:true};
       }));
     },
     async settle({userId,epoch,token},caller) {
@@ -170,6 +176,8 @@ export function attachReplication(app,runtime,control) {
         for(;;) {
           const row=(await businessQuery(app.data.pool,'SELECT * FROM agent_data.shard_owners WHERE shard_id=$1',[shardId])).rows[0];
           if(row.node_id!==runtime.nodeId || String(row.epoch)!==String(epoch) || !row.paused)throw new AppError('切换暂停或 epoch 已改变。',409);
+          // An in-flight copy may predate the shard pause and miss a newer boundary.
+          await worker.pending.get(userId)?.catch(()=>{});
           if(await worker.sync(userId,{force:true}))break;
           if(Date.now()>deadline)throw new AppError('等待轮次结束超时；分片保持暂停。',409);
           await delay(200);
