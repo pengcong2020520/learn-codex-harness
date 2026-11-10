@@ -11,7 +11,7 @@
 
 <p>现在服务端能独立完成一轮了。试着在回答过程中再输入两条，然后关闭客户端：已经发出的那一轮可以继续，仍等在客户端的输入却没有服务端记录。一个能长期工作的云端 Agent，还要接住用户连续交来的事情，并告诉用户每一条走到了哪里。</p>
 <p>本章的验收场景是：连续提交三条普通消息，三条都被服务端接收；关闭客户端后，服务端依次完成它们；回来时能看到队列和会话状态。如果执行结果拿不准，就停下来让用户核对，避免把同一件事做两遍。</p>
-<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="754" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="856" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">messages：决定执行节奏</div><div class="pattern-desc">接收消息、按 Thread 排队、发 turn/start，处理追加、超时、暂停与继续。它决定哪条输入现在可以执行，不代替 Codex 内部的推理与工具循环。</div></div>
 <div class="pattern-card"><div class="pattern-title">data：保存任务事实</div><div class="pattern-desc">将消息和暂停状态写入 .data/messages.json，每次更新整体原子替换文件。进程退出后记录还在，重启时可据此判断哪些任务需要核对。</div></div>

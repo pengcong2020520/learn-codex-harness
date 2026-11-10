@@ -9,7 +9,7 @@
 <section class="screen animate-in" id="s11-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：协调模型与用量</h2>
 <p>上一章 s10 用 Skill 教方法，用 Workflow 管步骤、权限与确认。写作任务可以先产出大纲，等用户确认后再继续成稿。这个云端 Agent 还缺什么？大纲和成稿未必适合用同一个模型；知识检索需要向量模型，生成图片又是另一种用途。模型越来越多之后，谁负责挑选，谁持有密钥，花费达到上限时谁来停止派发，都需要明确的执行位置。</p>
-<figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1080" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1192" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
 <p><span class="term" data-definition="本阶段使用 Bifrost 承接模型请求：对 Codex 提供 Responses 接口，向上游转换协议，并按配置处理备用链和 token 限流。">模型网关</span> 是请求经过的服务。<span class="term" data-definition="服务端根据用途、场景、步骤需求与预算策略选择本轮提交的模型；它不负责网关内部的失败重试。">模型路由</span> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
 <table><thead><tr><th>角色</th><th>负责什么</th><th>本章中的证据</th></tr></thead><tbody>
 <tr><td>Codex</td><td>管理 Thread 与 Turn，执行推理和工具循环，报告模型用量。</td><td>turn/start 参数、thread/tokenUsage/updated 通知。</td></tr>

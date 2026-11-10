@@ -9,7 +9,7 @@
 <section class="screen animate-in" id="s10-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：把一类任务做完的约定</h2>
 <p>上一章，云端 Agent 已能通过 Wiki / RAG 查依据，文件和知识操作也经过同一道门禁。这个云端 Agent 还缺什么？用户说“写一篇文章”，可能希望先看大纲再决定；用户说“整理这些新资料”，可能还需要一次受限的知识库更新。能调用工具，还不足以表达哪里等人确认、这一次能写到哪里、做到什么才算交付。</p>
-<figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="968" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="1080" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
 <p>本章把三件事分开。<span class="term" data-definition="方法说明，包含规范、模板与参考资料；教模型怎么做，但不能给工具或资源授权。">Skill</span> 教怎么做；<span class="term" data-definition="部署者声明的一类任务：目标、额外授权、Skill、步骤写入范围、验收与确认点；只组合代码允许的能力。">Workflow</span> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
 <table><thead><tr><th>层</th><th>存放内容</th><th>谁负责</th><th>与权限的关系</th></tr></thead><tbody>
 <tr><td>Agent 包</td><td>agent.json、role.md、skills/</td><td>部署者配置，服务端校验</td><td>Skill 不授权；Workflow 只能组合 Agent 已有能力</td></tr>

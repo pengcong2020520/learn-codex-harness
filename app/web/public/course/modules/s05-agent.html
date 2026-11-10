@@ -10,7 +10,7 @@
 <h2 class="screen-heading">这个云端 Agent 还缺什么：明确的角色与工作方法</h2>
 <p>上一章，服务已经能保存输入、按顺序执行，并把状态推送给客户端。这个云端 Agent 还缺什么？它还需要一份明确的定义：是谁、按什么方法工作、执行边界是什么。否则每换一种助手，就得在服务代码里寻找那段角色文字。</p>
 <p>本章用一份 JSON 装配 <span class="term" data-definition="由角色指令、已启用的 Skills 与执行策略共同约束的助手；本阶段一个服务实例装配一个 Agent，可运行多个会话。">Agent</span>。定义交给服务端校验，角色和工作方法交给 Codex 执行；会话与排队消息记录自己使用的装配版本。</p>
-<figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="856" alt="S05 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="968" alt="S05 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">定义决定装配内容</div><div class="pattern-desc">agents/writing-agent.json 指定角色文件、原生 Skills、工作区和执行策略。一个服务实例只加载一份定义；AGENT_DEFINITION 可以指定另一份定义文件。</div></div>
 <div class="pattern-card"><div class="pattern-title">Codex 执行角色与方法</div><div class="pattern-desc">服务端把角色放进 baseInstructions，Codex 负责原生 Skill 的发现、解析和正文注入。普通消息保留用户文本，并附加明确引用的已启用 Skill；角色正文不重复拼入用户消息。</div></div>

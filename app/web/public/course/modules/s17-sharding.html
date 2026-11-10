@@ -6,7 +6,7 @@
 <section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">分片键是用户，不是消息</h2>
 <p>上一章的云端 Agent 有三个节点，却只有 control 干活，用户多了仍是一台装不下。本章把用户分到不同节点，让每台都工作；入口还要能找到用户，不能把请求随意交给一块没有他历史的磁盘。</p>
 <p>从 s14 起，历史、索引和记忆都保存在用户自己的 CODEX_HOME。若第一轮在 A、第二轮在 B，B 看不到前文。所以分片键取稳定的用户 ID，一个人的全部会话与原生状态跟着他落在同一主节点。</p>
-<figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1752" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1304" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
 <p>用户先属于一个<span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>，再由分片找到<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>。control 发布归属，主节点运行用户业务；两种职责不同。三个节点各用自己的磁盘，仅部署身份一致，PG 中有会话索引不等于其他节点已有原生文件。</p>
 <p>租约、任期、用户隔离和 Hub 权限继续生效。分片负责放置与寻找数据，不替代认证授权，也不改变 Codex 的执行循环。</p>
 </section>

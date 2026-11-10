@@ -5,7 +5,7 @@
 <section class="screen animate-in" id="s15-screen-1">
 <h2 class="screen-heading">隔离之后，团队还需要有边界地共享</h2>
 <p>上一章让云端 Agent 的每个用户都有独立运行环境。但团队还需要一起用：bob 想把知识库给 carol 读，不让她修改；用户写的 Skill 想影响别人的 Agent，需要有人审阅；一个人用完预算，也不该拖住其他人。</p>
-<figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1528" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1192" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
 <p><span class="term" data-definition="统一处理资源可见性、动作授权、用户权益、分享审批、配额与审计的服务模块；不接管 Codex 执行循环。">权限与资源 Hub</span>统一回答“这个用户，能不能对这个资源做这个动作”。使用、读取、修改、分享、删除五种动作都到这里判定，避免工具、知识库和调度器各说各话。</p>
 <p>身份来自认证或持久任务，Codex 继续执行轮次，不参与授权。Hub 管理资源范围、权益、分享和审计；会话与普通文件仍是个人隔离对象，admin 也不能借 Hub 访问别人的会话。工具和 Agent 由部署者提供，用户不能上传新的工具实现或动态 Agent。</p>
 </section>

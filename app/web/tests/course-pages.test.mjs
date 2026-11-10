@@ -113,7 +113,7 @@ test('全景默认已完成的 s18，增量从 s17 到 s18',()=>{
  assert.match(overview,/data-stage-panel="s18"(?! hidden)/);
  assert.match(overview,/<output[^>]*>s18<\/output>/);
  assert.match(overview,/\/course\/assets\/s18-architecture.svg/);
- assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['异步副本']);
+ assert.deepEqual(stages.at(-1).modules.map(m=>m.name),['副本与接管']);
 });
 
 test('s18 八个术语都有释义，相关术语都能在术语表中找到',()=>{

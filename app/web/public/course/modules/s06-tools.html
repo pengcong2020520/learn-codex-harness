@@ -9,7 +9,7 @@
 <section class="screen animate-in" id="s06-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：接触资料的受控入口</h2>
 <p>上一章，Agent 已经有明确的角色、Skills 和执行策略。这个云端 Agent 还缺什么？写作助手只能处理用户粘贴的文字，不能读资料、查看网页或保存结果。本章给它工具，同时让每次调用都经过服务端检查。</p>
-<figure class="architecture-figure"><a href="/course/assets/s06-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S06 总架构 SVG 大图"><img src="/course/assets/s06-architecture.svg" width="1600" height="856" alt="S06 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s06-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S06 总架构 SVG 大图"><img src="/course/assets/s06-architecture.svg" width="1600" height="968" alt="S06 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <p><span class="term" data-definition="工具注册表，把工具名称、说明、参数 schema 和执行函数配对，并记录这一版工具源的版本。">Registry</span> 从 <code>config/tools/*.json</code> 装配：配置声明工具规格和实现模块，加载器编译参数校验规则、加载工厂函数，再把名称绑定到实际执行函数。重名、缺实现、无效 schema 或越界模块路径会使装配失败。</p>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">本阶段的四个默认工具</div><div class="pattern-desc">list_files 列出授权范围内的资料，read_file 读取文本，write_file 新建文件，read_webpage 读取公开网页。没有网页搜索工具；读取网页不等于搜索互联网。</div></div>
