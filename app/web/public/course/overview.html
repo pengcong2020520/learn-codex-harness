@@ -3,74 +3,74 @@
 <a class="course-skip" href="#main">跳到正文</a>
 <header class="chg-top"><a class="chg-brand" href="/course/">Agent Atelier <small>课程全景</small></a><nav aria-label="课程导航"><a href="/course/overview.html" aria-current="page">全景</a><a href="/course/">机制课程</a><a href="/course/handbook.html">章节长文</a><a href="/course/changes.html">阶段演示</a><a href="/course/glossary.html">术语表</a><a href="/app/index.html?stage=project">工作台 ↗</a></nav></header>
 <main class="chg-main course-main" id="main">
-<section class="overview-hero"><p class="course-eyebrow">从这里开始</p><h1>这套教程带你用 Codex 的 harness 亲手做一个云端 Agent</h1><a href="/course/assets/learning-roadmap.svg" aria-label="打开学习路线原图"><img class="roadmap" src="/course/assets/learning-roadmap.svg" alt="学习路线：s00–s18，五个阶段"></a></section>
+<section class="overview-hero"><p class="course-eyebrow">从这里开始</p><h1>用 Codex 的 harness，亲手搭一个通用的云端 Agent 脚手架</h1><p class="muted">它是谁、会什么由一份 Agent 配置决定；教程用一个写作助手作为示例 Agent。下面是全景图：我们的服务按职责分成 8 层，每个模块标着它加入的章节。</p><a href="/course/assets/overview.svg" aria-label="打开全景图原图"><img class="roadmap" src="/course/assets/overview.svg" alt="全景：一个通用的云端 Agent 由哪些部分组成"></a><a href="/course/assets/learning-roadmap.svg" aria-label="打开学习路线原图"><img class="roadmap" src="/course/assets/learning-roadmap.svg" alt="学习路线：s00–s18，五个阶段"></a></section>
 <section class="overview-section"><h2>谁负责什么</h2><div class="responsibilities"><article><h3>Codex harness 负责</h3><ul><li>agent loop</li><li>原生历史</li><li>Skills</li><li>工具调用</li><li>沙箱</li></ul></article><article><h3>我们的程序负责</h3><ul><li>服务与客户端</li><li>排队与推送</li><li>Agent 定义</li><li>工具与资料边界</li><li>记忆开关</li><li>数据</li><li>知识与门禁</li><li>Workflow</li><li>模型网关</li><li>部署与恢复</li><li>账号与用户隔离</li><li>资源权限与权益</li><li>多台机器：协调、分片、副本</li></ul></article></div><h3>一个 Agent 要回答的六个问题</h3><ul class="six-questions"><li>① 我是谁？</li><li>② 要做什么，做到什么算完？</li><li>③ 之前聊过什么？</li><li>④ 依据什么资料？</li><li>⑤ 能用什么？</li><li>⑥ 谁说了算？</li></ul><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/introduction.md#%E4%B8%80%E4%B8%AA-agent-%E5%AE%8C%E6%88%90%E4%BB%BB%E5%8A%A1%E8%A6%81%E5%9B%9E%E7%AD%94%E5%85%AD%E4%B8%AA%E9%97%AE%E9%A2%98">阅读导论中的分工说明 ↗</a></section>
 <section class="overview-section"><h2>架构怎么一步步长出来</h2><p class="muted">拖动滑块或用方向键切换阶段；点击刻度可以直接跳转。</p><div class="stage-controls"><button type="button" id="stage-prev" aria-label="上一个阶段">←</button><label for="stage-slider">阶段 <output id="stage-output" for="stage-slider">s18</output></label><input id="stage-slider" type="range" min="0" max="18" value="18" step="1" aria-valuetext="s18 副本与故障接管：保留可核对的历史窗口"><button type="button" id="stage-next" aria-label="下一个阶段">→</button></div>
 <nav class="stage-ticks" aria-label="阶段刻度"><button type="button" data-stage-index="0" aria-controls="overview-s00" aria-pressed="false">s00</button><button type="button" data-stage-index="1" aria-controls="overview-s01" aria-pressed="false">s01</button><button type="button" data-stage-index="2" aria-controls="overview-s02" aria-pressed="false">s02</button><button type="button" data-stage-index="3" aria-controls="overview-s03" aria-pressed="false">s03</button><button type="button" data-stage-index="4" aria-controls="overview-s04" aria-pressed="false">s04</button><button type="button" data-stage-index="5" aria-controls="overview-s05" aria-pressed="false">s05</button><button type="button" data-stage-index="6" aria-controls="overview-s06" aria-pressed="false">s06</button><button type="button" data-stage-index="7" aria-controls="overview-s07" aria-pressed="false">s07</button><button type="button" data-stage-index="8" aria-controls="overview-s08" aria-pressed="false">s08</button><button type="button" data-stage-index="9" aria-controls="overview-s09" aria-pressed="false">s09</button><button type="button" data-stage-index="10" aria-controls="overview-s10" aria-pressed="false">s10</button><button type="button" data-stage-index="11" aria-controls="overview-s11" aria-pressed="false">s11</button><button type="button" data-stage-index="12" aria-controls="overview-s12" aria-pressed="false">s12</button><button type="button" data-stage-index="13" aria-controls="overview-s13" aria-pressed="false">s13</button><button type="button" data-stage-index="14" aria-controls="overview-s14" aria-pressed="false">s14</button><button type="button" data-stage-index="15" aria-controls="overview-s15" aria-pressed="false">s15</button><button type="button" data-stage-index="16" aria-controls="overview-s16" aria-pressed="false">s16</button><button type="button" data-stage-index="17" aria-controls="overview-s17" aria-pressed="false">s17</button><button type="button" data-stage-index="18" aria-controls="overview-s18" aria-pressed="true">s18</button></nav>
 <p id="stage-announcement" class="sr-only" aria-live="polite"></p><section class="overview-stage" id="overview-s00" data-stage-panel="s00" hidden aria-labelledby="title-s00">
 <header class="stage-heading"><span class="chg-tag">s00</span><h3 id="title-s00">先体验：把一件事交给 Codex</h3><p>用官方 SDK 发起一轮任务；读文件、跑命令、改代码这个循环由 Codex 来转。</p></header>
 <a class="architecture-frame" href="/course/assets/s00-architecture.svg" aria-label="打开 s00 总架构原图"><img src="/course/assets/s00-architecture.svg" alt="s00 总架构：先体验：把一件事交给 Codex；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>SDK 脚本</b><span>接入与会话 · 官方 SDK 发起一轮</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>SDK 脚本</b><span>接入与调度 · 官方 SDK 发起一轮</span></li></ul>
 <nav class="stage-links" aria-label="s00 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s00-sdk-quickstart/README.md">README ↗</a><a href="/course/#s00">机制课</a><a href="/course/handbook.html">长文待补充 · 查看已发布目录</a><a href="/course/changes.html#s00">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s01" data-stage-panel="s01" hidden aria-labelledby="title-s01">
 <header class="stage-heading"><span class="chg-tag">s01</span><h3 id="title-s01">先打通一次问答</h3><p>自己写客户端，经 JSON-RPC 驱动 App Server；只有本轮成功结束，才算答完。</p></header>
 <a class="architecture-frame" href="/course/assets/s01-architecture.svg" aria-label="打开 s01 总架构原图"><img src="/course/assets/s01-architecture.svg" alt="s01 总架构：先打通一次问答；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>单轮客户端</b><span>接入与会话 · 发请求、核对终态</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>单轮客户端</b><span>接入与调度 · 发请求、核对终态</span></li></ul>
 <nav class="stage-links" aria-label="s01 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s01-single-turn/README.md">README ↗</a><a href="/course/#s01">机制课</a><a href="/course/handbook.html#module-s01">长文章节</a><a href="/course/changes.html#s01">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s02" data-stage-panel="s02" hidden aria-labelledby="title-s02">
 <header class="stage-heading"><span class="chg-tag">s02</span><h3 id="title-s02">让同一段对话继续下去</h3><p>输入先排队再发送；每轮只发新输入，历史由 Codex 原生保存，退出后可以恢复。</p></header>
 <a class="architecture-frame" href="/course/assets/s02-architecture.svg" aria-label="打开 s02 总架构原图"><img src="/course/assets/s02-architecture.svg" alt="s02 总架构：让同一段对话继续下去；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>会话</b><span>接入与会话 · 复用 Thread，整理快照</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>会话</b><span>会话与记忆 · 复用 Thread，整理快照</span></li></ul>
 <nav class="stage-links" aria-label="s02 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s02-multi-turn/README.md">README ↗</a><a href="/course/#s02">机制课</a><a href="/course/handbook.html#module-s02">长文章节</a><a href="/course/changes.html#s02">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s03" data-stage-panel="s03" hidden aria-labelledby="title-s03">
 <header class="stage-heading"><span class="chg-tag">s03</span><h3 id="title-s03">变成常驻服务：客户端走了，服务还在</h3><p>服务端常驻运行、持有 Codex；终端客户端经 HTTP 提交和查看，关掉客户端不影响正在执行的一轮。</p></header>
 <a class="architecture-frame" href="/course/assets/s03-architecture.svg" aria-label="打开 s03 总架构原图"><img src="/course/assets/s03-architecture.svg" alt="s03 总架构：变成常驻服务：客户端走了，服务还在；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>HTTP 接口</b><span>接入与会话 · 常驻服务的入口</span></li><li><b>生命周期与清理</b><span>运行支撑 · 启停、运行目录回收</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>HTTP 接口</b><span>接入与调度 · 常驻服务的入口</span></li><li><b>生命周期与清理</b><span>运行与部署 · 启停、运行目录回收</span></li></ul>
 <nav class="stage-links" aria-label="s03 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s03-service/README.md">README ↗</a><a href="/course/#s03">机制课</a><a href="/course/handbook.html#module-s03">长文章节</a><a href="/course/changes.html#s03">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s04" data-stage-panel="s04" hidden aria-labelledby="title-s04">
 <header class="stage-heading"><span class="chg-tag">s04</span><h3 id="title-s04">排队搬进服务端，状态推给客户端</h3><p>输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。</p></header>
 <a class="architecture-frame" href="/course/assets/s04-architecture.svg" aria-label="打开 s04 总架构原图"><img src="/course/assets/s04-architecture.svg" alt="s04 总架构：排队搬进服务端，状态推给客户端；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>任务与消息</b><span>接入与会话 · 任务排队与调度</span></li><li><b>事件推送</b><span>接入与会话 · 状态变化推给客户端</span></li><li><b>任务记录</b><span>数据 · 任务状态，重启后可核对</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>任务与消息</b><span>接入与调度 · 任务排队与调度</span></li><li><b>事件推送</b><span>接入与调度 · 状态变化推给客户端</span></li><li><b>任务记录</b><span>数据与知识 · 任务状态，重启后可核对</span></li></ul>
 <nav class="stage-links" aria-label="s04 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s04-events-messages/README.md">README ↗</a><a href="/course/#s04">机制课</a><a href="/course/handbook.html#module-s04">长文章节</a><a href="/course/changes.html#s04">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s05" data-stage-panel="s05" hidden aria-labelledby="title-s05">
 <header class="stage-heading"><span class="chg-tag">s05</span><h3 id="title-s05">一份 JSON 装配 Agent：角色与 Skills</h3><p>Agent 定义决定角色、Skill、执行策略和工作区；启动时校验，内容一变旧版本就作废，会话与排队消息都要核对版本。</p></header>
 <a class="architecture-frame" href="/course/assets/s05-architecture.svg" aria-label="打开 s05 总架构原图"><img src="/course/assets/s05-architecture.svg" alt="s05 总架构：一份 JSON 装配 Agent：角色与 Skills；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>Agent 定义</b><span>Agent 装配 · JSON 校验 + 版本哈希</span></li><li><b>角色与 Skills</b><span>Agent 装配 · 做什么、怎么做</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>Agent 定义与 Skills</b><span>Agent 装配 · JSON 装配角色与方法</span></li></ul>
 <nav class="stage-links" aria-label="s05 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s05-agent-assembly/README.md">README ↗</a><a href="/course/#s05">机制课</a><a href="/course/handbook.html#module-s05">长文章节</a><a href="/course/changes.html#s05">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s06" data-stage-panel="s06" hidden aria-labelledby="title-s06">
 <header class="stage-heading"><span class="chg-tag">s06</span><h3 id="title-s06">工具：读得到资料、存得下文章</h3><p>工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。</p></header>
 <a class="architecture-frame" href="/course/assets/s06-architecture.svg" aria-label="打开 s06 总架构原图"><img src="/course/assets/s06-architecture.svg" alt="s06 总架构：工具：读得到资料、存得下文章；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>工具与资料边界</b><span>Agent 装配 · 白名单 + 参数校验</span></li><li><b>MCP 工具入口</b><span>Agent 装配 · Codex 回调本地工具</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>工具与 MCP</b><span>Agent 装配 · 白名单、参数校验、回调</span></li></ul>
 <nav class="stage-links" aria-label="s06 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s06-tools/README.md">README ↗</a><a href="/course/#s06">机制课</a><a href="/course/handbook.html#module-s06">长文章节</a><a href="/course/changes.html#s06">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s07" data-stage-panel="s07" hidden aria-labelledby="title-s07">
 <header class="stage-heading"><span class="chg-tag">s07</span><h3 id="title-s07">记忆：Codex 提炼，服务端管控</h3><p>原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。</p></header>
 <a class="architecture-frame" href="/course/assets/s07-architecture.svg" aria-label="打开 s07 总架构原图"><img src="/course/assets/s07-architecture.svg" alt="s07 总架构：记忆：Codex 提炼，服务端管控；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>记忆</b><span>运行支撑 · Codex 提炼，服务端管控</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>记忆</b><span>会话与记忆 · Codex 提炼，服务端管控</span></li></ul>
 <nav class="stage-links" aria-label="s07 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s07-memory/README.md">README ↗</a><a href="/course/#s07">机制课</a><a href="/course/handbook.html#module-s07">长文章节</a><a href="/course/changes.html#s07">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s08" data-stage-panel="s08" hidden aria-labelledby="title-s08">
 <header class="stage-heading"><span class="chg-tag">s08</span><h3 id="title-s08">让任务与产物有据可查</h3><p>业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。</p></header>
 <a class="architecture-frame" href="/course/assets/s08-architecture.svg" aria-label="打开 s08 总架构原图"><img src="/course/assets/s08-architecture.svg" alt="s08 总架构：让任务与产物有据可查；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>PostgreSQL</b><span>数据 · 业务状态的依据</span></li><li><b>Outbox + Redis</b><span>数据 · 提交后再唤醒</span></li><li><b>资源版本</b><span>数据 · 产物可追溯来源</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>PostgreSQL + Redis</b><span>数据与知识 · 落库后再唤醒执行</span></li><li><b>资源版本</b><span>数据与知识 · 产物可追溯来源</span></li></ul>
 <nav class="stage-links" aria-label="s08 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s08-data-layer/README.md">README ↗</a><a href="/course/#s08">机制课</a><a href="/course/handbook.html#module-s08">长文章节</a><a href="/course/changes.html#s08">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s09" data-stage-panel="s09" hidden aria-labelledby="title-s09">
 <header class="stage-heading"><span class="chg-tag">s09</span><h3 id="title-s09">知识层与门禁：依据什么，能碰什么</h3><p>身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。</p></header>
 <a class="architecture-frame" href="/course/assets/s09-architecture.svg" aria-label="打开 s09 总架构原图"><img src="/course/assets/s09-architecture.svg" alt="s09 总架构：知识层与门禁：依据什么，能碰什么；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>可信门禁</b><span>知识与工作流 · 服务端签发身份</span></li><li><b>Wiki / RAG</b><span>知识与工作流 · 带原文依据的知识</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>Wiki / RAG</b><span>数据与知识 · 带原文依据的知识</span></li><li><b>可信门禁</b><span>身份与权限 · 服务端签发身份</span></li></ul>
 <nav class="stage-links" aria-label="s09 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s09-knowledge-layer/README.md">README ↗</a><a href="/course/#s09">机制课</a><a href="/course/handbook.html#module-s09">长文章节</a><a href="/course/changes.html#s09">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s10" data-stage-panel="s10" hidden aria-labelledby="title-s10">
 <header class="stage-heading"><span class="chg-tag">s10</span><h3 id="title-s10">Skill 教方法，Workflow 管边界和终点</h3><p>一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。</p></header>
 <a class="architecture-frame" href="/course/assets/s10-architecture.svg" aria-label="打开 s10 总架构原图"><img src="/course/assets/s10-architecture.svg" alt="s10 总架构：Skill 教方法，Workflow 管边界和终点；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>Workflow</b><span>知识与工作流 · 步骤、确认与验收</span></li><li><b>审批与提权</b><span>知识与工作流 · 可以提议，不能自批</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>Workflow</b><span>Agent 装配 · 步骤、确认与验收</span></li><li><b>审批与提权</b><span>Agent 装配 · 可以提议，不能自批</span></li></ul>
 <nav class="stage-links" aria-label="s10 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s10-skill-workflow/README.md">README ↗</a><a href="/course/#s10">机制课</a><a href="/course/handbook.html#module-s10">长文章节</a><a href="/course/changes.html#s10">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s11" data-stage-panel="s11" hidden aria-labelledby="title-s11">
@@ -82,44 +82,44 @@
 <section class="overview-stage" id="overview-s12" data-stage-panel="s12" hidden aria-labelledby="title-s12">
 <header class="stage-heading"><span class="chg-tag">s12</span><h3 id="title-s12">部署：健康、就绪与恢复</h3><p>独立 Compose 交付；就绪探测、容量限制与备份保护持久状态。</p></header>
 <a class="architecture-frame" href="/course/assets/s12-architecture.svg" aria-label="打开 s12 总架构原图"><img src="/course/assets/s12-architecture.svg" alt="s12 总架构：部署：健康、就绪与恢复；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>就绪与容量</b><span>部署 · 健康探测、限流与关闭</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>就绪与容量</b><span>运行与部署 · 健康探测、限流与关闭</span></li></ul>
 <nav class="stage-links" aria-label="s12 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s12-deploy/README.md">README ↗</a><a href="/course/#s12">机制课</a><a href="/course/handbook.html#module-s12">长文章节</a><a href="/course/changes.html#s12">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s13" data-stage-panel="s13" hidden aria-labelledby="title-s13">
 <header class="stage-heading"><span class="chg-tag">s13</span><h3 id="title-s13">账号与认证：请求有身份，资源有归属</h3><p>登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。</p></header>
 <a class="architecture-frame" href="/course/assets/s13-architecture.svg" aria-label="打开 s13 总架构原图"><img src="/course/assets/s13-architecture.svg" alt="s13 总架构：账号与认证：请求有身份，资源有归属；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>账号与认证</b><span>账号 · 登录、令牌与 owner 归属</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>账号与认证</b><span>身份与权限 · 登录、令牌与归属</span></li></ul>
 <nav class="stage-links" aria-label="s13 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s13-auth/README.md">README ↗</a><a href="/course/#s13">机制课</a><a href="/course/handbook.html#module-s13">长文章节</a><a href="/course/changes.html#s13">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s14" data-stage-panel="s14" hidden aria-labelledby="title-s14">
 <header class="stage-heading"><span class="chg-tag">s14</span><h3 id="title-s14">用户隔离：每个用户一个运行环境</h3><p>可信 owner 选择独立进程与原生目录；池控制名额，uid/gid 约束文件访问。</p></header>
 <a class="architecture-frame" href="/course/assets/s14-architecture.svg" aria-label="打开 s14 总架构原图"><img src="/course/assets/s14-architecture.svg" alt="s14 总架构：用户隔离：每个用户一个运行环境；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>用户运行环境</b><span>用户隔离 · owner 路由、进程池与 uid</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>用户运行环境</b><span>身份与权限 · 每人一个进程与 uid</span></li></ul>
 <nav class="stage-links" aria-label="s14 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s14-isolation/README.md">README ↗</a><a href="/course/#s14">机制课</a><a href="/course/handbook.html#module-s14">长文章节</a><a href="/course/changes.html#s14">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s15" data-stage-panel="s15" hidden aria-labelledby="title-s15">
 <header class="stage-heading"><span class="chg-tag">s15</span><h3 id="title-s15">权限与资源 Hub：能用什么，谁说了算</h3><p>统一可见范围与动作授权；工具取三方交集，Skill 分享经审批，下一轮核对新权限。</p></header>
 <a class="architecture-frame" href="/course/assets/s15-architecture.svg" aria-label="打开 s15 总架构原图"><img src="/course/assets/s15-architecture.svg" alt="s15 总架构：权限与资源 Hub：能用什么，谁说了算；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>资源 Hub</b><span>权限与资源 · 可见范围、权益与审批</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>资源 Hub</b><span>身份与权限 · 范围、授权与配额</span></li></ul>
 <nav class="stage-links" aria-label="s15 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s15-hub/README.md">README ↗</a><a href="/course/#s15">机制课</a><a href="/course/handbook.html#module-s15">长文章节</a><a href="/course/changes.html#s15">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s16" data-stage-panel="s16" hidden aria-labelledby="title-s16">
 <header class="stage-heading"><span class="chg-tag">s16</span><h3 id="title-s16">协调面：租约、选举与任期隔离</h3><p>节点是否存活变成租约是否过期；新 control 推进数据库任期后恢复，旧任期拒写。</p></header>
 <a class="architecture-frame" href="/course/assets/s16-architecture.svg" aria-label="打开 s16 总架构原图"><img src="/course/assets/s16-architecture.svg" alt="s16 总架构：协调面：租约、选举与任期隔离；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>集群协调</b><span>协调面 · 租约、选举与任期隔离</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>协调面</b><span>集群 · 租约、选举与任期</span></li></ul>
 <nav class="stage-links" aria-label="s16 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s16-coordination/README.md">README ↗</a><a href="/course/#s16">机制课</a><a href="/course/handbook.html#module-s16">长文章节</a><a href="/course/changes.html#s16">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s17" data-stage-panel="s17" hidden aria-labelledby="title-s17">
 <header class="stage-heading"><span class="chg-tag">s17</span><h3 id="title-s17">分片与路由：让用户找到自己的主节点</h3><p>按用户分片，缓存定位后转发；数据库校验 owner 与 epoch，手动迁移先暂停再切换。</p></header>
 <a class="architecture-frame" href="/course/assets/s17-architecture.svg" aria-label="打开 s17 总架构原图"><img src="/course/assets/s17-architecture.svg" alt="s17 总架构：分片与路由：让用户找到自己的主节点；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>用户分片</b><span>分片与路由 · 归属缓存、路由与手动迁移</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>分片与路由</b><span>集群 · 用户落到主节点</span></li></ul>
 <nav class="stage-links" aria-label="s17 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s17-sharding/README.md">README ↗</a><a href="/course/#s17">机制课</a><a href="/course/handbook.html#module-s17">长文章节</a><a href="/course/changes.html#s17">阶段演示</a></nav>
 </section>
 <section class="overview-stage" id="overview-s18" data-stage-panel="s18" aria-labelledby="title-s18">
 <header class="stage-heading"><span class="chg-tag">s18</span><h3 id="title-s18">副本与故障接管：保留可核对的历史窗口</h3><p>轮次边界快照异步复制；接管推进 epoch，明确标记丢失尾部，旧主以副本回归。</p></header>
 <a class="architecture-frame" href="/course/assets/s18-architecture.svg" aria-label="打开 s18 总架构原图"><img src="/course/assets/s18-architecture.svg" alt="s18 总架构：副本与故障接管：保留可核对的历史窗口；橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。"></a>
-<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>异步副本</b><span>副本与故障接管 · 边界快照、位点与故障接管</span></li></ul>
+<h4>这一阶段新增模块</h4><ul class="overview-modules"><li><b>副本与接管</b><span>集群 · 异步复制、故障接管</span></li></ul>
 <nav class="stage-links" aria-label="s18 学习入口"><a href="https://github.com/pengcong2020520/learn-codex-harness/blob/main/stages/s18-replication/README.md">README ↗</a><a href="/course/#s18">机制课</a><a href="/course/handbook.html#module-s18">长文章节</a><a href="/course/changes.html#s18">阶段演示</a></nav>
 </section></section>
-<section class="overview-section"><h2>一次请求怎么走（s11 完整内核）</h2><p class="muted">沿 s11 总架构图的黑色编号走一遍；阶段标签表示这个模块最早从哪里出现；s12 起这套内核整体装进容器部署，请求路径不变。</p><ol class="request-path"><li><strong>发起任务</strong><span>HTTP 接口</span><a href="/course/changes.html#s03">s03 起</a></li><li><strong>检查预算</strong><span>用量与预算</span><a href="/course/changes.html#s11">s11 起</a></li><li><strong>选定模型</strong><span>Agent 定义</span><a href="/course/changes.html#s05">s05 起</a></li><li><strong>Codex 执行</strong><span>Codex harness（原生）</span><a href="/course/changes.html#s00">s00 起</a></li><li><strong>转发到上游</strong><span>模型路由</span><a href="/course/changes.html#s11">s11 起</a></li><li><strong>记录用量</strong><span>用量与预算</span><a href="/course/changes.html#s11">s11 起</a></li></ol></section>
+<section class="overview-section"><h2>一次请求怎么走（s11 完整内核）</h2><p class="muted">沿 s11 总架构图的黑色编号走一遍；阶段标签表示这个模块最早从哪里出现；s12 起这套内核整体装进容器部署，请求路径不变。</p><ol class="request-path"><li><strong>发起任务</strong><span>HTTP 接口</span><a href="/course/changes.html#s03">s03 起</a></li><li><strong>检查预算</strong><span>用量与预算</span><a href="/course/changes.html#s11">s11 起</a></li><li><strong>选定模型</strong><span>Agent 定义与 Skills</span><a href="/course/changes.html#s05">s05 起</a></li><li><strong>Codex 执行</strong><span>Codex harness（原生）</span><a href="/course/changes.html#s00">s00 起</a></li><li><strong>转发到上游</strong><span>模型路由</span><a href="/course/changes.html#s11">s11 起</a></li><li><strong>记录用量</strong><span>用量与预算</span><a href="/course/changes.html#s11">s11 起</a></li></ol></section>
 <section class="overview-section"><h2>怎么学</h2><div class="learning-entries"><a href="/course/"><h3>机制课程</h3><p>拆解一个机制，用源码、推演和实验验证它的行为。</p></a><a href="/course/handbook.html"><h3>章节长文</h3><p>沿章节读清背景、概念与实现思路。</p></a><a href="/course/changes.html"><h3>阶段演示</h3><p>对照架构增量，逐步观察请求与状态如何流动。</p></a><a href="/course/glossary.html"><h3>术语表</h3><p>遇到陌生词时，查解释、相关概念与原始出处。</p></a><a href="/app/index.html?stage=project"><h3>工作台</h3><p>切换阶段，体验教学样例并连接实际服务验证行为。</p></a></div></section></main></body></html>

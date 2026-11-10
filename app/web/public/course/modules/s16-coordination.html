@@ -5,7 +5,7 @@
 </header><div class="module-body">
 <section class="screen animate-in" id="s16-screen-1"><h2 class="screen-heading">分布式里，分不清“慢”和“死”</h2>
 <p>上一章的云端 Agent 已能让多人安全共用，但只有一台机器，停了就一起停。扩展到多台之前，先要回答谁还活着、谁有权服务：节点没响应，可能是故障，也可能只是网络慢。</p>
-<figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1640" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1304" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
 <p>如果把慢误判为死，选出了新主，旧主醒来后又继续写，就会出现两个主同时工作的脑裂。因此成员资格交给所有节点共同认可的<span class="term" data-definition="etcd 为成员分配的有期限凭据；绑定键随租约失效而删除。进程存在不等于租约有效。">lease</span>，完整业务由当选的<span class="term" data-definition="当前被 Election 选出并经过任期确认的控制节点；只有完成数据库任期推进和业务恢复后才接收流量。">control</span>负责，另外两个节点热备，随时准备接任。</p>
 <p>etcd 只保存成员、选举与任期等协调信息；业务会话和任务仍在 PostgreSQL，Redis 唤醒队列，Codex 执行轮次。入口只转发给就绪的 control，用户隔离与 Hub 授权继续生效。</p>
 <p>本章三个容器共享数据卷，只用于单机主备模拟，并非三个独立故障域。PostgreSQL、Redis、模型网关和 etcd 仍是单实例；control 能接任，不等于依赖也高可用。</p>

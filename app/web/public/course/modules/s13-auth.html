@@ -5,7 +5,7 @@
 </header><div class="module-body">
 <section class="screen animate-in" id="s13-screen-1"><h2 class="screen-heading">认证与归属，缺一不可</h2>
 <p>上一章让云端 Agent 在服务器上长期运行，但共享连接令牌把所有使用者当成同一个人。几个人一起用，服务就必须知道每个请求来自谁，会话、知识库、产物和用量分别属于谁。</p>
-<figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1304" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1192" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
 <p><span class="term" data-definition="认证确定当前请求代表哪个用户；本章用用户名、密码和服务端存储的不透明令牌实现。">认证</span>回答“你是谁”，<span class="term" data-definition="owner 是资源所属用户；读取、缓存、后台执行和事件推送都必须携带并核对这个归属。">归属</span>回答“这份资源属于谁”。只有认证，任何登录者都可能看到全部数据；只有归属，谁都可以自称是别人。因此每个请求先认证，之后每次读写再核对 owner，模型不参与身份认定。</p>
 <p>账号由管理员创建，角色为 admin 或 user；即使是 admin，也不能凭别人的会话 ID 越过个人资源的 owner 检查。用户名和知识库 ID 都在实例内唯一，新账号不会获得别人的资料。</p>
 </section>

@@ -955,7 +955,7 @@ npm test</code></pre>
 
 <p>现在服务端能独立完成一轮了。试着在回答过程中再输入两条，然后关闭客户端：已经发出的那一轮可以继续，仍等在客户端的输入却没有服务端记录。一个能长期工作的云端 Agent，还要接住用户连续交来的事情，并告诉用户每一条走到了哪里。</p>
 <p>本章的验收场景是：连续提交三条普通消息，三条都被服务端接收；关闭客户端后，服务端依次完成它们；回来时能看到队列和会话状态。如果执行结果拿不准，就停下来让用户核对，避免把同一件事做两遍。</p>
-<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="754" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s04-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S04 总架构 SVG 大图"><img src="/course/assets/s04-architecture.svg" width="1600" height="856" alt="S04 总架构：消息先写入任务记录，按会话调度，状态经 SSE 推给客户端。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出本阶段要亲手实现的模块，黑色编号标出请求经过的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">messages：决定执行节奏</div><div class="pattern-desc">接收消息、按 Thread 排队、发 turn/start，处理追加、超时、暂停与继续。它决定哪条输入现在可以执行，不代替 Codex 内部的推理与工具循环。</div></div>
 <div class="pattern-card"><div class="pattern-title">data：保存任务事实</div><div class="pattern-desc">将消息和暂停状态写入 .data/messages.json，每次更新整体原子替换文件。进程退出后记录还在，重启时可据此判断哪些任务需要核对。</div></div>
@@ -1173,7 +1173,7 @@ npm test</code></pre>
 <h2 class="screen-heading">这个云端 Agent 还缺什么：明确的角色与工作方法</h2>
 <p>上一章，服务已经能保存输入、按顺序执行，并把状态推送给客户端。这个云端 Agent 还缺什么？它还需要一份明确的定义：是谁、按什么方法工作、执行边界是什么。否则每换一种助手，就得在服务代码里寻找那段角色文字。</p>
 <p>本章用一份 JSON 装配 <span class="term" data-definition="由角色指令、已启用的 Skills 与执行策略共同约束的助手；本阶段一个服务实例装配一个 Agent，可运行多个会话。">Agent</span>。定义交给服务端校验，角色和工作方法交给 Codex 执行；会话与排队消息记录自己使用的装配版本。</p>
-<figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="856" alt="S05 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s05-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S05 总架构 SVG 大图"><img src="/course/assets/s05-architecture.svg" width="1600" height="968" alt="S05 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">定义决定装配内容</div><div class="pattern-desc">agents/writing-agent.json 指定角色文件、原生 Skills、工作区和执行策略。一个服务实例只加载一份定义；AGENT_DEFINITION 可以指定另一份定义文件。</div></div>
 <div class="pattern-card"><div class="pattern-title">Codex 执行角色与方法</div><div class="pattern-desc">服务端把角色放进 baseInstructions，Codex 负责原生 Skill 的发现、解析和正文注入。普通消息保留用户文本，并附加明确引用的已启用 Skill；角色正文不重复拼入用户消息。</div></div>
@@ -1342,7 +1342,7 @@ npm test</code></pre>
 <section class="screen animate-in" id="s06-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：接触资料的受控入口</h2>
 <p>上一章，Agent 已经有明确的角色、Skills 和执行策略。这个云端 Agent 还缺什么？写作助手只能处理用户粘贴的文字，不能读资料、查看网页或保存结果。本章给它工具，同时让每次调用都经过服务端检查。</p>
-<figure class="architecture-figure"><a href="/course/assets/s06-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S06 总架构 SVG 大图"><img src="/course/assets/s06-architecture.svg" width="1600" height="856" alt="S06 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s06-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S06 总架构 SVG 大图"><img src="/course/assets/s06-architecture.svg" width="1600" height="968" alt="S06 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <p><span class="term" data-definition="工具注册表，把工具名称、说明、参数 schema 和执行函数配对，并记录这一版工具源的版本。">Registry</span> 从 <code>config/tools/*.json</code> 装配：配置声明工具规格和实现模块，加载器编译参数校验规则、加载工厂函数，再把名称绑定到实际执行函数。重名、缺实现、无效 schema 或越界模块路径会使装配失败。</p>
 <div class="pattern-cards">
 <div class="pattern-card"><div class="pattern-title">本阶段的四个默认工具</div><div class="pattern-desc">list_files 列出授权范围内的资料，read_file 读取文本，write_file 新建文件，read_webpage 读取公开网页。没有网页搜索工具；读取网页不等于搜索互联网。</div></div>
@@ -1529,7 +1529,7 @@ npm test</code></pre>
 <section class="screen animate-in" id="s07-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：跨会话使用经验</h2>
 <p>上一章，Agent 可以读取资料、查看网页并保存结果。这个云端 Agent 还缺什么？同一 Thread 可以延续历史，但新开的 Thread 不会仅凭另一段会话记录就自动继承其中的偏好。本章接入 Codex 原生记忆，同时明确谁能使用、谁能贡献、什么结果已经生成。</p>
-<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="968" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <p><a class="term" data-definition="Codex 后台自动从历史会话提炼并在未来会话中跨窗口使用的长期经验摘要。" href="/course/glossary.html#term-原生记忆">原生记忆</a> 的提炼与使用由 Codex 负责。服务端不自行拼接历史摘要、不把摘要塞进用户消息，而是管理配置、存储位置、核验与会话参与资格。CLI 只展示服务端结果并提出设置请求。</p>
 <table><thead><tr><th>固定产物</th><th>含义</th></tr></thead><tbody>
 <tr><td>raw_memories.md</td><td>提炼得到的原始记忆。</td></tr>
@@ -1691,7 +1691,7 @@ npm run test:codex-memory</code></pre>
         s08 把存储拆成四块各自负责，就像一家公司把财务账本、门卫铃、文件柜、原始档案交给四个专职部门。
       </p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="856" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s08-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S08 总架构 SVG 大图"><img src="/course/assets/s08-architecture.svg" width="1600" height="968" alt="S08 总架构：任务与数据分别存在哪里。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout">
         <div class="callout-text">
@@ -2120,7 +2120,7 @@ npm run test:codex-memory</code></pre>
 
       <p>s08 已经能可靠存储业务数据并调度任务。s09 解决两个新问题：让 Agent 在本机维护结构化<a class="term" data-definition="挂载给 Agent 且具备独立访问权限边界的结构化知识与索引命名空间。" href="/course/glossary.html#term-knowledgebase">知识库</a>，并以统一门禁拦截所有工具路径。上方保持用户、Agent 服务、Codex、模型的固定位置；下方展开统一门禁和 Wiki / RAG 两条知识路径。工具调用由 Codex 的 dynamicTools 回到服务端检查。</p>
 
-      <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="968" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
+      <figure class="architecture-figure"><a href="/course/assets/s09-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S09 总架构 SVG 大图"><img src="/course/assets/s09-architecture.svg" width="1600" height="1080" alt="S09 总架构：知识访问怎样经过门禁。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>所有阶段共用这张总图，橙色是本阶段新加的模块；黑色编号是一次请求经过的顺序。点击图片可放大。</figcaption></figure>
 
       <div class="callout" id="m5-callout-arch">
         <div class="callout-text">图为逻辑职责划分。蓝色是我们的程序，绿色是 Codex 原生能力，橙色突出本阶段新增。门禁位于同一服务进程中，不是另起一个网络服务。</div>
@@ -2522,7 +2522,7 @@ npm run test:codex-memory</code></pre>
 <section class="screen animate-in" id="s10-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：把一类任务做完的约定</h2>
 <p>上一章，云端 Agent 已能通过 Wiki / RAG 查依据，文件和知识操作也经过同一道门禁。这个云端 Agent 还缺什么？用户说“写一篇文章”，可能希望先看大纲再决定；用户说“整理这些新资料”，可能还需要一次受限的知识库更新。能调用工具，还不足以表达哪里等人确认、这一次能写到哪里、做到什么才算交付。</p>
-<figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="968" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s10-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S10 总架构 SVG 大图"><img src="/course/assets/s10-architecture.svg" width="1600" height="1080" alt="橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生" /></a><figcaption>总架构中的橙色部分标出本章机制；黑色编号表示请求经过的顺序。点击可放大。</figcaption></figure>
 <p>本章把三件事分开。<a class="term" data-definition="以 SKILL.md 文件向模型描述如何完成某类具体任务的原生方法说明书。" href="/course/glossary.html#term-skill">Skill</a> 教怎么做；<a class="term" data-definition="声明一类任务所需临时授权、输入输出边界、终点验收及人工确认点的配置。" href="/course/glossary.html#term-workflow">Workflow</a> 定义边界和终点；Workspace 保存用户资料与交付物。Skill 可以详细描述写作方法，Workflow 不需要列出每次检索和每次工具调用。</p>
 <table><thead><tr><th>层</th><th>存放内容</th><th>谁负责</th><th>与权限的关系</th></tr></thead><tbody>
 <tr><td>Agent 包</td><td>agent.json、role.md、skills/</td><td>部署者配置，服务端校验</td><td>Skill 不授权；Workflow 只能组合 Agent 已有能力</td></tr>
@@ -2742,7 +2742,7 @@ node --test --test-name-pattern='^权限门：步骤的 writes' tests/workflows.
 <section class="screen animate-in" id="s11-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：协调模型与用量</h2>
 <p>上一章 s10 用 Skill 教方法，用 Workflow 管步骤、权限与确认。写作任务可以先产出大纲，等用户确认后再继续成稿。这个云端 Agent 还缺什么？大纲和成稿未必适合用同一个模型；知识检索需要向量模型，生成图片又是另一种用途。模型越来越多之后，谁负责挑选，谁持有密钥，花费达到上限时谁来停止派发，都需要明确的执行位置。</p>
-<figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1080" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s11-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S11 总架构 SVG 大图"><img src="/course/assets/s11-architecture.svg" width="1600" height="1192" alt="S11 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色标出模型清单、网关与用量控制的位置；黑色编号串起发起任务、检查预算、选模型、执行与记账。点击查看大图。</figcaption></figure>
 <p><a class="term" data-definition="介于 Codex 与各模型厂商之间负责协议翻译、备用切换与额度管控的中介代理。" href="/course/glossary.html#term-模型网关">模型网关</a> 是请求经过的服务。<a class="term" data-definition="在任务每轮发出前综合用途、业务场景、能力特征与档位动态决策中选模型的逻辑。" href="/course/glossary.html#term-模型路由">模型路由</a> 是任务派发前的决策。名字相近，但发生时间和掌握的信息不同。</p>
 <table><thead><tr><th>角色</th><th>负责什么</th><th>本章中的证据</th></tr></thead><tbody>
 <tr><td>Codex</td><td>管理 Thread 与 Turn，执行推理和工具循环，报告模型用量。</td><td>turn/start 参数、thread/tokenUsage/updated 通知。</td></tr>
@@ -3139,7 +3139,7 @@ docker compose run --rm --no-deps -T agent node scripts/backup.mjs --apply --par
 </header><div class="module-body">
 <section class="screen animate-in" id="s13-screen-1"><h2 class="screen-heading">认证与归属，缺一不可</h2>
 <p>上一章让云端 Agent 在服务器上长期运行，但共享连接令牌把所有使用者当成同一个人。几个人一起用，服务就必须知道每个请求来自谁，会话、知识库、产物和用量分别属于谁。</p>
-<figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1304" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s13-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S13 总架构 SVG 大图"><img src="/course/assets/s13-architecture.svg" width="1600" height="1192" alt="S13 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>accounts 确定请求身份，owner 门禁决定资源范围。沿编号查看登录、认证、查询与推送；点击打开大图。</figcaption></figure>
 <p><span class="term" data-definition="认证确定当前请求代表哪个用户；本章用用户名、密码和服务端存储的不透明令牌实现。">认证</span>回答“你是谁”，<span class="term" data-definition="owner 是资源所属用户；读取、缓存、后台执行和事件推送都必须携带并核对这个归属。">归属</span>回答“这份资源属于谁”。只有认证，任何登录者都可能看到全部数据；只有归属，谁都可以自称是别人。因此每个请求先认证，之后每次读写再核对 owner，模型不参与身份认定。</p>
 <p>账号由管理员创建，角色为 admin 或 user；即使是 admin，也不能凭别人的会话 ID 越过个人资源的 owner 检查。用户名和知识库 ID 都在实例内唯一，新账号不会获得别人的资料。</p>
 </section>
@@ -3267,7 +3267,7 @@ export async function verifyPassword(password, encoded, kdf = derive) {
 <section class="screen animate-in" id="s14-screen-1">
 <h2 class="screen-heading">接口挡得住请求，挡不住底层文件</h2>
 <p>上一章让云端 Agent 认出每个用户，API 层彼此看不见。但 Codex 自己读写的历史、索引、记忆和 Skill 副本不经过 API，仍由同一个进程打开。要避免底层串话，不同用户的原生状态必须放在不同目录、由不同进程读取。</p>
-<figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1416" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1192" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
 <p>一个<a class="term" data-definition="每个用户一个独立的 Codex App Server 进程，配自己的 CODEX_HOME、工作目录和系统 uid。" href="/course/glossary.html#term-用户运行环境">用户运行环境</a>包含独立 Codex App Server、CODEX_HOME、工作目录和系统身份。同一个用户的多个会话共用自己的进程，不同用户不因 Agent 配置相同而共用状态。</p>
 <p>用户映射持久化保存 uid 和目录，uid 从 10001 顺序分配，gid 同号；首个 admin 保留既有原生目录的绝对位置。进程回收不删除映射与历史，下次可以重新启动。Skill 安装、核验与会话工作目录也随用户分开。</p>
 </section>
@@ -3400,7 +3400,7 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
 <section class="screen animate-in" id="s15-screen-1">
 <h2 class="screen-heading">隔离之后，团队还需要有边界地共享</h2>
 <p>上一章让云端 Agent 的每个用户都有独立运行环境。但团队还需要一起用：bob 想把知识库给 carol 读，不让她修改；用户写的 Skill 想影响别人的 Agent，需要有人审阅；一个人用完预算，也不该拖住其他人。</p>
-<figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1528" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s15-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S15 总架构 SVG 大图"><img src="/course/assets/s15-architecture.svg" width="1600" height="1192" alt="S15 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>Hub 在业务服务中统一判定资源与权益，可信门禁绑定本轮快照，用户运行环境落实 Skill 集合。Codex 继续管理原生执行循环。点击查看大图。</figcaption></figure>
 <p><a class="term" data-definition="统一判定某用户能否对某资源做 use、read、modify、share、delete，并列出“我能看到的资源”。" href="/course/glossary.html#term-hub">权限与资源 Hub</a>统一回答“这个用户，能不能对这个资源做这个动作”。使用、读取、修改、分享、删除五种动作都到这里判定，避免工具、知识库和调度器各说各话。</p>
 <p>身份来自认证或持久任务，Codex 继续执行轮次，不参与授权。Hub 管理资源范围、权益、分享和审计；会话与普通文件仍是个人隔离对象，admin 也不能借 Hub 访问别人的会话。工具和 Agent 由部署者提供，用户不能上传新的工具实现或动态 Agent。</p>
 </section>
@@ -3541,7 +3541,7 @@ export function can(user, action, resource) {
 </header><div class="module-body">
 <section class="screen animate-in" id="s16-screen-1"><h2 class="screen-heading">分布式里，分不清“慢”和“死”</h2>
 <p>上一章的云端 Agent 已能让多人安全共用，但只有一台机器，停了就一起停。扩展到多台之前，先要回答谁还活着、谁有权服务：节点没响应，可能是故障，也可能只是网络慢。</p>
-<figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1640" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s16-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S16 总架构 SVG 大图"><img src="/course/assets/s16-architecture.svg" width="1600" height="1304" alt="S16 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>新增 coordination 单元负责租约、选举、主备生命周期与任期隔离。业务事实仍在 PostgreSQL，Codex 仍执行原生循环。点击查看大图。</figcaption></figure>
 <p>如果把慢误判为死，选出了新主，旧主醒来后又继续写，就会出现两个主同时工作的脑裂。因此成员资格交给所有节点共同认可的<span class="term" data-definition="etcd 为成员分配的有期限凭据；绑定键随租约失效而删除。进程存在不等于租约有效。">lease</span>，完整业务由当选的<span class="term" data-definition="当前被 Election 选出并经过任期确认的控制节点；只有完成数据库任期推进和业务恢复后才接收流量。">control</span>负责，另外两个节点热备，随时准备接任。</p>
 <p>etcd 只保存成员、选举与任期等协调信息；业务会话和任务仍在 PostgreSQL，Redis 唤醒队列，Codex 执行轮次。入口只转发给就绪的 control，用户隔离与 Hub 授权继续生效。</p>
 <p>本章三个容器共享数据卷，只用于单机主备模拟，并非三个独立故障域。PostgreSQL、Redis、模型网关和 etcd 仍是单实例；control 能接任，不等于依赖也高可用。</p>
@@ -3729,7 +3729,7 @@ END $$;</code></pre></div><div class="translation-english"><span class="translat
 <section class="screen animate-in" id="s17-screen-1"><h2 class="screen-heading">分片键是用户，不是消息</h2>
 <p>上一章的云端 Agent 有三个节点，却只有 control 干活，用户多了仍是一台装不下。本章把用户分到不同节点，让每台都工作；入口还要能找到用户，不能把请求随意交给一块没有他历史的磁盘。</p>
 <p>从 s14 起，历史、索引和记忆都保存在用户自己的 CODEX_HOME。若第一轮在 A、第二轮在 B，B 看不到前文。所以分片键取稳定的用户 ID，一个人的全部会话与原生状态跟着他落在同一主节点。</p>
-<figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1752" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s17-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S17 总架构 SVG 大图"><img src="/course/assets/s17-architecture.svg" width="1600" height="1304" alt="S17 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；用户主节点负责本用户业务，control 管理归属。点击查看总架构大图。</figcaption></figure>
 <p>用户先属于一个<span class="term" data-definition="一组用户的归属单位；用户先映射到分片，再由分片归属找到主节点。">分片</span>，再由分片找到<span class="term" data-definition="某分片当前负责业务和本地数据的节点；与负责发布归属的 control 身份不同。">主节点</span>。control 发布归属，主节点运行用户业务；两种职责不同。三个节点各用自己的磁盘，仅部署身份一致，PG 中有会话索引不等于其他节点已有原生文件。</p>
 <p>租约、任期、用户隔离和 Hub 权限继续生效。分片负责放置与寻找数据，不替代认证授权，也不改变 Codex 的执行循环。</p>
 </section>
@@ -4042,7 +4042,7 @@ export const restoredMode = (mode, directory) =&gt; mode &amp; (directory ? 0o27
 <div class="module-content"><header class="module-header animate-in"><span class="module-number">s18</span><h2 class="module-title">副本与故障接管：有人接手，丢多少说得清</h2><p class="module-subtitle">先拍快照再慢慢发，按会话标记尾部丢失；旧主先当副本，追平后才能再当主。</p></header><div class="module-body">
 <section class="screen animate-in" id="s18-screen-1"><h2 class="screen-heading">每个分片一主一从，环形放置</h2>
 <p>上一章让云端 Agent 的每台机器都干活，但用户历史只在一块磁盘上，主节点坏了只能等。本章提前把历史复制到另一个节点，让它能接手；复制会慢一步，因此还必须说明哪些内容已经到达、哪些尾部可能丢失。</p>
-<figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1864" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1304" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure>
 <p>每个分片有一个副本，三个节点环形错开；每台既是一个分片的主，也是另一个分片的副本。<a class="term" data-definition="隔离保存当前服务实例配置、会话记录、原生 SQLite 与元数据的宿主目录。" href="/course/glossary.html#term-codex-home">CODEX_HOME</a>仍按用户隔离，复制不改变 Hub 授权。</p>
 <table><thead><tr><th>分片</th><th>初始主</th><th>初始副本</th></tr></thead><tbody><tr><td>0</td><td>node-a</td><td>node-b</td></tr><tr><td>1</td><td>node-b</td><td>node-c</td></tr><tr><td>2</td><td>node-c</td><td>node-a</td></tr></tbody></table>
 <p>PG 保留任务事实、归属和复制位点，磁盘保存原生历史；任务写进 PG 不代表副本已有文件。etcd 提供租约和路由发布，副本只解决节点磁盘，不代表控制面也高可用。</p>

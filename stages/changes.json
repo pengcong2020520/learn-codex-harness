@@ -8,7 +8,7 @@
       "previous": null,
       "modules": [
         {
-          "layer": "接入与会话",
+          "layer": "接入与调度",
           "name": "SDK 脚本",
           "desc": "官方 SDK 发起一轮"
         }
@@ -28,7 +28,7 @@
       "previous": "s00-sdk-quickstart",
       "modules": [
         {
-          "layer": "接入与会话",
+          "layer": "接入与调度",
           "name": "单轮客户端",
           "desc": "发请求、核对终态"
         }
@@ -65,7 +65,7 @@
       "previous": "s01-single-turn",
       "modules": [
         {
-          "layer": "接入与会话",
+          "layer": "会话与记忆",
           "name": "会话",
           "desc": "复用 Thread，整理快照"
         }
@@ -85,12 +85,12 @@
       "previous": "s02-multi-turn",
       "modules": [
         {
-          "layer": "接入与会话",
+          "layer": "接入与调度",
           "name": "HTTP 接口",
           "desc": "常驻服务的入口"
         },
         {
-          "layer": "运行支撑",
+          "layer": "运行与部署",
           "name": "生命周期与清理",
           "desc": "启停、运行目录回收"
         }
@@ -119,17 +119,17 @@
       "previous": "s03-service",
       "modules": [
         {
-          "layer": "接入与会话",
+          "layer": "接入与调度",
           "name": "任务与消息",
           "desc": "任务排队与调度"
         },
         {
-          "layer": "接入与会话",
+          "layer": "接入与调度",
           "name": "事件推送",
           "desc": "状态变化推给客户端"
         },
         {
-          "layer": "数据",
+          "layer": "数据与知识",
           "name": "任务记录",
           "desc": "任务状态，重启后可核对"
         }
@@ -156,13 +156,8 @@
       "modules": [
         {
           "layer": "Agent 装配",
-          "name": "Agent 定义",
-          "desc": "JSON 校验 + 版本哈希"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "角色与 Skills",
-          "desc": "做什么、怎么做"
+          "name": "Agent 定义与 Skills",
+          "desc": "JSON 装配角色与方法"
         }
       ],
       "surface": {
@@ -183,13 +178,8 @@
       "modules": [
         {
           "layer": "Agent 装配",
-          "name": "工具与资料边界",
-          "desc": "白名单 + 参数校验"
-        },
-        {
-          "layer": "Agent 装配",
-          "name": "MCP 工具入口",
-          "desc": "Codex 回调本地工具"
+          "name": "工具与 MCP",
+          "desc": "白名单、参数校验、回调"
         }
       ],
       "surface": {
@@ -218,7 +208,7 @@
       "previous": "s06-tools",
       "modules": [
         {
-          "layer": "运行支撑",
+          "layer": "会话与记忆",
           "name": "记忆",
           "desc": "Codex 提炼，服务端管控"
         }
@@ -249,17 +239,12 @@
       "previous": "s07-memory",
       "modules": [
         {
-          "layer": "数据",
-          "name": "PostgreSQL",
-          "desc": "业务状态的依据"
+          "layer": "数据与知识",
+          "name": "PostgreSQL + Redis",
+          "desc": "落库后再唤醒执行"
         },
         {
-          "layer": "数据",
-          "name": "Outbox + Redis",
-          "desc": "提交后再唤醒"
-        },
-        {
-          "layer": "数据",
+          "layer": "数据与知识",
           "name": "资源版本",
           "desc": "产物可追溯来源"
         }
@@ -287,14 +272,14 @@
       "previous": "s08-data-layer",
       "modules": [
         {
-          "layer": "知识与工作流",
-          "name": "可信门禁",
-          "desc": "服务端签发身份"
-        },
-        {
-          "layer": "知识与工作流",
+          "layer": "数据与知识",
           "name": "Wiki / RAG",
           "desc": "带原文依据的知识"
+        },
+        {
+          "layer": "身份与权限",
+          "name": "可信门禁",
+          "desc": "服务端签发身份"
         }
       ],
       "surface": {
@@ -334,12 +319,12 @@
       "previous": "s09-knowledge-layer",
       "modules": [
         {
-          "layer": "知识与工作流",
+          "layer": "Agent 装配",
           "name": "Workflow",
           "desc": "步骤、确认与验收"
         },
         {
-          "layer": "知识与工作流",
+          "layer": "Agent 装配",
           "name": "审批与提权",
           "desc": "可以提议，不能自批"
         }
@@ -437,7 +422,7 @@
       "previous": "s11-model-gateway",
       "modules": [
         {
-          "layer": "部署",
+          "layer": "运行与部署",
           "name": "就绪与容量",
           "desc": "健康探测、限流与关闭"
         }
@@ -471,9 +456,9 @@
       "previous": "s12-deploy",
       "modules": [
         {
-          "layer": "账号",
+          "layer": "身份与权限",
           "name": "账号与认证",
-          "desc": "登录、令牌与 owner 归属"
+          "desc": "登录、令牌与归属"
         }
       ],
       "surface": {
@@ -497,9 +482,9 @@
       "previous": "s13-auth",
       "modules": [
         {
-          "layer": "用户隔离",
+          "layer": "身份与权限",
           "name": "用户运行环境",
-          "desc": "owner 路由、进程池与 uid"
+          "desc": "每人一个进程与 uid"
         }
       ],
       "surface": {
@@ -520,9 +505,9 @@
       "previous": "s14-isolation",
       "modules": [
         {
-          "layer": "权限与资源",
+          "layer": "身份与权限",
           "name": "资源 Hub",
-          "desc": "可见范围、权益与审批"
+          "desc": "范围、授权与配额"
         }
       ],
       "surface": {
@@ -549,9 +534,9 @@
       "previous": "s15-hub",
       "modules": [
         {
-          "layer": "协调面",
-          "name": "集群协调",
-          "desc": "租约、选举与任期隔离"
+          "layer": "集群",
+          "name": "协调面",
+          "desc": "租约、选举与任期"
         }
       ],
       "surface": {
@@ -585,9 +570,9 @@
       "previous": "s16-coordination",
       "modules": [
         {
-          "layer": "分片与路由",
-          "name": "用户分片",
-          "desc": "归属缓存、路由与手动迁移"
+          "layer": "集群",
+          "name": "分片与路由",
+          "desc": "用户落到主节点"
         }
       ],
       "surface": {
@@ -621,9 +606,9 @@
       "previous": "s17-sharding",
       "modules": [
         {
-          "layer": "副本与故障接管",
-          "name": "异步副本",
-          "desc": "边界快照、位点与故障接管"
+          "layer": "集群",
+          "name": "副本与接管",
+          "desc": "异步复制、故障接管"
         }
       ],
       "surface": {

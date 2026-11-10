@@ -5,7 +5,7 @@
 <section class="screen animate-in" id="s14-screen-1">
 <h2 class="screen-heading">接口挡得住请求，挡不住底层文件</h2>
 <p>上一章让云端 Agent 认出每个用户，API 层彼此看不见。但 Codex 自己读写的历史、索引、记忆和 Skill 副本不经过 API，仍由同一个进程打开。要避免底层串话，不同用户的原生状态必须放在不同目录、由不同进程读取。</p>
-<figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1416" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s14-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S14 总架构 SVG 大图"><img src="/course/assets/s14-architecture.svg" width="1600" height="1192" alt="S14 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>用户运行环境位于业务服务与 Codex 连接之间。请求先确定 owner，再通过池取得对应连接；图中的 Codex 代表各用户独立的进程。点击查看大图。</figcaption></figure>
 <p>一个<span class="term" data-definition="由可信 owner 绑定的 Codex 进程、原生状态目录、工作目录、系统 uid/gid 和生命周期。进程按需启动，身份与持久状态不会随回收消失。">用户运行环境</span>包含独立 Codex App Server、CODEX_HOME、工作目录和系统身份。同一个用户的多个会话共用自己的进程，不同用户不因 Agent 配置相同而共用状态。</p>
 <p>用户映射持久化保存 uid 和目录，uid 从 10001 顺序分配，gid 同号；首个 admin 保留既有原生目录的绝对位置。进程回收不删除映射与历史，下次可以重新启动。Skill 安装、核验与会话工作目录也随用户分开。</p>
 </section>

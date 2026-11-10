@@ -8,7 +8,7 @@
 
 用官方 SDK 发起一轮任务；读文件、跑命令、改代码这个循环由 Codex 来转。
 
-**新增模块**：SDK 脚本（接入与会话，官方 SDK 发起一轮）
+**新增模块**：SDK 脚本（接入与调度，官方 SDK 发起一轮）
 
 <a id="s01"></a>
 
@@ -16,7 +16,7 @@
 
 相比 [s00-sdk-quickstart](s00-sdk-quickstart/)：自己写客户端，经 JSON-RPC 驱动 App Server；只有本轮成功结束，才算答完。
 
-**新增模块**：单轮客户端（接入与会话，发请求、核对终态）
+**新增模块**：单轮客户端（接入与调度，发请求、核对终态）
 
 **新增环境变量**：`CODEX_MODEL_CATALOG_ENABLED`、`CODEX_MODEL_DISPLAY_NAME`、`CODEX_MODEL_DESCRIPTION`、`CODEX_MODEL_CONTEXT_WINDOW`、`CODEX_MODEL_MAX_CONTEXT_WINDOW`、`CODEX_MODEL_EFFECTIVE_CONTEXT_WINDOW_PERCENT`、`CODEX_MODEL_INPUT_MODALITIES`、`CODEX_MODEL_SUPPORTS_IMAGE_DETAIL_ORIGINAL`、`CODEX_MODEL_REASONING_LEVELS`、`CODEX_MODEL_DEFAULT_REASONING_LEVEL`、`CODEX_MODEL_REASONING_SUMMARY`、`CODEX_MODEL_SHELL_TYPE`、`CODEX_MODEL_APPLY_PATCH_TOOL_TYPE`、`CODEX_MODEL_SUPPORT_VERBOSITY`、`CODEX_MODEL_DEFAULT_VERBOSITY`、`CODEX_MODEL_TOOL_OUTPUT_LIMIT`
 
@@ -26,7 +26,7 @@
 
 相比 [s01-single-turn](s01-single-turn/)：输入先排队再发送；每轮只发新输入，历史由 Codex 原生保存，退出后可以恢复。
 
-**新增模块**：会话（接入与会话，复用 Thread，整理快照）
+**新增模块**：会话（会话与记忆，复用 Thread，整理快照）
 
 <a id="s03"></a>
 
@@ -34,7 +34,7 @@
 
 相比 [s02-multi-turn](s02-multi-turn/)：服务端常驻运行、持有 Codex；终端客户端经 HTTP 提交和查看，关掉客户端不影响正在执行的一轮。
 
-**新增模块**：HTTP 接口（接入与会话，常驻服务的入口）；生命周期与清理（运行支撑，启停、运行目录回收）
+**新增模块**：HTTP 接口（接入与调度，常驻服务的入口）；生命周期与清理（运行与部署，启停、运行目录回收）
 
 **新增接口**：`GET /health`、`GET /sessions`、`POST /sessions`、`POST /sessions/resume`、`GET /state`、`POST /turns`
 
@@ -46,7 +46,7 @@
 
 相比 [s03-service](s03-service/)：输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。
 
-**新增模块**：任务与消息（接入与会话，任务排队与调度）；事件推送（接入与会话，状态变化推给客户端）；任务记录（数据，任务状态，重启后可核对）
+**新增模块**：任务与消息（接入与调度，任务排队与调度）；事件推送（接入与调度，状态变化推给客户端）；任务记录（数据与知识，任务状态，重启后可核对）
 
 **新增接口**：`POST /messages`、`POST /queue/continue`、`GET /events`
 
@@ -58,7 +58,7 @@
 
 相比 [s04-events-messages](s04-events-messages/)：Agent 定义决定角色、Skill、执行策略和工作区；启动时校验，内容一变旧版本就作废，会话与排队消息都要核对版本。
 
-**新增模块**：Agent 定义（Agent 装配，JSON 校验 + 版本哈希）；角色与 Skills（Agent 装配，做什么、怎么做）
+**新增模块**：Agent 定义与 Skills（Agent 装配，JSON 装配角色与方法）
 
 **新增环境变量**：`AGENT_DEFINITION`
 
@@ -68,7 +68,7 @@
 
 相比 [s05-agent-assembly](s05-agent-assembly/)：工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。
 
-**新增模块**：工具与资料边界（Agent 装配，白名单 + 参数校验）；MCP 工具入口（Agent 装配，Codex 回调本地工具）
+**新增模块**：工具与 MCP（Agent 装配，白名单、参数校验、回调）
 
 **新增工具**：`list_files`、`read_file`、`write_file`、`read_webpage`
 
@@ -82,7 +82,7 @@
 
 相比 [s06-tools](s06-tools/)：原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。
 
-**新增模块**：记忆（运行支撑，Codex 提炼，服务端管控）
+**新增模块**：记忆（会话与记忆，Codex 提炼，服务端管控）
 
 **新增接口**：`GET /memory`、`GET /memory/summary`、`POST /memory/contribution`
 
@@ -94,7 +94,7 @@
 
 相比 [s07-memory](s07-memory/)：业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。
 
-**新增模块**：PostgreSQL（数据，业务状态的依据）；Outbox + Redis（数据，提交后再唤醒）；资源版本（数据，产物可追溯来源）
+**新增模块**：PostgreSQL + Redis（数据与知识，落库后再唤醒执行）；资源版本（数据与知识，产物可追溯来源）
 
 **新增接口**：`GET /workbench`、`GET /resources/read`、`GET /preferences`、`POST /preferences`
 
@@ -106,7 +106,7 @@
 
 相比 [s08-data-layer](s08-data-layer/)：身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。
 
-**新增模块**：可信门禁（知识与工作流，服务端签发身份）；Wiki / RAG（知识与工作流，带原文依据的知识）
+**新增模块**：Wiki / RAG（数据与知识，带原文依据的知识）；可信门禁（身份与权限，服务端签发身份）
 
 **新增工具**：`kb_list`、`kb_read`、`kb_search`、`kb_submit_revision`
 
@@ -122,7 +122,7 @@
 
 相比 [s09-knowledge-layer](s09-knowledge-layer/)：一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。
 
-**新增模块**：Workflow（知识与工作流，步骤、确认与验收）；审批与提权（知识与工作流，可以提议，不能自批）
+**新增模块**：Workflow（Agent 装配，步骤、确认与验收）；审批与提权（Agent 装配，可以提议，不能自批）
 
 **新增工具**：`skill_read`、`propose_task`
 
@@ -152,7 +152,7 @@
 
 相比 [s11-model-gateway](s11-model-gateway/)：独立 Compose 交付；就绪探测、容量限制与备份保护持久状态。
 
-**新增模块**：就绪与容量（部署，健康探测、限流与关闭）
+**新增模块**：就绪与容量（运行与部署，健康探测、限流与关闭）
 
 **新增接口**：`GET /ready`
 
@@ -164,7 +164,7 @@
 
 相比 [s12-deploy](s12-deploy/)：登录签发不透明令牌；每次请求查库，数据、任务与事件按 owner 过滤。
 
-**新增模块**：账号与认证（账号，登录、令牌与 owner 归属）
+**新增模块**：账号与认证（身份与权限，登录、令牌与归属）
 
 **新增接口**：`GET /auth/me`、`POST /auth/logout`、`POST /auth/login`
 
@@ -176,7 +176,7 @@
 
 相比 [s13-auth](s13-auth/)：可信 owner 选择独立进程与原生目录；池控制名额，uid/gid 约束文件访问。
 
-**新增模块**：用户运行环境（用户隔离，owner 路由、进程池与 uid）
+**新增模块**：用户运行环境（身份与权限，每人一个进程与 uid）
 
 **新增数据迁移**：`011-user-runtimes.sql`、`012-runtime-migration.sql`
 
@@ -186,7 +186,7 @@
 
 相比 [s14-isolation](s14-isolation/)：统一可见范围与动作授权；工具取三方交集，Skill 分享经审批，下一轮核对新权限。
 
-**新增模块**：资源 Hub（权限与资源，可见范围、权益与审批）
+**新增模块**：资源 Hub（身份与权限，范围、授权与配额）
 
 **新增接口**：`POST /knowledge`、`GET /hub`、`GET /me/plan`、`POST /hub/skills`、`POST /hub/plans/assign`
 
@@ -198,7 +198,7 @@
 
 相比 [s15-hub](s15-hub/)：节点是否存活变成租约是否过期；新 control 推进数据库任期后恢复，旧任期拒写。
 
-**新增模块**：集群协调（协调面，租约、选举与任期隔离）
+**新增模块**：协调面（集群，租约、选举与任期）
 
 **新增接口**：`GET /cluster`
 
@@ -212,7 +212,7 @@
 
 相比 [s16-coordination](s16-coordination/)：按用户分片，缓存定位后转发；数据库校验 owner 与 epoch，手动迁移先暂停再切换。
 
-**新增模块**：用户分片（分片与路由，归属缓存、路由与手动迁移）
+**新增模块**：分片与路由（集群，用户落到主节点）
 
 **新增接口**：`GET /cluster/route`、`POST /cluster/move`
 
@@ -226,7 +226,7 @@
 
 相比 [s17-sharding](s17-sharding/)：轮次边界快照异步复制；接管推进 epoch，明确标记丢失尾部，旧主以副本回归。
 
-**新增模块**：异步副本（副本与故障接管，边界快照、位点与故障接管）
+**新增模块**：副本与接管（集群，异步复制、故障接管）
 
 **新增接口**：`POST /cluster/promote`
 

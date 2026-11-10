@@ -9,7 +9,7 @@
 <section class="screen animate-in" id="s07-screen-1">
 <h2 class="screen-heading">这个云端 Agent 还缺什么：跨会话使用经验</h2>
 <p>上一章，Agent 可以读取资料、查看网页并保存结果。这个云端 Agent 还缺什么？同一 Thread 可以延续历史，但新开的 Thread 不会仅凭另一段会话记录就自动继承其中的偏好。本章接入 Codex 原生记忆，同时明确谁能使用、谁能贡献、什么结果已经生成。</p>
-<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="856" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s07-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S07 总架构 SVG 大图"><img src="/course/assets/s07-architecture.svg" width="1600" height="968" alt="S07 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色定位本阶段增加的部分；黑色编号标出一次请求的顺序。点击图片可放大。</figcaption></figure>
 <p><span class="term" data-definition="Codex 从会话历史中按条件提炼、合并，并供后续会话使用的记忆；不同于恢复同一 Thread 的完整历史。">原生记忆</span> 的提炼与使用由 Codex 负责。服务端不自行拼接历史摘要、不把摘要塞进用户消息，而是管理配置、存储位置、核验与会话参与资格。CLI 只展示服务端结果并提出设置请求。</p>
 <table><thead><tr><th>固定产物</th><th>含义</th></tr></thead><tbody>
 <tr><td>raw_memories.md</td><td>提炼得到的原始记忆。</td></tr>

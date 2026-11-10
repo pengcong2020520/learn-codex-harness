@@ -2,7 +2,7 @@
 <div class="module-content"><header class="module-header animate-in"><span class="module-number">s18</span><h2 class="module-title">副本与故障接管：有人接手，丢多少说得清</h2><p class="module-subtitle">先拍快照再慢慢发，按会话标记尾部丢失；旧主先当副本，追平后才能再当主。</p></header><div class="module-body">
 <section class="screen animate-in" id="s18-screen-1"><h2 class="screen-heading">每个分片一主一从，环形放置</h2>
 <p>上一章让云端 Agent 的每台机器都干活，但用户历史只在一块磁盘上，主节点坏了只能等。本章提前把历史复制到另一个节点，让它能接手；复制会慢一步，因此还必须说明哪些内容已经到达、哪些尾部可能丢失。</p>
-<figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1864" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure>
+<figure class="architecture-figure"><a href="/course/assets/s18-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="打开 S18 总架构 SVG 大图"><img src="/course/assets/s18-architecture.svg" width="1600" height="1304" alt="S18 总架构。橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生。" /></a><figcaption>橙色为本阶段新增；分片主节点在轮次边界把用户目录异步复制到副本，主节点失联后由已追平的副本接手。点击查看总架构大图。</figcaption></figure>
 <p>每个分片有一个副本，三个节点环形错开；每台既是一个分片的主，也是另一个分片的副本。<span class="term" data-definition="每个用户拥有独立的原生运行目录。">CODEX_HOME</span>仍按用户隔离，复制不改变 Hub 授权。</p>
 <table><thead><tr><th>分片</th><th>初始主</th><th>初始副本</th></tr></thead><tbody><tr><td>0</td><td>node-a</td><td>node-b</td></tr><tr><td>1</td><td>node-b</td><td>node-c</td></tr><tr><td>2</td><td>node-c</td><td>node-a</td></tr></tbody></table>
 <p>PG 保留任务事实、归属和复制位点，磁盘保存原生历史；任务写进 PG 不代表副本已有文件。etcd 提供租约和路由发布，副本只解决节点磁盘，不代表控制面也高可用。</p>

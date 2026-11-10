@@ -23,29 +23,31 @@ function entry(n) {
   // s03 服务端还不排队（上一轮没结束返回 409）；s04 起排队归「任务与消息」，会话只复用 Thread、整理快照。
   const sessions = n === 3 ? M("sessions", "会话", "复用 Thread，一次一轮", 2, ["sessions/"])
     : M("sessions", "会话", "复用 Thread，整理快照", 2, ["sessions/"]);
-  return [first, sessions,
-    M("messages", "任务与消息", "任务排队与调度", 4, ["messages/"]), M("events", "事件推送", "状态变化推给客户端", 4, ["events/"])];
+  return { first, sessions,
+    messages: M("messages", "任务与消息", "任务排队与调度", 4, ["messages/"]), events: M("events", "事件推送", "状态变化推给客户端", 4, ["events/"]) };
 }
-const layers = n => [
-  { name: "接入与会话", mods: entry(n) },
-  { name: "Agent 装配", mods: [M("def", "Agent 定义", "JSON 校验 + 版本哈希", 5, ["agents/"]), M("roles", "角色与 Skills", "做什么、怎么做", 5, ["role/", "codex/skills.mjs"]),
-    M("tools", "工具与资料边界", "白名单 + 参数校验", 6, ["tools/", "data/files.mjs"]), M("mcp", "MCP 工具入口", "Codex 回调本地工具", 6, ["tools/mcp-server.mjs"])] },
-  { name: "运行支撑", mods: [M("lifecycle", "生命周期与清理", "启停、运行目录回收", 3, ["lifecycle/", "maintenance/"]), M("memory", "记忆", "Codex 提炼，服务端管控", 7, ["memory/"])] },
-  { name: "数据", mods: [M("jobs", "任务记录", n < 6 ? "任务状态，重启后可核对" : "任务状态与产物登记", 4, ["data/index.mjs", "data/jobs.mjs"]), M("pg", "PostgreSQL", "业务状态的依据", 8, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/"]),
-    M("outbox", "Outbox + Redis", "提交后再唤醒", 8, ["data/queue.mjs"]), M("versions", "资源版本", "产物可追溯来源", 8, ["data/resources.mjs"])] },
-  { name: "知识与工作流", mods: [M("gate", "可信门禁", "服务端签发身份", 9, ["permissions/"]), M("wiki", "Wiki / RAG", "带原文依据的知识", 9, ["knowledge/", "tools/knowledge.mjs"]),
-    M("flow", "Workflow", "步骤、确认与验收", 10, ["workflows/"]), M("approve", "审批与提权", "可以提议，不能自批", 10, ["tools/tasks.mjs"])] },
-  // 网关放在靠近 Codex 的几列：Codex 的模型请求先到网关，再由网关转给各家模型。
-  { name: "模型网关", mods: [M("media", "生图与生视频", "异步任务，结果存为产物", 11, ["media/", "tools/media.mjs"], 1), M("usage", "用量与预算", "超额停止派发", 11, ["usage/"], 2),
-    M("router", "模型路由", "统一协议，转给上游", 11, ["gateway/"], 3)] },
-  { name: "部署", mods: [M("deployment", "就绪与容量", "健康探测、限流与关闭", 12, ["deployment/"])] },
-  { name: "账号", mods: [M("accounts", "账号与认证", "登录、令牌与 owner 归属", 13, ["accounts/"])] },
-  { name: "用户隔离", mods: [M("runtimes", "用户运行环境", "owner 路由、进程池与 uid", 14, ["runtimes/"])] },
-  { name: "权限与资源", mods: [M("hub", "资源 Hub", "可见范围、权益与审批", 15, ["hub/"])] },
-  { name: "协调面", mods: [M("coordination", "集群协调", "租约、选举与任期隔离", 16, ["coordination/", "data/write.mjs"])] },
-  { name: "分片与路由", mods: [M("sharding", "用户分片", "归属缓存、路由与手动迁移", 17, ["sharding/", "data/diagnostics.mjs"])] },
-  { name: "副本与故障接管", mods: [M("replication", "异步副本", "边界快照、位点与故障接管", 18, ["replication/"])] },
-];
+// 按职责归层（不是一章一层）：同一类能力放在同一层，后面的章节往已有的层里加模块。
+const layers = n => {
+  const e = entry(n);
+  return [
+    { name: "接入与调度", mods: [e.first, e.messages, e.events] },
+    { name: "会话与记忆", mods: [e.sessions, M("memory", "记忆", "Codex 提炼，服务端管控", 7, ["memory/"])] },
+    { name: "Agent 装配", mods: [M("def", "Agent 定义与 Skills", "JSON 装配角色与方法", 5, ["agents/", "role/", "codex/skills.mjs"]),
+      M("tools", "工具与 MCP", "白名单、参数校验、回调", 6, ["tools/", "data/files.mjs", "tools/mcp-server.mjs"]),
+      M("flow", "Workflow", "步骤、确认与验收", 10, ["workflows/"]), M("approve", "审批与提权", "可以提议，不能自批", 10, ["tools/tasks.mjs"])] },
+    { name: "数据与知识", mods: [M("jobs", "任务记录", n < 6 ? "任务状态，重启后可核对" : "任务状态与产物登记", 4, ["data/index.mjs", "data/jobs.mjs"]),
+      M("pg", "PostgreSQL + Redis", "落库后再唤醒执行", 8, ["data/database.mjs", "data/repository.mjs", "data/schema.sql", "data/legacy.mjs", "data/migrations/", "data/queue.mjs"]),
+      M("versions", "资源版本", "产物可追溯来源", 8, ["data/resources.mjs"]), M("wiki", "Wiki / RAG", "带原文依据的知识", 9, ["knowledge/", "tools/knowledge.mjs"])] },
+    { name: "身份与权限", mods: [M("gate", "可信门禁", "服务端签发身份", 9, ["permissions/"]), M("accounts", "账号与认证", "登录、令牌与归属", 13, ["accounts/"]),
+      M("runtimes", "用户运行环境", "每人一个进程与 uid", 14, ["runtimes/"]), M("hub", "资源 Hub", "范围、授权与配额", 15, ["hub/"])] },
+    // 网关放在靠近 Codex 的几列：Codex 的模型请求先到网关，再由网关转给各家模型。
+    { name: "模型网关", mods: [M("media", "生图与生视频", "异步任务，结果存为产物", 11, ["media/", "tools/media.mjs"], 1), M("usage", "用量与预算", "超额停止派发", 11, ["usage/"], 2),
+      M("router", "模型路由", "统一协议，转给上游", 11, ["gateway/"], 3)] },
+    { name: "运行与部署", mods: [M("lifecycle", "生命周期与清理", "启停、运行目录回收", 3, ["lifecycle/", "maintenance/"]), M("deployment", "就绪与容量", "健康探测、限流与关闭", 12, ["deployment/"])] },
+    { name: "集群", mods: [M("coordination", "协调面", "租约、选举与任期", 16, ["coordination/", "data/write.mjs"]), M("sharding", "分片与路由", "用户落到主节点", 17, ["sharding/", "data/diagnostics.mjs"]),
+      M("replication", "副本与接管", "异步复制、故障接管", 18, ["replication/"])] },
+  ];
+};
 // 基础设施：每个阶段都需要、但不单独成章的代码，画在服务框底部的一条带里。until 表示只到哪个阶段为止算基础设施。
 const infra = [{ files: "config/", name: "配置" }, { files: "storage/", name: "存储" }, { files: "codex/", name: "Codex 连接" }, { files: "role/", name: "角色文件", until: 4 }, { files: "data/paths.mjs", name: "路径" }];
 const matches = (rel, files) => [].concat(files).some(f => f.endsWith("/") ? rel.startsWith(f) : rel === f);
@@ -82,15 +84,15 @@ const stageList = [
   { title: "排队搬进服务端，状态推给客户端", sub: "输入先写进任务记录，按会话先进先出逐条发给 Codex；状态变化经 SSE 推给客户端，断线重连先补快照。",
     path: [["user", "连续提交"], ["api", "POST /messages"], ["jobs", "写入任务记录"], ["messages", "按会话排队"], ["codex", "turn/start 执行"], ["events", "SSE 推送进度"]] },
   { title: "一份 JSON 装配 Agent：角色与 Skills", sub: "Agent 定义决定角色、Skill、执行策略和工作区；启动时校验，内容一变旧版本就作废，会话与排队消息都要核对版本。",
-    path: [["def", "校验 Agent 定义"], ["roles", "装配角色与 Skill"], ["codex", "skills/list 核验"], ["api", "POST /messages"], ["def", "核对版本"], ["codex", "带角色执行一轮"]] },
+    path: [["def", "校验 Agent 定义"], ["def", "装配角色与 Skill"], ["codex", "skills/list 核验"], ["api", "POST /messages"], ["def", "核对版本"], ["codex", "带角色执行一轮"]] },
   { title: "工具：读得到资料、存得下文章", sub: "工具来自配置，经 MCP 交给 Codex 调用；每次调用先核对白名单和参数，资料目录按用途授权，新建文件不覆盖。",
-    path: [["api", "发起任务"], ["messages", "任务排队"], ["codex", "Codex 执行一轮"], ["mcp", "MCP 回调工具"], ["tools", "核对名单与参数"], ["events", "推送进度"]] },
+    path: [["api", "发起任务"], ["messages", "任务排队"], ["codex", "Codex 执行一轮"], ["tools", "MCP 回调工具"], ["tools", "核对名单与参数"], ["events", "推送进度"]] },
   { title: "记忆：Codex 提炼，服务端管控", sub: "原生记忆默认关闭；总开关、读取和每个会话是否参与提炼由服务端决定，客户端只能查看、不能传路径。",
     path: [["user", "/memory contribute"], ["api", "提交参与设置"], ["memory", "查总开关与策略"], ["codex", "memoryMode/set"], ["codex", "空闲后提炼"], ["api", "GET /memory 查看"]] },
   { title: "让任务与产物有据可查", sub: "业务记录迁入 PostgreSQL，提交后经 Redis 唤醒执行；每个产物登记版本与来源。",
-    path: [["api", "发起任务"], ["pg", "任务落库"], ["outbox", "提交后唤醒"], ["codex", "Codex 执行"], ["tools", "写入产物"], ["versions", "登记版本"]] },
+    path: [["api", "发起任务"], ["pg", "任务落库"], ["pg", "提交后唤醒"], ["codex", "Codex 执行"], ["tools", "写入产物"], ["versions", "登记版本"]] },
   { title: "知识层与门禁：依据什么，能碰什么", sub: "身份由服务端签发；文件、知识、索引共用一道门禁，Wiki / RAG 保留原文依据。",
-    path: [["api", "发起任务"], ["gate", "签发任务身份"], ["codex", "Codex 执行"], ["mcp", "回调工具"], ["gate", "先过门禁"], ["wiki", "查询知识"]] },
+    path: [["api", "发起任务"], ["gate", "签发任务身份"], ["codex", "Codex 执行"], ["tools", "回调工具"], ["gate", "先过门禁"], ["wiki", "查询知识"]] },
   { title: "Skill 教方法，Workflow 管边界和终点", sub: "一类任务一份配置；多步任务在关键处停下等人确认，模型可以提议提权，不能自己批准。",
     path: [["api", "发起任务"], ["flow", "进入工作流"], ["codex", "按步骤执行"], ["approve", "提议提权"], ["user", "人来确认"], ["flow", "验收完成"]] },
   { title: "模型网关：Codex 只连网关", sub: "网关统一协议、按任务把请求路由到各家模型；每轮记录 token 用量，超出预算就停止派发。",
@@ -115,23 +117,26 @@ export const stages = Object.fromEntries(stageList.map((st, i) => [stageNo[i], s
 
 const esc = s => String(s).replace(/[&<>"]/g, v => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[v]));
 
-export function renderArchitecture(n) {
-  const st = stages[n], a = [], W = 1600, num = new Map(), pos = {};
+// overview：导论里的全景图。用最后一个阶段的完整结构，每个模块标出它在哪一章加入，底部换成六组学习路线。
+export const routeGroups = [["跑起来", "s00–s02"], ["变成服务", "s03–s04"], ["装配 Agent", "s05–s07"], ["靠得住、守得住", "s08–s11"], ["上云与多用户", "s12–s15"], ["多台机器", "s16–s18"]];
+export function renderArchitecture(n, { overview = false } = {}) {
+  const st = overview ? { title: "全景：一个通用的云端 Agent 由哪些部分组成", sub: "我们的服务按职责分成 8 层，Codex 负责执行循环；每个模块右上角是它加入的章节。", path: [] } : stages[n];
+  const a = [], W = 1600, num = new Map(), pos = {};
   st.path.forEach(([id], i) => num.set(id, [...(num.get(id) || []), i + 1]));
   const box = (x, y, w, h, fill, stroke, dash = "", r = 12) => a.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`);
   const t = (s, x, y, size, color, weight = 400, anchor = "start") => a.push(`<text x="${x}" y="${y}" font-size="${size}" fill="${color}" font-weight="${weight}" text-anchor="${anchor}">${esc(s)}</text>`);
   const arrow = (d, color, dash = "") => a.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ""} marker-end="url(#m${color.slice(1)})"/>`);
   const badge = (k, x, y) => { a.push(`<circle cx="${x}" cy="${y}" r="13" fill="${c.ink}"/>`); t(k, x, y + 5, 15, "#fff", 700, "middle"); };
-  const tag = `S${String(n).padStart(2, "0")}`;
+  const tag = overview ? "全景" : `S${String(n).padStart(2, "0")}`;
   a.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="{{H}}" viewBox="0 0 ${W} {{H}}" role="img" aria-labelledby="title desc"><title id="title">${tag} 架构：${esc(st.title)}</title><desc id="desc">${esc(st.sub)} 橙色为本阶段新增，白色为前面阶段已有，绿色为 Codex 原生能力；黑色编号是一次请求经过的顺序。</desc>`);
   a.push(`<defs>${[c.faint, c.ink, c.green].map(col => `<marker id="m${col.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join("")}</defs><g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif">`);
   a.push(`<rect x="0" y="0" width="${W}" height="{{H}}" fill="${c.bg}"/>`);
-  box(48, 44, 64, 32, c.ink, c.ink, "", 8); t(tag, 80, 66, 17, "#fff", 700, "middle");
+  box(48, 44, 64, 32, c.ink, c.ink, "", 8); t(tag, 80, 66, overview ? 15 : 17, "#fff", 700, "middle");
   t(st.title, 128, 70, 30, c.ink, 700); t(st.sub, 48, 112, 19, c.muted);
-  [[c.card, c.line, "", "前面阶段已有", c.muted], [c.accentBg, c.accent, "", "本阶段新增", c.accent], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]]
+  (overview ? [[c.card, c.line, "", "我们写的服务", c.muted], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]] : [[c.card, c.line, "", "前面阶段已有", c.muted], [c.accentBg, c.accent, "", "本阶段新增", c.accent], [c.greenBg, c.greenLine, "", "Codex 原生", c.green]])
     .forEach(([f, s, d, l, col], i) => { const x = 48 + i * 170; box(x, 138, 22, 16, f, s, d, 4); t(l, x + 30, 152, 15, col); });
 
-  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(n >= 13 ? "终端 / SSH" : n < 7 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
+  box(48, 330, 120, 104, c.card, c.line); t("用户", 108, 372, 20, c.ink, 600, "middle"); t(overview ? "终端 / 浏览器" : n >= 13 ? "终端 / SSH" : n < 7 ? "终端" : "终端 / 浏览器", 108, 402, 14, c.muted, 400, "middle");
   pos.user = { x: 48, y: 330, w: 120, h: 104 };
 
   // 我们的程序：每层一行，只画到本阶段为止；s03 起常驻为服务。
@@ -141,15 +146,17 @@ export function renderArchitecture(n) {
   const label = n >= 3 ? "我们的服务" : "我们的程序";
   a.push(`<rect x="${SX + 20}" y="${SY - 11}" width="96" height="22" fill="${c.bg}"/>`); t(label, SX + 28, SY + 6, 15, c.muted, 600);
   L.forEach((layer, li) => {
-    const y = SY + 22 + li * RH, isNew = layer.mods.some(m => m.stage === n);
-    t(layer.name, SX + 24, y + 46, 16, isNew ? c.accent : c.ink, 600);
+    const y = SY + 22 + li * RH, isNew = !overview && layer.mods.some(m => m.stage === n);
+    t(layer.name, SX + 24, y + (overview ? 38 : 46), 16, isNew ? c.accent : c.ink, 600);
+    if (overview) { const ns = layer.mods.map(m => m.stage), lo = Math.min(...ns), hi = Math.max(...ns), f = v => `s${String(v).padStart(2, "0")}`; t(lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`, SX + 24, y + 62, 13, c.muted); }
     if (li) a.push(`<line x1="${SX + 16}" y1="${y - 6}" x2="${SX + SW - 16}" y2="${y - 6}" stroke="${c.line}" stroke-width="1"/>`);
     layer.mods.forEach((m, mi) => {
-      const x = SX + LW + (m.col ?? mi) * (bw + gap), h = 84, fresh = m.stage === n;
+      const x = SX + LW + (m.col ?? mi) * (bw + gap), h = 84, fresh = !overview && m.stage === n;
       pos[m.id] = { x, y, w: bw, h };
       box(x, y, bw, h, fresh ? c.accentBg : c.card, fresh ? c.accent : c.line);
       if (fresh) a.push(`<rect x="${x + 1}" y="${y + 14}" width="4" height="${h - 28}" rx="2" fill="${c.accent}"/>`);
       t(m.name, x + 16, y + 36, 17, c.ink, 600); t(m.desc, x + 16, y + 62, 14, c.muted);
+      if (overview) { box(x + bw - 46, y - 9, 40, 20, c.ink, c.ink, "", 6); t(`s${String(m.stage).padStart(2, "0")}`, x + bw - 26, y + 6, 12, "#fff", 700, "middle"); }
     });
   });
   // 基础设施带：配置、存储、Codex 连接等，每个阶段都有，不单独成章。
@@ -160,7 +167,7 @@ export function renderArchitecture(n) {
   const later = layers(n).filter(layer => layer.mods.every(m => m.stage > n)).map(layer => layer.name);
   // 只列最近的三项，其余合计成"等 N 项"，避免与左侧基础设施清单重叠。
   const preview = later.length > 3 ? `${later.slice(0, 3).join(" · ")} 等 ${later.length} 项` : later.join(" · ");
-  if (later.length) t(`后面还会加：${preview}`, SX + SW - 20, iy + 20, 14, c.faint, 400, "end");
+  if (later.length && !overview) t(`后面还会加：${preview}`, SX + SW - 20, iy + 20, 14, c.faint, 400, "end");
 
   // Codex：s00 是一轮一个进程的 codex exec，s01 起是常驻的 App Server。
   const CX = 1230, CY = 300, CW = 200, CH = 280;
@@ -186,7 +193,15 @@ export function renderArchitecture(n) {
   for (const [id, ks] of num) { const p = pos[id]; ks.forEach((k, i) => badge(String(k), p.x + p.w - 6 - (ks.length - 1 - i) * 30, p.y - 2)); }
 
   const BY = Math.max(SY + SH, 600, n >= 11 ? pos.router.y + 140 : 0) + 44, sw = (W - 96 - 5 * 20) / 6;
-  t("一次请求怎么走", 48, BY, 17, c.ink, 700);
+  if (overview) {
+    t("学习路线：从跑起来到多台机器，一共六组", 48, BY, 17, c.ink, 700);
+    routeGroups.forEach(([name, range], i) => {
+      const x = 48 + i * (sw + 20), y = BY + 16;
+      box(x, y, sw, 58, c.card, c.line, "", 10); t(name, x + 18, y + 26, 16, c.ink, 600); t(range, x + 18, y + 47, 13, c.muted);
+      if (i < routeGroups.length - 1) arrow(`M${x + sw + 2},${y + 29} L${x + sw + 16},${y + 29}`, c.faint);
+    });
+  }
+  t(overview ? "" : "一次请求怎么走", 48, BY, 17, c.ink, 700);
   st.path.forEach(([id, text], i) => {
     const x = 48 + i * (sw + 20), y = BY + 16, codex = id === "codex";
     box(x, y, sw, 58, codex ? c.greenBg : c.card, codex ? c.greenLine : c.line, "", 10);
@@ -277,6 +292,14 @@ dirs.forEach((dir, i) => {
     else fs.writeFileSync(file, body);
   }
 });
+{
+  // 全景图：导论、根 README 与课程全景页共用。
+  const body = renderArchitecture(18, { overview: true });
+  for (const file of [path.join(root, "images/overview.svg"), path.join(root, "../app/web/public/course/assets/overview.svg")]) {
+    if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${path.relative(root, file)} 不是最新；请运行 node stages/build-architecture.mjs`); }
+    else { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, body); }
+  }
+}
 for (const [rel, d] of Object.entries(details)) {
   const file = path.join(root, rel), body = renderDetail(d);
   if (check) { if (fs.readFileSync(file, "utf8") !== body) throw new Error(`${rel} 不是最新；请运行 node stages/build-architecture.mjs`); }
