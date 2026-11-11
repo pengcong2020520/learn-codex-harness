@@ -50,14 +50,13 @@ npm run lesson -- list     # 本章的离线实验（不调用模型）
 想边看边学，在仓库根目录打开互动课程（不需要模型服务）：
 
 ```bash
-npm --prefix app ci
-npm --prefix app run web
+npm --prefix course ci && npm --prefix course run web
 # 机制课程 http://127.0.0.1:4320/course/ · 章节长文 /course/handbook.html · 阶段演示 /course/changes.html
 ```
 
 s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](app/docs/data-layer.md)。
 
-服务器同时运行 s03–s11 的步骤见 [部署说明](app/deploy/README.md)。教学快照保持不变；部署入口在共享网络内通过 `127.0.0.1:4331` 转发到模型网关，端口与进程管理集中在 `app/deploy/`。
+服务器同时运行 s03–s11 的步骤见 [部署说明](course/deploy/README.md)。教学快照保持不变；部署入口在共享网络内通过 `127.0.0.1:4331` 转发到模型网关，端口与进程管理集中在 `course/deploy/`。
 
 ---
 
@@ -117,7 +116,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 >
 > **[s18 副本与故障接管](stages/s18-replication/)** &nbsp; *"主节点坏了有人接手，丢多少说得清"* — 轮次边界异步复制、复制位点；接管后尾部丢失如实标出
 
-完整项目 [app/](app/README.md) 在 s11 之上持续开发，包含 Docker 部署、Web 工作台和互动课程；s12–s18 不并入 app，各自是一份可以独立部署的快照，用来讲清上云、多用户和多台机器各自要解决什么。
+完整项目 [app/](app/README.md) 在 s11 之上持续开发，包含本机 Docker 运行；Web 工作台、互动课程和阶段演示部署在 [course/](course/README.md)；s12–s18 不并入 app，各自是一份可以独立部署的快照，用来讲清上云、多用户和多台机器各自要解决什么。
 
 每章 README 都按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织；关键代码逐行摘自该阶段源码（`npm test` 会校验）。
 
@@ -131,7 +130,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 | 机制课程 | 想把一个机制吃透：问题、源码、正常与异常推演、测验 | `/course/`（s01–s18 已上线） |
 | 阶段演示 | 想快速看懂每个阶段多了什么 | `/course/changes.html`：总架构图 + 泳道动画 + 逐行注释源码 |
 
-工作台支持 s00–s18 十九个阶段和当前开发项目（s11 内核）；机制课程已发布 s01–s18 共 52 节。s00 保持缺课空态；s12、s13、s14、s15、s16、s17、s18 仅提供课程与独立部署说明，通过 SSH 隧道连接，不登记为工作台实时目标。
+工作台支持 s00–s18 十九个阶段；机制课程已发布 s01–s18 共 52 节。s00 保持缺课空态；s12、s13、s14、s15、s16、s17、s18 仅提供课程与独立部署说明，通过 SSH 隧道连接，不登记为工作台实时目标。
 
 ---
 
@@ -143,7 +142,8 @@ learn-codex-harness/
 │   ├── introduction.md     #   导论：Codex harness、App Server 与六个问题
 │   ├── sNN-*/              #   README（章节）、docs/design.md、images/、lessons/（离线实验）、tests/
 │   └── verify.mjs          #   阶段文档、结构与测试的统一检查
-├── app/                    # 完整项目：Agent 服务、终端客户端、Web 工作台与互动课程（app/web）
+├── app/                    # Agent 服务与终端客户端
+├── course/                 # 互动课程、教学工作台与阶段演示部署
 ├── docs/                   # 路线图等图片、分析报告
 └── scripts/run-all.mjs     # 根目录统一安装与测试
 ```

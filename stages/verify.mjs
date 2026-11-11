@@ -160,6 +160,9 @@ function run(directory, command, args) {
   console.log(JSON.stringify(record));
   if (!passed) { console.error(result.error?.message || output); process.exitCode = 1; }
 }
+for (const file of ["package.json", "web/server.mjs", "web/public/course/curriculum.json", "compose.yaml"]) {
+  assert.ok(fs.existsSync(path.join(root, "../course", file)), `课程文件缺失：${file}`);
+}
 if (!options.has("--docs-only")) {
   run("s00-sdk-quickstart", "npm", ["test"]);
   for (const stage of Object.keys(STAGES).map(Number)) run(STAGES[stage], "npm", ["test"]);

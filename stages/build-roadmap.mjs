@@ -1,7 +1,7 @@
 // 学习路线图：根 README 顶部那张图。按"跑起来 → 变成服务 → 装配 Agent → 靠得住、守得住 → 上云与多用户 → 多台机器"分组，每张卡片一个阶段。
 // 运行：node stages/build-roadmap.mjs 生成 docs/images/learning-roadmap.svg；加 --check 只检查是否最新。
 import fs from "node:fs";
-import { repositoryUrl } from "../app/web/course-data.mjs";
+import { repositoryUrl } from "../course/web/course-data.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

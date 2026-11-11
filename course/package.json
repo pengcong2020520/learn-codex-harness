@@ -1,0 +1,17 @@
+{
+  "name": "codex-harness-course",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "web": "node web/server.mjs",
+    "test": "node --test tests/*.test.mjs web/tests/course-pages.test.mjs web/tests/curriculum.test.mjs web/tests/stages.test.mjs web/tests/learning-routing.test.mjs",
+    "test:web": "node --test web/tests/*.test.mjs",
+    "course:build": "node web/build-curriculum.mjs",
+    "course:check": "node web/build-curriculum.mjs --check",
+    "test:deploy": "node --test tests/*.test.mjs tests/stages-forwarder.integration.mjs"
+  }
+}

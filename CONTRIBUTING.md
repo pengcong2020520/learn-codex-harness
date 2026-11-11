@@ -2,11 +2,12 @@
 
 ## 目录分工
 
-- `app/`：持续开发的完整项目。新功能和缺陷修复都先落在这里。
-- `stages/`：教学快照，默认冻结。只有影响教学正确性的问题才回补到对应阶段；回补后必须在 `app` 下运行 `npm run course:build`，让课程里的源码摘录与哈希同步。
+- `app/`：持续开发的 Agent 服务与 CLI。内核的新功能和缺陷修复先落在这里。
+- `course/`：课程网站、教学工作台与 s03–s11 演示部署；独立无依赖 npm 项目。
+- `stages/`：教学快照，默认冻结。只有影响教学正确性的问题才回补到对应阶段；回补后必须在 `course` 下运行 `npm run course:build`，让课程里的源码摘录与哈希同步。
 - 阶段章节 README 的 `javascript` / `sql` 代码块必须逐行摘自本阶段源码（可省略行，用 `// …` 标注），`stages/verify.mjs` 会检查。
 - `docs/reports/`：带日期的分析报告，生成后不再修改；结论过期时写新报告。
-- 验证记录（`stages/verification.json`、`app/docs/verification/`、`app/web/verification*.json`）由脚本生成，不手工编辑。
+- 验证记录（`stages/verification.json`、`app/docs/verification/`、`course/web/verification*.json`）由脚本生成，不手工编辑。
 
 ## 分支
 

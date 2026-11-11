@@ -64,8 +64,7 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
-  # 智能体服务与 Web 工作台（profile app，服务器部署用；本机开发直接 npm run server / npm run web）。
-  # 两者共用一个镜像；工作台共用智能体的网络，按原来的方式经 127.0.0.1 读取连接信息。端口只发布到宿主的 127.0.0.1，经 SSH 隧道访问。
+  # 智能体服务（profile app，服务器部署用；本机开发直接 npm run server）。
   # 数据、运行记录和工作区挂载到宿主目录，便于备份和迁移；容器里以 node（uid 1000）运行。
   agent:
     build:
@@ -80,98 +79,13 @@ services:
       AGENT_GATEWAY_URL: http://gateway:8080/v1
       DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:-}@postgres:5432/agent
       REDIS_URL: redis://redis:6379/0
-    ports: ["127.0.0.1:${AGENT_PORT:-4317}:4317", "127.0.0.1:${WORKBENCH_PORT:-14320}:14320"]
+    ports: ["127.0.0.1:${AGENT_PORT:-4317}:4317"]
     # 容器里的项目路径（CONTAINER_APP_DIR）在服务器上设成与部署路径相同，迁移过来的 Codex 历史记录路径不变。
     volumes: ["./.data:${CONTAINER_APP_DIR:-/app}/.data", "./.runs:${CONTAINER_APP_DIR:-/app}/.runs", "./workspace:${CONTAINER_APP_DIR:-/app}/workspace"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
       gateway: { condition: service_healthy }
-    restart: unless-stopped
-  # 九阶段共用 agent 网络空间；连接文件与 workspace 存在代码目录以外。
-  # 入口预留 127.0.0.1:4331 转发到 gateway:8080；不发布宿主端口，与阶段/agent/web 端口不重叠。
-  stages:
-    build:
-      context: ..
-      dockerfile: app/deploy/stages.Dockerfile
-      args:
-        NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org}"
-        APT_MIRROR: "${APT_MIRROR:-}"
-        CONTAINER_STAGES_DIR: "${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}"
-    image: codex-harness-stages:local
-    profiles: ["app"]
-    init: true
-    network_mode: "service:agent"
-    environment:
-      CONTAINER_STAGES_DIR: "${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}"
-      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:-}
-      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:-}
-      CODEX_MODEL: ${CODEX_MODEL:-}
-      STAGES: ${STAGES:-}
-    volumes:
-      - "./.data/stages:/etc/stages:ro"
-      - "../stages-data/s03-service/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s03-service/.data"
-      - "../stages-data/s03-service/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s03-service/.runs"
-      - "../stages-data/s03-service/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s03-service/workspace"
-      - "../stages-data/s04-events-messages/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s04-events-messages/.data"
-      - "../stages-data/s04-events-messages/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s04-events-messages/.runs"
-      - "../stages-data/s04-events-messages/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s04-events-messages/workspace"
-      - "../stages-data/s05-agent-assembly/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s05-agent-assembly/.data"
-      - "../stages-data/s05-agent-assembly/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s05-agent-assembly/.runs"
-      - "../stages-data/s05-agent-assembly/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s05-agent-assembly/workspace"
-      - "../stages-data/s06-tools/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s06-tools/.data"
-      - "../stages-data/s06-tools/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s06-tools/.runs"
-      - "../stages-data/s06-tools/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s06-tools/workspace"
-      - "../stages-data/s07-memory/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s07-memory/.data"
-      - "../stages-data/s07-memory/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s07-memory/.runs"
-      - "../stages-data/s07-memory/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s07-memory/workspace"
-      - "../stages-data/s08-data-layer/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s08-data-layer/.data"
-      - "../stages-data/s08-data-layer/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s08-data-layer/.runs"
-      - "../stages-data/s08-data-layer/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s08-data-layer/workspace"
-      - "../stages-data/s09-knowledge-layer/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s09-knowledge-layer/.data"
-      - "../stages-data/s09-knowledge-layer/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s09-knowledge-layer/.runs"
-      - "../stages-data/s09-knowledge-layer/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s09-knowledge-layer/workspace"
-      - "../stages-data/s10-skill-workflow/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s10-skill-workflow/.data"
-      - "../stages-data/s10-skill-workflow/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s10-skill-workflow/.runs"
-      - "../stages-data/s10-skill-workflow/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s10-skill-workflow/workspace"
-      - "../stages-data/s11-model-gateway/.data:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s11-model-gateway/.data"
-      - "../stages-data/s11-model-gateway/.runs:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s11-model-gateway/.runs"
-      - "../stages-data/s11-model-gateway/workspace:${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/app}/../stages}/s11-model-gateway/workspace"
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_started }
-      gateway: { condition: service_healthy }
-      agent: { condition: service_started }
-    mem_limit: ${STAGES_MEMORY_LIMIT:-1800m}
-    stop_grace_period: 120s
-    healthcheck:
-      test: ["CMD", "node", "/opt/stages-deploy/run-stages.mjs", "--health"]
-      interval: 15s
-      timeout: 10s
-      start_period: 120s
-      retries: 8
-    restart: unless-stopped
-  web:
-    image: codex-harness-app:local
-    profiles: ["app"]
-    command: ["node", "web/server.mjs"]
-    network_mode: "service:agent"
-    environment:
-      WORKBENCH_HOST: 0.0.0.0
-      WORKBENCH_PORT: "14320"
-      WORKBENCH_PUBLIC_ORIGIN: ${WORKBENCH_PUBLIC_ORIGIN:-}
-    volumes:
-      - "./.data:${CONTAINER_APP_DIR:-/app}/.data:ro"
-      - "../stages-data/s03-service/.data:${CONTAINER_APP_DIR:-/app}/../stages/s03-service/.data:ro"
-      - "../stages-data/s04-events-messages/.data:${CONTAINER_APP_DIR:-/app}/../stages/s04-events-messages/.data:ro"
-      - "../stages-data/s05-agent-assembly/.data:${CONTAINER_APP_DIR:-/app}/../stages/s05-agent-assembly/.data:ro"
-      - "../stages-data/s06-tools/.data:${CONTAINER_APP_DIR:-/app}/../stages/s06-tools/.data:ro"
-      - "../stages-data/s07-memory/.data:${CONTAINER_APP_DIR:-/app}/../stages/s07-memory/.data:ro"
-      - "../stages-data/s08-data-layer/.data:${CONTAINER_APP_DIR:-/app}/../stages/s08-data-layer/.data:ro"
-      - "../stages-data/s09-knowledge-layer/.data:${CONTAINER_APP_DIR:-/app}/../stages/s09-knowledge-layer/.data:ro"
-      - "../stages-data/s10-skill-workflow/.data:${CONTAINER_APP_DIR:-/app}/../stages/s10-skill-workflow/.data:ro"
-      - "../stages-data/s11-model-gateway/.data:${CONTAINER_APP_DIR:-/app}/../stages/s11-model-gateway/.data:ro"
-    depends_on: [agent]
     restart: unless-stopped
   chroma:
     image: chromadb/chroma:1.5.0

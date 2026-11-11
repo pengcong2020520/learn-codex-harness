@@ -41,6 +41,7 @@ jobs:
           - stages/s17-sharding
           - stages/s18-replication
           - app
+          - course
     defaults:
       run:
         working-directory: ${{ matrix.package }}
@@ -54,7 +55,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Web 工作台与课程一致性
-        if: matrix.package == 'app'
+        if: matrix.package == 'course'
         run: |
           npm run test:web
           npm run course:check
