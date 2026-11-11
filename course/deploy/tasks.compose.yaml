@@ -1,0 +1,12 @@
+# 仅供一次性任务叠加使用，不随 course/compose.yaml 的长期服务启动。
+services:
+  tasks:
+    image: codex-harness-stages:local
+    env_file: .env
+    environment:
+      COURSE_ROOT: /course
+      CONTAINER_STAGES_DIR: "${CONTAINER_STAGES_DIR:-${CONTAINER_APP_DIR:-/course}/../stages}"
+      AGENT_GATEWAY_URL: http://gateway:8080/v1
+    volumes:
+      - "./.data:/course/.data"
+    # 使用默认网络；不共享 web 的命名空间，web 停止时仍能执行配置任务。

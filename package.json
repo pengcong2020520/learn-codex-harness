@@ -15,7 +15,7 @@
     "test": "node scripts/run-all.mjs test",
     "verify:docs": "node stages/verify.mjs --docs-only",
     "privacy": "node scripts/privacy-check.mjs",
-    "course:build": "npm --prefix app run course:build",
-    "web": "npm --prefix app run web"
+    "course:build": "npm --prefix course run course:build",
+    "web": "npm --prefix course run web"
   }
 }

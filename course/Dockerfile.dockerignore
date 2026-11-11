@@ -1,0 +1,8 @@
+**
+!course/
+!course/web/
+!course/web/server.mjs
+!course/web/shared/
+!course/web/shared/**
+!course/web/public/
+!course/web/public/**

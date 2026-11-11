@@ -113,7 +113,7 @@ owner 来自服务端 `.data/identity.json`；本阶段尚未引入 s09 的统�
 
 ### 本地 Web 外部客户端
 
-启动本阶段的服务后，在 `../../app` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../app/web/README.md)。
+启动本阶段的服务后，在 `../../course` 运行 `npm run web`，在工作台选择本阶段。Web 接入层使用本阶段的连接文件，状态仍归本阶段管理。教学与客户端说明见 [web/README.md](../../../course/web/README.md)。
 
 
 ## 技术实现流程

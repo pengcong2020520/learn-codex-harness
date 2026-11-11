@@ -286,7 +286,7 @@ if (problems.length) throw new Error(`总图和代码对不上，请更新 stage
 dirs.forEach((dir, i) => {
   // 每章目录里的图与课程资产用同一份生成结果；s12 起课程资产也放一份，供 Web 课程引用。
   const body = renderArchitecture(stageNo[i]);
-  const files = [path.join(root, dir, "images/architecture.svg"), ...(stageNo[i] >= 12 ? [path.join(root, `../app/web/public/course/assets/s${stageNo[i]}-architecture.svg`)] : [])];
+  const files = [path.join(root, dir, "images/architecture.svg"), ...(stageNo[i] >= 12 ? [path.join(root, `../course/web/public/course/assets/s${stageNo[i]}-architecture.svg`)] : [])];
   for (const file of files) {
     if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${dir} 的架构图不是最新；请运行 node stages/build-architecture.mjs`); }
     else fs.writeFileSync(file, body);
@@ -295,7 +295,7 @@ dirs.forEach((dir, i) => {
 {
   // 全景图：导论、根 README 与课程全景页共用。
   const body = renderArchitecture(18, { overview: true });
-  for (const file of [path.join(root, "images/overview.svg"), path.join(root, "../app/web/public/course/assets/overview.svg")]) {
+  for (const file of [path.join(root, "images/overview.svg"), path.join(root, "../course/web/public/course/assets/overview.svg")]) {
     if (check) { if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) throw new Error(`${path.relative(root, file)} 不是最新；请运行 node stages/build-architecture.mjs`); }
     else { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, body); }
   }

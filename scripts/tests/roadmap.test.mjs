@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { render } from '../../stages/build-roadmap.mjs';
 import { dirs } from '../../stages/build-architecture.mjs';
-import { repositoryUrl } from '../../app/web/course-data.mjs';
+import { repositoryUrl } from '../../course/web/course-data.mjs';
 
 test('路线图包含全部十九个已完成阶段并生成链接', () => {
   const svg = render();

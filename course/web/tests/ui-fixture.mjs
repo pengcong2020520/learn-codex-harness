@@ -1,0 +1,54 @@
+// Local browser QA fixture. No production data or external model calls.
+import {createServer} from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {createWorkbench} from '../server.mjs';
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'agent-ui-fixture-'));
+fs.mkdirSync(path.join(root,'.data'));
+const threads=[], queues=new Map(), sources=new Map(), pages=new Map();let id=0;
+const upstream=createServer(async(req,res)=>{
+  const url=new URL(req.url,'http://localhost');let body={};if(req.method==='POST'){const chunks=[];for await(const c of req)chunks.push(c);body=JSON.parse(Buffer.concat(chunks));}
+  const send=(value,status=200)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(value));};
+  const session=()=>threads.find(t=>t.id===(body.threadId||url.searchParams.get('threadId')));
+  // Exercise real upstream HTTP errors through the bridge, not a browser fetch mock.
+  if(['/tools','/memory'].includes(url.pathname)&&process.env.UI_FIXTURE_OPTIONAL_STATUS){
+    const status=Number(process.env.UI_FIXTURE_OPTIONAL_STATUS);
+    const message=({404:'当前目标未提供此接口。',401:'Agent 认证失败。',403:'无权读取此接口。',503:'尚未核验 Codex 记忆配置。'})[status];
+    return send({error:{message:message+'<img data-diagnostic src=x onerror=alert(1)>',code:'FIXTURE_<DIAGNOSTIC>',status}},status);
+  }
+  switch(url.pathname){
+    case '/health':return send({model:'local-ui-fixture',queueBackend:'postgres'});
+    case '/workbench':return send({agent:{workflows:[{id:'write-article',label:'写文章',description:'理解用户观点，确定立意与大纲；完成定稿',params:null,steps:[{id:'outline',goal:'确定大纲',confirm:true},{id:'final',goal:'完成定稿',confirm:false}]},{id:'knowledge-maintain',label:'知识库维护',description:'把原始资料整理进指定知识库的 Wiki，带来源版本。',params:{required:['kbId'],properties:{kbId:{type:'string',description:'要维护的知识库',pattern:'^[a-z][a-z0-9-]{0,47}$'}}},steps:null},{id:'brief',label:'写简报',description:'按语气写一份简报',params:{required:['tone','topic'],properties:{tone:{type:'string',description:'语气',enum:['正式','轻松']},topic:{type:'string',description:'主题',maxLength:40},code:{type:'string',description:'编号',pattern:'^[a-z][a-z0-9-]{0,7}$'}}},steps:null}],id:'ui-fixture',version:'1.0',tools:{allow:['read_file','kb_read','kb_submit_revision']},memory:{use:false,contribute:false}},queueBackend:'postgres'});
+    // Match ToolManager.snapshot() and MemoryService.snapshot() in the s11 server modules.
+    case '/tools':return send({status:'ready',version:'fixture-tools-v1',pending:false,error:null,tools:[{name:'read_file',label:'读取文件'},{name:'kb_read',label:'读取知识'},{name:'kb_submit_revision',label:'提交 Wiki 修订'}]});
+    case '/memory':{
+      const configured={enabled:false,use:false,generate:false,contribute:false,extractModel:null,consolidationModel:null,minIdleHours:1};
+      return send({configured,effective:{...configured},directory:'.data/codex/memories',artifacts:Object.fromEntries(['memory_summary.md','MEMORY.md','raw_memories.md'].map(name=>[name,{exists:false,bytes:0,updatedAt:null}])),hasSummary:false,generationCapability:'blocked',generationWarning:'当前禁用原生写工具，后台合并不能写出最终记忆摘要。',generationProgress:'unknown',modelCompatibility:'unverified',note:'已开启不等于已生成；原生后台按条件处理，不是每轮即时保存。配置修改需重启；现有 Thread 可能保留之前注入的内容。'});
+    }
+    // 与 GET /workflows 同形状：write-article 多步无参数；brief 用来覆盖枚举与文本参数。
+    case '/workflows':return send({workflows:[{id:'write-article',label:'写文章',description:'理解用户观点，确定立意与大纲；完成定稿',params:null,steps:[{id:'outline',goal:'确定大纲',confirm:true},{id:'final',goal:'完成定稿',confirm:false}]},{id:'knowledge-maintain',label:'知识库维护',description:'把原始资料整理进指定知识库的 Wiki，带来源版本。',params:{required:['kbId'],properties:{kbId:{type:'string',description:'要维护的知识库',pattern:'^[a-z][a-z0-9-]{0,47}$'}}},steps:null},{id:'brief',label:'写简报',description:'按语气写一份简报',params:{required:['tone','topic'],properties:{tone:{type:'string',description:'语气',enum:['正式','轻松']},topic:{type:'string',description:'主题',maxLength:40},code:{type:'string',description:'编号',pattern:'^[a-z][a-z0-9-]{0,7}$'}}},steps:null}]});
+    case '/sessions':if(req.method==='GET')return send({sessions:threads});{const t={id:'fixture-thread-'+(++id),name:'浏览器测试会话',turns:[]};threads.push(t);queues.set(t.id,{threadId:t.id,paused:false,jobs:[]});return send(t);}
+    case '/sessions/resume':return send(session());
+    case '/messages':{const t=session();if(!t)return send({error:{message:'会话不存在'}},404);const knowledge=body.knowledge;const turn={id:'fixture-turn-'+(++id),status:'completed',messages:[{id:body.clientMessageId,text:body.text}],answers:{a:knowledge?'测试模型：Wiki 已整理为 services。':'测试模型：收到任务。'},tools:{}};t.turns.push(turn);const steps=body.workflow==='write-article';queues.get(t.id).jobs.push({id:body.clientMessageId,text:body.text,status:steps?'waiting':'completed',turnId:turn.id,workflow:body.workflow||'chat',...(steps?{step:0,steps:2,stepId:'outline'}:{})});if(!body.workflow&&/更新知识库/.test(body.text))queues.get(t.id).jobs.push({id:'proposal-'+(++id),text:'把新资料整理进 general 知识库',status:'proposed',workflow:'knowledge-maintain',params:{kbId:'general'},reason:'普通对话没有维护知识库的授权'});if(knowledge)pages.set('services',{slug:'services',content:'# 测试服务\n这是浏览器联调测试的 Wiki。',versionId:'fixture-wiki-v1',source_versions:[{resourceId:'fixture-resource',versionId:'fixture-source-v1'}]});return send({id:body.clientMessageId,status:'completed'});}
+    // 多步 workflow：write-article 第 1 步后停在 waiting，确认后进入第 2 步并完成。
+    case '/tasks/confirm':case '/tasks/cancel':{const job=queues.get(session()?.id)?.jobs.find(j=>j.id===body.taskId);if(!['waiting','proposed'].includes(job?.status))return send({error:{message:'只有等待确认的任务可以继续。'}},409);Object.assign(job,url.pathname==='/tasks/cancel'?{status:'cancelled'}:job.status==='proposed'?{status:'completed',checks:[{id:'wiki-effective',label:'Wiki 修订已生效',passed:true}]}:{status:'completed',step:1,stepId:'final',checks:[{id:'file-exists',label:'产物文件存在',passed:true}]});return send(job);}
+    case '/state':return send({session:session(),queue:queues.get(session()?.id)});
+    case '/events':res.writeHead(200,{'content-type':'text/event-stream'});res.write(`data: ${JSON.stringify({type:'snapshot',data:{session:session(),queue:queues.get(session()?.id)}})}\n\n`);return;
+    case '/knowledge':return send({knowledge:[{kbId:'general',desiredMode:'wiki',effectiveMode:'wiki',actions:['read','update','index']}]});
+    case '/knowledge/pages':return send({kbId:'general',pages:[...pages.values()],truncated:false});
+    case '/knowledge/read':return send(pages.get(url.searchParams.get('slug')));
+    case '/knowledge/search':return send({mode:'wiki',hits:[...pages.values()]});
+    case '/knowledge/source':if(sources.has(body.name))return send({error:{message:'同名原文已存在，请更换文件名；未覆盖。'}},409);sources.set(body.name,body.content);return send({path:'inputs/general/'+body.name,resourceId:'fixture-resource',versionId:'fixture-source-v1'});
+    case '/workspace':return send({path:url.searchParams.get('path'),entries:[...sources.keys()].map(name=>({name,type:'file',bytes:100}))});
+    case '/workspace/read':return send({path:url.searchParams.get('path'),content:[...sources.values()][0],resourceId:'fixture-resource',versionId:'fixture-source-v1'});
+    case '/knowledge/index':return send({jobId:'fixture-index',status:'queued'});
+    case '/knowledge/job':return send({id:'fixture-index',state:'completed'});
+    default:return send({error:{message:'fixture route missing'}},404);
+  }
+});
+await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
+fs.writeFileSync(path.join(root,'.data/connection.json'),JSON.stringify({url:`http://127.0.0.1:${upstream.address().port}`,token:'fixture-only-no-real-credentials'}));
+const bridge=createWorkbench({port:Number(process.env.UI_FIXTURE_PORT??4321),targets:[{id:'s09',root,live:true,name:'UI fixture'},{id:'s11',root,live:true,name:'UI fixture s11'}]});
+console.log(await bridge.listen());
+for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await bridge.close();upstream.closeAllConnections();await new Promise(r=>upstream.close(r));fs.rmSync(root,{recursive:true,force:true});process.exit(0);});

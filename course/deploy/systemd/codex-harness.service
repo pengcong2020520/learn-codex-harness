@@ -1,0 +1,19 @@
+# learn-codex-harness：全部服务在 Docker 里（compose.yaml），这个单元只负责开机拉起、关机停止。
+# 要启动哪些可选服务（阶段与工作台、本地向量模型）由 .env 的 COMPOSE_PROFILES 决定；数据在 Docker 数据卷与 .data/ 里，停止不会删除。
+[Unit]
+Description=learn-codex-harness（Docker：数据库、Redis、模型网关、Ollama、阶段演示、工作台）
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/learn-codex-harness/course
+ExecStart=/usr/bin/docker compose -f /opt/learn-codex-harness/course/compose.yaml up -d --wait
+ExecStop=/usr/bin/docker compose -f /opt/learn-codex-harness/course/compose.yaml stop
+TimeoutStartSec=600
+# stages 依次关闭九个服务，compose 宽限 120 秒；给基础服务留出余量。
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target
