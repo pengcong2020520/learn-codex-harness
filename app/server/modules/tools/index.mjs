@@ -32,7 +32,7 @@ export class ToolManager {
     return this;
   }
   configuration() { return this.gate ? {} : { [MCP_NAME]: this.connection(this.registry) }; }
-  dynamicTools() { return this.gate ? this.registry.specs.map(({ name, description, inputSchema }) => ({ type: 'function', name, description, inputSchema })) : undefined; }
+  dynamicTools() { return this.gate ? this.registry.specs.filter(spec => { try { this.gate.permissionHub?.checkTool(spec.name, this.agent); return true; } catch { return false; } }).map(({ name, description, inputSchema }) => ({ type: 'function', name, description, inputSchema })) : undefined; }
   async build(source) {
     const snapshotDir = fs.mkdtempSync(path.join(this.runtime.runDir, "tools-"));
     return createToolService(this.config.root, { source, snapshotDir, files: this.files, agent: this.agent, gate: this.gate, knowledge: this.knowledge, tasks: this.tasks, skills: this.skills, media: this.media,
@@ -42,8 +42,8 @@ export class ToolManager {
     return { url: `${this.server.url}/${registry.version}`, bearer_token_env_var: "PROJECT_MCP_TOKEN",
       required: true, enabled: true, startup_timeout_sec: 15, tool_timeout_sec: 30, default_tools_approval_mode: "approve" };
   }
-  attach({ rpc, isBusy = () => false, hub }) {
-    Object.assign(this, { rpc, hub });
+  attach({ rpc, isBusy = () => false, hub, owners = () => [] }) {
+    Object.assign(this, { rpc, hub, owners });
     this.boundary.isBusy = () => (this.server?.activeCalls || 0) > 0 || isBusy();
     this.timer = setInterval(() => { void this.poll().catch(error => this.report(error)); }, 1000);
     this.timer.unref();
@@ -54,7 +54,8 @@ export class ToolManager {
   }
   snapshot() {
     let specs = [];
-    try { specs = this.registry?.specs || []; } catch { /* 配置撤销后不展示旧能力；report 仍须可用。 */ }
+    try { specs = this.registry?.specs || [];
+      if (this.gate?.permissionHub?.context.getStore()) specs = specs.filter(spec => { try { this.gate.permissionHub.checkTool(spec.name, this.agent); return true; } catch { return false; } }); } catch { /* 配置撤销后不展示旧能力；report 仍须可用。 */ }
     return { status: this.status, version: this.registry?.version, pending: Boolean(this.pending), error: this.error,
       tools: specs.map(tool => ({ name: tool.name, label: tool.title })),
       groups: (this.registry?.groups || []).map(group => ({ ...group, tools: group.tools.filter(name => specs.some(tool => tool.name === name)) })).filter(group => group.tools.length) };
@@ -63,7 +64,11 @@ export class ToolManager {
     const value = this.snapshot(), serialized = JSON.stringify(value);
     if (serialized === this.lastPublished) return;
     this.lastPublished = serialized;
-    this.hub?.publish("tools", value);
+    for (const ownerId of new Set(this.owners?.() || [])) if (ownerId) {
+      const hub = this.gate?.permissionHub;
+      if (hub) void hub.withUser(ownerId, () => this.hub?.publish('tools', this.snapshot(), null, ownerId)).catch(error => this.log(this.redact(error.message)));
+      else this.hub?.publish('tools', value, null, ownerId);
+    }
   }
   report(error) {
     const message = this.redact(error.message);
@@ -96,12 +101,16 @@ export class ToolManager {
       mergeStrategy: "replace", filePath: this.configFile });
     await this.rpc.request("config/mcpServer/reload");
   }
-  async verify(registry = this.registry, threadId) {
+  async verify(registry = this.registry, threadId, connection = this.rpc) {
+    if (connection.pool) {
+      for (const entry of connection.pool.entries.values()) if (entry.state === 'ready') await this.verify(registry, threadId, entry.value.rpc);
+      return;
+    }
     // 全局 inventory 证明发现成功，不冒充正在运行的 turn 的工具快照。
     const data = [], seen = new Set();
     let cursor;
     do {
-      const page = await this.rpc.request("mcpServerStatus/list", { detail: "toolsAndAuthOnly", ...(threadId ? { threadId } : {}), ...(cursor ? { cursor } : {}) });
+      const page = await connection.request("mcpServerStatus/list", { detail: "toolsAndAuthOnly", ...(threadId ? { threadId } : {}), ...(cursor ? { cursor } : {}) });
       data.push(...page.data); cursor = page.nextCursor;
       if (cursor && seen.has(cursor)) throw new Error("工具状态分页游标重复。");
       seen.add(cursor);
@@ -128,6 +137,9 @@ export class ToolManager {
       await this.configure(candidate);
       await this.verify(candidate);
       await this.agent?.activate(candidate.compatibilityVersion);
+      if (this.rpc.pool) for (const entry of this.rpc.pool.entries.values()) {
+        if (entry.state === 'ready') await entry.value.agent.activate(candidate.compatibilityVersion);
+      }
       this.registry = candidate;
       this.pending = null; this.rejected = null; this.error = null; this.status = "ready";
       this.server?.registries.delete(previous.version);

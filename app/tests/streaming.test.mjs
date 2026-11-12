@@ -1,3 +1,5 @@
+import { fixedAccounts, OWNER_A } from './accounts-fixture.mjs';
+import { runOwner } from '../server/modules/accounts/context.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
@@ -32,6 +34,8 @@ function rig(t, options = {}) {
   rpc.request = async method => { throw new Error(`测试未实现 ${method}`); };
   const hub = new EventHub();
   const sessions = new SessionService({ rpc, config: { launch: {}, root: "/tmp" }, runtime: { workspaceDir: "/tmp" }, hub, redact, ...options });
+  const register = sessions.register.bind(sessions);
+  sessions.register = result => runOwner(OWNER_A, () => register(result));
   t.after(() => sessions.close());
   const events = [];
   hub.on("event", event => events.push(event));
@@ -159,7 +163,9 @@ test("推送量回归：30 轮历史下 1000 段增量，推送字节接近正�
   t.diagnostic(`协议 v2：${pushed.length} 次，${(bytes / 1024).toFixed(1)} KiB；回复正文 ${(body / 1024).toFixed(1)} KiB。协议 v1 合并推送约 31.7 MiB`);
   assert.ok(pushed.length <= 205, `推送 ${pushed.length} 次`);
   // 正文经 delta 推一遍、item/completed 与 turn/completed 各随整轮带一遍，再加每帧的少量字段。
-  assert.ok(bytes < body * 4, `推送 ${bytes} 字节，正文 ${body} 字节`);
+  const ownershipBytes = pushed.reduce((sum, event) => sum + Buffer.byteLength(`,"ownerId":${JSON.stringify(event.ownerId)}`), 0);
+  assert.ok(pushed.every(event => event.ownerId === OWNER_A));
+  assert.ok(bytes - ownershipBytes < body * 4, `推送 ${bytes} 字节，正文 ${body} 字节`);
   assert.deepEqual(replay(), sessions.snapshot("t1"), "快照加事件流应还原出与服务端一致的会话");
 });
 
@@ -181,7 +187,7 @@ test("事件归并：缺口返回 null，重叠只追加新文字，轮次按 id
 });
 
 async function service(t, { hub = new EventHub(), redact: encode = redact, messages = { snapshot: async () => ({ jobs: [] }) } } = {}) {
-  const http = createHttpService({ config: { port: 0, host: "127.0.0.1" }, token: "token", hub, redact: encode,
+  const http = createHttpService({ config: { port: 0, host: "127.0.0.1" }, accounts: fixedAccounts("token"), hub, redact: encode,
     sessions: { ensure: async () => {}, snapshot: id => ({ id, turns: [] }) }, messages });
   const url = await http.listen();
   t.after(() => http.close());
@@ -212,7 +218,7 @@ test("SSE：同一事件推给多个连接时只脱敏、序列化一次", async
   const url = await service(t, { hub, redact: value => { if (value?.type === "session") encodings++; return redact(value); } });
   const streams = [await connect(t, url), await connect(t, url)];
   for (const stream of streams) await stream.until(/"type":"snapshot"/);
-  hub.publish("session", { id: "t1", turns: [], note: `含密钥 ${KEY}` }, "t1");
+  hub.publish("session", { id: "t1", turns: [], note: `含密钥 ${KEY}` }, "t1", OWNER_A);
   for (const stream of streams) await stream.until(/"type":"session"/);
   assert.equal(encodings, 1);
   for (const stream of streams) assert.ok(!stream.text().includes(KEY));
@@ -223,20 +229,20 @@ test("SSE：事件带编号，断线重连凭 Last-Event-ID 只补发错过的�
   const url = await service(t, { hub });
   const first = await connect(t, url);
   await first.until(/"type":"snapshot"/);
-  hub.publish("turn", { turn: { id: "u1", answers: {} } }, "t1");
-  hub.publish("turn", { turn: { id: "x1", answers: {} } }, "t2");
-  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 0, text: "甲" }, "t1");
+  hub.publish("turn", { turn: { id: "u1", answers: {} } }, "t1", OWNER_A);
+  hub.publish("turn", { turn: { id: "x1", answers: {} } }, "t2", OWNER_A);
+  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 0, text: "甲" }, "t1", OWNER_A);
   await first.until(/"甲"/);
   const frames = first.frames();
   assert.deepEqual(frames.map(frame => frame.event.type), ["snapshot", "turn", "delta"], "其他会话的事件不推给本连接");
   assert.deepEqual(frames.map(frame => frame.id), [`${hub.epoch}-0`, `${hub.epoch}-1`, `${hub.epoch}-3`]);
   await first.close();
-  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 1, text: "乙" }, "t1");
+  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 1, text: "乙" }, "t1", OWNER_A);
   const resumed = await connect(t, url, { "last-event-id": frames.at(-1).id });
   await resumed.until(/"乙"/);
   assert.deepEqual(resumed.frames().map(frame => [frame.id, frame.event.type]), [[`${hub.epoch}-4`, "delta"]], "补发时不再发快照");
   // 编号来自别的进程，或缓冲已经覆盖不到：退回快照。
-  for (let i = 0; i < 3; i++) hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 2 + i, text: "丙" }, "t1");
+  for (let i = 0; i < 3; i++) hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 2 + i, text: "丙" }, "t1", OWNER_A);
   for (const id of ["ffffffff-3", `${hub.epoch}-1`, `${hub.epoch}-99`, "not-an-id"]) {
     const stream = await connect(t, url, { "last-event-id": id });
     await stream.until(/"type":"snapshot"/);
@@ -248,13 +254,13 @@ test("SSE：事件带编号，断线重连凭 Last-Event-ID 只补发错过的�
 test("SSE：快照之前缓冲的会话事件已含在快照里，不再补发；其他事件补发但不带编号", async t => {
   const hub = new EventHub();
   const url = await service(t, { hub, messages: { snapshot: async () => {
-    hub.publish("turn", { turn: { id: "旧轮次", answers: {} } }, "t1");
-    hub.publish("queue", { jobs: ["排队中"] }, "t1");
+    hub.publish("turn", { turn: { id: "旧轮次", answers: {} } }, "t1", OWNER_A);
+    hub.publish("queue", { jobs: ["排队中"] }, "t1", OWNER_A);
     return { jobs: [] };
   } } });
   const stream = await connect(t, url);
   await stream.until(/排队中/);
-  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 0, text: "新" }, "t1");
+  hub.publish("delta", { turnId: "u1", itemId: "a1", offset: 0, text: "新" }, "t1", OWNER_A);
   await stream.until(/"新"/);
   assert.deepEqual(stream.frames().map(frame => [frame.id, frame.event.type]),
     [[`${hub.epoch}-2`, "snapshot"], [null, "queue"], [`${hub.epoch}-3`, "delta"]]);

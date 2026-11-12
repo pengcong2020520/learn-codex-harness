@@ -23,7 +23,7 @@ export function installSkills(agent, codexHome) {
     fs.rmSync(staging, { recursive: true, force: true });
     for (const name of skill.files) {
       fs.mkdirSync(path.dirname(path.join(staging, name)), { recursive: true, mode: 0o700 });
-      fs.writeFileSync(path.join(staging, name), fs.readFileSync(path.join(skill.source, name)), { mode: 0o600 });
+      fs.writeFileSync(path.join(staging, name), skill.contents ? Buffer.from(skill.contents[name], 'base64') : fs.readFileSync(path.join(skill.source, name)), { mode: 0o600 });
     }
     fs.rmSync(target, { recursive: true, force: true });
     fs.renameSync(staging, target);
@@ -41,7 +41,11 @@ export async function verifySkills(rpc, agent, workspaceDir) {
     if (!Array.isArray(result.data)) throw new Error("Codex Skill 清单响应格式无效。");
     return result.data.flatMap(entry => entry.skills || []);
   };
-  const canonical = file => { try { return fs.realpathSync(file); } catch { return file; } };
+  const canonical = file => {
+    // 隔离模式下由用户 Codex 返回规范路径，服务不进入用户目录解析路径。
+    if (agent.runtime?.isolated) return file;
+    try { return fs.realpathSync(file); } catch { return file; }
+  };
   // Agent 包里的 Skill 以同步后的副本为准：Codex 从 CODEX_HOME 发现它。
   const target = skill => agent.installedSkills?.get(skill.id) || skill.path;
   const requested = new Map(agent.skills.map(skill => [target(skill), skill]));

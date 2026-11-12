@@ -153,7 +153,8 @@ export class RagIndex {
     if (manifest?.collection) await this.client.deleteCollection({ name: manifest.collection });
     if (manifest?.revision) fs.rmSync(this.filename(manifest.revision), { force: true });
   }
-  async search(service, kb, query, limit) {
+  async search(service, kb, query, limit, suppliedVector) {
+    await service.kb(kb.id);
     const row = (await service.query(`SELECT * FROM agent_data.knowledge_indexes WHERE instance_id=$1 AND kb_id=$3 AND revision=$4 AND state='ready' AND $2::uuid IS NOT NULL`, [kb.id, kb.index_revision])).rows[0];
     if (!row) throw new AppError('RAG 尚未就绪，请先构建索引。', 409, 'RAG_NOT_READY');
     const manifest = row.manifest;
@@ -165,10 +166,11 @@ export class RagIndex {
     const raw = fs.readFileSync(filename, 'utf8');
     if (createHash('sha256').update(raw).digest('hex') !== manifest.bm25Hash) throw new Error('BM25 索引校验失败。');
     const { documents } = JSON.parse(raw);
-    const [vector] = await this.embeddings.generate([query], service.gate?.current());
+    const vector = suppliedVector ?? (await this.embeddings.generate([query], service.gate?.current()))[0];
+    if (suppliedVector !== undefined && (!Array.isArray(vector) || vector.length !== this.embeddings.dimensions || vector.some(v => !Number.isFinite(v)))) throw new Error("查询向量格式无效。");
     const collection = await this.client.getCollection({ name: manifest.collection, embeddingFunction: null });
     const result = await collection.query({ queryEmbeddings: [vector], nResults: Math.min(40, documents.length),
-      where: { $and: [{ kbId: kb.id }, { ownerId: service.ownerId }, { indexRevision: manifest.revision }] }, include: [] });
+      where: { $and: [{ kbId: kb.id }, { ownerId: kb.owner_id }, { indexRevision: manifest.revision }] }, include: [] });
     const byId = new Map(documents.map(d => [d.id, d]));
     const hits = fuse(result.ids[0], bm25(documents, query)).filter(hit => byId.has(hit.id)).slice(0, limit)
       .map(hit => { const { tokens, ...document } = byId.get(hit.id); return { ...document, score: hit.score }; });

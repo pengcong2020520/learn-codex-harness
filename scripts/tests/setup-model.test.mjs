@@ -444,7 +444,7 @@ test("C 默认只写 s11/s12/s13/s14/s15/s16/s17/s18/app，各生成网关 Key�
     if (["s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id)) {
       const values = envFor(stage).values;
       assert.match(values.AGENT_GATEWAY_KEY, /^sk-bf-[a-f0-9]{64}$/);
-      if (["s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id)) {
+      if (["s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id)) {
         assert.ok(Object.hasOwn(values, "AGENT_DB_PASSWORD"));
         assert.ok(Object.hasOwn(values, "CONTAINER_APP_DIR"));
         assert.equal(values.DATABASE_URL, undefined); // 由独立 Compose 注入。
@@ -466,7 +466,7 @@ test("状态目录为符号链接时不写入、也不跨目录 unlink", t => {
 });
 
 test("s12 启动说明指向独立部署与 SSH 隧道", () => {
-  const stage = stages(ROOT).find(stage => ["s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id));
+  const stage = stages(ROOT).find(stage => ["s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id));
   const commands = startCommands(stage).join("\n");
   assert.match(commands, /s12-deploy\/README\.md/);
   assert.match(commands, /remote\.sh tunnel/);
@@ -535,4 +535,10 @@ test('s18 是网关独立部署，排除 link-login，启动说明要求登录',
  assert.match(commands,/remote\.sh tunnel/);
  assert.match(commands,/npm run login/);
  assert.doesNotMatch(commands,/npm .*run server/);
+});
+
+test('app 使用最终章部署内核，启动指引默认单节点且要求账号登录', () => {
+  const commands = startCommands(stages(ROOT).find(stage => stage.id === 'app')).join('\n');
+  for (const text of ['app/README.md', '默认单节点', 'bash deploy/configure.sh', 'docker compose up -d --wait', 'npm run login']) assert.ok(commands.includes(text), text);
+  assert.doesNotMatch(commands, /run server|run data:migrate/);
 });

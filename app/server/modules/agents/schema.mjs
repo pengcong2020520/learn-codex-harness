@@ -18,7 +18,7 @@ const step = object({ id: slug, goal: text, writes: array(text), confirm: { type
   needs: object({ image: { type: "boolean" }, contextTokens: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER } }, []),
   effort: choices(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]) }, ["id", "goal"]);
 const workflow = object({
-  id: slug, label: text, description: text, skill: text, params: workflowParams,
+  id: slug, label: text, skill: text, params: workflowParams,
   grants: array(object({ type: choices(GRANT_TYPES), kbId: { anyOf: [slug, object({ param: text })] } })),
   checks: array(choices(CHECKS)),
   steps: { type: "array", items: step, minItems: 2, maxItems: 5 }
@@ -30,7 +30,7 @@ const schema = object({
     skills: array(object({ id: text, required: { type: "boolean" }, scope: { ...choices(["system"]), default: "system" } }, ["id", "required"])),
     tools: object({ allow: array({ type: "string", pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,47}$" }) }),
     dataBindings: array(object({ sourceRef: text, actions: array(choices(["read", "create"])), methods: array(choices(["files"])), required: { type: "boolean" } })),
-    knowledge: array(object({ kbId: { type: "string", pattern: "^[a-z][a-z0-9-]{0,47}$" }, mode: choices(["wiki", "rag"]), actions: array(choices(["read", "update", "index"])) })),
+    knowledge: array(object({ kbId: { type: "string", pattern: "^[a-z0-9-]{1,64}$" }, mode: choices(["wiki", "rag"]), actions: array(choices(["read", "update", "index"])) })),
     executionRef: text,
     memory: object({ use: { type: "boolean" }, contribute: { type: "boolean" } }),
     outputs: object({ directory: text, formats: array(choices(["md", "txt", "png", "jpeg", "webp", "mp4"])), writeMode: { const: "create-only" }, requiredChecks: array(choices(["file-exists", "format"])) }),

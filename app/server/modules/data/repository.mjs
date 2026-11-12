@@ -1,23 +1,38 @@
+import { businessQuery } from './write.mjs';
+import { lossStateSql, replicaSessionMissing } from '../replication/loss.mjs';
+import { markMissingConversation } from '../replication/store.mjs';
+import { can } from '../hub/policy.mjs';
 import { AppError } from "../../../shared/errors.mjs";
 import { transaction } from "./database.mjs";
 
+const missingConversationSql = 'c.replica_missing';
+const missingTurnsSql = `(SELECT coalesce(jsonb_agg(jsonb_build_object('taskId',t.id,'turnId',t.turn_id,'message',t.error) ORDER BY t.sequence),'[]'::jsonb)
+  FROM agent_data.tasks t WHERE t.instance_id=c.instance_id AND t.thread_id=c.id AND t.status='replica_missing')`;
+
 export class Repository {
   constructor(pool, scope) {
-    Object.assign(this, { pool, ...scope });
+    Object.assign(this, { pool, scope, instanceId: scope.instanceId });
   }
+  get ownerId() { return this.scope.ownerId; }
+  // 仅实例级维护可用；业务查询必须走 query 的 owner 过滤。
+  systemQuery(sql, values = [], client = this.pool) { return businessQuery(client, sql, [this.instanceId, this.instanceId, ...values]); }
   query(sql, values = [], client = this.pool) {
-    return client.query(sql, [this.instanceId, this.ownerId, ...values]);
+    return businessQuery(client, sql, [this.instanceId, this.ownerId, ...values]);
   }
   async initialize() {
+    if ((await this.query('SELECT 1 FROM agent_data.users WHERE instance_id=$1 AND id=$2')).rows.length) return;
     await this.query(
       "INSERT INTO agent_data.users(instance_id,id,name) VALUES($1,$2,'local-owner') ON CONFLICT DO NOTHING",
     );
   }
   async saveAgent(descriptor) {
-    await this.query(
+    await this.systemQuery(
       "INSERT INTO agent_data.agent_versions(instance_id,hash,descriptor) SELECT $1,$3,$4 WHERE $2::uuid IS NOT NULL ON CONFLICT DO NOTHING",
       [descriptor.hash, descriptor],
     );
+  }
+  async agentDescriptor(hash) {
+    return (await this.query('SELECT descriptor FROM agent_data.agent_versions WHERE instance_id=$1 AND hash=$3 AND $2::uuid IS NOT NULL', [hash])).rows[0]?.descriptor;
   }
   async bind(threadId, hash, cwd, name = "") {
     const result = await this.query(
@@ -32,23 +47,32 @@ export class Repository {
   async conversation(id) {
     const row = (
       await this.query(
-        "SELECT * FROM agent_data.conversations WHERE instance_id=$1 AND owner_id=$2 AND id=$3",
+        `SELECT c.*,${missingConversationSql} AS replica_missing,${missingTurnsSql} AS "missingTurns" FROM agent_data.conversations c WHERE c.instance_id=$1 AND c.owner_id=$2 AND c.id=$3`,
         [id],
       )
     ).rows[0];
     if (!row)
       throw new AppError("未找到本项目的这个会话。", 404, "THREAD_NOT_FOUND");
+    can({ id: this.ownerId }, 'read', { ...row, type: 'personal' });
     return row;
   }
   async listConversations(keyword = "") {
     return (
       await this.query(
-        `SELECT id,name,cwd,updated_at AS "updatedAt" FROM agent_data.conversations
+        `SELECT id,name,cwd,updated_at AS "updatedAt",${missingConversationSql} AS "replicaMissing" FROM agent_data.conversations c
       WHERE instance_id=$1 AND owner_id=$2 AND (strpos(lower(name),lower($3))>0 OR strpos(lower(id),lower($3))>0)
       ORDER BY updated_at DESC LIMIT 200`,
         [keyword],
       )
     ).rows;
+  }
+  async markReplicaMissingAfterResume(id) {
+    return transaction(this.pool, async db => {
+      const row = (await this.query(lossStateSql + ' AND c.id=$3', [id], db)).rows[0];
+      if (!row || !replicaSessionMissing(row)) return false;
+      await markMissingConversation(db, this.instanceId, this.ownerId, row);
+      return true;
+    });
   }
   async preferences() {
     return (

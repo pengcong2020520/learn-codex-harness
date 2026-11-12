@@ -235,7 +235,7 @@ async executionError(job, error, sent) {
 | 偏好 `/preferences` | 只存储，不会注入上下文（`injectedIntoContext:false`） |
 | Skill | 只支持纯文本指令型；声明了 `requires` 的一律禁用 |
 | RAG | 语义质量未验收（`verification.json` 中 `semanticQualityVerified:false`） |
-| 多用户 / 认证 / 配额 | 已后置（`docs/multi-user-upgrade-plan.md`） |
+| 多用户 / 认证 / 配额 | 已后置（[认证章节设计](../../../stages/s13-auth/docs/design.md)） |
 | Codex 版本 | 锁定 0.154.0；App Server 官方仍标注为 experimental |
 
 ### P2-3 配置与文档漂移
@@ -295,7 +295,7 @@ async executionError(job, error, sent) {
 4. **RAG**：按结构分块，建立语义质量评测集，支持增量索引。
 5. **Codex 升级流程**：把 `test:protocol` 和 `test:protocol:research` 作为升级闸门，维护版本矩阵。
 6. **可观测性**：结构化日志（如 pino），`/metrics` 暴露轮次耗时、工具耗时、队列深度等指标。
-7. **多用户**（如需要）：按 `docs/multi-user-upgrade-plan.md` 实施，前提是阶段 1、2 的进程守护和存储抽象已经完成。
+7. **多用户**（如需要）：按 [认证章节设计](../../../stages/s13-auth/docs/design.md) 实施，前提是阶段 1、2 的进程守护和存储抽象已经完成。
 
 ---
 

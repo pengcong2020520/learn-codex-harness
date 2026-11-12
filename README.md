@@ -54,7 +54,7 @@ npm --prefix course ci && npm --prefix course run web
 # 机制课程 http://127.0.0.1:4320/course/ · 章节长文 /course/handbook.html · 阶段演示 /course/changes.html
 ```
 
-s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](app/docs/data-layer.md)。
+s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](stages/s08-data-layer/docs/data-layer.md)。
 
 服务器同时运行 s03–s11 的步骤见 [部署说明](course/deploy/README.md)。教学快照保持不变；部署入口在共享网络内通过 `127.0.0.1:4331` 转发到模型网关，端口与进程管理集中在 `course/deploy/`。
 
@@ -116,7 +116,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 >
 > **[s18 副本与故障接管](stages/s18-replication/)** &nbsp; *"主节点坏了有人接手，丢多少说得清"* — 轮次边界异步复制、复制位点；接管后尾部丢失如实标出
 
-完整项目 [app/](app/README.md) 在 s11 之上持续开发，包含本机 Docker 运行；Web 工作台、互动课程和阶段演示部署在 [course/](course/README.md)；s12–s18 不并入 app，各自是一份可以独立部署的快照，用来讲清上云、多用户和多台机器各自要解决什么。
+完整项目 [app/](app/README.md) 以 s18 为内核持续开发，包含本机 Docker 运行；Web 工作台、互动课程和阶段演示部署在 [course/](course/README.md)；s12–s18 各自保留为可以独立部署的教程快照，用来讲清上云、多用户和多台机器各自要解决什么。
 
 每章 README 都按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织；关键代码逐行摘自该阶段源码（`npm test` 会校验）。
 

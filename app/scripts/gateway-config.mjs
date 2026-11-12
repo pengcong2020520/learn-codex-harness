@@ -32,6 +32,7 @@ export function writeGatewayConfig(projectRoot = root, inherited = process.env) 
     fs.writeFileSync(target, JSON.stringify(content, null, 2) + "\n", { mode: 0o644 });
     fs.chmodSync(target, 0o644);
   }
+  fs.writeFileSync(path.join(path.dirname(file), "enabled-providers.json"), JSON.stringify(Object.keys(config.providers)) + "\n", { mode: 0o644 });
   return { file, config, routes, model: routes.chat };
 }
 

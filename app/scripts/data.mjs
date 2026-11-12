@@ -1,3 +1,5 @@
+import { RuntimeStore } from '../server/modules/runtimes/store.mjs';
+import { isolationMode, prepareServiceDirectories } from '../server/modules/runtimes/directories.mjs';
 import path from "node:path";
 import {
   loadEnvironment,
@@ -18,7 +20,8 @@ import { RedisQueue } from "../server/modules/data/queue.mjs";
 import { selectAgentFile } from "../server/modules/agents/selection.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
 import { Resources } from "../server/modules/data/resources.mjs";
-import { createFileTools } from "../server/modules/data/files.mjs";
+import { createUserFileTools } from "../server/modules/accounts/workspace.mjs";
+import { runOwner } from "../server/modules/accounts/context.mjs";
 
 const [command, ...args] = process.argv.slice(2),
   env = loadEnvironment();
@@ -37,10 +40,15 @@ try {
     throw new Error(
       "用法：data.mjs migrate|check|import [--apply]|reconcile|revoke <id>|relocate <id> <新路径>",
     );
+  const isolated = isolationMode();
+  prepareServiceDirectories(PROJECT_ROOT, isolated);
   if (command !== "check") release = acquireServerLock(PROJECT_ROOT);
-  pool = await openDatabase(env.DATABASE_URL);
+  pool = await openDatabase(env.DATABASE_URL, { maintenance: true });
   if (command === "migrate") {
     await migrate(pool);
+    const scope = identity(PROJECT_ROOT);
+    const agent = new AgentDefinition(PROJECT_ROOT, selectAgentFile(PROJECT_ROOT, env.AGENT_DEFINITION));
+    await new RuntimeStore(pool, scope.instanceId, PROJECT_ROOT).migrateDirectories({ isolated, workspace: agent.workspacePath });
     console.log("数据库 schema 已就绪；未导入旧数据，未修改 Codex 原生存储。");
   } else {
     await verifySchema(pool);
@@ -69,12 +77,15 @@ try {
         PROJECT_ROOT,
         selectAgentFile(PROJECT_ROOT, env.AGENT_DEFINITION),
       );
-      const files = createFileTools(PROJECT_ROOT, {
+      const ownedFiles = createUserFileTools(PROJECT_ROOT, {
         workspaceDir: agent.workspacePath,
         sources: agent.sources,
         outputs: agent.outputs,
         assertCurrent: () => agent.assertCurrent(),
       });
+      const files = new Proxy(ownedFiles, { get(target, key) {
+        return runOwner(scope.ownerId, () => { const value = target[key]; return typeof value === "function" ? (...args) => runOwner(scope.ownerId, () => value.apply(target, args)) : value; });
+      } });
       const resources = new Resources(pool, scope, {
         files,
         sources: agent.sources,

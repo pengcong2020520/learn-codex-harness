@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
 import { AgentClient, loadClientConnection } from "./modules/connection/index.mjs";
 import { createTerminal } from "./modules/terminal/index.mjs";
 import { runChat } from "./modules/chat/index.mjs";
@@ -13,6 +14,7 @@ export async function main() {
   await runChat(api, createTerminal());
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare real paths: the entry may be reached through a symlinked directory.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -1,9 +1,11 @@
-import fs from "node:fs";
+import { can, owns } from '../hub/policy.mjs';
+import { readAsUser } from '../runtimes/user-files.mjs';
+import fs from 'node:fs';
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
-import { MAX_MEDIA_BYTES, mediaFormat } from "./files.mjs";
+import { MAX_MEDIA_BYTES, mediaFormat, createFileTools } from "./files.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
 const hash = (content) => createHash("sha256").update(content).digest("hex");
@@ -22,6 +24,7 @@ export class Resources extends Repository {
     if (fs.lstatSync(blobDir).isSymbolicLink())
       throw new Error("正文存储目录不能是链接。");
   }
+  ownerWorkspace(owner) { return this.files.workspaceFor?.(owner) || path.join(path.dirname(this.files.workspace), owner); }
   async locked(operation) {
     return transaction(this.pool, async (client) => {
       await client.query(
@@ -33,30 +36,47 @@ export class Resources extends Repository {
       return result;
     });
   }
+  dynamicSource(locator) {
+    return this.gate?.permissionHub && [...this.gate.permissionHub.current().resources.values()]
+      .find(kb => kb.type === 'knowledge' && kb.user_created && covers(kb.source_root, locator));
+  }
+  sourceFiles(locator) {
+    const kb = this.dynamicSource(locator);
+    if (!kb || kb.owner_id !== this.ownerId) return this.files;
+    this.gate.check('read', { kbId: kb.id });
+    return createFileTools(this.files.workspace, { workspaceDir: this.files.workspace,
+      sources: [{ id: `knowledge:${kb.id}`, locator: kb.source_root, actions: ['read'], readOnly: true }],
+      assertCurrent: () => this.gate.current() });
+  }
   source(locator, action) {
     this.gate?.check(action, { path: locator });
     const found = this.sources
       .filter((s) => s.actions.includes(action) && covers(s.locator, locator))
       .sort((a, b) => b.locator.length - a.locator.length)[0];
     if (found) return found.id;
+    const kb = action === 'read' && this.dynamicSource(locator);
+    if (kb) return `knowledge:${kb.id}`;
     if (action === "create" && covers(this.outputs.directory, locator))
       return "agent-output";
     throw new AppError("未授权访问这个资料范围。", 403);
   }
   async row(locator, client = this.pool) {
-    // Deliberately not filtered by owner: a foreign row must block auto-registration.
+    // locator 在各自用户目录中解释，登记与查询都按 owner。
     return (
       await this.query(
-        "SELECT * FROM agent_data.resources WHERE instance_id=$1 AND locator=$3 AND $2::uuid IS NOT NULL",
+        "SELECT * FROM agent_data.resources WHERE instance_id=$1 AND locator=$3 AND owner_id=$2",
         [locator],
         client,
       )
     ).rows[0];
   }
+  authorize(row, action = 'read') {
+    if (this.gate?.permissionHub) return this.gate.permissionHub.checkFile(row, action);
+    return can({ id: this.ownerId }, action, row && { ...row, type: 'personal' });
+  }
   async readable(row, client = this.pool) {
-    if (row) this.gate?.check("read", { path: row.locator, ownerId: row.owner_id });
-    if (!row || row.owner_id !== this.ownerId)
-      throw new AppError("资料不存在或无权访问。", 404);
+    this.authorize(row);
+    this.gate?.check("read", { path: row.locator });
     this.source(row.locator, "read");
     if (row.state !== "ready")
       throw new AppError(
@@ -74,7 +94,8 @@ export class Resources extends Repository {
       )
     ).rows;
     for (const dependency of dependencies) {
-      if (dependency.owner_id !== this.ownerId || dependency.state !== "ready")
+      this.authorize(dependency);
+      if (dependency.state !== "ready")
         throw new AppError("引用资料已失效或撤销，停止读取派生内容。", 403);
       this.source(dependency.locator, "read");
     }
@@ -144,7 +165,7 @@ export class Resources extends Repository {
       await this.readable(await this.row(locator));
     }
     // Existing bounded reader also enforces links, path, file type, size and Agent revision.
-    const output = this.files.read_file({ ...args, max_chars: 256 * 1024 });
+    const output = this.sourceFiles(locator).read_file({ ...args, max_chars: 256 * 1024 });
     const body = this.blob(output.content);
     const metadata = await this.locked(async (client) => {
       let row = await this.row(locator, client);
@@ -158,7 +179,7 @@ export class Resources extends Repository {
               randomUUID(),
               this.source(locator, "read"),
               locator,
-              this.sources.some(source => (source.readOnly || !source.actions.includes("create")) && covers(source.locator, locator)) || Object.values(this.gate?.knowledgeBases || {}).some(kb => covers(kb.sourceRoot, locator)) ? "original" : "knowledge",
+              this.sources.some(source => (source.readOnly || !source.actions.includes("create")) && covers(source.locator, locator)) || Object.values(this.gate?.bindings?.() || this.gate?.knowledgeBases || {}).some(kb => covers(kb.sourceRoot, locator)) ? "original" : "knowledge",
             ],
             client,
           )
@@ -181,7 +202,7 @@ export class Resources extends Repository {
     });
     // Recheck after awaits: revoked data is never served from a stale cache.
     await this.readable(await this.row(locator));
-    this.files.check(locator, "read");
+    this.sourceFiles(locator).check(locator, "read");
     return {
       ...output,
       ...metadata,
@@ -198,7 +219,7 @@ export class Resources extends Repository {
       UNION SELECT d.source_id FROM agent_data.dependencies d JOIN refs x ON d.derived_id=x.id WHERE d.instance_id=$1)
       SELECT r.*,v.revision FROM refs JOIN agent_data.resources r ON r.id=refs.id
       JOIN agent_data.resource_versions v ON v.instance_id=r.instance_id AND v.id=r.current_version
-      WHERE r.instance_id=$1 AND r.owner_id=$2`,
+      WHERE r.instance_id=$1 AND ${this.gate?.permissionHub ? '$2::uuid IS NOT NULL' : 'r.owner_id=$2'}`,
         [row.id],
       )
     ).rows;
@@ -206,7 +227,8 @@ export class Resources extends Repository {
     for (const source of upstream) {
       let output;
       try {
-        output = this.files[/\.(png|jpeg|webp|mp4)$/i.test(source.locator) ? "read_binary" : "read_file"]({
+        if (!owns({ id: this.ownerId }, source)) { await this.readShared(source, { max_chars: 256 * 1024 }); continue; }
+        output = this.sourceFiles(source.locator)[/\.(png|jpeg|webp|mp4)$/i.test(source.locator) ? "read_binary" : "read_file"]({
           path: source.locator,
           max_chars: 256 * 1024,
         });
@@ -232,7 +254,7 @@ export class Resources extends Repository {
     }
   }
   async list_files(args) {
-    const result = this.files.list_files(args);
+    const result = this.sourceFiles(args.path || "").list_files(args);
     const entries = [];
     for (const entry of result.entries) {
       const locator = result.path === "." ? entry.name : `${result.path}/${entry.name}`;
@@ -280,7 +302,7 @@ export class Resources extends Repository {
             throw new AppError(`${field} 格式不正确，可能是号码抄错了。`);
         }
         source = (await this.query(
-          "SELECT * FROM agent_data.resources WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL",
+          `SELECT * FROM agent_data.resources WHERE instance_id=$1 AND id=$3 AND ${this.gate?.permissionHub ? '$2::uuid IS NOT NULL' : 'owner_id=$2'}`,
           [reference.resourceId], client,
         )).rows[0];
         if (!source) throw new AppError("resourceId 不存在，可能是号码抄错了。", 404);
@@ -289,12 +311,12 @@ export class Resources extends Repository {
         if (typeof reference.path !== "string" || !reference.path)
           throw new AppError("path 必须是非空字符串，或填写 resourceId 和 versionId。");
         this.source(reference.path, "read");
-        this.files.check(reference.path, "read");
+        this.sourceFiles(reference.path).check(reference.path, "read");
         source = await this.row(reference.path, client);
         if (!source) throw new AppError("路径尚未登记，请先通过 read_file 读取该路径。", 404);
         versionId = source.current_version;
       }
-      if (source.owner_id !== this.ownerId) throw new AppError("没有读权限。", 403);
+      this.authorize(source);
       await this.readable(source, client);
       const version = (await this.query(
         "SELECT resource_id FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND resource_id=$4 AND $2::uuid IS NOT NULL",
@@ -305,7 +327,7 @@ export class Resources extends Repository {
         throw new AppError("版本已过期：资料已有更新，请重新读取。", 409);
       return { resourceId: source.id, versionId };
     } catch (error) {
-      const reason = error.code === "ENOENT" ? "路径不存在。"
+      const reason = error.status === 404 ? error.message : error.code === "ENOENT" ? "路径不存在。"
         : error.code === "ENOTDIR" ? "路径中有非目录项。"
         : error.code === "EACCES" || error.status === 403 || /未授权|无权/.test(error.message) ? "没有读权限。"
         : /^E[A-Z]+$/.test(error.code || "") ? `来源文件检查失败（${error.code}）。` : error.message;
@@ -320,7 +342,8 @@ export class Resources extends Repository {
     if (binary && operationId) {
       const previous = await this.row(locator);
       if (previous) {
-        if (previous.id !== operationId || previous.owner_id !== this.ownerId || !['pending', 'ready'].includes(previous.state)) throw new Error('媒体路径已有其他资源，未覆盖。');
+        this.authorize(previous, 'modify');
+        if (previous.id !== operationId || !['pending', 'ready'].includes(previous.state)) throw new Error('媒体路径已有其他资源，未覆盖。');
         const version = (await this.query('SELECT revision FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [previous.current_version])).rows[0];
         if (version?.revision !== hash(content)) throw new Error('恢复正文与预留版本不同。');
         this.check_binary(locator);
@@ -400,18 +423,53 @@ export class Resources extends Repository {
   async get(id, client = this.pool) {
     const row = (
       await this.query(
-        "SELECT * FROM agent_data.resources WHERE instance_id=$1 AND owner_id=$2 AND id=$3",
+        `SELECT * FROM agent_data.resources WHERE instance_id=$1 AND ${this.gate?.permissionHub ? '$2::uuid IS NOT NULL' : 'owner_id=$2'} AND id=$3`,
         [safeId(id)],
         client,
       )
     ).rows[0];
-    if (!row) throw new AppError("资料不存在或无权访问。", 404);
+    this.authorize(row);
     return row;
   }
   async readById(id, args = {}) {
     const row = await this.get(id);
     await this.readable(row);
+    if (!owns({ id: this.ownerId }, row)) return this.readShared(row, args);
     return /\.(png|jpeg|webp|mp4)$/i.test(row.locator) ? this.read_binary({ path: row.locator }) : this.read_file({ ...args, path: row.locator });
+  }
+  async registerImported(kb, locator, content) {
+    this.gate.permissionHub.checkResource('knowledge', kb.id, 'modify');
+    const body = this.blob(content), versionId = randomUUID();
+    return this.locked(async client => {
+      // 显式保存授权资源的 owner；不切换请求身份，admin 导入也不会写入自己的工作区。
+      const row = (await this.query(`INSERT INTO agent_data.resources(instance_id,id,owner_id,source_id,locator,kind,state)
+        SELECT $1,$3,$4,$5,$6,'original','pending' WHERE $2::uuid IS NOT NULL
+        ON CONFLICT(instance_id,owner_id,locator) DO UPDATE SET source_id=EXCLUDED.source_id,kind='original',state='pending'
+        WHERE resources.state='revoked' RETURNING id,current_version`, [randomUUID(), kb.owner_id, this.source(locator, 'read'), locator], client)).rows[0];
+      if (!row) throw new AppError('该路径仍有有效资料登记。', 409);
+      const id = row.id;
+      // Recreating a deleted KB can reuse a revoked path; old immutable versions remain history.
+      if (row.current_version) await this.invalidate(id, client);
+      await this.query(`INSERT INTO agent_data.resource_versions(instance_id,id,resource_id,revision,blob,bytes)
+        SELECT $1,$3,$4,$5,$6,$7 WHERE $2::uuid IS NOT NULL`, [versionId,id,body.revision,body.blob,body.bytes], client);
+      await this.query(`UPDATE agent_data.resources SET current_version=$4,state='ready' WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL`, [id,versionId], client);
+      return { resourceId: id, versionId, revision: body.revision };
+    });
+  }
+  async readShared(row, args = {}) {
+    // Hub 已授权知识库原文。只读取登记 owner 的 workspace，不借身份切换访问 CODEX_HOME。
+    this.authorize(row);
+    const record = (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [row.owner_id])).rows[0];
+    if (!record) throw new AppError('来源运行环境尚未初始化。', 409);
+    const base = this.ownerWorkspace(row.owner_id);
+    const target = path.join(base, row.locator);
+    if (!target.startsWith(base + path.sep)) throw new AppError('来源路径无效。', 404);
+    const data = await readAsUser(record.uid, target, { maxBytes: 256 * 1024, isolated: process.getuid?.() === 0 });
+    const version = (await this.query('SELECT revision FROM agent_data.resource_versions WHERE instance_id=$1 AND id=$3 AND $2::uuid IS NOT NULL', [row.current_version])).rows[0];
+    if (!version || hash(data) !== version.revision) throw new AppError('共享来源已变化，请所有者重新登记版本。', 409, 'SOURCE_STALE');
+    this.authorize(row);
+    const content = data.toString('utf8'), limit = args.max_chars || 20000;
+    return { path: row.locator, resourceId: row.id, versionId: row.current_version, revision: version.revision, content: content.slice(0, limit), truncated: content.length > limit };
   }
   async finish(id, revision) {
     return this.locked(async (client) => {
@@ -453,7 +511,8 @@ export class Resources extends Repository {
   async revoke(id) {
     return this.locked(async (client) => {
       const row = await this.get(id, client);
-      this.source(row.locator, "read");
+      this.gate?.check("read", { path: row.locator, ownerId: row.owner_id });
+    this.source(row.locator, "read");
       await this.query(
         "UPDATE agent_data.resources SET state='revoked',updated_at=now() WHERE instance_id=$1 AND owner_id=$2 AND id=$3",
         [id],

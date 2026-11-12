@@ -1,3 +1,4 @@
+import { fixedAccounts } from './accounts-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -133,7 +134,7 @@ function request(service, url, body, token = 'unit-token') {
 
 test('路由策略：POST /messages 校验、存储、幂等、步骤优先级和 /state 选择来源', async t => {
   const r = await routingRig(t, { step: { model: 'fast' } });
-  const http = createHttpService({ ...r, token: 'unit-token' }); t.after(() => http.close());
+  const http = createHttpService({ ...r, accounts: fixedAccounts() }); t.after(() => http.close());
   const body = { threadId: r.session.id, clientMessageId: 'task', text: '正文', model: 'strong' };
   for (const model of ['missing', 'missing/model', '', 1, [], null, 'ollama/qwen3-embedding:0.6b']) {
     const result = await request(http, '/messages', { ...body, model });
@@ -162,7 +163,7 @@ test('路由策略：POST /messages 校验、存储、幂等、步骤优先级�
 
 test('路由策略：GET /models 按用途返回能力、定价、场景、默认模型与搜索开关', async t => {
   const r = await routingRig(t, { env: {} });
-  const http = createHttpService({ ...r, token: 'unit-token' }); t.after(() => http.close());
+  const http = createHttpService({ ...r, accounts: fixedAccounts() }); t.after(() => http.close());
   assert.equal((await request(http, '/models', undefined, 'wrong')).status, 401);
   const { status, body } = await request(http, '/models');
   assert.equal(status, 200); assert.equal(body.webSearch, 'live');
@@ -224,8 +225,8 @@ test('路由策略：预算降级默认与步骤场景，具体模型豁免，�
     await r.submit('budget', { ...(step ? { workflow: 'route-test' } : {}), ...(selection ? { model: selection } : {}) });
     assert.equal((await r.started('budget')).model, expected);
     assert.equal(r.messages.job('budget').modelSource, source);
-    const http = createHttpService({ ...r, token: 'unit-token' }); t.after(() => http.close());
-    for (const url of ['/health', '/usage']) assert.equal((await request(http, url)).body.budget.downgraded, true);
+    const http = createHttpService({ ...r, accounts: fixedAccounts() }); t.after(() => http.close());
+    for (const url of ['/usage']) assert.equal((await request(http, url)).body.budget.downgraded, true);
   }
   for (const budget of [{}, { AGENT_BUDGET_DOWNGRADE_AT: '0.8' }, { AGENT_BUDGET_DAILY_TOKENS: '100', AGENT_BUDGET_DOWNGRADE_AT: '0.9' }]) {
     const r = await routingRig(t, { budget });

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { startAgentServer } from "../server/main.mjs";
+import { startAgentServer } from "./authenticated-server.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 import { tempRoot, installToolFixture, cleanup, until } from "./helpers.mjs";
 import { responsesFixture, answer, toolSpecs } from "./responses-fixture.mjs";
@@ -44,8 +44,8 @@ test("真实 Codex：原生提炼、参与设置持久化，以及禁用写工�
   let app;
   cleanup(root, () => app?.close());
   app = await startAgentServer({ dataFactory: testDataFactory, config, log: line => logs.push(line) });
-  assert.equal(app.memory.snapshot().effective.enabled, true);
-  assert.equal(app.memory.snapshot().generationCapability, "blocked");
+  assert.equal((await app.memory.snapshot()).effective.enabled, true);
+  assert.equal((await app.memory.snapshot()).generationCapability, "blocked");
   const session = await app.sessions.create();
   await app.messages.submit({ threadId: session.id, clientMessageId: "seed", text: "我是测试用户，我的文章偏好是先用具体案例开头。".repeat(80) });
   await until(() => app.messages.job("seed")?.status === "completed", 10000);
@@ -69,8 +69,8 @@ test("真实 Codex：原生提炼、参与设置持久化，以及禁用写工�
   assert.equal(phase1, 1, "必须实际提炼一次；被禁用的源会话不得参与");
   assert.ok(!mergeTools.some(name => /shell|exec_command|apply_patch|write_file/.test(name)), "不得偷偷放开后台写权限");
   assert.match(fs.readFileSync(path.join(home, "memories/raw_memories.md"), "utf8"), /具体案例/);
-  assert.equal(app.memory.snapshot().hasSummary, false, "原始提炼产物不是可供注入的最终摘要");
-  assert.equal(app.memory.snapshot().artifacts["raw_memories.md"].exists, true);
+  assert.equal((await app.memory.snapshot()).hasSummary, false, "原始提炼产物不是可供注入的最终摘要");
+  assert.equal((await app.memory.snapshot()).artifacts["raw_memories.md"].exists, true);
   assert.deepEqual(provider.errors, []);
 });
 
@@ -104,12 +104,12 @@ test("真实 Codex：预置合成摘要在新 Thread 自动注入，读取关闭
   const first = await turn("read");
   assert.ok(JSON.stringify(provider.requests.at(-1)).includes(marker), "新 Thread 的模型请求必须携带原生注入的摘要");
   assert.ok(!toolSpecs(provider.requests.at(-1)).some(tool => /shell_command|exec_command|apply_patch/.test(tool.name || "")));
-  assert.equal(app.memory.summary().text.includes(marker), true);
+  assert.equal((await app.memory.summary()).text.includes(marker), true);
   await app.memory.contribute(first.id, false);
   await app.close();
   app = await start({ AGENT_MEMORY_USE: "false" });
-  assert.equal(app.memory.snapshot().effective.use, false);
-  assert.equal(app.memory.snapshot().hasSummary, true, "关闭读取不等于删除记忆");
+  assert.equal((await app.memory.snapshot()).effective.use, false);
+  assert.equal((await app.memory.snapshot()).hasSummary, true, "关闭读取不等于删除记忆");
   await turn("no-read");
   assert.ok(!JSON.stringify(provider.requests.at(-1)).includes(marker), "关闭读取后新 Thread 不应注入原生摘要");
   const state = new DatabaseSync(path.join(root, ".data/codex/state_5.sqlite"), { readOnly: true });

@@ -6,3 +6,11 @@ node_modules/
 .data/
 /workspace/
 .DS_Store
+backups/
+.deploy.lock
+.deploy-pending
+
+nodes/
+
+.remote.env
+.remote-identity.json

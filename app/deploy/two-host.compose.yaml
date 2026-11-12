@@ -1,0 +1,7 @@
+# docker compose -f compose.yaml -f deploy/two-host.compose.yaml --profile cluster --profile remote-access ...
+services:
+  node-b:
+    profiles: [local-node-b]
+  caddy:
+    depends_on: !override
+      node-a: { condition: service_healthy }

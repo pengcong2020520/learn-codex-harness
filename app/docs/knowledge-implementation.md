@@ -1,10 +1,8 @@
 # 知识层实现详解（s09 / app 当前实现）
 
-`knowledge_bases.visibility` 由 `009-knowledge-visibility.sql` 新增，非空且默认 `private`，只允许 `private` / `system`；创建时采用数据库默认值，列表返回 visibility，门禁仍按 owner 判定。
-
 本文档是 s09 及 `app/` 当前知识层的权威说明，记录已实现状态与已知局限。
 
-> **注意**：[知识层设计基线](knowledge-layer-design.md)是早期目标设计文档，可能包含尚未实现的 rerank、缓存共享、自动 Wiki 更新等规划项。两份文档共存时，以本文件为准。
+> 本文说明本阶段知识层的接口、运行方式与能力边界；具体限制见「已知局限与预留项」。
 
 ## 总体架构
 
@@ -120,7 +118,7 @@ npm run knowledge:init
 - 创建工作区与知识库目录结构。
 - 不导入样例事实，不自动写 Wiki；只建目录。
 
-knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，服务启动时同步到 `.data/codex/skills/knowledge/`，不再复制进工作区。默认 Agent 可选绑定它，缺失时服务启动会输出警告。
+knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，用户运行环境启动时同步到该用户的 `CODEX_HOME/skills/knowledge/`。默认 Agent 可选绑定它，缺失时服务启动会输出警告。
 
 ## knowledge CLI 命令
 
@@ -137,7 +135,7 @@ knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，�
 
 ## HTTP 接口（本机客户端使用）
 
-Agent API 需现有本机 Bearer 认证。Web 工作台通过本地同源接入层调用，令牌保留在 Node 服务端；浏览器使用 HttpOnly 会话 Cookie。仍未实现账号登录或公网多用户认证。
+Agent API 通过 accounts 的不透明 Bearer 令牌认证用户。CLI 运行 login 获取令牌；知识查询按 owner 过滤，跨用户返回 404 NOT_FOUND。本阶段没有 Web 登录、Cookie 或浏览器接入，带 Origin 的请求拒绝。
 
 | 接口 | 说明 |
 |------|------|
@@ -155,7 +153,7 @@ Agent API 需现有本机 Bearer 认证。Web 工作台通过本地同源接入�
 
 | 项目 | 当前状态 |
 |------|---------|
-| 多账户 / 登录 Session | 未实现 |
+| 多账户 / 登录 Session | accounts 密码登录与 PG 登录会话，见 [沿用教程第 18 章的内核设计](../../stages/s18-replication/docs/design.md) |
 | 共享 KB（跨实例） | 未实现 |
 | rerank | 未实现（仅 RRF 融合） |
 | 自动 Wiki 更新 | 未实现（手动 `maintain`） |
@@ -167,4 +165,4 @@ Agent API 需现有本机 Bearer 认证。Web 工作台通过本地同源接入�
 
 ## 验证状态
 
-实际测试结果见仓库根目录 [`../../stages/verification.json`](../../stages/verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。运行 npm run test:rag（需 Chroma CLI，或 CHROMA_TEST_BIN），或在演进目录运行 node verify.mjs --integration --rag 生成统一记录。test:data 不带 Chroma 时跳过该项。
+实际测试结果见仓库根目录 [`stages/verification.json`](../../stages/verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。运行 npm run test:rag（需 Chroma CLI，或 CHROMA_TEST_BIN），或在演进目录运行 node verify.mjs --integration --rag 生成统一记录。test:data 不带 Chroma 时跳过该项。

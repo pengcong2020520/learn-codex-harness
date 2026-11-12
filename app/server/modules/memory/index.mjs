@@ -1,33 +1,19 @@
-import fs from "node:fs";
+import { readAsUser } from '../runtimes/user-files.mjs';
 import path from "node:path";
 import { AppError, requireId } from "../../../shared/errors.mjs";
 
 const SUMMARY_LIMIT = 64 * 1024;
 const FILES = ["memory_summary.md", "MEMORY.md", "raw_memories.md"];
 
-// 固定文件白名单；不允许客户端传路径，不跟随链接，不扫描个人 CODEX_HOME。
-function readArtifact(root, name, content = false) {
-  let file = root;
+// 固定文件白名单；用户目录的校验、打开和读取全部在该 uid 下执行。
+async function readArtifact(root, name, content = false, codexHome, uid = process.getuid?.(), isolated) {
   try {
-    for (const part of [".data", "codex", "memories"]) {
-      file = path.join(file, part);
-      const stat = fs.lstatSync(file);
-      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("记忆目录不是独立真实目录。");
-    }
-    const fd = fs.openSync(path.join(file, name), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-    try {
-      const stat = fs.fstatSync(fd);
-      if (!stat.isFile() || stat.nlink !== 1) throw new Error("记忆产物不是独立普通文件。");
-      const result = { exists: true, bytes: stat.size, updatedAt: stat.mtime.toISOString() };
-      if (content) {
-        const buffer = Buffer.alloc(SUMMARY_LIMIT + 1);
-        const length = fs.readSync(fd, buffer, 0, buffer.length, 0);
-        result.text = buffer.subarray(0, Math.min(length, SUMMARY_LIMIT)).toString("utf8");
-        result.truncated = length > SUMMARY_LIMIT;
-      }
-      return result;
-    } finally { fs.closeSync(fd); }
-  } catch (error) { if (error.code === "ENOENT") return { exists: false, bytes: 0, updatedAt: null }; throw error; }
+    const { data, metadata } = await readAsUser(uid, path.join(codexHome || path.join(root, '.data/codex'), 'memories', name), {
+      maxBytes: SUMMARY_LIMIT, metadata: true, metadataOnly: !content, truncate: true, isolated,
+    });
+    return { exists: true, bytes: metadata.bytes, updatedAt: metadata.updatedAt,
+      ...(content ? { text: data.toString('utf8'), truncated: metadata.truncated } : {}) };
+  } catch (error) { if (error.code === 'ENOENT') return { exists: false, bytes: 0, updatedAt: null }; throw error; }
 }
 
 export class MemoryService {
@@ -49,12 +35,12 @@ export class MemoryService {
     this.generationBlocked = actual.features.shell_tool === false && actual.features.apply_patch_freeform === false;
   }
 
-  snapshot() {
+  async snapshot() {
     if (!this.effective) throw new AppError("尚未核验 Codex 记忆配置。", 503);
-    const artifacts = Object.fromEntries(FILES.map(name => [name, readArtifact(this.config.root, name)]));
+    const artifacts = Object.fromEntries(await Promise.all(FILES.map(async name => [name, this.effective.enabled ? await readArtifact(this.config.root, name, false, this.config.codexHome, this.config.runtimeUid, this.config.runtimeIsolated) : { exists: false, bytes: 0, updatedAt: null }])));
     return {
       configured: this.config.memory, effective: this.effective,
-      directory: ".data/codex/memories", artifacts,
+      directory: this.config.codexHome ? path.relative(this.config.root, path.join(this.config.codexHome, "memories")) : ".data/codex/memories", artifacts,
       hasSummary: artifacts["memory_summary.md"].bytes > 0,
       generationCapability: this.generationBlocked ? "blocked" : "unverified",
       generationWarning: this.generationBlocked ? "当前禁用原生写工具，后台合并不能写出最终记忆摘要。" : "模型提炼与合并兼容性仍需真实模型验证。",
@@ -63,8 +49,9 @@ export class MemoryService {
     };
   }
 
-  summary() {
-    const result = readArtifact(this.config.root, "memory_summary.md", true);
+  async summary() {
+    if (!this.effective?.enabled) return { exists: false, bytes: 0, updatedAt: null, text: "", note: "原生记忆已关闭。" };
+    const result = await readArtifact(this.config.root, "memory_summary.md", true, this.config.codexHome, this.config.runtimeUid, this.config.runtimeIsolated);
     return { ...result, text: this.redact(result.text || ""), note: "这是生成的记忆摘要，不是全部会话历史；不存在摘要不直接代表错误。" };
   }
 

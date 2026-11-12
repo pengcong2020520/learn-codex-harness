@@ -1,8 +1,9 @@
+import { readAsUser } from '../runtimes/user-files.mjs';
 import fs from "node:fs";
 import { validateEffort } from "../gateway/router.mjs";
 import { readCompatibility } from "./upgrade.mjs";
 import { selectAgentFile } from "./selection.mjs";
-import { CONTRACTS, digest } from "./contracts.mjs";
+import { CONTRACTS, digest, modelContract, knowledgeModeContract, compatibleRecordedV2 } from "./contracts.mjs";
 import { resourcePath, covers, validateKnowledgeBindings } from "../data/paths.mjs";
 export { resourcePath } from "../data/paths.mjs";
 import path from "node:path";
@@ -85,9 +86,6 @@ export class AgentDefinition {
       const locator = resourcePath(source.root);
       if (!binding.methods.includes("files") || !binding.actions.length) throw new Error(`资料源缺少可执行的文件方法或动作：${binding.sourceRef}`);
       if (source.readOnly && binding.actions.includes("create")) throw new Error("只读资料源不能声明 create 权限。");
-      if (!binding.required && !fs.existsSync(path.join(this.workspacePath, locator))) {
-        this.warnings.push(`可选资料源目录不存在：${binding.sourceRef}`); continue;
-      }
       this.sources.push({ id: binding.sourceRef, locator, actions: binding.actions, revision: source.revision || "content-sha256", readOnly: source.readOnly === true });
     }
     if (new Set(this.sources.map(source => source.id)).size !== this.sources.length) throw new Error("资料源不能重复绑定。");
@@ -160,6 +158,7 @@ export class AgentDefinition {
       contribute: config.memory.enabled && this.definition.agent.memory.contribute };
     if (this.definition.agent.knowledge?.length && (config.memory.enabled || config.memory.use || config.memory.contribute)) throw new Error('挂载知识库时请设置 AGENT_MEMORY_ENABLED=false；首版禁用共享原生记忆，避免重新注入范围外知识。');
     this.memory = { ...config.memory };
+    this.modelPolicy = modelContract(config.launch);
     if (config.launch.catalog) for (const model of config.launch.catalog.models) model.model_messages = { instructions_template: this.instructions };
     // 工作流步骤指定的模型在启动时就解析一遍：写错的场景名、没启用的服务商当场报错，而不是跑到那一步才失败。
     for (const workflow of this.workflows.list()) for (const step of workflow.steps || []) {
@@ -183,8 +182,12 @@ export class AgentDefinition {
     const { version: _label, instructions: _path, ...effectiveAgent } = this.definition.agent;
     const descriptor = { schemaVersion: "2.0", contracts: CONTRACTS, agentId: this.definition.agent.id,
       definitionHash: digest(effectiveAgent), roleHash: digest(this.role), toolVersion, tools: this.definition.agent.tools.allow,
-      skills: skills.map(({ name, path: file, version, scope = "system" }) => ({ name, path: file, version, scope })), workspaceDir: this.runtime.workspaceDir,
-      knowledgeBindings: this.definition.bindings.knowledgeBases || {}, knowledgeModes: this.knowledgeModes || {}, sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
+      // Physical paths remain on runtime/availableSkills, never in the policy identity.
+      skills: skills.map(({ id, name, version, scope = "system" }) => ({ id, name, version, scope }))
+        .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      workspaceDir: "workspace",
+      knowledgeBindings: this.definition.bindings.knowledgeBases || {}, knowledgeModes: knowledgeModeContract(this.knowledgeModes), sources: this.sources, outputs: this.outputs, execution: this.execution, memory: this.memory,
+      modelPolicy: this.modelPolicy,
       dataVersion: CONTRACTS.resources, knowledgeVersion: CONTRACTS.knowledge };
     this.descriptor = freeze({ ...descriptor, hash: digest(descriptor) });
     if (this.repository) return this.repository.saveAgent(this.descriptor);
@@ -200,14 +203,25 @@ export class AgentDefinition {
   }
   assertCompatible(threadId, jobHash) {
     this.assertCurrent();
-    if (this.repository) return this.repository.conversation(threadId).then(row => this.checkBinding(row.agent_hash, jobHash));
+    if (this.repository) return this.repository.conversation(threadId).then(async row => {
+      const recorded = new Map();
+      for (const hash of new Set([row.agent_hash, jobHash]))
+        if (hash && hash !== this.descriptor?.hash && this.repository.agentDescriptor)
+          recorded.set(hash, await this.repository.agentDescriptor(hash));
+      this.checkBinding(row.agent_hash, jobHash, recorded);
+    });
     const previous = readJson(this.bindingsFile, {})[threadId];
-    this.checkBinding(previous, jobHash);
+    const recorded = new Map();
+    for (const hash of new Set([previous, jobHash]))
+      if (/^[a-f0-9]{64}$/.test(hash || '') && hash !== this.descriptor?.hash)
+        recorded.set(hash, readJson(path.join(this.root, '.data/agent-descriptors', `${hash}.json`), null));
+    this.checkBinding(previous, jobHash, recorded);
   }
-  checkBinding(previous, jobHash) {
+  checkBinding(previous, jobHash, recorded = new Map()) {
     if (!previous) throw new AppError("旧会话没有 Agent 版本绑定，历史已保留；本版不自动迁移权限，请新建会话。", 409, "LEGACY_THREAD");
     const aliases = readCompatibility(this.root).aliases;
-    const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash;
+    const compatible = hash => hash === this.descriptor?.hash || aliases[hash] === this.descriptor?.hash ||
+      (recorded.get(hash)?.hash === hash && compatibleRecordedV2(recorded.get(hash), this.descriptor));
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
   // skill_read 的实现：只读已核验启用的 Skill；文件限于打包时的白名单（SKILL.md 与 references/ 下的文本）。
@@ -215,9 +229,14 @@ export class AgentDefinition {
     this.assertCurrent();
     const skill = (this.availableSkills || []).find(item => item.name === name);
     if (!skill) throw new AppError(`Skill 未启用或不存在：${name}`, 404, "SKILL_UNAVAILABLE");
-    const files = skill.files || ["SKILL.md"];
+    if (this.permissionHub) this.permissionHub.checkResource('skill', skill.id, 'read');
+    const files = skill.files || ['SKILL.md'];
     if (!files.includes(file)) throw new AppError(`Skill ${name} 没有这个文件：${file}。可读文件：${files.join("、")}`, 404);
-    const target = path.join(path.dirname(skill.path), file), info = fs.lstatSync(target);
+    if (skill.contents) return { name, file, files, content: Buffer.from(skill.contents[file], 'base64').toString('utf8') };
+    const target = path.join(path.dirname(skill.path), file);
+    if (this.runtime?.isolated) return readAsUser(this.runtime.uid, target, { maxBytes: 128 * 1024, isolated: true })
+      .then(content => ({ name, file, files, content: content.toString('utf8') }));
+    const info = fs.lstatSync(target);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024) throw new AppError(`Skill 文件无效：${name}/${file}`, 409);
     return { name, file, files, content: fs.readFileSync(target, "utf8") };
   }
@@ -231,6 +250,7 @@ export class AgentDefinition {
     }
     // 不解析 SKILL.md；原生引擎按已验证名称和路径注入正文。
     const selected = (this.availableSkills || []).filter(skill => mentions.has(skill.name) || (workflow?.skill && skill.id === workflow.skill));
+    for (const skill of selected) this.permissionHub?.checkResource('skill', skill.id, 'use');
     const brief = workflow ? describe(workflow, step) : null;
     return [...(brief ? [{ type: "text", text: brief, text_elements: [] }] : []), { type: "text", text, text_elements: [] },
       ...selected.map(({ name, path }) => ({ type: "skill", name, path }))];

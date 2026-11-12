@@ -1,4 +1,4 @@
-// 模型网关集成测试：真 Bifrost 容器（compose.yaml 里锁定的镜像）+ 本机模拟的两家模型服务 + 真 Codex 0.154.0。
+// 模型网关集成测试：真 Bifrost 容器（compose.yaml 里锁定的镜像）+ 本机模拟的两家模型服务。
 // 不读取 .env，不调用真实模型；需要 Docker（npm run test:gateway）。没有 Docker 时跳过。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -7,11 +7,8 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { testDataFactory } from "./jobs-fixture.mjs";
-import { tempRoot } from "./helpers.mjs";
-import { sendResponse, answer, toolCall, toolSpecs } from "./responses-fixture.mjs";
+import { answer } from "./responses-fixture.mjs";
 import { buildGatewayConfig, buildModelParameters, validateRegistry } from "../server/modules/gateway/index.mjs";
-import { loadScenarios, runOnce } from "../scripts/eval-role.mjs";
 
 const app = path.resolve(import.meta.dirname, "..");
 const image = fs.readFileSync(path.join(app, "compose.yaml"), "utf8").match(/^\s+image: (maximhq\/bifrost:\S+)$/m)[1];
@@ -31,23 +28,16 @@ async function upstream(t, handle) {
   return { requests, url: `http://host.docker.internal:${server.address().port}` };
 }
 
-test("模型网关：没有访问密钥一律拒绝；主模型余额不足时自动改用备用；Codex 经网关完成带工具调用的任务", { skip: !docker && "需要 Docker", timeout: 240000 }, async t => {
+test("模型网关：没有访问密钥一律拒绝；主模型余额不足时自动改用备用；Responses 转 Claude 格式", { skip: !docker && "需要 Docker", timeout: 240000 }, async t => {
   const alpha = await upstream(t, (request, response) => {
     response.writeHead(402, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: { message: "Insufficient Balance", type: "insufficient_balance_error" } }));
   });
-  let step = 0;
   const beta = await upstream(t, (request, response, body) => {
     if (!request.url.endsWith("/responses")) { response.writeHead(404); response.end(); return; }
-    // 直接调用网关的那次是非流式请求，回完整 JSON；Codex 的任务是流式的，先列目录再回答。
-    if (!body.stream) {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ id: "resp_direct", object: "response", status: "completed", model: body.model, output: [answer("好")],
-        usage: { input_tokens: 5, output_tokens: 1, total_tokens: 6 } }));
-      return;
-    }
-    const listFiles = toolSpecs(body).find(spec => spec.name?.endsWith("list_files"));
-    sendResponse(response, listFiles && step++ === 0 ? toolCall(listFiles, {}) : answer("已经看过资料目录。"));
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ id: "resp_direct", object: "response", status: "completed", model: body.model,
+      output: [answer("好")], usage: { input_tokens: 5, output_tokens: 1, total_tokens: 6 } }));
   });
 
   // gamma 是 Claude 格式的服务：记下网关填的输出上限，回一段固定的文字。
@@ -110,30 +100,8 @@ test("模型网关：没有访问密钥一律拒绝；主模型余额不足时�
   assert.match(JSON.stringify(await claude.json()), /来自 gamma/);
   assert.equal(gamma.requests.filter(request => request.path.endsWith("/messages")).at(-1).body.max_tokens, 23456);
 
-  // Codex 经网关：评估运行器在独立临时项目里起完整服务，网关模式的连接参数由 AGENT_GATEWAY_KEY 推导。
-  const work = tempRoot(t), agentDir = path.join(work, "agent");
-  fs.cpSync(path.join(app, "agents/writing"), agentDir, { recursive: true });
-  const definition = JSON.parse(fs.readFileSync(path.join(agentDir, "agent.json"), "utf8"));
-  definition.agent.tools.allow = ["list_files", "read_file", "write_file"];
-  definition.agent.skills = []; definition.agent.workflows = []; definition.bindings.skills = {};
-  delete definition.agent.knowledge; delete definition.bindings.knowledgeBases;
-  fs.writeFileSync(path.join(agentDir, "agent.json"), JSON.stringify(definition));
-  // 默认模型由模型路由按这份清单的 routes.chat 决定（不写 CODEX_MODEL）。
-  const env = { ...process.env, AGENT_GATEWAY_KEY: gatewayKey, AGENT_GATEWAY_PORT: String(port), ALPHA_API_KEY: "sk-alpha-test", BETA_API_KEY: "sk-beta-test",
-    CODEX_MODEL_CATALOG_ENABLED: "true", DEMO_TIMEOUT_MS: "30000" };
-  for (const name of ["CODEX_BASE_URL", "CODEX_API_KEY", "CODEX_MODEL"]) delete env[name];
-  const before = beta.requests.length;
-  const record = await runOnce({ label: "gateway", agentDir, scenario: loadScenarios(["s2-wechat"])[0], index: 1, env, out: path.join(work, "out"),
-    timeoutMs: 90000, dataFactory: testDataFactory, files: { "config/models.json": JSON.stringify(registry) } });
-  assert.equal(record.model, "alpha/model-a", "默认模型来自清单的 routes.chat");
-  assert.equal(record.status, "completed", record.error);
-  assert.equal(record.reply, "已经看过资料目录。");
-  assert.deepEqual(record.tools.map(tool => tool.tool), ["list_files"]);
-  const codexRequests = beta.requests.slice(before).filter(request => request.path.endsWith("/responses"));
-  assert.equal(codexRequests.length, 2, "Codex 的两次请求都经网关转到备用服务");
-  assert.ok(codexRequests[0].body.instructions.includes("AI 知识整理助手"), "角色指令原样转过去");
-  assert.ok(codexRequests[1].body.input.some(item => item.type === "function_call_output"), "工具结果随第二次请求转过去");
-  assert.ok(record.usage.requests >= 2, "token 用量经网关回到 Codex");
+  // 本阶段不携带角色评估运行器；本课验证真实网关，Codex 工具闭环另见 test:codex-tools。
+
 });
 
 test("模型网关：每日 token 限流使用真实 Bifrost，首个请求耗尽额度后第二个请求被拒绝", { skip: !docker && "需要 Docker", timeout: 120000 }, async t => {

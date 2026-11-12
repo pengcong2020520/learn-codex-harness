@@ -1,8 +1,14 @@
+import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
+import { can } from '../hub/policy.mjs';
+import { busyError } from "../runtimes/pool.mjs";
+import { currentIdentity, runOwner } from "../accounts/context.mjs";
 import { UsageService } from "../usage/index.mjs";
 import { EventEmitter } from "node:events";
 import { listProjectThreads, importLegacyThread, ensureThreadDirectory } from "./history.mjs";
 import { AppError, requireId } from "../../../shared/errors.mjs";
 import { SESSION_TURN_LIMIT } from "../../../shared/session-events.mjs";
+import { MISSING_SESSION_MESSAGE } from '../replication/store.mjs';
+import { resumeFailure } from '../replication/loss.mjs';
 
 // 每个会话在内存里最多保留的轮次。快照只发最后 SESSION_TURN_LIMIT 轮；完成的轮次结果已持久化，完整历史在 Codex 原生记录里。
 // 多留一些，给追加消息定位较早的目标轮次。
@@ -12,9 +18,9 @@ const copyTurn = turn => ({ ...turn, answers: { ...turn.answers }, artifacts: { 
   tools: Object.fromEntries(Object.entries(turn.tools).map(([id, tool]) => [id, { ...tool }])), messages: [...turn.messages] });
 
 export class SessionService extends EventEmitter {
-  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, usage = new UsageService({ registry: config.registry, budget: config.budget }), publishInterval = 100 }) {
+  constructor({ rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, permissionHub, repository, usage = new UsageService({ registry: config.registry, budget: config.budget }), publishInterval = 100 }) {
     super();
-    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, repository, usage, publishInterval });
+    Object.assign(this, { rpc, config, runtime, hub, redact, tools, boundary, beforeTurn, permissionHub, repository, usage, publishInterval });
     this.sessions = new Map();
     this.starting = new Map();
     this.turnUsage = new WeakMap();
@@ -31,36 +37,72 @@ export class SessionService extends EventEmitter {
       ...(config.launch.model ? { model: config.launch.model } : {}),
       ...(config.launch.authMode === "apiKey" ? { modelProvider: "project_api" } : {})
     };
-    this.onNotification = message => this.handleNotification(message);
+    this.onNotification = message => {
+      const ownerId = this.sessions.get(message.params?.threadId)?.ownerId;
+      if (message.runtimeOwner && message.runtimeOwner !== ownerId) return;
+      return ownerId ? runOwner(ownerId, () => this.handleNotification(message)) : this.handleNotification(message);
+    };
     rpc.on("notification", this.onNotification);
   }
 
+  userOptions() {
+    if (!this.permissionHub) return this.options;
+    let web = false;
+    try { this.permissionHub.checkTool('read_webpage', this.config.agent); web = true; } catch { /* Hub 不可见即禁用原生搜索。 */ }
+    return { ...this.options, config: { web_search: web ? this.config.launch.webSearch : 'disabled' } };
+  }
   async create() {
     return this.atBoundary(async () => {
       this.config.agent?.assertCurrent();
-      const result = await this.rpc.request("thread/start", { ...this.options, cwd: this.runtime.workspaceDir, ...(this.tools?.gate ? { dynamicTools: this.tools.dynamicTools() } : {}) });
+      this.permissionHub?.checkAgent(this.config.agent);
+      const result = await this.rpc.request("thread/start", { ...this.userOptions(), cwd: this.userRuntime().workspaceDir, ...(this.tools?.gate ? { dynamicTools: this.tools.dynamicTools() } : {}) });
       if (this.config.agent) {
-        await this.rpc.request("thread/memoryMode/set", { threadId: result.thread.id, mode: this.config.memory.contribute ? "enabled" : "disabled" });
         await this.config.agent.bind(result.thread.id);
+        if (this.permissionHub) {
+          const visible = new Set(this.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id));
+          result.hubKnowledge = effectiveKnowledgeMounts(this.config.agent, this.permissionHub).map(m => m.kbId).filter(id => visible.has(id));
+          await this.repository.query('UPDATE agent_data.conversations SET hub_knowledge=$4 WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [result.thread.id, result.hubKnowledge]);
+        }
+        await this.rpc.request("thread/memoryMode/set", { threadId: result.thread.id, mode: this.config.memory.contribute ? "enabled" : "disabled" });
       }
       return this.register(result);
     }, { allowBusy: true });
   }
 
-  atBoundary(operation, options) { return this.boundary ? this.boundary.run(operation, options) : operation(); }
+  userRuntime() {
+    if (!this.rpc.pool) return this.runtime;
+    const runtime = this.rpc.current()?.runtime;
+    if (!runtime && this.rpc.isolated) throw busyError();
+    return runtime || this.runtime;
+  }
+  atBoundary(operation, options) {
+    const fresh = () => this.permissionHub ? this.permissionHub.withUser(currentIdentity().userId, operation) : operation();
+    const run = () => this.boundary ? this.boundary.run(fresh, options) : fresh();
+    return this.rpc.pool ? this.rpc.pool.withOwner(currentIdentity().userId, run) : run();
+  }
 
   assertCompatible(threadId, jobHash) { return this.config.agent?.assertCompatible(threadId, jobHash); }
   async prepareInput(threadId, text, jobHash, workflow = null, step = 0) {
+    this.permissionHub?.checkAgent(this.config.agent);
     await this.assertCompatible(threadId, jobHash);
     await this.beforeTurn?.();
+    if (this.permissionHub) {
+      const row = await this.repository.conversation(threadId);
+      for (const id of row.hub_knowledge || []) this.permissionHub.checkResource('knowledge', id, 'read');
+      const visible = new Set(this.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id));
+      const mounted = effectiveKnowledgeMounts(this.config.agent, this.permissionHub).map(m => m.kbId).filter(id => visible.has(id));
+      const next = [...new Set([...(row.hub_knowledge || []), ...mounted])];
+      if (next.length !== (row.hub_knowledge || []).length)
+        await this.repository.query('UPDATE agent_data.conversations SET hub_knowledge=$4 WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [threadId, next]);
+    }
     return this.config.agent?.input(text, workflow, step) || [{ type: "text", text, text_elements: [] }];
   }
 
-  register(result) {
+  register(result, missingTurns = []) {
     const thread = result.thread;
-    const session = { id: thread.id, cwd: thread.cwd || this.runtime.workspaceDir,
+    const session = { ownerId: currentIdentity()?.userId || this.repository?.ownerId, id: thread.id, cwd: thread.cwd || this.runtime.workspaceDir,
       name: thread.name || thread.preview || "新会话", model: result.model,
-      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, turns: new Map() };
+      modelProvider: result.modelProvider, activeTurnId: null, lastTurnId: null, missingTurns, turns: new Map() };
     this.sessions.set(session.id, session);
     for (const turn of thread.turns || []) this.recordTurn(session.id, turn);
     this.publish(session.id);
@@ -81,8 +123,12 @@ export class SessionService extends EventEmitter {
   }
 
   async ensure(threadId) {
+    if (this.rpc.pool && !this.rpc.current()) return this.rpc.pool.withOwner(currentIdentity().userId, () => this.ensure(threadId));
     requireId(threadId, "会话 ID");
-    if (this.sessions.has(threadId)) { await this.assertCompatible(threadId); return this.snapshot(threadId); }
+    const selected = await this.repository?.conversation(threadId);
+    if (selected?.replica_missing)
+      throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
+    if (this.sessions.has(threadId)) { this.sessions.get(threadId).missingTurns = selected?.missingTurns || []; await this.assertCompatible(threadId); return this.snapshot(threadId); }
     if (!this.loading.has(threadId)) {
       const promise = this.load(threadId).finally(() => this.loading.delete(threadId));
       this.loading.set(threadId, promise);
@@ -94,16 +140,25 @@ export class SessionService extends EventEmitter {
     const selected = this.repository ? await this.repository.conversation(threadId) :
       (await listProjectThreads(this.rpc.request.bind(this.rpc), this.config.root, "", this.runtime.workspaceDir)).find(thread => thread.id === threadId);
     if (!selected) throw new AppError("未找到本项目的这个会话。", 404, "THREAD_NOT_FOUND");
+    if (selected.replica_missing) throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
     return this.atBoundary(async () => {
       await this.assertCompatible(threadId);
       const legacyPath = this.tools && !this.repository ? await importLegacyThread(this.config.root, selected) : undefined;
-      await ensureThreadDirectory(this.config.root, selected.cwd, this.runtime.workspaceDir);
-      const result = await this.rpc.request("thread/resume", {
-        ...this.options, threadId, cwd: selected.cwd, excludeTurns: false,
-        ...(legacyPath ? { path: legacyPath } : {})
-      });
+      const cwd = this.rpc.pool ? this.userRuntime().workspaceDir : selected.cwd;
+      await ensureThreadDirectory(this.config.root, cwd, this.userRuntime().workspaceDir);
+      let result;
+      try {
+        result = await this.rpc.request("thread/resume", {
+          ...this.userOptions(), threadId, cwd, excludeTurns: false,
+          ...(legacyPath ? { path: legacyPath } : {})
+        });
+      } catch (error) {
+        if (resumeFailure(error) && await this.repository?.markReplicaMissingAfterResume?.(threadId))
+          throw new AppError(MISSING_SESSION_MESSAGE, 409, 'REPLICA_MISSING');
+        throw error;
+      }
       if (result.thread.id !== threadId) throw new AppError("历史文件与 Thread id 不一致。", 409);
-      return this.register(result);
+      return this.register(result, selected.missingTurns || []);
     }, { allowBusy: true });
   }
 
@@ -261,7 +316,7 @@ export class SessionService extends EventEmitter {
   flushDeltas(threadId, exceptTurnId) {
     const pending = this.deltas.get(threadId);
     this.deltas.delete(threadId);
-    for (const delta of pending?.values() || []) if (delta.turnId !== exceptTurnId) this.hub.publish("delta", delta, threadId);
+    for (const delta of pending?.values() || []) if (delta.turnId !== exceptTurnId) this.hub.publish("delta", delta, threadId, this.sessions.get(threadId)?.ownerId);
   }
 
   // 给出 turn 时只推这一轮的完整状态，否则推整个会话。完整状态已含待推送的文字，对应增量不再单独推；
@@ -269,20 +324,27 @@ export class SessionService extends EventEmitter {
   publish(threadId, turn) {
     clearTimeout(this.timers.get(threadId));
     this.timers.delete(threadId);
-    if (!turn) { this.deltas.delete(threadId); return this.hub.publish("session", this.snapshot(threadId), threadId); }
+    if (!turn) { this.deltas.delete(threadId); return this.hub.publish("session", this.snapshot(threadId), threadId, this.sessions.get(threadId)?.ownerId); }
     this.flushDeltas(threadId, turn.id);
     const session = this.sessions.get(threadId);
-    this.hub.publish("turn", { name: session.name, activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, turn: copyTurn(turn) }, threadId);
+    this.hub.publish("turn", { name: session.name, activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, missingTurns: session.missingTurns || [], turn: copyTurn(turn) }, threadId, session.ownerId);
   }
 
   snapshot(threadId) {
     const session = this.sessions.get(threadId);
-    if (!session) throw new AppError("会话尚未载入。", 404);
+    if (!session) throw new AppError('会话不存在。', 404);
+    if (currentIdentity()) can(currentIdentity(), 'read', { ...session, type: 'personal' });
     return { id: session.id, name: session.name, model: session.model, modelProvider: session.modelProvider,
-      activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId,
+      activeTurnId: session.activeTurnId, lastTurnId: session.lastTurnId, missingTurns: session.missingTurns || [],
       turns: [...session.turns.values()].slice(-SESSION_TURN_LIMIT).map(copyTurn) };
   }
 
+  invalidateOwner(owner) {
+    for (const [id, session] of this.sessions) if (session.ownerId === owner) {
+      clearTimeout(this.timers.get(id)); this.timers.delete(id); this.deltas.delete(id);
+      this.starting.delete(id); this.sessions.delete(id);
+    }
+  }
   close() {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();

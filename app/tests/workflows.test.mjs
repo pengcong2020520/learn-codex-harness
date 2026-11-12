@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { defineWorkflows, describe, runChecks } from "../server/modules/workflows/index.mjs";
+import { checksPassed, defineWorkflows, describe, runChecks, stepOf } from "../server/modules/workflows/index.mjs";
 import { PermissionGate } from "../server/modules/permissions/index.mjs";
 import { createTools as createTaskTools } from "../server/modules/tools/tasks.mjs";
 import { AgentDefinition } from "../server/modules/agents/index.mjs";
@@ -51,21 +51,6 @@ test("workflow 解析：参数按 schema 校验，授权落到具体知识库，
   assert.equal(workflows.resolve().id, "chat");
 });
 
-test("Workflow 目录只给界面填表需要的字段：不含 chat、授权、Skill、写入范围与步骤模型", () => {
-  const article = { id: "article", label: "写文章", skill: "outline",
-    params: { type: "object", additionalProperties: false, required: ["tone"], properties: { tone: { type: "string", enum: ["正式", "轻松"], description: "语气" }, topic: { type: "string", maxLength: 80 } } },
-    steps: [{ id: "outline", goal: "先列大纲", writes: ["drafts"], confirm: true, model: "fast" }, { id: "final", goal: "完成定稿", checks: ["file-exists"] }] };
-  const catalog = defineWorkflows({ ...base, workflows: [{ id: "knowledge-maintain" }, article] }, { writable: ["drafts"] }).catalog();
-  assert.deepEqual(catalog.map(item => item.id), ["knowledge-maintain", "article"]);
-  assert.equal(catalog[0].label, "知识库维护"); assert.match(catalog[0].description, /Wiki/);
-  assert.deepEqual(catalog[0].params, { required: ["kbId"], properties: { kbId: { type: "string", description: "要维护的知识库", pattern: "^[a-z][a-z0-9-]{0,47}$" } } });
-  assert.deepEqual(catalog[1], { id: "article", label: "写文章", description: "先列大纲；完成定稿",
-    params: { required: ["tone"], properties: { tone: { type: "string", description: "语气", enum: ["正式", "轻松"] }, topic: { type: "string", maxLength: 80 } } },
-    steps: [{ id: "outline", goal: "先列大纲", confirm: true }, { id: "final", goal: "完成定稿", confirm: false }] });
-  assert.doesNotMatch(JSON.stringify(catalog), /grants|skill|writes|fast|knowledge\.update/);
-  assert.deepEqual(defineWorkflows({ ...base, workflows: [] }).catalog(), []);
-});
-
 test("任务说明只写目标、授权和验收；验收只看产物和生效的修订", t => {
   const workflows = defineWorkflows({ ...base, workflows: [{ id: "knowledge-maintain" }] });
   assert.equal(describe(workflows.resolve("chat")), null);
@@ -109,6 +94,36 @@ async function messageRig(t, workflows, gate, environment = fixture) {
   const started = async count => { await until(() => rpc.calls.filter(call => call.method === "turn/start").length >= count); return rpc.calls.filter(call => call.method === "turn/start")[count - 1].params.input; };
   return { root, agent, rpc, store, messages, sessions, session, submit, started };
 }
+
+test("声明 checks 的 workflow 步骤必须收到全部通过的验收结果；缺失、空、部分结果不能完成", () => {
+  const definitions = defineWorkflows({ ...base, workflows: [report,
+    { id: "review", steps: [{ id: "review", goal: "核查", checks: ["format", "sources-cited"] },
+      { id: "final", goal: "定稿", checks: ["format"] }] }] });
+  for (const id of ["report", "review"]) {
+    const required = stepOf(definitions.resolve(id)).checks;
+    const passed = required.map(id => ({ id, passed: true }));
+    for (const results of [undefined, null, [], passed.slice(1), [{ id: "unrelated", passed: true }],
+      passed.map(check => ({ ...check, passed: false })), passed.map(check => ({ ...check, passed: "true" }))])
+      assert.equal(checksPassed(required, results), false, `${id}: ${JSON.stringify(results)}`);
+    assert.equal(checksPassed(required, passed), true);
+  }
+});
+
+test("验收解析异常不能将声明 checks 的步骤记为 completed，也不能沿用上一步验收", async t => {
+  for (const workflow of [report, { id: "review", steps: [{ id: "review", goal: "核查", checks: ["format"] },
+    { id: "final", goal: "定稿", checks: ["format"] }] }]) {
+    const r = await messageRig(t, [workflow]);
+    await r.submit("broken", { workflow: workflow.id });
+    await r.started(1);
+    r.store.patch("broken", { checks: [{ id: "format", passed: true }] });
+    t.mock.method(r.messages, "resolve", () => { throw new Error("无法取得 workflow 验收定义"); });
+    r.rpc.finish(r.session.id);
+    await until(() => !["starting", "running"].includes(r.store.get("broken").status));
+    assert.equal(r.store.get("broken").status, "needs-review");
+    assert.equal(r.store.get("broken").checks, null);
+    assert.match(r.store.get("broken").error, /Workflow 验收未完成/);
+  }
+});
 
 test("按 workflow 入队与派发：注入任务说明和 Skill，旧 knowledge 字段等价于知识维护，追加不能换 workflow", async t => {
   const r = await messageRig(t, [{ id: "knowledge-maintain" }, report]);
@@ -336,4 +351,25 @@ test("资源规则列出可提议的 workflow；没有允许 propose_task 时不
   const value = JSON.parse(original); value.agent.tools.allow = value.agent.tools.allow.filter(name => name !== "propose_task");
   fs.writeFileSync(file, JSON.stringify(value));
   assert.doesNotMatch(new AgentDefinition(root).instructions, /propose_task/);
+});
+
+
+test("per-user workflow checks use the existing workspace without nesting users again", async t => {
+  const root = tempRoot(t), owner = '11111111-1111-4111-8111-111111111111';
+  const workspaceDir = path.join(root, 'workspace/users', owner);
+  fs.mkdirSync(path.join(workspaceDir, 'outputs'), { recursive: true });
+  fs.writeFileSync(path.join(workspaceDir, 'outputs/report.md'), '报告');
+  const workflows = defineWorkflows({ ...base, workflows: [report, { id: 'knowledge-maintain' }] });
+  const service = Object.create(MessageService.prototype);
+  service.resolve = ({ id, params }) => workflows.resolve(id, params);
+  service.config = { agent: { runtime: { ownerId: owner, workspaceDir, isolated: true }, outputs: { formats: ['md'] }, workflows } };
+  for (const [workflow, params, evidence] of [
+    ['report', null, { artifacts: { r: { locator: 'outputs/report.md', format: 'md', sources: 1 } } }],
+    ['knowledge-maintain', { kbId: 'general' }, { revisions: { r: { kbId: 'general', slug: 'p', effective: true } } }],
+  ]) {
+    const outcome = await service.checkOutcome({ userId: owner, workflow, params }, { status: 'completed', ...evidence });
+    assert.equal(outcome.status, 'completed');
+    assert.ok(outcome.checks.every(check => check.passed));
+    assert.equal(fs.existsSync(path.join(workspaceDir, 'users')), false);
+  }
 });

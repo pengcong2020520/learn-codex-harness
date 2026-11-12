@@ -1,13 +1,22 @@
+import { maintenanceConnection } from './write.mjs';
 import { Pool } from "pg";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { readJson, writeJson } from "../storage/index.mjs";
 
-export async function transaction(pool, operation) {
+export async function transaction(pool, operation, { isolation, readOnly } = {}) {
+  // Transaction characteristics must precede the fencing wrapper's SET LOCAL/set_config.
+  const level = typeof isolation === 'string' ? isolation.toUpperCase() : isolation;
+  if (isolation !== undefined && !['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SERIALIZABLE'].includes(level))
+    throw new TypeError('transaction isolation 必须是有效的 PostgreSQL 隔离级别。');
+  if (readOnly !== undefined && typeof readOnly !== 'boolean')
+    throw new TypeError('transaction readOnly 必须是 boolean。');
+  const begin = 'BEGIN' + (level ? ` ISOLATION LEVEL ${level}` : '') +
+    (readOnly === undefined ? '' : readOnly ? ' READ ONLY' : ' READ WRITE');
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await client.query(begin);
     const result = await operation(client);
     await client.query("COMMIT");
     return result;
@@ -19,9 +28,9 @@ export async function transaction(pool, operation) {
   }
 }
 
-export function identity(root) {
+export function identity(root, { create = true } = {}) {
   const file = path.join(root, ".data/identity.json");
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  if (create) fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (fs.lstatSync(path.dirname(file)).isSymbolicLink())
     throw new Error("数据身份目录不能是链接。");
   if (fs.existsSync(file)) {
@@ -31,6 +40,7 @@ export function identity(root) {
   }
   let value = readJson(file, null);
   if (!value) {
+    if (!create) throw new Error("数据实例身份尚未初始化，请先运行 npm run agent:init。");
     value = { instanceId: randomUUID(), ownerId: randomUUID() };
     writeJson(file, value);
   }
@@ -40,31 +50,48 @@ export function identity(root) {
   return value;
 }
 
-export async function openDatabase(url) {
+// Same-host defaults; a node behind a cross-region tunnel needs several RTTs per handshake
+// and per transaction step, so deploy/remote-env.mjs widens these for that node only.
+export function boundedMs(env, name, fallback, min, max, unit = '毫秒') {
+  const raw = env[name] ?? String(fallback);
+  if (!/^\d+$/.test(String(raw)) || Number(raw) < min || Number(raw) > max) throw new Error(`${name} 必须是 ${min}–${max} 的整数（${unit}）。`);
+  return Number(raw);
+}
+export const connectTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_CONNECT_TIMEOUT_MS', 3000, 1000, 60000);
+export const poolMax = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_POOL_MAX', 6, 2, 32, '连接数');
+export const idleTransactionTimeout = (env = process.env) => boundedMs(env, 'AGENT_DATABASE_IDLE_TX_TIMEOUT_MS', 15000, 5000, 120000);
+
+export async function openDatabase(url, { maintenance } = {}) {
   if (!url)
     throw new Error(
       "缺少 DATABASE_URL。请配置 PostgreSQL 后运行 npm run data:migrate；不会回退到 JSON 存储。",
     );
   const pool = new Pool({
     connectionString: url,
-    max: 6,
-    connectionTimeoutMillis: 3000,
+    ...(maintenance === undefined ? {} : { options: `-c app.maintenance=${maintenance ? 'on' : 'off'}` }),
+    max: poolMax(),
+    connectionTimeoutMillis: connectTimeout(),
     query_timeout: 12000,
     keepAlive: true,
     statement_timeout: 10000,
-    idle_in_transaction_session_timeout: 15000,
+    idle_in_transaction_session_timeout: idleTransactionTimeout(),
   });
   pool.on("error", () => {}); // Requests/worker heartbeat surface failures without printing connection secrets.
   try {
-    await pool.query("SELECT 1");
+    const { rows } = await pool.query("SELECT current_setting('app.maintenance', true) AS maintenance");
+    if (rows[0].maintenance === 'on') {
+      maintenanceConnection(pool);
+      // Covers existing and future clients, including explicit transaction() clients.
+      pool.on('acquire', maintenanceConnection);
+    }
     return pool;
-  } catch {
+  } catch (error) {
     await pool.end();
-    throw new Error("无法连接 PostgreSQL；请检查 DATABASE_URL 和数据库状态。");
+    throw error;
   }
 }
 
-const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql'].map((name, index) => {
+const migrations = ['schema.sql', 'migrations/002-knowledge.sql', 'migrations/003-workflows.sql', 'migrations/004-workflow-steps.sql', 'migrations/005-task-proposals.sql', 'migrations/006-usage.sql', 'migrations/007-media.sql', 'migrations/008-task-model-routing.sql', 'migrations/009-knowledge-visibility.sql', 'migrations/010-accounts.sql', 'migrations/011-user-runtimes.sql', 'migrations/012-runtime-migration.sql', 'migrations/013-hub.sql', 'migrations/014-user-knowledge.sql', 'migrations/015-cluster-term.sql', 'migrations/016-sharding.sql', 'migrations/017-shard-diagnostics.sql', 'migrations/018-move-security.sql', 'migrations/019-replication.sql', 'migrations/020-replica-missing.sql', 'migrations/021-replication-error.sql'].map((name, index) => {
   const sql = fs.readFileSync(new URL(name, import.meta.url), 'utf8');
   return { version: index + 1, sql, checksum: createHash('sha256').update(sql).digest('hex') };
 });
@@ -73,6 +100,7 @@ function compatible(rows) {
 }
 export async function migrate(pool) {
   await transaction(pool, async client => {
+    await client.query("SET LOCAL app.maintenance = 'on'");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('agent_data_migration'))");
     await client.query('CREATE SCHEMA IF NOT EXISTS agent_data; CREATE TABLE IF NOT EXISTS agent_data.migrations(version integer PRIMARY KEY, checksum text NOT NULL)');
     const { rows } = await client.query('SELECT * FROM agent_data.migrations ORDER BY version');

@@ -1,3 +1,4 @@
+import { fixedAccounts } from './accounts-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -178,10 +179,10 @@ async function request(service, url, authorization = 'Bearer unit-token') {
     writeHead(status) { this.status = status; }, end(body) { resolve({ status: this.status, body: JSON.parse(body) }); }, destroy() { resolve({ status: 500 }); },
   }));
 }
-test('GET /usage 默认今日、本月结构、预算、鉴权与非法 period；/health 和 /state 带预算', async t => {
+test('GET /usage 默认今日、本月结构、预算、鉴权与非法 period；/health 只报存活，/state 带预算', async t => {
   const r = await rig(t), usage = r.sessions.usage;
   await usage.record({ source: 'chat', model: 'example/chat', inputTokens: 5 });
-  const http = createHttpService({ ...r, token: 'unit-token', usage }); t.after(() => http.close());
+  const http = createHttpService({ ...r, accounts: fixedAccounts(), usage }); t.after(() => http.close());
   for (const url of ['/usage', '/usage?period=month']) {
     const result = await request(http, url); assert.equal(result.status, 200);
     for (const key of ['total', 'byModel', 'bySource', 'byDay', 'budget', 'currency', 'timezone', 'storage']) assert.ok(key in result.body, key);
@@ -189,7 +190,7 @@ test('GET /usage 默认今日、本月结构、预算、鉴权与非法 period�
   }
   assert.equal((await request(http, '/usage?period=year')).status, 400);
   assert.equal((await request(http, '/usage', 'Bearer wrong')).status, 401);
-  assert.equal((await request(http, '/health')).body.budget.exceeded, false);
+  assert.equal((await request(http, '/health')).body.status, 'alive');
   assert.equal((await request(http, `/state?threadId=${r.session.id}`)).body.queue.budget.exceeded, false);
 });
 

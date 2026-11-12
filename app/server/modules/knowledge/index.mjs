@@ -1,4 +1,8 @@
+import { withShardUser } from '../sharding/fence.mjs';
 import fs from 'node:fs';
+import { declaredKnowledgeMounts, effectiveKnowledgeMounts } from './mounts.mjs';
+import { prepareKnowledgeDirectories, removeKnowledgeDirectories, createSourceFile } from './directories.mjs';
+import { userFileOperation } from '../runtimes/user-files.mjs';
 import { resourcePath, validateKnowledgeBindings } from '../data/paths.mjs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -8,14 +12,16 @@ import { AppError } from '../../../shared/errors.mjs';
 const fail = (text, code = 'KNOWLEDGE_INVALID') => { throw new AppError(text, 409, code); };
 const slugPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,95}$/;
 export class KnowledgeService extends Repository {
-  constructor(pool, scope, { agent, gate, resources, rag, redact = value => String(value) }) {
-    super(pool, scope); Object.assign(this, { agent, gate, resources, rag, redact });
+  constructor(pool, scope, { agent, gate, resources, rag, sharding, redact = value => String(value) }) {
+    super(pool, scope); Object.assign(this, { agent, gate, resources, rag, redact, sharding });
   }
   async open() {
     const bindings = validateKnowledgeBindings(this.agent.definition.bindings.knowledgeBases || {});
-    const existing = (await this.query('SELECT id,source_root,wiki_root FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
+    const existing = (await this.query('SELECT id,source_root,wiki_root,user_created FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
     validateKnowledgeBindings({ ...Object.fromEntries(existing.map(row => [row.id, { sourceRoot: row.source_root, wikiRoot: row.wiki_root }])), ...bindings });
     for (const [id, binding] of Object.entries(bindings)) {
+      if (this.sharding && !this.sharding.owns(this.ownerId)) continue;
+      if (this.gate.permissionHub) { await this.gate.permissionHub.registerKnowledge(this.ownerId, id, binding); continue; }
       const result = await this.query(`INSERT INTO agent_data.knowledge_bases(instance_id,id,owner_id,source_root,wiki_root)
         VALUES($1,$3,$2,$4,$5) ON CONFLICT(instance_id,id) DO UPDATE SET source_root=EXCLUDED.source_root
         WHERE knowledge_bases.owner_id=$2 AND knowledge_bases.source_root=EXCLUDED.source_root AND knowledge_bases.wiki_root=EXCLUDED.wiki_root RETURNING id`,
@@ -24,55 +30,95 @@ export class KnowledgeService extends Repository {
     }
     // Registry covers every persisted KB, including KBs omitted from this Agent's configuration.
     // Otherwise a broad source binding could bypass an absent Agent mount via read_file.
-    const registered = (await this.query('SELECT id,source_root,wiki_root FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
+    const registered = (await this.query('SELECT id,source_root,wiki_root,user_created FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL')).rows;
     validateKnowledgeBindings(Object.fromEntries(registered.map(row => [row.id, { sourceRoot: row.source_root, wikiRoot: row.wiki_root }])));
     this.gate.knowledgeBases = Object.freeze(Object.fromEntries(registered.map(row => [row.id,
       Object.freeze({ sourceRoot: row.source_root, wikiRoot: row.wiki_root })])));
     const ids = new Set();
     this.modes = {};
-    for (const mount of this.agent.definition.agent.knowledge || []) {
-      if (!bindings[mount.kbId] || ids.has(mount.kbId) || !mount.actions.includes('read')) fail('知识库绑定缺失、重复或没有 read 权限。');
+    const modeBindings = { ...Object.fromEntries(registered.map(r => [r.id, { sourceRoot: r.source_root, wikiRoot: r.wiki_root }])), ...bindings };
+    for (const mount of declaredKnowledgeMounts(this.agent, registered.map(r => ({ ...r, type: 'knowledge' })))) {
+      if (!modeBindings[mount.kbId] || ids.has(mount.kbId) || !mount.actions.includes('read')) fail('知识库绑定缺失、重复或没有 read 权限。');
       ids.add(mount.kbId);
-      const kb = (await this.query('SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [mount.kbId])).rows[0];
+      const kb = (await this.query('SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND $2::uuid IS NOT NULL AND id=$3', [mount.kbId])).rows[0];
+      if (!kb) continue; // Explicitly deleted configured defaults stay deleted until POST /knowledge.
       // Effective mode changes only at service startup; queued tasks/Threads bind the resulting descriptor.
       const prepared = mount.mode === 'rag' && kb.index_revision && this.rag && await this.rag.ready(this, kb);
       const previous = (await this.query('SELECT effective_mode FROM agent_data.knowledge_mounts WHERE instance_id=$1 AND agent_id=$3 AND kb_id=$4 AND $2::uuid IS NOT NULL', [this.agent.definition.agent.id, mount.kbId])).rows[0];
       if (mount.mode === 'rag' && previous?.effective_mode === 'rag' && !prepared) fail('已启用的 RAG 当前不可用；恢复配置或显式切回 Wiki 后重建索引。', 'RAG_NOT_READY');
       const effective = prepared ? 'rag' : 'wiki';
       this.modes[mount.kbId] = effective;
-      await this.query(`INSERT INTO agent_data.knowledge_mounts(instance_id,agent_id,kb_id,desired_mode,effective_mode)
+      if (!this.sharding || this.sharding.owns(kb.owner_id)) await withShardUser(kb.owner_id, () => this.query(`INSERT INTO agent_data.knowledge_mounts(instance_id,agent_id,kb_id,desired_mode,effective_mode)
         SELECT $1,$3,$4,$5,$6 WHERE $2::uuid IS NOT NULL ON CONFLICT(instance_id,agent_id,kb_id)
         DO UPDATE SET desired_mode=EXCLUDED.desired_mode,effective_mode=EXCLUDED.effective_mode`,
-      [this.agent.definition.agent.id, mount.kbId, mount.mode, effective]);
+      [this.agent.definition.agent.id, mount.kbId, mount.mode, effective]));
     }
     return this;
   }
   async kb(id, action = 'read', client = this.pool) {
-    this.gate.check(action, { kbId: id });
-    const row = (await this.query('SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [id], client)).rows[0];
+    const row = (await this.query(`SELECT * FROM agent_data.knowledge_bases WHERE instance_id=$1 AND ${this.gate.permissionHub ? '$2::uuid IS NOT NULL' : 'owner_id=$2'} AND id=$3`, [id], client)).rows[0];
     if (!row) throw new AppError('知识库不存在或无权访问。', 404);
-    this.gate.check(action, { kbId: id, ownerId: row.owner_id });
+    if (this.gate.permissionHub) this.gate.permissionHub.checkResource('knowledge', id, action === 'read' ? 'read' : 'modify');
+    this.gate.check(action, { kbId: id, ...(this.gate.permissionHub ? {} : { ownerId: row.owner_id }) });
     return row;
   }
   async list() {
     this.gate.current();
-    const mounts = this.agent.definition.agent.knowledge || [];
-    return Promise.all(mounts.map(async m => { const kb = await this.kb(m.kbId); return {
-      kbId: kb.id, visibility: kb.visibility, desiredMode: m.mode, effectiveMode: this.modes[kb.id], indexRevision: kb.index_revision,
-      pending: m.mode !== this.modes[kb.id], actions: m.actions
+    const mounts = effectiveKnowledgeMounts(this.agent, this.gate.permissionHub);
+    const owned = this.gate.permissionHub ? new Set(this.gate.permissionHub.visible().filter(r => r.type === 'knowledge').map(r => r.id)) : new Set((await this.query('SELECT id FROM agent_data.knowledge_bases WHERE instance_id=$1 AND owner_id=$2')).rows.map(row => row.id));
+    return Promise.all(mounts.filter(m => owned.has(m.kbId)).map(async m => { const kb = await this.kb(m.kbId); return {
+      kbId: kb.id, title: kb.title || kb.id, visibility: kb.visibility, desiredMode: m.mode, effectiveMode: this.modes[kb.id] || 'wiki', indexRevision: kb.index_revision,
+      pending: m.mode !== (this.modes[kb.id] || 'wiki'), actions: m.actions
     }; }));
+  }
+  async ownerFiles(owner, client) {
+    const record = (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [owner], client)).rows[0];
+    if (!record) throw new AppError('所有者运行环境尚未初始化。', 409);
+    return { uid: record.uid, workspace: this.resources.ownerWorkspace?.(owner) || path.join(path.dirname(this.resources.files.workspace), owner) };
+  }
+  async create(body) {
+    this.gate.current();
+    if (!this.gate.permissionHub) throw new AppError('需要 Hub。', 409);
+    return this.gate.permissionHub.createKnowledge(body, async (owner, binding, client) => {
+      const { uid, workspace } = await this.ownerFiles(owner, client), bindings = { [body.kbId]: binding };
+      if (process.getuid?.() === 0) await userFileOperation(uid, 'knowledge-create', { workspace, bindings });
+      else prepareKnowledgeDirectories(workspace, bindings, { exclusive: true });
+    });
+  }
+  async delete(id) {
+    this.gate.current();
+    if (!this.gate.permissionHub) throw new AppError('需要 Hub。', 409);
+    const remove = () => this.gate.permissionHub.deleteKnowledge(id, async (row, indexes, client) => {
+      // Active in-memory contexts supplement durable starting/running task records.
+      if ([...this.gate.runs.values()].some(run => run.context.policy?.resources.has(`knowledge:${id}`) &&
+          this.gate.permissionHub.run(run.context.policy, () => effectiveKnowledgeMounts(this.agent, this.gate.permissionHub).some(m => m.kbId === id))))
+        throw new AppError('知识库仍被执行中任务挂载。', 409, 'KNOWLEDGE_BUSY');
+      if (indexes.some(i => i.manifest) && !this.rag) throw new AppError('需要恢复 RAG 配置后清理索引。', 409);
+      for (const index of indexes) if (index.manifest) await this.rag.discard(index.manifest);
+      const { uid, workspace } = await this.ownerFiles(row.owner_id, client);
+      const binding = { sourceRoot: row.source_root, wikiRoot: row.wiki_root };
+      if (process.getuid?.() === 0) await userFileOperation(uid, 'knowledge-delete', { workspace, binding });
+      else removeKnowledgeDirectories(workspace, binding);
+    });
+    const result = await (this.boundary ? this.boundary.run(remove) : remove());
+    delete this.modes[id];
+    return result;
   }
   async pages(kbId) {
     await this.kb(kbId);
     const rows = (await this.query(`SELECT p.slug,p.current_version AS "versionId",v.revision,v.created_at AS "createdAt"
       FROM agent_data.wiki_pages p JOIN agent_data.wiki_versions v ON v.instance_id=p.instance_id AND v.id=p.current_version
       JOIN agent_data.knowledge_bases k ON k.instance_id=p.instance_id AND k.id=p.kb_id
-      WHERE p.instance_id=$1 AND k.owner_id=$2 AND p.kb_id=$3 ORDER BY p.slug LIMIT 201`, [kbId])).rows;
+      WHERE p.instance_id=$1 AND ${this.gate.permissionHub ? '$2::uuid IS NOT NULL' : 'k.owner_id=$2'} AND p.kb_id=$3 ORDER BY p.slug LIMIT 201`, [kbId])).rows;
     this.gate.check('read', { kbId });
     // Listing grants no content validity; read() rechecks every source before returning the body.
     return { kbId, pages: rows.slice(0, 200), truncated: rows.length > 200 };
   }
-  async importSource({ kbId, name, content, ...unknown }) {
+  async importSource(body) {
+    const operation = () => this.importSourceAtBoundary(body);
+    return this.boundary ? this.boundary.run(operation) : operation();
+  }
+  async importSourceAtBoundary({ kbId, name, content, ...unknown }) {
     if (Object.keys(unknown).length || !['operator', 'user'].includes(this.gate.current().kind))
       throw new AppError('原文导入只允许本地操作者。', 403, 'FORBIDDEN');
     const kb = await this.kb(kbId, 'update');
@@ -80,28 +126,33 @@ export class KnowledgeService extends Repository {
         typeof content !== 'string' || !content.trim() || Buffer.byteLength(content) > 256 * 1024)
       throw new AppError('请选择非空 .md/.txt 文本，文件名不能含路径，大小不超过 256 KiB。', 400);
     resourcePath(kb.source_root);
-    const base = this.resources.files.workspace;
+    const base = this.gate.permissionHub
+      ? (this.resources.ownerWorkspace?.(kb.owner_id) || path.join(path.dirname(this.resources.files.workspace), kb.owner_id))
+      : this.resources.files.workspace;
+    const ownerRuntime = this.gate.permissionHub ? (await this.query('SELECT uid FROM agent_data.user_runtimes WHERE instance_id=$1 AND user_id=$3 AND $2::uuid IS NOT NULL', [kb.owner_id])).rows[0] : null;
+    if (this.gate.permissionHub && !ownerRuntime) throw new AppError('所有者运行环境尚未初始化。', 409);
     const relative = `${kb.source_root}/${name}`;
     this.gate.check('read', { path: relative });
-    // Human ingestion is separate from agent write_file: KB sources stay read-only to the agent.
-    let directory = base;
-    for (const part of ['', ...kb.source_root.split('/')]) {
-      if (part) directory = path.join(directory, part);
-      const info = fs.lstatSync(directory);
-      if (!info.isDirectory() || info.isSymbolicLink()) throw new AppError('原文目录必须是真实目录。', 409);
-    }
+    // Human ingestion remains separate from agent write_file (sources are read-only).
     this.gate.current();
-    try { fs.writeFileSync(path.join(directory, name), content, { flag: 'wx', mode: 0o600, flush: true }); }
-    catch (error) { if (error.code === 'EEXIST') throw new AppError('同名原文已存在，请更换文件名；未覆盖。', 409); throw error; }
+    this.sharding?.assertPrimary(kb.owner_id);
+    if (this.gate.permissionHub && !kb.user_created) {
+      const bindings = { [kb.id]: { sourceRoot: kb.source_root, wikiRoot: kb.wiki_root } };
+      if (process.getuid?.() === 0) await userFileOperation(ownerRuntime.uid, 'knowledge-create', { workspace: base, bindings, exclusive: false });
+      else prepareKnowledgeDirectories(base, bindings);
+    }
+    createSourceFile(base, kb.source_root, name, content, ownerRuntime?.uid);
     try {
-      const saved = await this.resources.read_file({ path: relative, max_chars: 1 });
+      const saved = this.gate.permissionHub
+        ? await this.resources.registerImported(kb, relative, content)
+        : await this.resources.read_file({ path: relative, max_chars: 1 });
       return { kbId, path: relative, resourceId: saved.resourceId, versionId: saved.versionId, bytes: Buffer.byteLength(content) };
     } catch {
       throw new AppError('原文已保存但版本登记未完成；请在资料浏览中读取核对，不要重复上传。', 409, 'IMPORT_UNCONFIRMED');
     }
   }
   wikiPath(locator) {
-    return Object.entries(this.agent.definition.bindings.knowledgeBases || {}).find(([, b]) => locator === b.wikiRoot || locator.startsWith(b.wikiRoot + '/'));
+    return Object.entries(this.gate.bindings()).find(([, b]) => locator === b.wikiRoot || locator.startsWith(b.wikiRoot + '/'));
   }
   async sourceVersions(kb, references, client) {
     if (!Array.isArray(references) || !references.length || references.length > 200) fail('必须引用 1–200 个当前原始资料版本。');
@@ -111,7 +162,7 @@ export class KnowledgeService extends Repository {
       keys.add(ref.resourceId);
       const row = await this.resources.get(ref.resourceId, client);
       await this.resources.readable(row, client);
-      if (!row.locator.startsWith(kb.source_root + '/') || row.kind !== 'original') fail('只接受本知识库的原始资料。');
+      if (row.owner_id !== kb.owner_id || !row.locator.startsWith(kb.source_root + '/') || row.kind !== 'original') fail('只接受本知识库的原始资料。');
       if (row.current_version !== ref.versionId) fail('来源版本已变化，需要重新读取。', 'SOURCE_STALE');
     }
   }
@@ -134,7 +185,7 @@ export class KnowledgeService extends Repository {
     if (!slugPattern.test(slug || '')) fail('Wiki 页面名称无效。');
     const row = (await this.query(`SELECT v.* FROM agent_data.wiki_pages p JOIN agent_data.wiki_versions v
       ON v.instance_id=p.instance_id AND v.id=p.current_version JOIN agent_data.knowledge_bases k
-      ON k.instance_id=p.instance_id AND k.id=p.kb_id WHERE p.instance_id=$1 AND k.owner_id=$2 AND p.kb_id=$3 AND p.slug=$4`, [kbId, slug])).rows[0];
+      ON k.instance_id=p.instance_id AND k.id=p.kb_id WHERE p.instance_id=$1 AND ${this.gate.permissionHub ? '$2::uuid IS NOT NULL' : 'k.owner_id=$2'} AND p.kb_id=$3 AND p.slug=$4`, [kbId, slug])).rows[0];
     if (!row) throw new AppError('没有生效的 Wiki 页面。', 404);
     await this.refresh(row.sources); await this.sourceVersions(kb, row.sources);
     const content = this.readBlob(row.blob, row.revision);
@@ -168,7 +219,7 @@ export class KnowledgeService extends Repository {
     if (typeof query !== 'string' || !query.trim() || query.length > 500 || !Number.isInteger(limit) || limit < 1 || limit > 20) fail('查询或 limit 无效。');
     if (this.modes[kbId] === 'rag') return this.rag.search(this, kb, query, limit);
     const pages = (await this.query(`SELECT p.slug FROM agent_data.wiki_pages p JOIN agent_data.knowledge_bases k ON k.instance_id=p.instance_id AND k.id=p.kb_id
-      WHERE p.instance_id=$1 AND k.owner_id=$2 AND p.kb_id=$3 AND p.current_version IS NOT NULL ORDER BY p.slug LIMIT 201`, [kbId])).rows;
+      WHERE p.instance_id=$1 AND ${this.gate.permissionHub ? '$2::uuid IS NOT NULL' : 'k.owner_id=$2'} AND p.kb_id=$3 AND p.current_version IS NOT NULL ORDER BY p.slug LIMIT 201`, [kbId])).rows;
     const hits = [];
     for (const { slug } of pages.slice(0, 200)) {
       let page;
@@ -210,7 +261,7 @@ export class KnowledgeService extends Repository {
   }
   async job(id) {
     const row = (await this.query(`SELECT j.* FROM agent_data.knowledge_jobs j JOIN agent_data.knowledge_bases k ON j.instance_id=k.instance_id AND j.kb_id=k.id
-      WHERE j.instance_id=$1 AND k.owner_id=$2 AND j.id=$3`, [id])).rows[0];
+      WHERE j.instance_id=$1 AND ${this.gate.permissionHub ? '$2::uuid IS NOT NULL' : 'k.owner_id=$2'} AND j.id=$3`, [id])).rows[0];
     if (!row) throw new AppError('索引任务不存在。', 404);
     await this.kb(row.kb_id); return row;
   }

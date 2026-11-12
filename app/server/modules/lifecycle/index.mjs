@@ -20,6 +20,6 @@ export function createLifecycle() {
 
 export function publishConnection(root, connection, lifecycle) {
   const file = path.join(root, ".data", "connection.json");
-  writeJson(file, connection);
-  lifecycle.defer(() => { if (readJson(file, null)?.token === connection.token) unlinkSync(file); });
+  writeJson(file, { url: connection.url });
+  lifecycle.defer(() => { if (readJson(file, null)?.url === connection.url) unlinkSync(file); });
 }

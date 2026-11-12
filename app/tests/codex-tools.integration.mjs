@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { startAgentServer } from "../server/main.mjs";
+import { startAgentServer } from "./authenticated-server.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 import { RunMaintenance, RUN_RETENTION } from "../server/modules/maintenance/index.mjs";
 import { tempRoot, cleanup, until, installToolFixture } from "./helpers.mjs";

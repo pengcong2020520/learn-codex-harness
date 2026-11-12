@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { identity } from "../server/modules/data/database.mjs";
+import { userWorkspace } from "../server/modules/accounts/workspace.mjs";
 import path from "node:path";
 import { loadEnvironment } from "../server/modules/config/index.mjs";
 import { selectAgentFile } from "../server/modules/agents/selection.mjs";
@@ -48,7 +50,7 @@ try {
   directory(workspace);
   await resolveWorkspace(PROJECT_ROOT, workspace);
   for (const root of roots) {
-    let target = workspace;
+    let target = userWorkspace(workspace, identity(PROJECT_ROOT).ownerId);
     for (const part of root.split("/")) {
       target = path.join(target, part);
       directory(target);

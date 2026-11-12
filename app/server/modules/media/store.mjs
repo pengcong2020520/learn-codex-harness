@@ -11,6 +11,6 @@ export class MediaJobs extends Repository {
     return (await this.query('SELECT payload FROM agent_data.media_jobs WHERE instance_id=$1 AND owner_id=$2 AND id=$3', [id])).rows[0]?.payload;
   }
   async pending() {
-    return (await this.query("SELECT payload FROM agent_data.media_jobs WHERE instance_id=$1 AND owner_id=$2 AND status NOT IN ('completed','failed') ORDER BY created_at")).rows.map(row => row.payload);
+    return (await this.systemQuery("SELECT payload,owner_id FROM agent_data.media_jobs WHERE instance_id=$1 AND $2::uuid IS NOT NULL AND status NOT IN ('completed','failed') ORDER BY created_at")).rows.map(row => ({ ...row.payload, ownerId: row.owner_id }));
   }
 }

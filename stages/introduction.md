@@ -83,7 +83,7 @@ Codex 已经是一个很强的 Agent：会读文件、跑命令、调工具、�
 | [s17](s17-sharding/README.md) | 分片路由（Sharding） | 用户分到不同节点，从任意入口都能找到他 |
 | [s18](s18-replication/README.md) | 高可用与故障接管（Replication / Failover） | 副本接手继续服务，丢了什么说得清 |
 
-完整项目 [app](../app/README.md) 在 s11 之上持续开发，Web 工作台和互动课程位于 [course](../course/README.md)；s12–s18 是各自独立的部署快照。
+完整项目 [app](../app/README.md) 以 s18 为内核持续开发，Web 工作台和互动课程位于 [course](../course/README.md)；s12–s18 是各自独立的部署快照。
 
 开工之前，先弄清楚我们要用的这个引擎。
 

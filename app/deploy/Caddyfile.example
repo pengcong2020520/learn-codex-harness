@@ -1,0 +1,8 @@
+# Optional host-side HTTPS proxy. Preserve each client's own Bearer identity.
+example.com {
+  reverse_proxy 127.0.0.1:4317 {
+    header_up Host {http.request.host}
+    flush_interval -1
+  }
+  # Do not enable request-body or Authorization logging.
+}

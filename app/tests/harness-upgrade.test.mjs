@@ -194,9 +194,9 @@ test("工具执行函数收到冻结的可信三元组；并行会话隔离，�
     assert.equal(v.context.turnId, contexts[i].turnId);
     assert.equal(v.frozen, true);
   }
-  assert.throws(() =>
-    gate.start({ id: "evil", threadId: "other", userId: "forged" }),
-  );
+  gate.start({ id: "another-owner", threadId: "other", userId: "other-owner" });
+  gate.started("other", "other-turn");
+  assert.equal(gate.forTurn("other", "other-turn").ownerId, "other-owner");
   assert.equal(
     (
       await registry.call(
