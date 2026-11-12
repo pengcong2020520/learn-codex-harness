@@ -42,7 +42,7 @@ for (const shard of cluster.shards) {
   assert.equal(shard.replica, null, `分片 ${shard.shardId} 不应有副本`);
 }
 
-const created = await expectStatus(await fetch(`${url}/sessions`, { method: 'POST', headers, body: '{}' }), 200, '创建会话（拉起该用户的 Codex 进程）');
+const created = await expectStatus(await fetch(`${url}/sessions`, { method: 'POST', headers, body: '{}' }), 201, '创建会话（拉起该用户的 Codex 进程）');
 const session = await created.json();
 assert.ok(session.id, '会话 ID');
 await expectStatus(await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, { headers }), 200, '读取会话状态');
