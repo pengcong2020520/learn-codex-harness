@@ -10,7 +10,7 @@ import {
   loadServerConfig,
   createLogRedactor,
 } from "../server/modules/config/index.mjs";
-import { startAgentServer } from "../server/main.mjs";
+import { startAgentServer } from "../tests/authenticated-server.mjs";
 import { openDatabase, migrate } from "../server/modules/data/database.mjs";
 import { AgentClient } from "../client/modules/connection/index.mjs";
 import { installToolFixture } from "../tests/helpers.mjs";

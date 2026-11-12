@@ -114,6 +114,9 @@ export async function runOnce({ label, agentDir, scenario, index, env, out, time
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  console.error('角色在线评测暂未适配当前账号与隔离内核：旧执行器缺少账号身份、用户运行环境及协调节点生命周期。建议改为连接已部署服务的认证 HTTP 客户端；离线评分请继续使用 npm run eval:role:score。');
+  process.exit(1);
+
   const { values } = parseArgs({ options: {
     variant: { type: "string", multiple: true }, repeat: { type: "string", default: "3" }, only: { type: "string", default: "" },
     env: { type: "string", default: path.join(app, ".env") }, out: { type: "string" }, "timeout-min": { type: "string", default: "20" },

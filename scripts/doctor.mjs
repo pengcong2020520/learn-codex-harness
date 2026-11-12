@@ -69,10 +69,10 @@ export async function main(argv = process.argv.slice(2), { root = ROOT, env = pr
         if (item.kind !== "login" && stage.id !== "s00" && item.values.CODEX_MODEL_CATALOG_ENABLED === "true" && !item.values.CODEX_MODEL?.trim()) {
           report(false, "本地模型目录缺少模型名", "填写 CODEX_MODEL，或设 CODEX_MODEL_CATALOG_ENABLED=false");
         }
-        if (["s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id)) {
+        if (["s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id)) {
           report(Boolean(item.values.AGENT_DB_PASSWORD?.trim() && item.values.CONTAINER_APP_DIR?.trim()), "独立部署配置（不检查 Docker）", `填写 AGENT_DB_PASSWORD / CONTAINER_APP_DIR，按 ${stage.id} README 配置 Compose`);
           log(`提示：数据库与 Redis URL 由 Compose 注入；部署与 SSH 隧道见 ${stage.relative}/README.md。`);
-        } else if (/^s(08|09|10|11)$/.test(stage.id) || stage.id === "app") {
+        } else if (/^s(08|09|10|11)$/.test(stage.id)) {
           report(Boolean(item.values.DATABASE_URL && item.values.REDIS_URL), "数据库配置（不检查连通性）", "配置 DATABASE_URL / REDIS_URL，按阶段说明启动数据库并迁移");
           log("提示：启动前还需 PostgreSQL、Redis 与 data:migrate；本检查不连接数据库。");
         }

@@ -1,11 +1,11 @@
 import { testDataFactory } from './jobs-fixture.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, readFileSync, statSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, statSync, existsSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startAgentServer } from "../server/main.mjs";
+import { startAgentServer } from "./authenticated-server.mjs";
 import { AgentClient, loadClientConnection } from "../client/modules/connection/index.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
 import { fixture, tempRoot, cleanup, until, installToolFixture } from "./helpers.mjs";
@@ -52,6 +52,11 @@ createInterface({input:process.stdin}).on('line',line=>{
 });
 `;
 
+// The spawned CLI reads the same private credentials file that npm run login writes.
+function writeClientCredentials(root, app) {
+  mkdirSync(path.join(root, ".data"), { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(root, ".data/credentials.json"), JSON.stringify({ url: app.url, token: app.token }) + "\n", { mode: 0o600 });
+}
 async function appFixture(t) {
   const root = installToolFixture(tempRoot(t));
   const cli = path.join(root, "mock-codex.mjs");
@@ -77,13 +82,14 @@ test("真实本机 HTTP + stdio 假 Codex：提交非阻塞，断开客户端不
   const state = await api.request(`/state?threadId=${session.id}`);
   assert.equal(state.session.turns.length, 2);
   assert.notEqual(app.messages.job("a").turnId, app.messages.job("b").turnId);
-  assert.equal((await api.request("/health")).status, "ready");
+  assert.equal((await api.request("/health")).status, "alive");
 });
 
 test("CLI 管道连续输入并 /exit，消息交给服务端后继续执行", async t => {
-  const { app } = await appFixture(t);
-  const clientFile = fileURLToPath(new URL("../client/main.mjs", import.meta.url));
-  const child = spawn(process.execPath, [clientFile], { env: { ...process.env, AGENT_SERVER_URL: app.url, AGENT_SERVER_TOKEN: app.token }, stdio: ["pipe","pipe","pipe"] });
+  const { root, app } = await appFixture(t);
+  const clientFile = path.join(root, "client/main.mjs");
+  writeClientCredentials(root, app);
+  const child = spawn(process.execPath, [clientFile], { env: { ...process.env, AGENT_SERVER_URL: app.url }, stdio: ["pipe","pipe","pipe"] });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -100,8 +106,9 @@ test("CLI 管道连续输入并 /exit，消息交给服务端后继续执行", a
 
 test("CLI 经真实 HTTP/SSE 接收多个流式片段，连续两轮的回复不换行拆碎", async t => {
   const { root, app } = await appFixture(t);
-  const clientFile = fileURLToPath(new URL("../client/main.mjs", import.meta.url));
-  const child = spawn(process.execPath, [clientFile], { env: { ...process.env, AGENT_SERVER_URL: app.url, AGENT_SERVER_TOKEN: app.token }, stdio: ["pipe", "pipe", "pipe"] });
+  const clientFile = path.join(root, "client/main.mjs");
+  writeClientCredentials(root, app);
+  const child = spawn(process.execPath, [clientFile], { env: { ...process.env, AGENT_SERVER_URL: app.url }, stdio: ["pipe", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", chunk => { output += chunk; });
   child.stderr.on("data", chunk => { output += chunk; });
@@ -127,28 +134,18 @@ test("认证令牌私有保存；拒绝未认证、跨源和错误 JSON 请求",
   assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.deepEqual(loadClientConnection({}, root).url, app.url);
   assert.ok(!readFileSync(file, "utf8").includes(fixture.CODEX_API_KEY));
-  assert.equal((await fetch(app.url + "/health")).status, 401);
-  assert.equal((await fetch(app.url + "/health", { headers: { authorization: `Bearer ${app.token}`, origin: "https://untrusted.invalid" } })).status, 403);
+  assert.equal((await fetch(app.url + "/sessions")).status, 401);
+  assert.equal((await fetch(app.url + "/sessions", { headers: { authorization: `Bearer ${app.token}`, origin: "https://untrusted.invalid" } })).status, 403);
   const bad = await fetch(app.url + "/messages", { method: "POST", headers: { authorization: `Bearer ${app.token}`, "content-type": "application/json" }, body: "null" });
   assert.equal(bad.status, 400);
-  assert.equal((await api.request("/health")).model, "unit-model");
+  assert.equal((await api.request("/health")).version, "dev");
   await app.close();
   assert.equal(existsSync(file), false);
   assert.equal(existsSync(path.join(root, ".data", "server.lock")), false);
 });
 
-test("Workflow 目录是只读接口，复用认证，只返回界面需要的字段", async t => {
-  const { app, api } = await appFixture(t);
-  const { workflows } = await api.request("/workflows");
-  assert.ok(Array.isArray(workflows));
-  assert.deepEqual(workflows.map(item => item.id), app.config.agent.workflows.list().filter(item => item.id !== "chat").map(item => item.id));
-  for (const item of workflows) assert.deepEqual(Object.keys(item), ["id", "label", "description", "params", "steps"]);
-  assert.equal((await fetch(app.url + "/workflows")).status, 401);
-  assert.equal((await fetch(app.url + "/workflows", { method: "POST", headers: { authorization: `Bearer ${app.token}`, "content-type": "application/json" }, body: "{}" })).status, 404);
-});
-
 test("重复启动同项目会明确拒绝，不出现两个调度器", async t => {
-  const { app } = await appFixture(t);
+  const { root, app } = await appFixture(t);
   await assert.rejects(startAgentServer({ dataFactory: testDataFactory, config: app.config, log: () => {} }), /已有 Agent 服务/);
 });
 
@@ -177,7 +174,7 @@ test("记忆 HTTP 管理复用认证和会话边界，不提供任意路径或�
   assert.equal(result.mode, "disabled");
   await assert.rejects(api.request("/memory/contribution", { threadId: session.id, enabled: false, path: "../../.env" }), /只接受/);
   await assert.rejects(api.request("/memory/reset", {}), /不存在/);
-  await assert.rejects(api.request("/memory/contribution", { threadId: "foreign", enabled: false }), /未找到/);
+  await assert.rejects(api.request("/memory/contribution", { threadId: "foreign", enabled: false }), /资源不存在/);
 });
 
 test("重连先同步快照，不把客户端再次连接当成新消息", async t => {

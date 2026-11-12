@@ -74,7 +74,7 @@ async function managerFixture(t) {
     if (method === "mcpServerStatus/list") return { data: [{ name: "project_tools", tools: Object.fromEntries(selected.specs.map(tool => [tool.name, tool])), toolsError: null }], nextCursor: null };
     throw new Error(method);
   } };
-  manager.attach({ rpc, isBusy: () => [...sessions.sessions.values()].some(session => session.activeTurnId), hub });
+  manager.attach({ owners: () => ["fixture-owner"], rpc, isBusy: () => [...sessions.sessions.values()].some(session => session.activeTurnId), hub });
   return { root, config, manager, sessions, calls, hub, failNextReload: () => { fail = true; } };
 }
 

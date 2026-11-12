@@ -109,6 +109,7 @@ export async function runChat(api, terminal) {
     renderingTurnId = null;
     reported = new Set();
     terminal.write(`Thread id: ${session.id}\n模型：${session.model || "服务端配置"}`);
+    for (const warning of session.warnings || []) terminal.write(`${warning.taskId}：${warning.message}`);
     renderSession(session);
     const stream = api.subscribe(session.id, event => {
       if (event.threadId && event.threadId !== current?.id) return;
@@ -130,9 +131,10 @@ export async function runChat(api, terminal) {
             terminal.write(`模型：${job.selectedModel}（${job.modelSource}）`);
           }
           const key = `${job.id}:${job.status}:${job.step || 0}`;
-          if (reported.has(key) || !(["waiting", "proposed"].includes(job.status) || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
+          if (reported.has(key) || !(["waiting", "proposed", "replica_missing"].includes(job.status) || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
           reported.add(key);
-          if (job.status === "proposed") terminal.write(`Agent 提议执行工作流 ${job.workflow}${job.params ? ` ${JSON.stringify(job.params)}` : ""}：${job.text}\n理由：${job.reason}\n/confirm [补充说明] 执行，/reject 忽略。确认前不会执行，也不授予权限。`);
+          if (job.status === "replica_missing") terminal.write(`${job.id}：${job.error || "该轮结果在故障接管时丢失，请核对"}`);
+          else if (job.status === "proposed") terminal.write(`Agent 提议执行工作流 ${job.workflow}${job.params ? ` ${JSON.stringify(job.params)}` : ""}：${job.text}\n理由：${job.reason}\n/confirm [补充说明] 执行，/reject 忽略。确认前不会执行，也不授予权限。`);
           else if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/reject 结束。`);
           else if (event.type !== "snapshot") terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
         }

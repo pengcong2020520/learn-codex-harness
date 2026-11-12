@@ -1,3 +1,4 @@
+import { userFileOperation } from '../runtimes/user-files.mjs';
 import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -67,13 +68,13 @@ function ownerAlive(directory) {
 }
 
 export class RunMaintenance {
-  constructor({ root, runtime, sessions, log = () => {}, policy = RUN_RETENTION, inspectOpenPaths = openPaths }) {
+  constructor({ root, runtime, sessions, runsDir, log = () => {}, policy = RUN_RETENTION, inspectOpenPaths = openPaths, protectedDirectories = [] }) {
     if (!(policy.maxAgeMs > 0) || !Number.isInteger(policy.keep) || policy.keep < 1 ||
         !Number.isInteger(policy.intervalMs) || policy.intervalMs < 1 || policy.intervalMs > 2147483647) throw new Error("运行缓存保留规则无效。");
-    Object.assign(this, { root, runtime, sessions, log, policy, inspectOpenPaths });
+    Object.assign(this, { root, runtime, sessions, runsDir, log, policy, inspectOpenPaths, protectedDirectories });
   }
   protected(directory) {
-    return this.closed || directory === (this.runtime?.runDir || this.runtime?.workspace) || directory === this.runtime?.workspaceDir || this.sessions?.loading.size > 0 ||
+    return this.closed || this.protectedDirectories.includes(directory) || directory === (this.runtime?.runDir || this.runtime?.workspace) || directory === this.runtime?.workspaceDir || this.sessions?.loading.size > 0 ||
       [...(this.sessions?.sessions.values() || [])].some(session => path.resolve(session.cwd) === directory);
   }
   async start() {
@@ -93,7 +94,16 @@ export class RunMaintenance {
     return this.running;
   }
   async prune(now, dryRun) {
-    const runs = path.resolve(this.root, ".runs"), result = { removed: [], bytes: 0, skipped: [] };
+    if (this.runtime?.isolated) {
+      // 缓存扫描/删除也在用户 uid 内执行；服务只传必要路径与保留规则。
+      if (this.closed || this.sessions?.loading.size > 0) return { removed: [], bytes: 0, skipped: [] };
+      return userFileOperation(this.runtime.uid, 'prune', { now, dryRun, options: {
+        root: this.root, runsDir: this.runsDir, policy: this.policy,
+        protectedDirectories: [...(this.sessions?.sessions.values() || [])].map(session => path.resolve(session.cwd)),
+        runtime: { runDir: this.runtime.runDir, workspaceDir: this.runtime.workspaceDir },
+      } });
+    }
+    const runs = this.runsDir || path.resolve(this.root, ".runs"), result = { removed: [], bytes: 0, skipped: [] };
     let info;
     try { info = fs.lstatSync(runs); } catch (error) { if (error.code === "ENOENT") return result; throw error; }
     if (!info.isDirectory() || info.isSymbolicLink()) throw new Error(".runs 不是普通目录。");
@@ -113,7 +123,7 @@ export class RunMaintenance {
       try {
         if (this.protected(directory) || ownerAlive(directory) || opened.some(file => file === directory || file.startsWith(directory + path.sep))) continue;
         if (dryRun) { result.removed.push(path.basename(directory)); result.bytes += item.bytes; continue; }
-        await rememberRunHistory(this.root, directory, this.runtime?.workspaceDir);
+        if (!this.runsDir) await rememberRunHistory(this.root, directory, this.runtime?.workspaceDir);
         // await 期间可能恢复了会话或写入了文件。删除前再次核验，不跨 await 做删除。
         if (this.protected(directory) || ownerAlive(directory) || inspectCache(directory).stamp !== item.stamp) continue;
         fs.rmSync(directory, { recursive: true });

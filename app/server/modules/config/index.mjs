@@ -1,4 +1,7 @@
 // 配置模块：只在服务端读取模型密钥，不向客户端返回完整环境变量。
+import { clusterNodes } from "./cluster.mjs";
+import { replicationRateLimit } from "../replication/transport.mjs";
+import { deploymentConfig } from "../deployment/index.mjs";
 import { budgetConfig } from "../usage/config.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -34,7 +37,7 @@ export function createLogRedactor(apiKey = "", additional = []) {
     .sort((a, b) => b.length - a.length);
   const redact = value => {
     let text = typeof value === "string" ? value : JSON.stringify(value, (key, entry) =>
-      /^(api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)$/i.test(key) ? "[REDACTED]" : entry
+      /^(password(?:_hash)?|token(?:_hash)?|api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)$/i.test(key) ? "[REDACTED]" : entry
     );
     for (const secret of secrets) text = text.split(secret).join("[REDACTED]");
     return text;
@@ -75,10 +78,16 @@ function partialSuffix(text, secret) {
 
 export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   const environment = loadEnvironment(root, inherited);
-  const port = Number(environment.AGENT_PORT || 4317);
+  const nodes = clusterNodes(environment);
+  const rateLimit = replicationRateLimit(environment);
+  const port = Number(environment.AGENT_PORT || 4340);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("AGENT_PORT 必须是 1 到 65535 的整数。");
   const turnTimeoutMs = Number(environment.AGENT_TURN_TIMEOUT_MS || 600_000);
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs < 1 || turnTimeoutMs > 2_147_483_647) throw new Error("AGENT_TURN_TIMEOUT_MS 必须是有效的正整数毫秒数。");
+  if (environment.AGENT_DEPLOYED === "true") {
+    const enabled = JSON.parse(readFileSync(path.join(root, ".data/gateway/enabled-providers.json"), "utf8"));
+    environment.AGENT_ENABLED_PROVIDERS = enabled.join(",");
+  }
   const registry = loadModelRegistry(root), budget = budgetConfig(environment);
   const launch = buildRestrictedLaunch(environment, { registry });
   if (budget.downgradeAt !== null && [budget.dailyTokens, budget.monthlyTokens, budget.dailyCost, budget.monthlyCost].some(limit => limit !== null)) {
@@ -119,5 +128,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
   const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
   if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
-  return { root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
+  return { clusterNodes: nodes, replicationRateLimit: rateLimit, authMemorySetting: environment.AGENT_MEMORY_ENABLED, deployment: deploymentConfig(environment), root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
 }

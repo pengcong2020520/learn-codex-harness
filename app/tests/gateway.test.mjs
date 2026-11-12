@@ -90,7 +90,7 @@ test("网关配置：备用模型的服务商没有密钥时不写进备用链�
   const withOllama = buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://ollama:11434" });
   assert.deepEqual(withOllama.providers.ollama, { keys: [{ name: "ollama", value: "", models: ["qwen3-embedding:0.6b"], weight: 1, ollama_key_config: { url: "http://ollama:11434" } }],
     network_config: { base_url: "http://ollama:11434", allow_private_network: true } }, "容器名地址属于内网，要显式放行");
-  assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://ollama.example.com" }), /OLLAMA_BASE_URL 必须是 https/);
+  assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://example.com" }), /OLLAMA_BASE_URL 必须是 https/);
   const withClaude = buildGatewayConfig(registry, { ...gatewayEnv, ANTHROPIC_API_KEY: "sk-ant-x" });
   assert.deepEqual(withClaude.providers.anthropic.keys[0].models, ["claude-sonnet-5-5"]);
   // 智谱没有 OpenAI 新接口，按 Claude 格式接入：自定义服务商、接口类型 anthropic、地址指向它的 Claude 兼容接口。
@@ -183,7 +183,7 @@ test("生成网关配置文件与访问密钥：文件不含密钥；密钥只�
 test("放进容器：网关地址可以指到容器名；容器名走 http 允许，外部地址的 http 仍拒绝；监听地址只能是本机或全部网卡", async t => {
   const { loadServerConfig } = await import("../server/modules/config/index.mjs");
   assert.equal(gatewayEndpoint({ AGENT_GATEWAY_KEY: "sk-bf-k", AGENT_GATEWAY_URL: "http://gateway:8080/v1" }).baseUrl, "http://gateway:8080/v1");
-  assert.throws(() => gatewayEndpoint({ AGENT_GATEWAY_KEY: "sk-bf-k", AGENT_GATEWAY_URL: "http://gateway.example.com/v1" }), /AGENT_GATEWAY_URL 必须是 https/);
+  assert.throws(() => gatewayEndpoint({ AGENT_GATEWAY_KEY: "sk-bf-k", AGENT_GATEWAY_URL: "http://example.com/v1" }), /AGENT_GATEWAY_URL 必须是 https/);
   const launch = buildAppServerLaunch({ ...gatewayEnv, AGENT_GATEWAY_URL: "http://gateway:8080/v1" }, "", { registry });
   assert.ok(launch.args.includes('model_providers.project_api.base_url="http://gateway:8080/v1"'));
   assert.throws(() => buildAppServerLaunch({ CODEX_API_KEY: "k", CODEX_BASE_URL: "http://provider.example/v1", CODEX_MODEL: "m" }), /只有本机回环地址或容器名允许 HTTP/);

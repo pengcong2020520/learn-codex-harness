@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import { loadEnvironment, buildModelCatalog, buildAppServerLaunch, prepareRun, createLogRedactor, parseOptions, createChatInput, listProjectThreads, runAppServer } from "./05-app-server.mjs";
+import { buildModelCatalog as buildDeploymentCatalog } from "./server/modules/codex/launch.mjs";
 import { AGENT_INSTRUCTIONS } from "./05-app-server.mjs";
 
 const fixture = {
@@ -111,10 +112,11 @@ test("拒绝互相矛盾的图片和详细程度声明", () => {
 });
 test("模板中的参数能完整生成目录，且不带密钥、地址等认证信息", () => {
   const template = parseEnv(readFileSync(new URL(".env.example", import.meta.url), "utf8"));
-  const catalog = buildModelCatalog({ ...template, CODEX_API_KEY: fixture.CODEX_API_KEY, OTHER_SECRET: "not-for-catalog" });
+  const registry = JSON.parse(readFileSync(new URL("config/models.json", import.meta.url), "utf8"));
+  const catalog = buildDeploymentCatalog({ ...template, CODEX_API_KEY: fixture.CODEX_API_KEY, OTHER_SECRET: "not-for-catalog" }, AGENT_INSTRUCTIONS, registry);
   const model = catalog.models[0];
   assert.equal(model.slug, template.CODEX_MODEL);
-  assert.equal(model.context_window, Number(template.CODEX_MODEL_CONTEXT_WINDOW));
+  assert.equal(model.context_window, registry.models[template.CODEX_MODEL].contextWindow);
   assert.equal(Object.hasOwn(template, "AGENT_INSTRUCTIONS"), false);
   assert.equal(model.model_messages.instructions_template, AGENT_INSTRUCTIONS);
   assert.ok(!JSON.stringify(catalog).includes(fixture.CODEX_API_KEY));

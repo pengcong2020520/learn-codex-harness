@@ -5,14 +5,13 @@ import { writeText } from "../storage/index.mjs";
 const HEADER = "# project-managed Codex configuration";
 const LEGACY_HEADER = "# project-managed MCP configuration";
 
-export function codexPaths(root) {
-  const home = path.join(root, ".data", "codex");
+export function codexPaths(root, home = path.join(root, ".data", "codex")) {
   return { home, configFile: path.join(home, "config.toml"), memories: path.join(home, "memories") };
 }
 
 // 公共状态位置与配置只有这一处负责；工具模块只提供自己的 MCP 配置。
 export function prepareCodexConfig(config, mcpServers) {
-  const paths = codexPaths(config.root);
+  const paths = codexPaths(config.root, config.codexHome);
   for (const directory of [path.join(config.root, ".data"), paths.home]) {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     const stat = fs.lstatSync(directory);

@@ -1,3 +1,5 @@
+import { fencePool, advanceTerm } from '../coordination/fence.mjs';
+import { requestScope } from "../accounts/context.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import {
@@ -12,21 +14,26 @@ import { RedisQueue } from "./queue.mjs";
 import { Resources } from "./resources.mjs";
 
 export async function openData(config, { onLost = () => {} } = {}) {
-  const pool = await openDatabase(config.data?.databaseUrl);
+  const rawPool = await openDatabase(config.data?.databaseUrl, config.generation ? { maintenance: false } : {});
+  const pool = config.generation ? fencePool(rawPool, config.generation) : rawPool;
   let unlock, queue;
   try {
     await verifySchema(pool);
-    const scope = identity(config.root),
+    if (config.generation && !config.generation.routes) await advanceTerm(rawPool, config.generation);
+    const legacy = identity(config.root);
+    await new Repository(pool, legacy).initialize();
+    const scope = requestScope(legacy.instanceId),
       repository = new Repository(pool, scope),
       jobs = new PostgresJobs(pool, scope);
-    unlock = await acquireDatabaseLock(pool, scope.instanceId, onLost);
-    await repository.initialize();
+    jobs.sharding = config.sharding;
+    jobs.maxQueued = config.deployment?.maxQueued ?? 200;
+    if (!config.generation) unlock = await acquireDatabaseLock(pool, scope.instanceId, onLost);
     if (
       ["messages.json", "thread-agents.json"].some((name) =>
         fs.existsSync(path.join(config.root, ".data", name)),
       )
     ) {
-      const imported = await repository.query(
+      const imported = await repository.systemQuery(
         "SELECT 1 FROM agent_data.imports WHERE instance_id=$1 AND kind='legacy-json' AND $2::uuid IS NOT NULL",
       );
       if (!imported.rowCount)
@@ -34,11 +41,12 @@ export async function openData(config, { onLost = () => {} } = {}) {
           "检测到旧 JSON 状态。请停服后先运行 npm run data:import 预检，再运行 npm run data:import -- --apply；原文件不会删除。",
         );
     }
-    queue = new RedisQueue(config.data?.redisUrl, scope.instanceId, jobs);
+    queue = new RedisQueue(config.data?.redisUrl, scope.instanceId + (config.sharding ? ':' + config.sharding.nodeId : ''), jobs);
     await queue.open();
     return {
       pool,
       scope,
+      sharding: config.sharding,
       repository,
       jobs,
       queue,
@@ -50,7 +58,7 @@ export async function openData(config, { onLost = () => {} } = {}) {
       },
       async close() {
         await queue.close();
-        await unlock();
+        await unlock?.();
         await pool.end();
       },
     };

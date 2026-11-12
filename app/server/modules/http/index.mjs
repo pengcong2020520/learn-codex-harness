@@ -1,5 +1,9 @@
+import { logFailure } from '../data/diagnostics.mjs';
+import { shardUser } from '../sharding/fence.mjs';
+import { hubRoute } from '../hub/routes.mjs';
+import { RequestLimits, createReadiness, revision } from "../deployment/index.mjs";
 import { createServer } from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import { runIdentity } from "../accounts/context.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 import { SESSION_EVENT_TYPES } from "../../../shared/session-events.mjs";
 
@@ -21,14 +25,11 @@ async function readBody(request) {
   catch { throw new AppError("JSON 格式不正确。"); }
 }
 
-function authenticated(request, token) {
-  const provided = Buffer.from(request.headers.authorization || "");
-  const expected = Buffer.from(`Bearer ${token}`);
-  return provided.length === expected.length && timingSafeEqual(provided, expected);
-}
-
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
-export function createHttpService({ config, token, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage = sessions.usage }) {
+export function createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, permissionHub, usage = sessions.usage, readiness, log = console.error }) {
+  const limits = new RequestLimits(config.deployment);
+  const ready = readiness || createReadiness({ config, data, messages, tools });
+  const version = revision(config.root);
   const streams = new Set();
   // 同一个事件推给多个 SSE 连接时，只序列化、脱敏一次。
   const encoded = new WeakMap();
@@ -43,27 +44,56 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
       response.end(redact(data));
     };
     try {
-      // 首版仅支持本机 CLI，拒绝网页跨源调用，不对公网暴露执行能力。
-      if (request.headers.origin) throw new AppError("当前接口仅供本机 CLI 使用。", 403);
-      if (!authenticated(request, token)) throw new AppError("Agent 服务认证失败，请重新连接。", 401);
+      const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+      if (request.headers.origin !== undefined) throw new AppError("当前接口仅供 CLI 使用。", 403);
+      if (request.method === 'GET' && pathname === '/health') return json(200, { status: 'alive', version });
+      if (request.method === 'GET' && pathname === '/ready') {
+        const result = await ready();
+        const replication = await config.sharding?.replication?.status();
+        if (replication?.waiting) { result.status = 'not-ready'; result.waiting = replication.waiting; }
+        if (replication?.replication === 'off') result.replication = 'off';
+        if (replication?.shards.some(s => s.replica_lagging)) result.degraded = { replica_lagging: replication.shards.filter(s => s.replica_lagging).map(s => s.shardId) };
+        return json(result.status === 'ready' ? 200 : 503, result);
+      }
+      config.generation?.assert();
+      const source = request.socket?.remoteAddress || 'unknown';
+      if (request.method === 'POST' && pathname === '/auth/login') {
+        limits.request(null, source);
+        const result = await accounts.login(await readBody(request), source);
+        // 令牌只交付给登录者；不要把认证响应交给日志脱敏器或日志输出。
+        response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        response.end(JSON.stringify(result));
+        return;
+      }
+      let identity;
+      try { identity = await accounts.authenticate(request.headers.authorization); }
+      catch (error) { limits.request(null, source); throw error; }
+      limits.request(identity.userId, source);
       const dispatch = async () => {
       const url = new URL(request.url, "http://127.0.0.1");
       const route = `${request.method} ${url.pathname}`;
+      if (permissionHub && (pathname.startsWith('/hub') || pathname === '/me/plan')) {
+        const result = await hubRoute(permissionHub, request.method, pathname, () => readBody(request));
+        return json(result.status, result.body);
+      }
+      if (route === 'GET /auth/me') return json(200, { user: identity.user });
+      if (route === 'POST /auth/logout') { await accounts.logout(identity); return json(200, { loggedOut: true }); }
       if (route === 'GET /workbench') {
         const definition = config.agent?.definition?.agent;
+        const visibleKnowledge = knowledge ? await knowledge.list() : [];
         return json(200, { agent: definition ? { id: definition.id, version: definition.version,
-          skills: definition.skills, tools: definition.tools, memory: definition.memory,
-          outputs: definition.outputs, knowledge: definition.knowledge || [], workflows: config.agent.workflows.list() } : null,
+          skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
+          outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }
-      // 只读的 Workflow 目录：工作台据此渲染选择器与参数表单；提交仍走 POST /messages 的 workflow + params。
-      if (route === 'GET /workflows') return json(200, { workflows: config.agent?.workflows?.catalog() || [] });
       if (route === 'GET /workspace' && files) return json(200, await files.list_files({ path: url.searchParams.get('path') || '' }));
       if (route === 'GET /workspace/read' && files) return json(200, await files.read_file({ path: url.searchParams.get('path'), max_chars: 262144 }));
       if (route === 'GET /knowledge/pages' && knowledge) return json(200, await knowledge.pages(url.searchParams.get('kbId')));
       if (route === 'POST /knowledge/source' && knowledge) return json(201, await knowledge.importSource(await readBody(request)));
 
+      if (route === 'POST /knowledge' && knowledge) return json(201, await knowledge.create(await readBody(request)));
+      if (request.method === 'DELETE' && /^\/knowledge\/[^/]+$/.test(pathname) && knowledge) return json(200, await knowledge.delete(decodeURIComponent(pathname.slice('/knowledge/'.length))));
       if (route === 'GET /knowledge' && knowledge) return json(200, { knowledge: await knowledge.list() });
       if (route === 'GET /knowledge/read' && knowledge) return json(200, await knowledge.read({ kbId: url.searchParams.get('kbId'), slug: url.searchParams.get('slug') }));
       if (route === 'POST /knowledge/search' && knowledge) return json(200, await knowledge.search(await readBody(request)));
@@ -83,22 +113,26 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         models: {}, scenes: {}, defaults: { chat: config.launch.model || null }, webSearch: config.launch.webSearch || "disabled"
       });
       if (route === "GET /usage") return json(200, await usage.summary(url.searchParams.get("period") || "today"));
-      if (route === "GET /memory") return json(200, memory.snapshot());
-      if (route === "GET /memory/summary") return json(200, memory.summary());
+      if (route === "GET /memory") return json(200, await memory.snapshot());
+      if (route === "GET /memory/summary") return json(200, await memory.summary());
       if (route === "POST /memory/contribution") {
         const body = await readBody(request);
         if (Object.keys(body).some(key => !["threadId", "enabled"].includes(key))) throw new AppError("记忆参与设置只接受 threadId 和 enabled。");
         return json(200, await memory.contribute(body.threadId, body.enabled));
       }
       if (route === "GET /tools") return json(200, tools.snapshot());
-      if (route === "GET /health") return json(messages.failure || tools?.broken || data?.queue?.healthy === false ? 503 : 200, { status: messages.failure || tools?.broken || data?.queue?.healthy === false ? "degraded" : "ready", model: config.launch.model, queueBackend: messages.backend,
-        budget: await usage.budgetStatus(), tools: tools?.snapshot(),
-        ...(messages.failure ? { error: { message: "Codex 连接已失效，请重启服务并核对任务状态。" } } : {}) });
       if (route === "GET /sessions") return json(200, { sessions: await sessions.list(url.searchParams.get("q") || "") });
-      if (route === "POST /sessions") { await readBody(request); return json(201, await sessions.create()); }
+      if (route === "POST /sessions") {
+        const body = await readBody(request);
+        if (Object.keys(body).some(key => key !== 'agent')) throw new AppError('只接受 agent。', 400);
+        if (permissionHub && body.agent) permissionHub.checkResource('agent', body.agent, 'use');
+        return json(201, await sessions.create());
+      }
       if (route === "POST /sessions/resume") {
         const body = await readBody(request);
-        return json(200, await sessions.ensure(body.threadId));
+        const session = await sessions.ensure(body.threadId);
+        const missing = await data?.jobs?.missing?.(body.threadId) || [];
+        return json(200, { ...session, ...(missing.length ? { warnings: missing.map(t => ({ taskId: t.id, message: t.error })) } : {}) });
       }
       if (route === "GET /state") {
         const id = url.searchParams.get("threadId");
@@ -113,16 +147,20 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         return json(200, await messages.continue(body.threadId));
       }
       if (route === "GET /events") {
+        const release = limits.acquireSse();
+        response.once('close', release);
         const id = url.searchParams.get("threadId");
         await sessions.ensure(id);
+        if (response.destroyed) return;
         const buffered = [];
         let ready = false;
         let heartbeat;
         response.writeHead(200, {
-          "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform",
+          "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store, no-transform",
           connection: "keep-alive", "x-accel-buffering": "no"
         });
         response.flushHeaders();
+        response.shardUserId = identity.userId;
         streams.add(response);
         // 带编号的帧会更新客户端的 Last-Event-ID；不带编号的帧不影响断点。
         const write = (event, sequence) => {
@@ -130,7 +168,7 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
           if (response.writableLength > 1024 * 1024) { response.destroy(); return; }
           response.write(`${sequence != null ? `id: ${hub.eventId(sequence)}\n` : ""}data: ${encode(event)}\n\n`);
         };
-        const listener = event => { if (!event.threadId || event.threadId === id) {
+        const listener = event => { if (event.ownerId === identity.userId && (!event.threadId || event.threadId === id)) {
           if (ready) write(event, event.sequence);
           else if (buffered.length < 1000) buffered.push(event);
           else response.destroy();
@@ -138,11 +176,11 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
         hub.on("event", listener);
         response.once('close', () => { clearInterval(heartbeat); hub.off('event', listener); streams.delete(response); });
         // 断线重连且缓冲还覆盖得到：只补发错过的事件；否则从快照开始。
-        const missed = hub.since(request.headers["last-event-id"], id);
+        const missed = hub.since(request.headers["last-event-id"], id, identity.userId);
         if (missed) for (const event of missed) write(event, event.sequence);
         else {
           const queue = await messages.snapshot(id);
-          write({ type: "snapshot", threadId: id, protocol: 2, data: { session: sessions.snapshot(id), queue } }, hub.sequence);
+          write({ ownerId: identity.userId, type: "snapshot", threadId: id, protocol: 2, data: { session: sessions.snapshot(id), queue } }, hub.sequence);
           // 等待队列快照期间缓冲的会话事件已包含在会话快照里；其余事件照常补发，但不带编号，避免断点倒退。
           for (const event of buffered) if (!SESSION_EVENT_TYPES.has(event.type)) write(event, null);
         }
@@ -152,9 +190,26 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
       }
       throw new AppError("接口不存在。", 404);
       };
-      return await (gate ? gate.run(gate.user(), dispatch) : dispatch());
+      return await runIdentity(identity, () => {
+        const operation = () => gate && !pathname.startsWith('/hub') && pathname !== '/me/plan' && !pathname.startsWith('/auth/') ? gate.run(gate.user(), dispatch) : dispatch();
+        const resourceOnly = config.sharding && (['/knowledge/search', '/knowledge/read', '/knowledge/pages', '/resources/read'].includes(pathname) ||
+          (shardUser() && shardUser() !== identity.userId));
+        const dispatchUser = () => {
+          if (resourceOnly && gate?.forResource) return gate.forResource(operation);
+          if (sessions.rpc?.pool && !pathname.startsWith('/auth/') && !pathname.startsWith('/hub') && pathname !== '/me/plan')
+            return sessions.rpc.pool.withOwner(identity.userId, operation);
+          return operation();
+        };
+        const work = () => permissionHub ? permissionHub.withUser(identity.userId, dispatchUser) : dispatchUser();
+        return Promise.resolve().then(work).catch(error => {
+          if (!error.status || error.status >= 500) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
+          throw error;
+        });
+      });
     } catch (error) {
-      if (!response.headersSent) json(error.status || 500, { error: { message: error.message, code: error.code || "SERVER_ERROR" } });
+      if ((!error.status || error.status >= 500) && !error.databaseDiagnostic) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
+      if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
+      if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR" } });
       else response.end();
     }
   };
@@ -165,7 +220,8 @@ export function createHttpService({ config, token, sessions, messages, hub, reda
   server.requestTimeout = 30000;
   server.headersTimeout = 10000;
   return {
-    server,
+    server, handle, limits,
+    closeUserStreams(userId) { for (const stream of streams) if (stream.shardUserId === userId) stream.end(); },
     async listen() {
       await new Promise((resolve, reject) => {
         server.once("error", reject);

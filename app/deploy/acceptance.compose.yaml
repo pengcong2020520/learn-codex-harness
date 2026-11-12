@@ -1,0 +1,25 @@
+# Disposable project only: see README. Never point these at a live deployment.
+services:
+  uid-tests: &tests
+    image: codex-agent:current
+    profiles: [acceptance]
+    user: "0:1000"
+    init: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN,FOWNER,SETUID,SETGID]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    environment:
+      DATA_TEST_DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}@postgres:5432/agent_test
+      DATA_TEST_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/15
+    command: ["npm", "run", "test:runtimes:uid"]
+  etcd-tests:
+    <<: *tests
+    environment:
+      DATA_TEST_DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}@postgres:5432/agent_etcd_test
+      DATA_TEST_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/15
+      ETCD_TEST_ENDPOINT: http://etcd:2379
+      ETCD_TEST_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      ETCD_TEST_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:?Set ETCD_NODE_B_PASSWORD}
+      ETCD_TEST_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:?Set ETCD_NODE_C_PASSWORD}
+    command: ["npm", "run", "test:etcd"]

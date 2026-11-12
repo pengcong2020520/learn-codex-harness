@@ -106,7 +106,7 @@ export function render() {
 
   // 终点：完整项目
   const H = nextY + 56;
-  t("app/ 是在 s11 之上持续开发的完整项目（Docker 部署、Web 工作台、互动课程）；s12–s18 是各自独立的部署快照。", LX, H - 36, 16, "#6B7780");
+  t("app/ 是以 s18 为内核持续开发的 Agent 脚手架（默认单节点、可选集群）；Web 工作台和互动课程位于 course/；s12–s18 是各自独立的部署快照。", LX, H - 36, 16, "#6B7780");
 
   const defs = `<defs>${[...new Set([...colors, "#9AA5B1"])].map(c => `<marker id="arrow-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join("")}</defs>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc"><title id="title">学习路线：亲手做一个云端 Agent</title><desc id="desc">s00 到 s18 分六组：跑起来、变成服务、装配 Agent、靠得住守得住、上云与多用户、多台机器。</desc>${defs}<g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"><rect width="${W}" height="${H}" fill="#FBFBF9"/>${a.join("")}</g></svg>\n`;

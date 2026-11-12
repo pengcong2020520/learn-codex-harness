@@ -69,7 +69,7 @@ test("每个来源错误都带序号，区分路径、权限、资源号码、�
     [{ path: "inputs/missing.md" }, /路径不存在/],
     [{ path: "inputs/unregistered.md" }, /路径尚未登记/],
     [{ path: "outputs/private.md" }, /没有读权限/],
-    [{ path: foreign.locator }, /没有读权限/], [ids(foreign), /没有读权限/],
+    [{ path: foreign.locator }, /资源不存在/], [ids(foreign), /资源不存在/],
     [{ resourceId: randomUUID(), versionId: randomUUID() }, /resourceId 不存在.*号码抄错/],
     [{ resourceId: "wrong", versionId: randomUUID() }, /resourceId 格式.*号码抄错/],
     [{ resourceId: r.first.id, versionId: "wrong" }, /versionId 格式.*号码抄错/],

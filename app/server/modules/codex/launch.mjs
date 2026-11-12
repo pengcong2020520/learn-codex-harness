@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { gatewayEndpoint, fallbackWarnings } from "../gateway/index.mjs";
 import { createModelRouter } from "../gateway/router.mjs";
 
@@ -192,4 +193,34 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   // 密钥只通过子进程环境传递，不进入启动参数。
   env.CODEX_API_KEY = values.CODEX_API_KEY;
   return { args, env, model, catalog, timeoutMs, webSearch, baseUrl: values.CODEX_BASE_URL, authMode: "apiKey", gateway: Boolean(gateway), router, warnings };
+}
+
+// spawn 的最终边界：只接受模型网关访问凭据与运行必需变量。
+export function userEnvironment(environment, home) {
+  const env = {};
+  for (const name of ['CODEX_BASE_URL', 'CODEX_API_KEY', 'PATH', 'LANG']) {
+    if (environment[name] !== undefined) env[name] = environment[name];
+  }
+  return { ...env, CODEX_HOME: home, CODEX_SQLITE_HOME: home, HOME: home };
+}
+// 不传 groups：Node/libuv 在指定 uid/gid 时执行 setgroups(0)，清空继承的补充组。
+export function userSpawn(executable, args, { uid, gid, isolated }) {
+  return {
+    command: '/bin/sh',
+    args: ['-c', 'umask 0007 && exec "$0" "$@"', executable, ...args],
+    options: isolated ? { uid, gid } : {},
+  };
+}
+
+// 最小能力集没有 KILL；用 SETUID/SETGID 启动同 uid 的短命信号发送器。
+// 参数不进入脚本文本，不扩大容器 capabilities。
+export function signalUserProcess(pid, signal, { uid, gid, env }, start = spawn) {
+  if (!Number.isSafeInteger(pid) || pid < 1 || !['SIGTERM', 'SIGKILL'].includes(signal)) throw new Error('无效进程信号。');
+  return new Promise((resolve, reject) => {
+    const child = start('/bin/sh', ['-c', 'kill -s "$1" "$2"', 'runtime-signal', signal.slice(3), String(pid)],
+      { uid, gid, env, stdio: 'ignore' });
+    child.once('error', reject);
+    // 目标先退出时 kill 返回非零是正常竞态；CodexConnection 仍等待实际 close。
+    child.once('close', resolve);
+  });
 }

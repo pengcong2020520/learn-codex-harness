@@ -1,14 +1,22 @@
-# 项目名固定，避免与其他同名目录（如另一个 app/）共用数据卷。
-# 端口可在 .env 或终端里改：本机 5432 / 6379 已被其他服务占用时，设置 AGENT_PG_PORT / AGENT_REDIS_PORT。
-name: codex-harness-app
+name: codex-agent
+x-runtime: &runtime
+  restart: unless-stopped
+  stop_grace_period: 30s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 services:
   postgres:
+    <<: *runtime
     image: postgres:16
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-256m}
     environment:
       POSTGRES_USER: agent
-      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD in .env or the terminal}
+      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}
       POSTGRES_DB: agent
-    ports: ["127.0.0.1:${AGENT_PG_PORT:-5432}:5432"]
+    # 默认只发布 Caddy；remote-access profile 才开启回环隧道入口。
     volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
@@ -16,17 +24,25 @@ services:
       timeout: 3s
       retries: 10
   redis:
+    <<: *runtime
     image: redis:7.4
-    command: ["redis-server", "--appendonly", "yes"]
-    ports: ["127.0.0.1:${AGENT_REDIS_PORT:-6379}:6379"]
-    volumes: ["redis-data:/data"]
-  # 模型网关（Bifrost）：Codex 只连这里，再由网关转到各家模型并在失败时改用备用模型。
-  # 配置由 npm run gateway:config 生成（.data/gateway/config.json，不含密钥），每次启动都以它为准；
-  # 配置库放在临时目录里，重启即清空。只把下面列出的密钥传进容器，其他 .env 内容不进。
-  gateway:
-    image: maximhq/bifrost:v2.4.0@sha256:a1c90607dcfd13c1fb2f9476ceb3bb24407a50ade7fdf3e61a59fb42b09e5c57
+    mem_limit: ${REDIS_MEMORY_LIMIT:-128m}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
     environment:
-      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:-}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  gateway:
+    <<: *runtime
+    image: maximhq/bifrost:v2.4.0@sha256:a1c90607dcfd13c1fb2f9476ceb3bb24407a50ade7fdf3e61a59fb42b09e5c57
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-256m}
+    # 网关访问密钥用于校验调用者；服务商密钥只进入这个服务。
+    environment:
+      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
       ARK_API_KEY: ${ARK_API_KEY:-}
       KIMI_API_KEY: ${KIMI_API_KEY:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
@@ -36,64 +52,209 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
       ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
       HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
-    ports: ["127.0.0.1:${AGENT_GATEWAY_PORT:-4330}:8080"]
     tmpfs: ["/app/data:uid=1000,gid=0,mode=0770"]
     volumes: ["./.data/gateway/config.json:/app/data/config.json:ro", "./.data/gateway/model-parameters.json:/app/data/model-parameters.json:ro"]
+    depends_on:
+      postgres: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
       interval: 5s
       timeout: 3s
       retries: 20
-    restart: unless-stopped
-  # 本地向量模型（Ollama）：用到 RAG 时才启动（npm run ollama:up）。网关经容器名 http://ollama:11434 访问，不对宿主开放端口。
-  # 同时只加载一个模型，空闲 5 分钟卸载以释放内存；模型文件存在数据卷里，下载用 npm run ollama:pull。
-  ollama:
-    image: ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
-    profiles: ["embedding"]
+  etcd-init:
+    image: codex-agent:current
+    restart: on-failure
+    command: ["node", "scripts/etcd-init.mjs"]
     environment:
-      OLLAMA_KEEP_ALIVE: 5m
-      OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_NUM_PARALLEL: "1"
-      # 向量模型的输入是切好的文本块（几百到一千多词元），不需要模型支持的最大上下文；按最大上下文预留缓存会多占数百 MB 内存。
-      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-2048}
-    volumes: ["ollama-data:/root/.ollama"]
-    mem_limit: ${OLLAMA_MEMORY_LIMIT:-1536m}
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    restart: unless-stopped
-  # 智能体服务（profile app，服务器部署用；本机开发直接 npm run server）。
-  # 数据、运行记录和工作区挂载到宿主目录，便于备份和迁移；容器里以 node（uid 1000）运行。
-  agent:
+      ETCD_ENDPOINT: http://etcd:2379
+      AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
+      ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:?Set ETCD_ROOT_PASSWORD}
+      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}
+      ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:-}
+      ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:-}
+    depends_on:
+      etcd: { condition: service_started }
+  node-a: &node
+    <<: *runtime
     build:
       context: .
-      args: { NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org}", APT_MIRROR: "${APT_MIRROR:-}", APP_DIR: "${CONTAINER_APP_DIR:-/app}" }
-    image: codex-harness-app:local
-    profiles: ["app"]
-    env_file: .env
-    environment:
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        APT_MIRROR: ${APT_MIRROR:-}
+        CONTAINER_APP_DIR: ${CONTAINER_APP_DIR:?Set to the absolute deployment directory}
+    image: codex-agent:current
+    user: "0:1000"
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    extra_hosts: ["host.docker.internal:${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}"]
+    init: true
+    mem_limit: ${AGENT_MEMORY_LIMIT:-768m}
+    environment: &node-env
+      AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_A:?Set AGENT_NODE_KEY_A}
+      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:?Set AGENT_NODE_KEY_A_HASH}
+      AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:-}
+      AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:-}
+      AGENT_REPLICATION_RATE_LIMIT: ${AGENT_REPLICATION_RATE_LIMIT:-0}
+      AGENT_REQUEST_TIMEOUT_MS: ${AGENT_REQUEST_TIMEOUT_MS:-30000}
+      AGENT_TRANSFER_MAX_BYTES: ${AGENT_TRANSFER_MAX_BYTES:-1073741824}
+      AGENT_SHARD_STRATEGY: ${AGENT_SHARD_STRATEGY:-slots}
+      AGENT_RUNTIME_LIMIT: ${AGENT_RUNTIME_LIMIT:-4}
+      AGENT_NODE_ADDRESS: ${AGENT_NODE_ADDRESS_A:-http://node-a:4340}
+      AGENT_NODE_ID: node-a
+      ETCD_ENDPOINT: http://etcd:2379
+      ETCD_USERNAME: node-a
+      ETCD_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      AGENT_DEPLOYED: "true"
       AGENT_LISTEN_HOST: 0.0.0.0
-      AGENT_PORT: "4317"
+      AGENT_PORT: "4340"
       AGENT_GATEWAY_URL: http://gateway:8080/v1
-      DATABASE_URL: postgresql://agent:${AGENT_DB_PASSWORD:-}@postgres:5432/agent
-      REDIS_URL: redis://redis:6379/0
-    ports: ["127.0.0.1:${AGENT_PORT:-4317}:4317"]
-    # 容器里的项目路径（CONTAINER_APP_DIR）在服务器上设成与部署路径相同，迁移过来的 Codex 历史记录路径不变。
-    volumes: ["./.data:${CONTAINER_APP_DIR:-/app}/.data", "./.runs:${CONTAINER_APP_DIR:-/app}/.runs", "./workspace:${CONTAINER_APP_DIR:-/app}/workspace"]
+      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
+      DATABASE_URL: postgresql://agent_node_a:${AGENT_NODE_A_DB_PASSWORD:?Set AGENT_NODE_A_DB_PASSWORD}@postgres:5432/agent
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+      CODEX_MODEL_CATALOG_ENABLED: "true"
+      CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}
+      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
+      AGENT_WEB_SEARCH: ${AGENT_WEB_SEARCH:-auto}
+      AGENT_MAX_CONCURRENT_TURNS: ${AGENT_MAX_CONCURRENT_TURNS:-2}
+      AGENT_MAX_QUEUED: ${AGENT_MAX_QUEUED:-200}
+      AGENT_RATE_LIMIT_PER_MINUTE: ${AGENT_RATE_LIMIT_PER_MINUTE:-120}
+      AGENT_MAX_SSE: ${AGENT_MAX_SSE:-20}
+      AGENT_MEMORY_ENABLED: ${AGENT_MEMORY_ENABLED:-false}
+      AGENT_MEMORY_USE: ${AGENT_MEMORY_USE:-true}
+      AGENT_MEMORY_GENERATE: ${AGENT_MEMORY_GENERATE:-true}
+      AGENT_MEMORY_EXTRACT_MODEL: ${AGENT_MEMORY_EXTRACT_MODEL:-}
+      AGENT_MEMORY_CONSOLIDATION_MODEL: ${AGENT_MEMORY_CONSOLIDATION_MODEL:-}
+      AGENT_MEMORY_MIN_IDLE_HOURS: ${AGENT_MEMORY_MIN_IDLE_HOURS:-6}
+      AGENT_BUDGET_DAILY_TOKENS: ${AGENT_BUDGET_DAILY_TOKENS:-}
+      AGENT_BUDGET_MONTHLY_TOKENS: ${AGENT_BUDGET_MONTHLY_TOKENS:-}
+      AGENT_BUDGET_DAILY_COST: ${AGENT_BUDGET_DAILY_COST:-}
+      AGENT_BUDGET_MONTHLY_COST: ${AGENT_BUDGET_MONTHLY_COST:-}
+      AGENT_BUDGET_TIMEZONE: ${AGENT_BUDGET_TIMEZONE:-}
+      AGENT_BUDGET_DOWNGRADE_AT: ${AGENT_BUDGET_DOWNGRADE_AT:-}
+      AGENT_BUDGET_DOWNGRADE_SCENE: ${AGENT_BUDGET_DOWNGRADE_SCENE:-fast}
+    # 三个节点分别使用独立宿主目录；节点丢失只让其分片 unavailable。
+    # CONTAINER_APP_DIR 与宿主部署目录相同且保持不变。
+    # Codex 历史记录的是绝对路径；换成 release/时间戳路径会导致旧会话无法恢复。
+    volumes:
+      - "./nodes/node-a/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
+      - "./nodes/node-a/.runs:${CONTAINER_APP_DIR}/.runs"
+      - "./nodes/node-a/workspace:${CONTAINER_APP_DIR}/workspace"
+      - "./backups/node-a:${CONTAINER_APP_DIR}/backups"
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_started }
+      redis: { condition: service_healthy }
       gateway: { condition: service_healthy }
-    restart: unless-stopped
-  chroma:
-    image: chromadb/chroma:1.5.0
-    profiles: ["rag"]
-    ports: ["127.0.0.1:${AGENT_CHROMA_PORT:-8000}:8000"]
-    volumes: ["chroma-data:/data"]
+      etcd: { condition: service_healthy }
+      etcd-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "deploy/ready.mjs", "--alive"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+  node-b:
+    profiles: ["cluster"]
+    <<: *node
+    volumes:
+      - "./nodes/node-b/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
+      - "./nodes/node-b/.runs:${CONTAINER_APP_DIR}/.runs"
+      - "./nodes/node-b/workspace:${CONTAINER_APP_DIR}/workspace"
+      - "./backups/node-b:${CONTAINER_APP_DIR}/backups"
+    environment:
+      <<: *node-env
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_B:-}
+      AGENT_NODE_ADDRESS: ${AGENT_NODE_ADDRESS_B:-http://node-b:4341}
+      AGENT_NODE_ID: node-b
+      ETCD_USERNAME: node-b
+      ETCD_PASSWORD: ${ETCD_NODE_B_PASSWORD:-}
+      AGENT_PORT: "4341"
+      DATABASE_URL: postgresql://agent_node_b:${AGENT_NODE_B_DB_PASSWORD:-}@postgres:5432/agent
+  node-c:
+    profiles: ["cluster"]
+    <<: *node
+    volumes:
+      - "./nodes/node-c/.data:${CONTAINER_APP_DIR}/.data"
+      - "./.data/gateway:${CONTAINER_APP_DIR}/.data/gateway"
+      - "./nodes/node-c/.runs:${CONTAINER_APP_DIR}/.runs"
+      - "./nodes/node-c/workspace:${CONTAINER_APP_DIR}/workspace"
+      - "./backups/node-c:${CONTAINER_APP_DIR}/backups"
+    environment:
+      <<: *node-env
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_C:-}
+      AGENT_NODE_ADDRESS: ${AGENT_NODE_ADDRESS_C:-http://node-c:4342}
+      AGENT_NODE_ID: node-c
+      ETCD_USERNAME: node-c
+      ETCD_PASSWORD: ${ETCD_NODE_C_PASSWORD:-}
+      AGENT_PORT: "4342"
+      DATABASE_URL: postgresql://agent_node_c:${AGENT_NODE_C_DB_PASSWORD:-}@postgres:5432/agent
+  etcd:
+    <<: *runtime
+    image: quay.io/coreos/etcd:v3.7.3@sha256:8d1b6c24f08e12ed7623d1df421832b3cafabe221aa6b658b97288d07807582f
+    mem_limit: 128m
+    command: ["etcd", "--name=etcd", "--data-dir=/etcd-data", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd:2380", "--initial-cluster=etcd=http://etcd:2380"]
+    volumes: ["etcd-data:/etcd-data"]
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  caddy:
+    <<: *runtime
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    mem_limit: 64m
+    ports: ["127.0.0.1:${AGENT_PORT:-4317}:80"]
+    extra_hosts: ["host.docker.internal:${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}"]
+    environment:
+      AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
+      NODE_B_UPSTREAM: ${NODE_B_UPSTREAM:-node-b:4341}
+    entrypoint: ["/bin/sh", "/etc/caddy/caddy-upstreams.sh"]
+    volumes: ["./deploy/Caddyfile:/etc/caddy/Caddyfile:ro", "./deploy/caddy-upstreams.sh:/etc/caddy/caddy-upstreams.sh:ro"]
+    depends_on:
+      node-a: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+  remote-access:
+    <<: *runtime
+    profiles: [remote-access]
+    image: codex-agent:current
+    user: "1000:1000"
+    mem_limit: 64m
+    command: ["node", "deploy/tcp-relay.mjs"]
+    environment:
+      RELAY_BIND: 0.0.0.0
+      RELAYS: '[[2379,"etcd",2379],[5432,"postgres",5432],[6379,"redis",6379],[8080,"gateway",8080],[4340,"node-a",4340],[4342,"node-c",4342]]'
+    ports:
+      - "127.0.0.1:12379:2379"
+      - "127.0.0.1:15432:5432"
+      - "127.0.0.1:16379:6379"
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:14340:4340"
+      - "127.0.0.1:14342:4342"
+  remote-node-link:
+    <<: *runtime
+    profiles: [remote-access]
+    image: codex-agent:current
+    user: "1000:1000"
+    mem_limit: 64m
+    network_mode: host
+    command: ["node", "deploy/tcp-relay.mjs"]
+    environment:
+      RELAY_BIND: ${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}
+      RELAYS: '[[4341,"127.0.0.1",14341]]'
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${REMOTE_BRIDGE_SUBNET:-172.29.18.0/24}
+          gateway: ${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}
 volumes:
+  etcd-data:
   postgres-data:
   redis-data:
-  chroma-data:
-  ollama-data:

@@ -17,7 +17,7 @@ export function mediaFormat(content) {
 // 不跟随符号链接，不覆盖文件；同步检查和操作之间不让出 JS 执行权。
 export function createFileTools(
   projectRoot,
-  { workspaceDir, sources, outputs, assertCurrent = () => {} } = {},
+  { workspaceDir, sources, outputs, uid, assertCurrent = () => {} } = {},
 ) {
   const base =
     workspaceDir || path.join(fs.realpathSync(projectRoot), "workspace");
@@ -46,13 +46,15 @@ export function createFileTools(
     (outputs && covers(outputs.directory, relative)));
   function directory(file) {
     try {
-      fs.mkdirSync(file, { mode: 0o700 });
+      fs.mkdirSync(file, { mode: uid === undefined ? 0o700 : 0o2770 });
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
     }
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isDirectory())
       throw new Error("工作目录必须是真实目录，不能是符号链接。");
+    if (uid !== undefined && process.getuid?.() === 0) fs.chownSync(file, uid, 1000);
+    if (uid !== undefined) fs.chmodSync(file, 0o2770);
   }
   directory(base);
 
@@ -246,7 +248,7 @@ export function createFileTools(
       try {
         fs.writeFileSync(file, content, {
           flag: "wx",
-          mode: 0o600,
+          mode: uid === undefined ? 0o600 : 0o660,
           flush: true,
         });
       } catch (error) {
@@ -256,6 +258,7 @@ export function createFileTools(
           );
         throw error;
       }
+      if (uid !== undefined && process.getuid?.() === 0) fs.chownSync(file, uid, 1000);
       const info = fs.lstatSync(file);
       if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
         throw new Error("产物检查失败。");

@@ -17,6 +17,11 @@ async function required(ask, prompt, options) {
   return value;
 }
 export function startCommands(stage) {
+  if (stage.id === "app") return [
+    "按 app/README.md 填写 .env（默认单节点）并初始化账号。",
+    "cd app", "bash deploy/configure.sh", "docker compose up -d --wait",
+    "export AGENT_SERVER_URL=http://127.0.0.1:4317", "npm run login", "npm run chat",
+  ];
   if (stage.id === "s00") return [`npm --prefix ${stage.relative} run hello`];
   if (["s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id)) return [
     `按 ${stage.relative}/README.md 填写独立部署配置并构建、初始化 Compose。`,
@@ -27,7 +32,7 @@ export function startCommands(stage) {
   const scripts = JSON.parse(readText(path.join(stage.dir, "package.json")) || "{}").scripts || {};
   if (["s01", "s02"].includes(stage.id)) return [`${prefix} start`];
   return [
-    ...(/^s(08|09|10|11)$/.test(stage.id) || stage.id === "app" ? [scripts["db:up"] ? `${prefix} run db:up` : `docker compose --project-directory ${stage.relative} up -d postgres redis`, `${prefix} run data:migrate`] : []),
+    ...(/^s(08|09|10|11)$/.test(stage.id) ? [scripts["db:up"] ? `${prefix} run db:up` : `docker compose --project-directory ${stage.relative} up -d postgres redis`, `${prefix} run data:migrate`] : []),
     ...(gatewayStage(stage) ? [`${prefix} run gateway:up`] : []),
     `${prefix} run server`, `${prefix} start（另一个终端）`,
   ];

@@ -14,8 +14,10 @@ import { PostgresJobs } from "../server/modules/data/jobs.mjs";
 import { Resources } from "../server/modules/data/resources.mjs";
 import { RedisQueue } from "../server/modules/data/queue.mjs";
 import { createFileTools } from "../server/modules/data/files.mjs";
+import { requestScope, runOwner } from "../server/modules/accounts/context.mjs";
+import { createUserFileTools } from "../server/modules/accounts/workspace.mjs";
 import { loadServerConfig } from "../server/modules/config/index.mjs";
-import { startAgentServer } from "../server/main.mjs";
+import { startAgentServer } from "./authenticated-server.mjs";
 import { importLegacy } from "../server/modules/data/legacy.mjs";
 import { createHash } from "node:crypto";
 import {
@@ -167,51 +169,76 @@ test("真实文件 + PG：稳定 ID、版本更新、来源失效传播、路径
 });
 test("跨 owner / 收窄范围 / 越界 / 旧版本引用均拒绝；移动不改变资料 ID", async (t) => {
   const r = await setup(t);
-  const write = await r.resources.write_file({
-    path: "outputs/a.txt",
-    content: "A",
+  const ownerA = r.scope.ownerId, ownerB = randomUUID();
+  r.scope = requestScope(r.scope.instanceId);
+  await runOwner(ownerB, () => new Repository(r.pool, r.scope).initialize());
+  r.files = createUserFileTools(r.root, {
+    workspaceDir: path.join(r.root, "workspace"),
+    sources: r.sources,
+    outputs: r.outputs,
   });
-  const narrow = new Resources(r.pool, r.scope, {
-    files: createFileTools(r.root, {
-      sources: [{ id: "inputs", locator: "inputs", actions: ["read"] }],
-      outputs: r.outputs,
-    }),
-    sources: [{ id: "inputs", locator: "inputs", actions: ["read"] }],
+  r.resources = new Resources(r.pool, r.scope, {
+    files: r.files,
+    sources: r.sources,
     outputs: r.outputs,
     blobDir: path.join(r.root, "blobs"),
   });
-  await assert.rejects(narrow.readById(write.artifact.resourceId), /未授权/);
-  const foreign = new Resources(
-    r.pool,
-    { ...r.scope, ownerId: randomUUID() },
-    {
-      files: r.files,
-      sources: r.sources,
+  await runOwner(ownerA, async () => {
+    const write = await r.resources.write_file({
+      path: "outputs/a.txt",
+      content: "A",
+    });
+    const narrow = new Resources(r.pool, r.scope, {
+      files: createFileTools(r.root, {
+        workspaceDir: r.files.workspace,
+        sources: [{ id: "inputs", locator: "inputs", actions: ["read"] }],
+        outputs: r.outputs,
+      }),
+      sources: [{ id: "inputs", locator: "inputs", actions: ["read"] }],
       outputs: r.outputs,
       blobDir: path.join(r.root, "blobs"),
-    },
-  );
-  await assert.rejects(foreign.read_file({ path: "outputs/a.txt" }), /无权/);
-  await assert.rejects(r.resources.read_file({ path: "../.env" }), /未授权/);
-  await assert.rejects(
-    r.resources.write_file({
-      path: "drafts/b.txt",
-      content: "bad",
-      source_versions: [
-        { resourceId: write.artifact.resourceId, versionId: randomUUID() },
-      ],
-    }),
-    /第 1 项：versionId 不属于这个资源.*号码抄错/,
-  );
-  fs.renameSync(
-    path.join(r.files.workspace, "outputs/a.txt"),
-    path.join(r.files.workspace, "outputs/moved.txt"),
-  );
-  await r.resources.relocate(write.artifact.resourceId, "outputs/moved.txt");
-  assert.equal(
-    (await r.resources.readById(write.artifact.resourceId)).content,
-    "A",
-  );
+    });
+    await assert.rejects(narrow.readById(write.artifact.resourceId), /未授权/);
+    await runOwner(ownerB, async () => {
+      const foreign = new Resources(r.pool, r.scope, {
+        files: r.files,
+        sources: r.sources,
+        outputs: r.outputs,
+        blobDir: path.join(r.root, "blobs"),
+      });
+      assert.equal(r.files.workspace, path.join(r.root, "workspace", "users", ownerB));
+      await assert.rejects(foreign.read_file({ path: "outputs/a.txt" }), {
+        status: 404, message: "资源不存在。",
+      });
+      await assert.rejects(foreign.readById(write.artifact.resourceId), {
+        status: 404, code: "NOT_FOUND",
+      });
+      // readById 只按资源 ID 读取；资源/版本对走实际的引用解析方法。
+      await assert.rejects(foreign.sourceVersion(write.artifact, 0, r.pool), {
+        status: 404, code: "NOT_FOUND",
+      });
+    });
+    await assert.rejects(r.resources.read_file({ path: "../.env" }), /未授权/);
+    await assert.rejects(
+      r.resources.write_file({
+        path: "drafts/b.txt",
+        content: "bad",
+        source_versions: [
+          { resourceId: write.artifact.resourceId, versionId: randomUUID() },
+        ],
+      }),
+      /第 1 项：versionId 不属于这个资源.*号码抄错/,
+    );
+    fs.renameSync(
+      path.join(r.files.workspace, "outputs/a.txt"),
+      path.join(r.files.workspace, "outputs/moved.txt"),
+    );
+    await r.resources.relocate(write.artifact.resourceId, "outputs/moved.txt");
+    assert.equal(
+      (await r.resources.readById(write.artifact.resourceId)).content,
+      "A",
+    );
+  });
 });
 test("写入中断留 pending，核对正确正文恢复，不覆盖现有文件", async (t) => {
   const r = await setup(t),
@@ -616,10 +643,25 @@ test('真实 PG + 假 HTTP：重启继续视频任务、产物落盘后恢复、
   await first.close(); completed = true;
   const store = new MediaJobs(r.pool, r.scope), persisted = await store.get(job.id);
   assert.equal(persisted.providerId, 'remote-persisted');
-  for (const scope of [{ ...r.scope, ownerId: randomUUID() }, { ...r.scope, instanceId: randomUUID() }]) {
-    assert.equal(await new MediaJobs(r.pool, scope).get(job.id), undefined);
-    assert.deepEqual(await new MediaJobs(r.pool, scope).pending(), []);
-  }
+  const ownerB = randomUUID(), scope = requestScope(r.scope.instanceId);
+  await runOwner(ownerB, () => new Repository(r.pool, scope).initialize());
+  const userStore = new MediaJobs(r.pool, scope);
+  const userMedia = new MediaService({ ...options, store: userStore });
+  cleanup(r.root, () => userMedia.close());
+  assert.equal((await runOwner(r.scope.ownerId, () => userMedia.status(job))).id, job.id);
+  await runOwner(ownerB, async () => {
+    // pending() 是实例级后台枚举，非用户接口；恢复循环随后逐个 runOwner(job.ownerId)。
+    // rg -n '\.pending\s*\(' app/server 仅匹配 media/index.mjs 的恢复循环。
+    assert.deepEqual(await userStore.pending(), [{ ...persisted, ownerId: r.scope.ownerId }]);
+    assert.equal(await userStore.get(job.id), undefined);
+    // tools/media.mjs 的 media_status 调用 MediaService.status()，后者通过 get() 按 owner 查询。
+    await assert.rejects(userMedia.status(job), {
+      status: 404, message: '媒体任务不存在或无权访问。',
+    });
+    const otherInstance = new MediaJobs(r.pool, requestScope(randomUUID()));
+    assert.equal(await otherInstance.get(job.id), undefined);
+    assert.deepEqual(await otherInstance.pending(), []);
+  });
   // 模拟进程在文件版本已确认、任务完成状态尚未写入时退出。
   await gate.run(gate.media(persisted), () => r.resources.write_binary({ path: persisted.path, content: mp4, operationId: job.id }));
   await options.usage.record({ source: 'video', model: persisted.model, units: 5, eventKey: `video:${job.id}` });

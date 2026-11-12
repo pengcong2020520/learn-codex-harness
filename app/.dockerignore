@@ -1,11 +1,14 @@
-# 依赖在镜像里重新安装；数据、运行记录、工作区和密钥都不进镜像（运行时挂载或由 compose 传入）。
-node_modules
+.env
+.env.*
 .data
 .runs
 workspace
-.env
-.env.*
-!.env.example
-tests
-web/tests
+node_modules
+backups
+.git
 *.log
+
+nodes/
+
+.remote.env
+.remote-identity.json

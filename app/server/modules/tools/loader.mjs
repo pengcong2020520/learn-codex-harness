@@ -103,7 +103,7 @@ export async function createToolService(root, { source = readToolSources(root), 
   return {
     compatibilityVersion: toolContract(groups, agent?.definition.agent.tools.allow),
     groups: groups.map(({ id, scope, tools }) => ({ id, scope, tools: tools.map(tool => tool.name) })),
-    version: source.version, get specs() { const names = currentNames(); return names ? specs.filter(spec => names.has(spec.name)) : specs; }, workspace: fileService.workspace, networkMode: nodeEnv === "production" ? "strict" : "proxy-debug",
+    version: source.version, get specs() { const names = currentNames(); return names ? specs.filter(spec => names.has(spec.name)) : specs; }, get workspace() { return fileService.workspace; }, networkMode: nodeEnv === "production" ? "strict" : "proxy-debug",
     label: name => entries.get(name)?.spec.label || name,
     validate(name, args) {
       const entry = entries.get(name);

@@ -143,6 +143,12 @@ export function modelEndpoint(environment) {
 
 // keyEnv、baseUrlEnv 里声明的变量都有值，这家服务商才启用；没启用的服务商和它的模型都不进网关配置。
 export function enabledProviders(registry, environment) {
+  // 部署时只传非敏感的服务商清单，agent 不持有服务商密钥。
+  if (environment.AGENT_ENABLED_PROVIDERS !== undefined) {
+    const ids = environment.AGENT_ENABLED_PROVIDERS.split(",").filter(Boolean);
+    if (ids.some(id => !registry.providers[id])) throw new Error("启用清单包含未知服务商。");
+    return new Set(ids);
+  }
   return new Set(Object.entries(registry.providers)
     .filter(([, provider]) => [provider.keyEnv, provider.baseUrlEnv].filter(Boolean).every(name => environment[name]?.trim()))
     .map(([id]) => id));

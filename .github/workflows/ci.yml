@@ -79,3 +79,22 @@ jobs:
         run: |
           node --test scripts/privacy-check.test.mjs
           node scripts/privacy-check.mjs
+
+  scaffold-e2e:
+    name: 脚手架端到端（Docker 单节点）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      # 与服务器部署一致，以 root 运行：configure 会把数据目录交给容器里的 1000 组。
+      - name: 从零生成配置、构建、启动并验收
+        run: sudo env "PATH=$PATH" bash scripts/e2e-compose.sh

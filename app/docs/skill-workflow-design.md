@@ -1,26 +1,13 @@
 # Skill 与 Workflow 设计
 
-**状态：** 设计确认，按第 8 节的 PR 顺序实施；第 0 步验证与第 1–6 个 PR 已完成。角色提示词瘦身待真实模型评估后再做（见第 8 节）。
-**日期：** 2026-10-31
+**范围：** Agent 包、Skill 安装与读取、Workflow 权限、步骤与任务提议。
 **锁定版本：** Codex 0.154.0
 
-总体设计入口：[基于 Codex App Server 的 Agent 脚手架设计方案](agent-core-design.md)。本文新增第 9 个配置维度 `workflows`，并调整 Skill 的存放与安装方式。
+总体入口：[本阶段 README](../README.md)。本文说明 `workflows` 配置维度，以及 Skill 的存放与安装方式。
 
 ---
 
-## 1 要解决的问题
-
-| # | 问题 | 现状依据 |
-|---|------|---------|
-| Q1 | **知识维护写死在 4 个地方**。再加一种"写文章"任务，4 处都要再改一遍 | 消息的 `knowledge` 字段（`messages/index.mjs`）、`gate.maintenance()` 与任务上下文的 `maintenanceKb`（`permissions/index.mjs`）、自动加 `$knowledge` 前缀（`messages/index.mjs:150`）、CLI 的 `knowledge maintain` 入口 |
-| Q2 | **流程只写在角色提示词里**。模型跳步了服务端不知道，中间没有确认点，做完也无法判断算不算完成 | `agents/roles/writing-assistant.md` 的 7 步流程与保存规则 |
-| Q3 | **Skill 放在用户数据目录里，且实际上只能显式触发** | `bindings.skills.*.path` 相对 workspace，靠 `knowledge init` 复制；shell 关闭后模型无法自己读取 SKILL.md |
-| Q4 | **用户数据目录里的指令文件会进入模型上下文** | 第 0 步验证：workspace 及其上级目录的 `AGENTS.md` 均被 Codex 加载 |
-| Q5 | **Codex 原生"目标"机制可以绕过任务队列自动发起轮次** | 第 0 步验证：`create_goal` 对模型可见；设置目标后 Codex 自动连续发起轮次，直到目标完成 |
-
----
-
-## 2 设计原则
+## 1 设计原则
 
 **P1 Skill 只教方法，不授权。** 权限只来自 Agent 定义与 Workflow。Skill 被调用、被提及都不改变任何权限。
 
@@ -32,7 +19,7 @@
 
 **P5 默认完全自主。** 不指定 workflow 的消息走 `chat`：在 Agent 基础权限内由模型自主完成，不设步骤、不设额外检查。
 
-### 2.1 防止 Workflow 侵蚀自主性的四条规则
+### 1.1 防止 Workflow 侵蚀自主性的四条规则
 
 1. **只在两种地方切步骤**：权限要变的地方，以及必须由人做决定的地方。不能按"怎么做"切（例如"搜索 → 阅读 → 写作"）。
 2. **Workflow 只写目标、边界、验收**。方法写进 Skill，只作参考，模型可以根据情况不用。
@@ -41,7 +28,7 @@
 
 ---
 
-## 3 四个区与信任边界
+## 2 四个区与信任边界
 
 | 区 | 内容 | 谁能改 | 变更方式 |
 |---|------|-------|---------|
@@ -63,17 +50,17 @@ agents/writing/                      workspace/（bindings.workspaceDir）
 
 ---
 
-## 4 Agent 包与 Skill
+## 3 Agent 包与 Skill
 
-### 4.1 Agent 包
+### 3.1 Agent 包
 
-一个 Agent 一个目录 `agents/<id>/`，`config/runtime/project.json` 指向其中的 `agent.json`。定义升级为 `schemaVersion: "1.2"`，`1.1` 继续可读。
+一个 Agent 一个目录 `agents/<id>/`，`config/runtime/project.json` 指向其中的 `agent.json`。定义使用 `schemaVersion: "1.2"`，也兼容 `1.1`。
 
 - 角色、Skill 路径都相对 Agent 包；`trustedFile` 的检查（不能出包、不能是符号链接）同样适用于 Skill。
-- `examples/` 拆成"Agent 包"与"workspace 模板"两部分；`npm run agent:init` 根据 Agent 包创建 workspace 目录骨架。
+- `examples/` 包含"Agent 包"与"workspace 模板"两部分；`npm run agent:init` 根据 Agent 包创建 workspace 目录骨架。
 - 创建新 Agent = 复制一个 Agent 包、改配置、绑定一个 workspace。
 
-### 4.2 Skill 的存放、安装与核验
+### 3.2 Skill 的存放、安装与核验
 
 | 环节 | 做法 |
 |------|------|
@@ -81,20 +68,20 @@ agents/writing/                      workspace/（bindings.workspaceDir）
 | 安装 | 服务启动时同步到 `CODEX_HOME/skills/<skill>/`（Codex 的 `user` 范围）；同目录写一份受管清单，只清理本服务装过、现已移除的 Skill，不碰 `.system/` |
 | 核验 | 沿用 `verifySkills`：只启用 Agent 声明的 Skill，其余（含 `~/.agents/skills` 与 Codex 自带的 6 个）一律关闭，关不掉就拒绝启动 |
 | 版本 | Skill 内容纳入 `sourceHash`；Agent 包里的 Skill 被修改即撤销，与角色文件相同 |
-| 脚本 | Skill 不带可执行脚本。需要执行能力时写成 MCP 工具（`server/modules/tools` + `config/tools/*.json`），Skill 只写工具名；`requires` 改为"依赖哪些工具"，装配时检查它们都在 `tools.allow` 中 |
+| 脚本 | Skill 不带可执行脚本。需要执行能力时写成 MCP 工具（`server/modules/tools` + `config/tools/*.json`），Skill 只写工具名；`requires` 声明"依赖哪些工具"，装配时检查它们都在 `tools.allow` 中 |
 
-### 4.3 Skill 的触发
+### 3.3 Skill 的触发
 
-- **显式**：用户写 `$name`，或 workflow 指定 Skill，由服务端注入 `{ type: "skill", name, path }` 输入项。已实现。
-- **隐式**：已启用 Skill 的名称、描述、路径会进入模型上下文（第 0 步已验证），但 shell 关闭后模型读不到文件。新增只读工具 `skill_read({ name, file? })`：只能读已启用 Skill 的目录，默认读 `SKILL.md`，`file` 只能是该目录内的相对路径。模型据描述自行决定读不读。
+- **显式**：用户写 `$name`，或 workflow 指定 Skill，由服务端注入 `{ type: "skill", name, path }` 输入项。
+- **隐式**：已启用 Skill 的名称、描述、路径会进入模型上下文，但 shell 关闭后模型读不到文件。只读工具 `skill_read({ name, file? })`：只能读已启用 Skill 的目录，默认读 `SKILL.md`，`file` 只能是该目录内的相对路径。模型据描述自行决定读不读。
 
 ---
 
-## 5 Workflow
+## 4 Workflow
 
-### 5.1 定义
+### 4.1 定义
 
-Agent 定义新增 `agent.workflows` 数组。只写 `id` 的条目启用同名内置 workflow；带其他字段的条目是用积木组合出的自定义 workflow。`chat` 始终存在，不需要声明。
+Agent 定义通过 `agent.workflows` 数组声明工作流。只写 `id` 的条目启用同名内置 workflow；带其他字段的条目是用积木组合出的自定义 workflow。`chat` 始终存在，不需要声明。
 
 ```json
 "workflows": [
@@ -127,7 +114,7 @@ Agent 定义新增 `agent.workflows` 数组。只写 `id` 的条目启用同名�
 | `chat` | 无 | 无 | 无 | 无 |
 | `knowledge-maintain` | `knowledge` | `{ kbId }` | `knowledge.update`（限 `params.kbId`） | `wiki-effective` |
 
-### 5.2 执行链路
+### 4.2 执行链路
 
 ```
 POST /messages { threadId, text, workflow, params }
@@ -139,13 +126,11 @@ POST /messages { threadId, text, workflow, params }
   → 有下一步：confirm 则停在 waiting，否则直接发下一步；没有下一步：completed 或 needs-review
 ```
 
-发起入口：CLI 用 `/workflow ID 键=值 内容`；工作台对话页的"选择 Workflow"先读只读接口 `GET /workflows`，按返回的参数 schema 渲染表单，再走同一个 `POST /messages`。`GET /workflows` 只返回 `{ id, label, description, params: { required, properties }, steps: [{ id, goal, confirm }] }`（不含 `chat`），不暴露授权、Skill、写入范围和步骤模型；`description` 可在 workflow 定义里写，缺省时由各步 goal 拼成。注意：`GET /workflows` 只是给界面用的目录，不是权限边界——同一令牌的 `GET /workbench` 里 `agent.workflows` 仍含步骤的 model、needs、effort、checks；真正的授权与校验始终在 `POST /messages` 解析 workflow 时完成。
+追加消息（`mode: "append"`）沿用当前任务的 workflow 与授权，不能更换 workflow，也不能扩大授权。
 
-追加消息（`mode: "append"`）沿用当前任务的 workflow 与授权，不能更换 workflow，也不能扩大授权（推广现有"知识维护不能用追加提交"的规则）。
+### 4.3 授权类型
 
-### 5.3 授权类型
-
-授权类型在代码区定义，Agent 包只能引用。首版只有一种：
+授权类型在代码区定义，Agent 包只能引用。本阶段支持 `knowledge.update`：
 
 | 类型 | 参数 | 含义 | 上限 |
 |------|------|------|------|
@@ -153,7 +138,7 @@ POST /messages { threadId, text, workflow, params }
 
 `writes` 只能收窄，不能放宽：步骤可新建文件的区域 = Agent 基础写入范围 ∩ `writes`。
 
-### 5.4 验收检查
+### 4.4 验收检查
 
 | 检查 | 通过条件 |
 |------|---------|
@@ -164,25 +149,25 @@ POST /messages { threadId, text, workflow, params }
 
 检查不通过时任务标为 `needs-review` 并推送给客户端，不自动重试，不阻断后续消息。
 
-### 5.5 让模型自己决定"该启动哪个 workflow"
+### 4.5 让模型自己决定"该启动哪个 workflow"
 
-新增工具 `propose_task({ workflow, params, text, reason })`：模型可以提议，但不能自己批准。调用后生成一条状态为 `proposed` 的任务并推送给客户端；用户确认后才在**用户身份**下核对授权并排队执行，可以附补充说明。普通对话里需要维护知识库时，模型不必再让用户自己去找入口。
+工具 `propose_task({ workflow, params, text, reason })`：模型可以提议，但不能自己批准。调用后生成一条状态为 `proposed` 的任务并推送给客户端；用户确认后才在**用户身份**下核对授权并排队执行，可以附补充说明。普通对话里需要维护知识库时，模型不必再让用户自己去找入口。
 
 - 资源规则里列出 Agent 启用的 workflow（id、名称、参数名、步数），模型据此提议。
 - 提议工具需要权限门提供的会话身份（数据层模式）；每个会话最多 3 个待确认提议。
 - Agent 必须在 `tools.allow` 里显式允许 `propose_task`。
 
-### 5.6 任务记录与兼容
+### 4.6 任务记录与兼容
 
 - 迁移 `003-workflows.sql`：`tasks` 新增 `workflow`（默认 `chat`）、`params`、`checks`，状态增加 `needs-review`，把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
 - 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。
 - 迁移 `005-task-proposals.sql`：新增 `reason`（提议理由），状态增加 `proposed`。
 - 消息里旧的 `knowledge` 字段兼容一个版本，映射为 `knowledge-maintain`。
-- workflow 纳入 Agent 描述符，`CONTRACTS.agent` 升为 3。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
+- workflow 属于 Agent 描述符，`CONTRACTS.agent` 为 3。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
 
 ---
 
-## 6 自主性：谁决定什么
+## 5 自主性：谁决定什么
 
 | 层 | 由谁决定 | 决定的内容 |
 |----|---------|-----------|
@@ -191,51 +176,38 @@ POST /messages { threadId, text, workflow, params }
 | Codex 执行循环 | 模型 | 怎么做：拆解、顺序、工具、次数、换方法、何时收尾 |
 | Skill | 模型 | 方法参考，自行决定用不用 |
 
-**跨轮次的自主推进**：Codex 0.154 原生提供线程目标（`thread/goal/set`，状态 `active / paused / blocked / budgetLimited / complete`）。目标处于 `active` 时，Codex 在每轮结束后自动发起下一轮，直到模型调用 `update_goal` 标记完成，或耗尽 token 预算。它是"不自造 loop"前提下实现长任务自主推进的正确机制，但这些自动轮次不经过任务队列和权限门，所以首版先关闭（第 7 节），作为后续 PR `feat/workflow-goals` 接入：由 workflow 设置目标与预算，任务上下文覆盖同一目标下的所有自动轮次，目标结束后再跑验收；模型自己创建目标的能力仍然关闭，改由 `propose_task` 提议。
+**跨轮次的自主推进**：本阶段通过 `features.goals=false` 关闭 Codex 原生线程目标与目标工具，避免自动轮次绕过任务队列和权限门。模型通过 `propose_task` 提议任务。
 
 ---
 
-## 7 第 0 步验证结果
+## 6 原生上下文与能力边界
 
-在本项目的生产受限配置下启动完整服务，用本机模拟模型截获 Codex 发给模型的请求。结论将在 `fix/restricted-native-context` 中转为集成测试。
+下表说明原生能力与服务配置的关系。本机模拟模型可检查上下文与协议，不能验证真实模型主动使用 Skill 的效果。
 
-| 验证项 | 结果 | 对方案的影响 |
+| 原生行为 | 行为说明 | 本阶段处理 |
 |--------|------|-------------|
 | Skill 放在 `CODEX_HOME/skills` | 被发现（scope `user`），显式调用时正文注入 | Skill 安装位置确定为 `CODEX_HOME/skills` |
-| 已启用 Skill 的名称、描述、路径 | 进入模型上下文；被禁用的不出现 | 隐式触发只差一个读取工具，即 `skill_read` |
+| 已启用 Skill 的名称、描述、路径 | 进入模型上下文；被禁用的不出现 | 通过 `skill_read` 读取已启用 Skill |
 | 被禁用的 Skill 直接作为输入项发给 Codex | Codex 不注入正文 | 我们的检查之外还有一层保护 |
-| workspace 及其上级目录的 `AGENTS.md` | **均被加载**进模型上下文 | 启动参数加 `project_doc_max_bytes=0`，已验证有效；角色指令本来就走 `instructions_template` |
-| 用户真实 HOME 的 `~/.agents/skills` | 会被发现 | `verifySkills` 已全部关闭，保持 |
-| 规划类工具 | 没有 `update_plan`；有 `create_goal / get_goal / update_goal` | 见第 6 节 |
-| 设置线程目标后 | **Codex 自动连续发起轮次**，直到 `update_goal(complete)` | 启动参数加 `features.goals=false`（已验证有效），并纳入有效开关校验；接入留给 `feat/workflow-goals` |
+| workspace 及其上级目录的 `AGENTS.md` | **均被加载**进模型上下文 | 启动参数设置 `project_doc_max_bytes=0`；角色指令本来就走 `instructions_template` |
+| 用户真实 HOME 的 `~/.agents/skills` | 会被发现 | `verifySkills` 关闭未声明的 Skill |
+| 规划类工具 | 没有 `update_plan`；有 `create_goal / get_goal / update_goal` | 见第 5 节 |
+| 设置线程目标后 | **Codex 自动连续发起轮次**，直到 `update_goal(complete)` | 启动参数设置 `features.goals=false`，并校验有效开关 |
 | `request_user_input` | 对模型可见，但默认模式下返回 "unavailable in Default mode"，轮次照常完成 | 不处理 |
 
 ---
 
-## 8 实施计划
+## 7 验证命令与边界
 
-| 顺序 | 分支 | 内容 | 对外行为 |
-|------|------|------|---------|
-| 1 | `fix/restricted-native-context` | 关闭 `goals`、禁止加载 `AGENTS.md`、workspace 不能是服务目录的上级；第 0 步验证转为集成测试 | 安全修补 |
-| 2 | `refactor/agent-package` | Agent 包、Skill 移出 workspace 并同步到 `CODEX_HOME`、示例拆分、通用 init | 不变 |
-| 3 | `feat/workflow-registry` | Workflow 层、`chat` 与 `knowledge-maintain`、授权改造、验收检查、迁移 003、CLI 与工作台入口 | 知识维护行为不变，新增 workflow 接口 |
-| 4 | `feat/workflow-steps` | 多步与确认点、`writes` 收窄、`write-article` | 新能力 |
-| 5 | `feat/propose-task` | `propose_task` 工具与 `proposed` 状态 | 新能力 |
-| 6 | `feat/skill-read-tool` | 隐式触发与多文件 Skill | 新能力 |
-| 7 | `docs/s10` | 冻结 `stages/s10`、章节 README、改写 s09 的"接下来" | 课程 |
-| 后续 | `feat/workflow-goals` | 原生目标接入任务与权限门 | 待定 |
+在本阶段目录运行 `npm test`；检查 Codex 行为时运行 `npm run test:protocol`、`npm run test:codex-tools`；检查权限、任务表或知识库时运行 `npm run test:data`。
 
-角色提示词瘦身暂缓：第 4 个 PR 只把"写文章"的分步方法写进 `write-article` Skill，角色里保留原有说明。第 6 个 PR 让模型能够自行读取 Skill，但方法移出角色之后，普通对话是否仍按方法做，取决于真实模型会不会主动读取；本机模拟模型无法验证这一点。等用真实模型评估过隐式触发的实际效果，再决定把哪些内容从角色移到 Skill。
-
-每个 PR：根目录 `npm test`；涉及 Codex 行为时加 `test:protocol`、`test:codex-tools`；涉及权限、任务表或知识库时加 `test:data`。
+角色提示词与 `write-article` Skill 均保留方法说明。`skill_read` 支持读取 Skill，但真实模型是否主动读取、如何遵循方法，仍需真实模型评估；本机模拟模型不能证明这一点。
 
 ---
 
-## 9 待验证与风险
+## 8 待验证与风险
 
 | 项 | 说明 |
 |----|------|
-| 目标的受控接入 | 需要验证：服务端设置的目标能否在关闭模型侧 `create_goal` 的同时生效；自动轮次能否稳定关联到同一任务上下文 |
 | 多步流程中的会话上下文 | 每步是同一会话的新 Turn，模型能看到前面步骤的历史；确认点之间用户可以追加修改意见，追加不得扩大授权 |
 | 旧会话 | 描述符变化后旧会话需 `sessions:upgrade` 登记映射，否则按现有规则拒绝续用、要求新建会话 |
-| 冻结阶段 | `stages/s03–s09` 同样存在 Q4、Q5；它们是冻结快照，按 CONTRIBUTING 的规则不回补，在 s10 章节中说明 |

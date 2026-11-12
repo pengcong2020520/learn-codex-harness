@@ -1,22 +1,26 @@
 import { createClient } from "redis";
+import { boundedMs } from "./database.mjs";
+// Same-host default 2s; a cross-region node gets a wider value from deploy/remote-env.mjs.
+export const redisTimeout = (env = process.env) => boundedMs(env, "AGENT_REDIS_TIMEOUT_MS", 2000, 1000, 30000);
 
 // Redis contains only wake-up IDs. PostgreSQL owns ordering, payload and claims.
 // A lost/duplicate Redis entry is harmless: the outbox republishes until claimed.
 export class RedisQueue {
-  constructor(url, instanceId, jobs) {
+  constructor(url, instanceId, jobs, { timeout = redisTimeout() } = {}) {
     if (!url) throw new Error("缺少 REDIS_URL；不会回退为进程内生产队列。");
+    this.timeout = timeout;
     this.client = createClient({
       url,
       disableOfflineQueue: true,
       socket: {
-        connectTimeout: 2000,
+        connectTimeout: timeout,
         reconnectStrategy: (retries) => Math.min(200 + retries * 200, 2000),
       },
     });
     this.client.on("error", () => {
       this.healthy = false;
     });
-    this.commands = this.client.withCommandOptions({ timeout: 2000 });
+    this.commands = this.client.withCommandOptions({ timeout });
     this.key = `agent:${instanceId}:ready`;
     this.jobs = jobs;
     this.healthy = false;
@@ -26,7 +30,7 @@ export class RedisQueue {
       await Promise.race([
         this.client.connect(),
         new Promise((_, reject) => {
-          this.openTimer = setTimeout(() => reject(new Error("timeout")), 3000);
+          this.openTimer = setTimeout(() => reject(new Error("timeout")), this.timeout + 1000);
         }),
       ]);
     } catch {

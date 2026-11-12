@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -24,7 +25,7 @@ export function requireSupportedVersion(version) {
     );
   return version;
 }
-export function installedCodex() {
+export function installedCodex({ env, cwd, uid, gid } = {}) {
   const require = createRequire(import.meta.url),
     pkg = require("@openai/codex/package.json");
   const cli = path.join(
@@ -32,7 +33,16 @@ export function installedCodex() {
     "bin/codex.js",
   );
   requireSupportedVersion(pkg.version);
-  const actual = execFileSync(process.execPath, [cli, "--version"], {
+  // 读取已安装官方平台包里的原生可执行文件，不复制 CLI 启动器的实现。
+  // 直接 exec 原生进程，避免 SIGKILL Node 包装器后遗留 App Server 孙进程。
+  const platform = `@openai/codex-${process.platform}-${process.arch}`;
+  const vendor = path.join(path.dirname(require.resolve(`${platform}/package.json`)), 'vendor');
+  const binaries = fs.readdirSync(vendor).map(target => path.join(vendor, target, 'bin', process.platform === 'win32' ? 'codex.exe' : 'codex'))
+    .filter(file => fs.existsSync(file));
+  if (binaries.length !== 1) throw new Error('Codex 官方平台包中没有唯一的原生可执行文件。');
+  const executable = binaries[0];
+  const actual = execFileSync(executable, ["--version"], {
+    env, cwd, uid, gid,
     encoding: "utf8",
     timeout: 10000,
   })
@@ -40,7 +50,7 @@ export function installedCodex() {
     .match(/^codex-cli (\S+)$/)?.[1];
   if (actual !== pkg.version)
     throw new Error("Codex 包与实际二进制版本不一致，拒绝启动。");
-  return { cli, version: actual };
+  return { cli, executable, version: actual };
 }
 export async function verifyRestrictedFeatures(rpc, cwd = null) {
   const features = [],

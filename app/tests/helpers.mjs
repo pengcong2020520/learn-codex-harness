@@ -1,5 +1,7 @@
+import { runOwner } from '../server/modules/accounts/context.mjs';
+const TEST_OWNER = '11111111-1111-4111-8111-111111111111';
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, cpSync, symlinkSync, rmSync as remove, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { realpathSync, mkdtempSync, rmSync, cpSync, symlinkSync, rmSync as remove, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,19 +16,19 @@ import { TestJobs } from './jobs-fixture.mjs';
 export { testDataFactory } from './jobs-fixture.mjs';
 
 export const fixture = { CODEX_API_KEY: "test-key-not-real", CODEX_BASE_URL: "https://provider.invalid/v1", CODEX_MODEL: "unit-model", DEMO_TIMEOUT_MS: "3000" };
+// Service-level integration calls enter through the same identity + fresh Hub snapshot as HTTP.
+export function asUser(permissionHub, ownerId, operation) {
+  return runOwner(ownerId, () => permissionHub.withUser(ownerId, operation));
+}
 export function installToolFixture(root, { knowledge = false, article = false } = {}) {
   const project = fileURLToPath(new URL("../", import.meta.url));
   cpSync(path.join(project, "config/runtime"), path.join(root, "config/runtime"), { recursive: true });
   for (const area of ["inputs", "research", "drafts", "outputs"]) mkdirSync(path.join(root, "workspace", area), { recursive: true });
   cpSync(path.join(project, "config/tools"), path.join(root, "config/tools"), { recursive: true });
-  cpSync(path.join(project, "server/modules/tools"), path.join(root, "server/modules/tools"), { recursive: true });
-  for (const name of ["gateway", "usage"]) cpSync(path.join(project, "server/modules", name), path.join(root, "server/modules", name), { recursive: true });
-  cpSync(path.join(project, "server/modules/agents"), path.join(root, "server/modules/agents"), { recursive: true });
-  cpSync(path.join(project, "server/modules/role"), path.join(root, "server/modules/role"), { recursive: true });
-  cpSync(path.join(project, "server/modules/workflows"), path.join(root, "server/modules/workflows"), { recursive: true });
-  cpSync(path.join(project, "server/modules/storage"), path.join(root, "server/modules/storage"), { recursive: true });
+  // 假 Codex 会导入工具与 Agent 模块，它们又依赖其他服务端模块；整份复制，新增模块时不会漏。
+  cpSync(path.join(project, "server"), path.join(root, "server"), { recursive: true });
+  cpSync(path.join(project, "client"), path.join(root, "client"), { recursive: true });
   cpSync(path.join(project, "shared"), path.join(root, "shared"), { recursive: true });
-  cpSync(path.join(project, "server/modules/data"), path.join(root, "server/modules/data"), { recursive: true });
   cpSync(path.join(project, "agents"), path.join(root, "agents"), { recursive: true });
   if (!knowledge) {
     remove(path.join(root, 'config/tools/knowledge.json'), { force: true });
@@ -52,14 +54,27 @@ export function installToolFixture(root, { knowledge = false, article = false } 
 }
 const cleanups = new Map();
 export function cleanup(root, action) { cleanups.get(root).push(action); }
-export function tempRoot(t) {
-  const root = mkdtempSync(path.join(tmpdir(), "agent-project-test-"));
+export function tempRoot(t, { cleanupTimeout } = {}) {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "agent-project-test-")));
   mkdirSync(path.join(root, "config/runtime"), { recursive: true });
   writeFileSync(path.join(root, "config/runtime/project.json"), JSON.stringify({ agentDefinition: "agents/writing/agent.json" }));
   cleanups.set(root, []);
   t.after(async () => {
-    try { for (const action of cleanups.get(root).reverse()) await action(); }
-    finally { cleanups.delete(root); rmSync(root, { recursive: true, force: true }); }
+    const errors = [];
+    try {
+      for (const action of cleanups.get(root).reverse()) {
+        let timer;
+        try {
+          const work = Promise.resolve().then(action);
+          if (cleanupTimeout) await Promise.race([work, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('temporary root cleanup timed out')), cleanupTimeout);
+          })]);
+          else await work;
+        } catch (error) { errors.push(error); }
+        finally { clearTimeout(timer); }
+      }
+    } finally { cleanups.delete(root); rmSync(root, { recursive: true, force: true }); }
+    if (errors.length) throw new AggregateError(errors, 'temporary root cleanup failed');
   });
   return root;
 }
@@ -85,8 +100,9 @@ export class FakeRpc extends EventEmitter {
     this.notify("item/completed", { threadId, turnId: turn.id, item });
     this.notify("turn/completed", { threadId, turn: structuredClone(turn) });
   }
-  async request(method, params = {}) {
+  async request(method, params = {}, { onSent } = {}) {
     this.calls.push({ method, params });
+    onSent?.();
     if (method === "thread/memoryMode/set") return {};
     if (method === "thread/start") {
       const thread = { id: `thread-${this.threads.size + 1}`, cwd: params.cwd, turns: [] };
@@ -136,8 +152,10 @@ export async function rig(t) {
   const hub = new EventHub();
   const redact = createLogRedactor(fixture.CODEX_API_KEY);
   const sessions = new SessionService({ rpc, config, runtime, hub, redact });
+  const register = sessions.register.bind(sessions);
+  sessions.register = result => runOwner(TEST_OWNER, () => register(result));
   const messages = await new MessageService({ rpc, config, sessions, hub, store: new TestJobs() }).open();
-  const session = await sessions.create();
+  const session = await runOwner(TEST_OWNER, () => sessions.create());
   // 明确在临时目录移除之前释放持久化对象。
   const close = async () => { await messages.close(); sessions.close(); };
   cleanup(root, close);
