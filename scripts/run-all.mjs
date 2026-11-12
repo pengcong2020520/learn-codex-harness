@@ -34,6 +34,8 @@ const plans = {
   test: [
     [".", process.execPath, ["--test", "scripts/tests/*.test.mjs"]],
     ...packages.map(dir => [dir, "npm", ["test"]]),
+    // s13 起的包另有需要监听本机端口的测试，与 CI 一致。
+    ...packages.map(dir => [dir, "npm", ["run", "test:ports", "--if-present"]]),
     ["course", "npm", ["run", "test:web"]],
     ["course", "npm", ["run", "course:check"]],
     ["stages", process.execPath, ["verify.mjs", "--docs-only"]],

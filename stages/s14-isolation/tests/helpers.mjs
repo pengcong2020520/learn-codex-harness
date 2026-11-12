@@ -21,16 +21,10 @@ export function installToolFixture(root, { knowledge = false, article = false } 
   cpSync(path.join(project, "config/runtime"), path.join(root, "config/runtime"), { recursive: true });
   for (const area of ["inputs", "research", "drafts", "outputs"]) mkdirSync(path.join(root, "workspace", area), { recursive: true });
   cpSync(path.join(project, "config/tools"), path.join(root, "config/tools"), { recursive: true });
-  cpSync(path.join(project, "server/modules/tools"), path.join(root, "server/modules/tools"), { recursive: true });
-  for (const name of ["gateway", "usage"]) cpSync(path.join(project, "server/modules", name), path.join(root, "server/modules", name), { recursive: true });
-  cpSync(path.join(project, "server/modules/agents"), path.join(root, "server/modules/agents"), { recursive: true });
-  cpSync(path.join(project, "server/modules/role"), path.join(root, "server/modules/role"), { recursive: true });
-  cpSync(path.join(project, "server/modules/workflows"), path.join(root, "server/modules/workflows"), { recursive: true });
-  cpSync(path.join(project, "server/modules/storage"), path.join(root, "server/modules/storage"), { recursive: true });
-  cpSync(path.join(project, "server/modules/accounts"), path.join(root, "server/modules/accounts"), { recursive: true });
+  // 假 Codex 会导入工具与 Agent 模块，它们又依赖其他服务端模块；整份复制，新增模块时不会漏。
+  cpSync(path.join(project, "server"), path.join(root, "server"), { recursive: true });
   cpSync(path.join(project, "client"), path.join(root, "client"), { recursive: true });
   cpSync(path.join(project, "shared"), path.join(root, "shared"), { recursive: true });
-  cpSync(path.join(project, "server/modules/data"), path.join(root, "server/modules/data"), { recursive: true });
   cpSync(path.join(project, "agents"), path.join(root, "agents"), { recursive: true });
   if (!knowledge) {
     remove(path.join(root, 'config/tools/knowledge.json'), { force: true });
