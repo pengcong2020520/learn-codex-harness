@@ -92,6 +92,8 @@ services:
     init: true
     mem_limit: ${AGENT_MEMORY_LIMIT:-768m}
     environment: &node-env
+      # All nodes trust the public entry origin, not their internal listening port.
+      AGENT_ALLOWED_ORIGINS: ${AGENT_ALLOWED_ORIGINS:-http://127.0.0.1:${AGENT_PORT:-4317},http://localhost:${AGENT_PORT:-4317}}
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
       AGENT_NODE_KEY: ${AGENT_NODE_KEY_A:?Set AGENT_NODE_KEY_A}
       AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:?Set AGENT_NODE_KEY_A_HASH}
@@ -212,7 +214,7 @@ services:
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
       NODE_B_UPSTREAM: ${NODE_B_UPSTREAM:-node-b:4341}
     entrypoint: ["/bin/sh", "/etc/caddy/caddy-upstreams.sh"]
-    volumes: ["./deploy/Caddyfile:/etc/caddy/Caddyfile:ro", "./deploy/caddy-upstreams.sh:/etc/caddy/caddy-upstreams.sh:ro"]
+    volumes: ["./web:/srv/ui:ro", "./deploy/Caddyfile:/etc/caddy/Caddyfile:ro", "./deploy/caddy-upstreams.sh:/etc/caddy/caddy-upstreams.sh:ro"]
     depends_on:
       node-a: { condition: service_healthy }
     healthcheck:

@@ -67,7 +67,8 @@
     "test:etcd": "node --test --test-concurrency=1 tests/coordination.integration.mjs tests/sharding-route-etcd.integration.mjs tests/replication-etcd.integration.mjs",
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs",
-    "test:protocol:research": "node scripts/test-research-protocol.mjs"
+    "test:protocol:research": "node scripts/test-research-protocol.mjs",
+    "test:web": "node --test tests/web.browser.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

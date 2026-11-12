@@ -1,11 +1,24 @@
 :80 {
-    respond /health 200
-    reverse_proxy {$AGENT_UPSTREAMS:node-a:4340} {
-        health_uri /ready
-        health_status 200
-        health_interval 1s
-        health_timeout 3s
-        fail_duration 3s
-        flush_interval -1
+    redir / /ui/ 302
+    redir /ui /ui/ 302
+    handle_path /ui/* {
+        root * /srv/ui
+        header {
+            Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+            X-Content-Type-Options nosniff
+            Referrer-Policy no-referrer
+        }
+        file_server
+    }
+    handle {
+        respond /health 200
+        reverse_proxy {$AGENT_UPSTREAMS:node-a:4340} {
+            health_uri /ready
+            health_status 200
+            health_interval 1s
+            health_timeout 3s
+            fail_duration 3s
+            flush_interval -1
+        }
     }
 }

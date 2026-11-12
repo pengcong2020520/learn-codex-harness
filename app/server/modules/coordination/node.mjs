@@ -39,6 +39,7 @@ export async function startCoordinatedServer({ config = loadServerConfig(), env 
     revision: revision(config.root), agentHash: createHash('sha256').update(fs.readFileSync(agent.file)).update(agent.instructions).digest('hex'), capacity: RUNTIME_LIMIT });
   const cache = await new RouteCache(adapter.client, env.AGENT_SHARD_STRATEGY || 'slots').open();
   const runtime = new ShardRuntime({ nodeId, cache, coordination, key: env.AGENT_NODE_KEY, keyHashes, nodes });
+  runtime.config = { allowedOrigins: config.allowedOrigins };
   const control = new ReplicationControl(coordination, cache, pool, identity(config.root, { create: false }).instanceId, nodes);
   control.log = log;
   const service = new ShardedService(coordination, generation => start({ config: { ...config, sharding: runtime }, generation, externalHttp: true, log }), runtime, log);

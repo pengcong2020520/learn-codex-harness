@@ -16,7 +16,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 最小用户配置：模型名与一把占位密钥。本验收不调用模型，其余密钥全部随机生成。
+# 最小用户配置：模型名与一把占位密钥。网页验收会提交一次任务，预期占位密钥导致任务失败；其余密钥随机生成。
 printf 'CODEX_MODEL=deepseek/deepseek-flash\nDEEPSEEK_API_KEY=sk-e2e-placeholder\n' > .env
 node scripts/deploy-env.mjs "$PWD" > .env.generated
 mv .env.generated .env
@@ -30,5 +30,6 @@ printf 'admin\n%s\n' "$password" |
   docker compose run --rm --no-deps -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts init
 
 node scripts/e2e-check.mjs "$password"
+E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
 npm run -s test:deploy:integration
 echo "端到端验收通过。"

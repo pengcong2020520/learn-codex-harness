@@ -12,7 +12,7 @@ export class Accounts {
   constructor(store, { now = Date.now, verify = verifyPassword, limits = new LoginLimits({ now }) } = {}) {
     Object.assign(this, { store, now, verify, limits });
   }
-  async login({ username, password }, source) {
+  async login({ username, password }, source, clientHint = 'CLI') {
     const finish = this.limits.begin(username, source);
     let success = false;
     try {
@@ -23,7 +23,7 @@ export class Accounts {
       const now = this.now(), expiresAt = new Date(now + ABSOLUTE_MS).toISOString();
       // 再锁定用户并核对哈希，避免改密码/禁用与登录并发时签出旧凭证。
       const saved = await this.store.createSession(user, { id: randomUUID(), userId: user.id, tokenHash: tokenHash(token),
-        createdAt: new Date(now), expiresAt, clientHint: 'CLI' });
+        createdAt: new Date(now), expiresAt, clientHint });
       if (!saved) throw new AppError('用户名或密码错误。', 401, 'LOGIN_FAILED');
       success = true;
       return { token, expiresAt, user: publicUser(user) };
