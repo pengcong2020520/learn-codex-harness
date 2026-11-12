@@ -50,6 +50,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       if (request.method === 'GET' && pathname === '/ready') {
         const result = await ready();
         const replication = await config.sharding?.replication?.status();
+        if (replication?.waiting) { result.status = 'not-ready'; result.waiting = replication.waiting; }
         if (replication?.replication === 'off') result.replication = 'off';
         if (replication?.shards.some(s => s.replica_lagging)) result.degraded = { replica_lagging: replication.shards.filter(s => s.replica_lagging).map(s => s.shardId) };
         return json(result.status === 'ready' ? 200 : 503, result);

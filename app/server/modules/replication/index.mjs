@@ -186,7 +186,6 @@ export function attachReplication(app,runtime,control) {
       return {synced:true};
     },
     async tick() {
-      if (runtime.nodes?.length === 1) return;
       if(api.pending)return api.pending;
       api.pending=(async()=>{
         const rows=await control.rows();
@@ -214,7 +213,8 @@ export function attachReplication(app,runtime,control) {
     },
     async status(){
       const users=await store.status(),rows=await control.rows();
-      return {replication: runtime.nodes?.length === 1 ? 'off' : 'on',users,shards:rows.map(row=>({shardId:row.shard_id,primary:row.node_id,replica:row.replica,epoch:Number(row.epoch),replica_ready:row.replica_ready&&!users.some(u=>u.shard_id===row.shard_id&&(u.transfer_started_at||u.replication_error)),
+      return {waiting: control.placementWaiting ? control.placementWaiting(rows) : control.reasons.get('waiting') ?? null,
+        replication: runtime.nodes?.length === 1 ? 'off' : 'on',users,shards:rows.map(row=>({shardId:row.shard_id,primary:row.node_id,replica:row.replica,epoch:Number(row.epoch),replica_ready:row.replica_ready&&!users.some(u=>u.shard_id===row.shard_id&&(u.transfer_started_at||u.replication_error)),
         status:!hasMember(runtime.coordination.members,row.node_id)?'unavailable':row.recovering||row.publishing?'recovering':row.paused?'paused':'available',
         reason:users.find(u=>u.shard_id===row.shard_id&&u.replication_error)?.replication_error||control.reasons.get(row.shard_id)||(!hasMember(runtime.coordination.members,row.node_id)?takeoverReason(row,runtime.coordination.members,users.some(u=>u.shard_id===row.shard_id&&u.transfer_started_at))||'等待 control 接管':null),
         replica_lagging:runtime.nodes?.length === 1 ? false : !row.replica_ready||users.some(u=>u.shard_id===row.shard_id&&(u.replica_lagging||u.transfer_started_at)),

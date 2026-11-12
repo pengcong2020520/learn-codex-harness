@@ -14,7 +14,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     init: true
     network_mode: host
-    extra_hosts: ["node-a:127.0.0.1", "node-c:127.0.0.1", "host.docker.internal:127.0.0.1"]
+    extra_hosts: ["host.docker.internal:127.0.0.1"]
     mem_limit: ${REMOTE_MEMORY_LIMIT:-700m}
     env_file: ../.remote.env
     environment:

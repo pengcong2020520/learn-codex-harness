@@ -21,6 +21,16 @@ case ",$AGENT_CLUSTER_NODES," in
  *) echo '节点不在 AGENT_CLUSTER_NODES 配置中。' >&2; exit 1 ;;
 esac
 # Pure output mode lets the administrator provision the restricted account before installation.
+print_compose_override() {
+  local peer
+  local -a peers
+  IFS=, read -r -a peers <<< "$AGENT_CLUSTER_NODES"
+  printf 'services:\n  node:\n    extra_hosts:\n      host.docker.internal: 127.0.0.1\n'
+  for peer in "${peers[@]}"; do
+    if [[ $peer != "$NODE_ID" ]]; then printf '      %s: 127.0.0.1\n' "$peer"; fi
+  done
+}
+if [[ ${1:-} == --compose-override ]]; then print_compose_override; exit 0; fi
 if [[ $SSH_USER == root ]]; then echo '隧道必须使用专用非 root 系统账号。' >&2; exit 1; fi
 print_authorized_key() {
   local public_key options
@@ -51,6 +61,7 @@ test -f .remote.env && test -f .remote-identity.json && test -f "$SSH_KEY"
 grep -qx "AGENT_CLUSTER_NODES=$AGENT_CLUSTER_NODES" .remote.env
 grep -qx "AGENT_NODE_ID=$NODE_ID" .remote.env
 grep -qx "AGENT_PORT=$NODE_PORT" .remote.env
+print_compose_override > deploy/remote.hosts.override.yaml
 node_forwards=""
 for port in $cluster_ports; do
   if [ "$port" != "$default_port" ]; then node_forwards+=" -L 127.0.0.1:$port:127.0.0.1:$((port+10000))"; fi
@@ -87,14 +98,14 @@ After=docker.service codex-agent-tunnel.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=$APP_DIR
-ExecStart=/usr/bin/docker compose --env-file .remote.env -f deploy/remote.compose.yaml up -d --wait
-ExecStop=/usr/bin/docker compose --env-file .remote.env -f deploy/remote.compose.yaml stop
+ExecStart=/usr/bin/docker compose --env-file .remote.env -f deploy/remote.compose.yaml -f deploy/remote.hosts.override.yaml up -d --wait
+ExecStop=/usr/bin/docker compose --env-file .remote.env -f deploy/remote.compose.yaml -f deploy/remote.hosts.override.yaml stop
 TimeoutStartSec=600
 [Install]
 WantedBy=multi-user.target
 UNIT
 export APP_DIR
 # Build uses code + lockfile only; .remote.env is excluded by .dockerignore.
-docker compose --env-file .remote.env -f deploy/remote.compose.yaml build
+docker compose --env-file .remote.env -f deploy/remote.compose.yaml -f deploy/remote.hosts.override.yaml build
 systemctl daemon-reload
 systemctl enable --now codex-agent-tunnel.service codex-agent-remote.service

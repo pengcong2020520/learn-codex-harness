@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { clusterNodes, clusterUpstreams } from '../server/modules/config/cluster.mjs';
+import { clusterNodes, clusterUpstreams, validateClusterSecrets } from '../server/modules/config/cluster.mjs';
 import { loadServerConfig } from '../server/modules/config/index.mjs';
 import { ReplicationControl, ring } from '../server/modules/replication/control.mjs';
 import { attachReplication } from '../server/modules/replication/index.mjs';
@@ -173,5 +173,162 @@ test('topology: 已迁走的旧主节点即使仍在线，也不能成为未配�
     f.members.set('node-c', {nodeId:'node-c'});
     await f.control.place();
     assert.ok(f.rows.every(row => row.replica === null));
+  }
+});
+
+function replicationApp(t, control, nodes = all) {
+  const runtime = { nodes, nodeId: 'node-a', paused: new Set(), cache: { shards: {}, slots: {}, revision: '1' },
+    coordination: { members: control.coordination.members, isController: () => true, status: async () => ({ members: [] }) } };
+  const app = { config: { root: temp(t), generation: {}, sharding: runtime },
+    data: { pool: { query: async () => ({ rows: [] }) }, scope: { instanceId: 'test' }, jobs: { patch: async () => ({}) } },
+    runtimes: { pool: { entries: new Map() } }, sessions: { invalidateOwner() {} },
+    accounts: { authenticate: async () => ({ role: 'admin' }) }, close: async () => {} };
+  runtime.replication = attachReplication(app, runtime, control);
+  app.http = createHttpService({ config: app.config, sessions: {}, hub: new EventEmitter(), redact: JSON.stringify, readiness: async () => ({ status: 'ready' }) });
+  t.after(() => app.close());
+  return { app, runtime, api: runtime.replication };
+}
+
+test('topology: 首次放置等待全部成员；原因进入 status、/cluster、/ready；上线后恢复 s18 环形放置', async t => {
+  const f = placement(all); f.members.delete('node-b'); f.members.delete('node-c');
+  await f.control.place();
+  assert.equal(f.rows.length, 0); assert.equal(f.published.length, 0);
+  const reason = '等待配置的节点全部加入后再首次放置分片：缺 node-b、node-c';
+  assert.equal(f.control.reasons.get('waiting'), reason);
+  const { app, runtime, api } = replicationApp(t, f.control);
+  assert.equal((await api.status()).waiting, reason);
+  for (const started of [false, true]) {
+    const handler = createShardedHandler(runtime.coordination, { app: started ? app : null, isReady: () => started }, runtime, f.control);
+    const ready = await request(handler, '/ready');
+    assert.equal(ready.status, 503); assert.equal(ready.body.waiting, reason);
+    const cluster = await request(handler, '/cluster');
+    assert.equal(cluster.status, started ? 200 : 503); assert.equal(cluster.body.waiting, reason);
+  }
+  // etcd membership keys need not equal node IDs.
+  for (const nodeId of ['node-b','node-c']) f.members.set(`/members/${nodeId}`, { nodeId });
+  await f.control.place();
+  assert.deepEqual(f.rows.map(row => ({ primary: row.node_id, replica: row.replica, epoch: row.epoch })), ['0','1','2'].map(id => ring(id, all)));
+  assert.ok(f.published.length > 0); assert.equal(f.control.reasons.has('waiting'), false);
+  assert.equal((await api.status()).waiting, null);
+  assert.equal((await request(app.http.handle, '/ready')).status, 200);
+  f.control.rows = async () => { throw Error('database closed'); };
+  const stopped = createShardedHandler(runtime.coordination, { app: null, isReady: () => false }, runtime, f.control);
+  assert.equal((await request(stopped, '/ready')).status, 503, '数据库不可用时仍保持未就绪状态');
+});
+
+test('topology: 部分分片缺归属也等待全部成员：不插入新行，已有行照常对账', async () => {
+  const f = placement(all, [{ shard_id: '0', node_id: 'node-a', replica: null, epoch: 3 }]);
+  f.members.delete('node-c');
+  await f.control.place();
+  assert.deepEqual(f.rows.map(row => row.shard_id), ['0']);
+  assert.equal(f.rows[0].node_id, 'node-a'); assert.equal(f.rows[0].epoch, 3);
+  assert.match(f.control.reasons.get('waiting'), /缺 node-c$/);
+});
+
+test('topology: 单节点 tick 完成接管恢复并清暂停，复制 schedule、sync、open 仍关闭', async t => {
+  const f = placement(['node-a'], [{ shard_id: '0', node_id: 'node-a', replica: null, epoch: 2, recovering: true }]);
+  const { app, runtime, api } = replicationApp(t, f.control, ['node-a']);
+  const calls = []; runtime.paused.add('test-user');
+  api.store.users = async () => ['test-user'];
+  api.store.recover = async (...args) => { assert.equal(runtime.paused.has('test-user'), true); calls.push(['recover', ...args]); };
+  app.sessions.invalidateOwner = id => calls.push(['invalidate', id]);
+  f.control.recovered = async (...args) => { calls.push(['recovered', ...args]); f.rows[0].recovering = false; };
+  api.worker.store.route = async () => { throw Error('单节点不得发起复制'); };
+  api.worker.schedule('test-user'); api.worker.open();
+  await api.tick();
+  assert.deepEqual(calls, [['recover','test-user',2,{ missingHome: true }], ['invalidate','test-user'], ['recovered','0',2,'node-a']]);
+  assert.equal(runtime.paused.has('test-user'), false);
+  assert.equal(await api.worker.sync('test-user'), false);
+  assert.equal(api.worker.timer, undefined); assert.equal(api.worker.timers.size, 0);
+});
+
+function secrets(nodes = all) {
+  const env = { AGENT_CLUSTER_NODES: nodes.join(',') };
+  for (const id of nodes) {
+    const suffix = id.slice(-1).toUpperCase(), key = `fixture-node-${suffix}-key-1234567890123456`;
+    Object.assign(env, { [`AGENT_NODE_KEY_${suffix}`]: key, [`AGENT_NODE_KEY_${suffix}_HASH`]: nodeKeyHash(key),
+      [`ETCD_NODE_${suffix}_PASSWORD`]: `fixture-etcd-${suffix}`, [`AGENT_NODE_${suffix}_DB_PASSWORD`]: `fixture_db-${suffix}` });
+  }
+  for (const name of ['ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY']) env[name] = `fixture-${name}`;
+  return env;
+}
+
+test('topology: 凭据校验只要求配置节点，单节点不要求 B/C', () => {
+  for (let n = 1; n <= 3; n++) assert.doesNotThrow(() => validateClusterSecrets(secrets(all.slice(0,n)), all.slice(0,n)));
+});
+
+for (const [label, name, value] of [
+  ['缺 B 密钥','AGENT_NODE_KEY_B',undefined], ['密钥太短','AGENT_NODE_KEY_B','short-fixture'],
+  ['哈希不匹配','AGENT_NODE_KEY_B_HASH','b'.repeat(64)], ['哈希必须小写','AGENT_NODE_KEY_B_HASH','A'.repeat(64)],
+  ['数据库口令非法','AGENT_NODE_B_DB_PASSWORD','fixture-bad-password!'],
+  ...['ETCD_NODE_B_PASSWORD','AGENT_NODE_B_DB_PASSWORD','ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY'].map(name => ['口令为空',name,'']),
+]) test(`topology: 凭据校验 ${label} ${name}，错误只列变量名不含值`, () => {
+  const env = { ...secrets(), [name]: value };
+  assert.throws(() => validateClusterSecrets(env, all), error => {
+    const variables = error.message.replace('集群配置检查失败，请检查变量：', '').split('、');
+    assert.ok(variables.includes(name));
+    assert.ok(variables.every(variable => /^[A-Z_]+$/.test(variable)));
+    for (const secret of Object.values(env).filter(Boolean)) assert.equal(error.message.includes(secret), false);
+    return true;
+  });
+});
+
+test('topology: cluster-config check 从 dotenv 读取，成功与失败退出码且不泄漏凭据', t => {
+  const root = temp(t), env = secrets(['node-a']);
+  const runEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(AGENT_|ETCD_|REDIS_PASSWORD)/.test(name)));
+  const run = () => spawnSync(process.execPath, [new URL('../scripts/cluster-config.mjs', import.meta.url).pathname, 'check'], { cwd: root, env: runEnv, encoding: 'utf8' });
+  fs.writeFileSync(path.join(root, '.env'), Object.entries(env).map(([key,value]) => `${key}=${value}`).join('\n'));
+  const good = run(); assert.equal(good.status, 0, good.stderr); assert.equal(good.stdout.trim(), '集群配置检查通过：node-a');
+  fs.appendFileSync(path.join(root, '.env'), '\nAGENT_CLUSTER_NODES=node-a,node-b\n');
+  const bad = run(); assert.equal(bad.status, 1); assert.match(bad.stderr, /AGENT_NODE_KEY_B/); assert.equal(bad.stdout, '');
+  for (const value of Object.values(env)) assert.equal(bad.stderr.includes(value), false);
+});
+
+test('topology: configure 在凭据检查失败时立即停止，检查容器只读挂载且无网络', t => {
+  const root = temp(t); fs.mkdirSync(path.join(root, 'deploy')); fs.mkdirSync(path.join(root, 'bin'));
+  for (const file of ['configure.sh','topology.sh']) fs.copyFileSync(new URL(`../deploy/${file}`, import.meta.url), path.join(root, 'deploy', file));
+  fs.writeFileSync(path.join(root, 'Dockerfile'), 'FROM test-image\n');
+  fs.writeFileSync(path.join(root, 'bin/docker'), `#!/bin/bash
+echo "$*" >> "$CALLS"
+case "$*" in
+ *'cluster-config.mjs nodes') echo 'node-a node-b';;
+ *'cluster-config.mjs check') echo '集群配置检查失败，请检查变量：AGENT_NODE_KEY_B' >&2; exit 1;;
+ *) exit 99;;
+esac
+`, { mode: 0o755 });
+  const result = spawnSync('/bin/bash', [path.join(root,'deploy/configure.sh')], { encoding: 'utf8', env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, CALLS: path.join(root,'calls') } });
+  assert.equal(result.status, 1); assert.match(result.stderr, /AGENT_NODE_KEY_B/);
+  const calls = fs.readFileSync(path.join(root,'calls'),'utf8').trim().split('\n');
+  assert.equal(calls.length, 2); assert.match(calls[1], /--network none .*:ro .*cluster-config.mjs check$/);
+  assert.equal(fs.existsSync(path.join(root,'.data')), false);
+});
+
+for (const nodeId of ['node-b','node-c']) test(`topology: 远端 ${nodeId} extra_hosts 只映射其他已配置节点`, () => {
+  for (const nodes of [all.slice(0,all.indexOf(nodeId)+1), all]) {
+    const result = spawnSync('/bin/bash', [new URL('../deploy/remote-node.sh', import.meta.url).pathname, '--compose-override'],
+      { encoding: 'utf8', env: { ...process.env, NODE_ID: nodeId, AGENT_CLUSTER_NODES: nodes.join(',') } });
+    assert.equal(result.status, 0, result.stderr);
+    const hosts = [...result.stdout.matchAll(/^      (node-[abc]): 127\.0\.0\.1$/gm)].map(match => match[1]);
+    assert.deepEqual(hosts, nodes.filter(id => id !== nodeId));
+  }
+  assert.doesNotMatch(read('deploy/remote.compose.yaml'), /node-[abc]:127\.0\.0\.1/);
+  const script = read('deploy/remote-node.sh');
+  assert.match(script, /print_compose_override > deploy\/remote.hosts.override.yaml/);
+  for (const command of ['up -d --wait','stop','build']) assert.ok(script.includes(`-f deploy/remote.hosts.override.yaml ${command}`));
+});
+
+test('topology: remote tunnel 按数据读取本机 AGENT_PORT，缺省 4317 且拒绝命令注入', t => {
+  const root = temp(t); fs.mkdirSync(path.join(root,'deploy')); fs.mkdirSync(path.join(root,'bin'));
+  fs.copyFileSync(new URL('../deploy/remote.sh',import.meta.url), path.join(root,'deploy/remote.sh'));
+  fs.writeFileSync(path.join(root,'bin/ssh'), '#!/bin/bash\necho "$*" >> "$CALLS"\nif [[ "$*" == *"compose port caddy 80"* ]]; then echo 127.0.0.1:9876; fi\n', { mode: 0o755 });
+  for (const [dotenv, expected] of [[null,'4317'], ['AGENT_PORT="5123" # comment\nUNUSED=$(touch injected)\n','5123'], ['AGENT_PORT=$(touch injected)\n',null]]) {
+    const file = path.join(root,'.env'); if (dotenv === null) fs.rmSync(file,{force:true}); else fs.writeFileSync(file,dotenv);
+    fs.writeFileSync(path.join(root,'calls'),'');
+    const result = spawnSync('/bin/bash',[path.join(root,'deploy/remote.sh'),'tunnel'], { cwd: root, encoding: 'utf8',
+      env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, CALLS: path.join(root,'calls'), DEPLOY_HOST: 'fixture-host', APP_DIR: '/opt/test-agent' } });
+    const calls = fs.readFileSync(path.join(root,'calls'),'utf8');
+    if (expected) { assert.equal(result.status,0,result.stderr); assert.ok(calls.includes(`-L ${expected}:127.0.0.1:9876 fixture-host`)); assert.ok(result.stdout.includes(`http://127.0.0.1:${expected}`)); }
+    else { assert.equal(result.status,1); assert.match(result.stderr,/AGENT_PORT/); assert.equal(calls,''); }
+    assert.equal(fs.existsSync(path.join(root,'injected')),false);
   }
 });

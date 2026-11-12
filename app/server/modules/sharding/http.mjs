@@ -207,7 +207,16 @@ export function createShardedHandler(coordination, service, runtime, control) {
     try {
       const pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/health') return json(200, { status: 'alive' });
-      if (!service.isReady()) throw unavailable('节点未就绪或成员租约失效。');
+      if (!service.isReady()) {
+        // Placement precedes service creation. Expose only the startup reason here;
+        // full cluster details still require the normal admin authentication below.
+        if (['/ready', '/cluster'].includes(pathname) && control?.placementWaiting) {
+          const rows = await control.rows().catch(() => { throw unavailable('节点未就绪或成员租约失效。'); });
+          const waiting = control.placementWaiting(rows);
+          if (waiting) return json(503, { status: 'not-ready', waiting, error: { code: 'SHARD_UNAVAILABLE', message: waiting } });
+        }
+        throw unavailable('节点未就绪或成员租约失效。');
+      }
       if (pathname === '/ready') return service.app.http.handle(request, response);
       if (pathname === '/internal/content') {
         const caller = authenticateNode(request.headers, runtime.keyHashes, runtime.nodes);
@@ -225,7 +234,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       runtime.rememberAuthorization?.(identity, request.headers.authorization);
       if (pathname === '/cluster' || pathname === '/cluster/move' || pathname === '/cluster/route' || pathname === '/cluster/promote') {
         if (identity.role !== 'admin') throw new AppError('需要 admin。', 403);
-        if (pathname === '/cluster') { const status=await shardStatus(coordination,runtime.cache,service.app,runtime); const replication=await service.app.replication?.status(); return json(200,replication?{...status,shards:replication.shards,replication:replication.replication,replicationStatus:replication}:status); }
+        if (pathname === '/cluster') { const status=await shardStatus(coordination,runtime.cache,service.app,runtime); const replication=await service.app.replication?.status(); return json(200,replication?{...status,waiting:replication.waiting,shards:replication.shards,replication:replication.replication,replicationStatus:replication}:status); }
         if (pathname === '/cluster/route') {
           if (request.method !== 'GET') throw new AppError('需要 GET。', 405);
           const username = new URL(request.url, 'http://localhost').searchParams.get('username');

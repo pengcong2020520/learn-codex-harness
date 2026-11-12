@@ -22,15 +22,29 @@ export class ReplicationControl extends ShardControl {
     this.reasons = new Map();
   }
   async rows() { return (await this.pool.query('SELECT * FROM agent_data.shard_owners ORDER BY shard_id')).rows; }
+  placementWaiting(rows) {
+    if (SHARDS.every(id => rows.some(row => row.shard_id === id))) return null;
+    const missing = this.nodes.filter(id => !hasMember(this.coordination.members, id));
+    return missing.length ? `等待配置的节点全部加入后再首次放置分片：缺 ${missing.join('、')}` : '等待首次放置分片完成';
+  }
   async place() {
     // Keep existing primaries when nodes are added; never automatically rebalance.
-    assertClusterOwners(await this.rows(), this.nodes);
-    await this.locked(async db => {
-      for (const id of SHARDS) {
-        const r = ring(id, this.nodes);
-        await db.query(`INSERT INTO agent_data.shard_owners(shard_id,node_id,epoch,replica,publishing) VALUES($1,$2,$3,$4,true) ON CONFLICT DO NOTHING`,[id,r.primary,r.epoch,r.replica]);
-      }
-    });
+    const rows = await this.rows();
+    assertClusterOwners(rows, this.nodes);
+    // 首次放置要等配置的节点全部在线，否则主节点会落在一直不来的节点上；已有归属行照常对账。
+    const waiting = this.placementWaiting(rows);
+    if (waiting && this.nodes.some(id => !hasMember(this.coordination.members, id))) {
+      this.reasons.set('waiting', waiting);
+      if (!rows.length) return; // 还没有任何归属行：没有可对账的，也不先发布路由。
+    } else {
+      this.reasons.delete('waiting');
+      await this.locked(async db => {
+        for (const id of SHARDS) {
+          const r = ring(id, this.nodes);
+          await db.query(`INSERT INTO agent_data.shard_owners(shard_id,node_id,epoch,replica,publishing) VALUES($1,$2,$3,$4,true) ON CONFLICT DO NOTHING`,[id,r.primary,r.epoch,r.replica]);
+        }
+      });
+    }
     await this.publish();
     await this.locked(async db => {
       const users = (await db.query('SELECT id FROM agent_data.users WHERE instance_id=$1 AND id NOT IN (SELECT user_id FROM agent_data.user_shards)',[this.instanceId])).rows;

@@ -66,10 +66,23 @@ REMOTE
   ;;
  status) remote "cd '$APP_DIR' && cat REVISION && docker compose ps && bash deploy/cluster-ready.sh --check" ;;
  tunnel)
+  local_port=$(node --input-type=module - "$APP/.env" <<'NODE'
+import fs from 'node:fs';
+import { parseEnv } from 'node:util';
+let env = {};
+try { env = parseEnv(fs.readFileSync(process.argv[2], 'utf8')); }
+catch (error) { if (error.code !== 'ENOENT') throw error; }
+const port = env.AGENT_PORT || '4317';
+if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+  console.error('AGENT_PORT 必须为 1–65535 的整数。'); process.exit(1);
+}
+console.log(Number(port));
+NODE
+  )
   target=$(remote "cd '$APP_DIR' && docker compose port caddy 80")
   [[ "$target" =~ ^127\.0\.0\.1:[0-9]+$ ]] || { echo '服务器没有回环 Caddy 端口。' >&2; exit 1; }
-  echo '本机 http://127.0.0.1:4317 → 服务器 Caddy；Ctrl-C 关闭隧道。'
-  exec ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L "4317:$target" "$DEPLOY_HOST"
+  echo "本机 http://127.0.0.1:$local_port → 服务器 Caddy；Ctrl-C 关闭隧道。"
+  exec ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L "$local_port:$target" "$DEPLOY_HOST"
   ;;
  backup) remote "cd '$APP_DIR' && bash deploy/backup.sh" ;;
  backup-download)
