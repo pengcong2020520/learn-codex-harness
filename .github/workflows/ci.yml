@@ -54,6 +54,9 @@ jobs:
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
       - run: npm ci
       - run: npm test
+      # s13 起的包另有一组要监听本机端口的测试（真实 HTTP、CLI 子进程）；没有这个脚本的包跳过。
+      - name: 本机端口测试
+        run: npm run test:ports --if-present
       - name: Web 工作台与课程一致性
         if: matrix.package == 'course'
         run: |

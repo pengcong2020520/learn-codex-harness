@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { currentIdentity } from '../server/modules/accounts/context.mjs';
+import { AppError } from '../shared/errors.mjs';
 import { accountFixture } from './accounts-fixture.mjs';
 // Unit-test double only; production has no JSON or memory fallback.
 export class TestJobs {
@@ -59,7 +60,7 @@ export async function testDataFactory(config) {
   const repository = {
     saveAgent: async () => {},
     bind: async (id, hash, cwd) => rows.set(id, { id, owner_id: currentIdentity().userId, agent_hash: hash, cwd, name: 'fixture' }),
-    conversation: async id => { const row = rows.get(id); if (!row || row.owner_id !== currentIdentity().userId) throw new Error('missing'); return row; },
+    conversation: async id => { const row = rows.get(id); if (!row || row.owner_id !== currentIdentity().userId) throw new AppError('未找到本项目的这个会话。', 404, 'THREAD_NOT_FOUND'); return row; },
     listConversations: async () => [...rows.values()].filter(row => row.owner_id === currentIdentity().userId),
     recordArtifacts: async () => {},
   };
