@@ -19,7 +19,7 @@ test('真实 Compose：配置节点服务健康、故障就绪/存活分离、�
   const config = JSON.parse(compose(['config', '--format', 'json']));
   for (const [name, bytes] of Object.entries({ postgres: 256 * 1024 ** 2, redis: 128 * 1024 ** 2, gateway: 256 * 1024 ** 2, ...Object.fromEntries(nodes.map(node => [node, 768 * 1024 ** 2])), etcd: 128 * 1024 ** 2, caddy: 64 * 1024 ** 2 })) {
     const service = config.services[name];
-    assert.equal(service.mem_limit, bytes); assert.equal(service.restart, 'unless-stopped');
+    assert.equal(Number(service.mem_limit), bytes); assert.equal(service.restart, 'unless-stopped');
     assert.equal(service.logging.options['max-size'], '10m'); assert.equal(service.logging.options['max-file'], '3');
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
