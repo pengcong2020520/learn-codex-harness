@@ -93,6 +93,8 @@ Codex 已经是一个很强的 Agent：会读文件、跑命令、调工具、�
 
 **Agent = LLM + Harness。**
 
+这个说法由 LangChain 的文章《[The Anatomy of an Agent Harness](https://www.langchain.com/blog/the-anatomy-of-an-agent-harness)》推广开来：模型提供智能，harness 让智能变得有用。
+
 模型很聪明，但它只会"想"：读进一段上下文，吐出一段文字，或者说一句"我要调用某个工具"。它碰不到你的文件，跑不了命令，也记不住上一次聊过什么。
 
 把"想"变成"做"的，是模型外面那一圈程序，也就是 harness。它要做的事情很多：
