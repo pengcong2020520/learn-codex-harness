@@ -15,6 +15,12 @@ async function until(check, label, ms = 120_000) {
   }
 }
 
+// 失败时打出状态码和返回内容（错误信息不含密钥），方便在 CI 日志里定位。
+async function expectStatus(response, status, label) {
+  if (response.status === status) return response;
+  throw new Error(`${label}：期望 HTTP ${status}，实际 ${response.status}：${(await response.text()).slice(0, 500)}`);
+}
+
 await until(async () => (await fetch(`${url}/ready`)).status === 200, '/ready 返回 200');
 const ready = await (await fetch(`${url}/ready`)).json();
 assert.equal(ready.replication, 'off', '单节点 /ready 应显示复制关闭');
@@ -24,7 +30,7 @@ const login = await fetch(`${url}/auth/login`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ username: 'admin', password }),
 });
-assert.equal(login.status, 200, '管理员登录');
+await expectStatus(login, 200, '管理员登录');
 const { token } = await login.json();
 const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
 
@@ -36,12 +42,10 @@ for (const shard of cluster.shards) {
   assert.equal(shard.replica, null, `分片 ${shard.shardId} 不应有副本`);
 }
 
-const created = await fetch(`${url}/sessions`, { method: 'POST', headers, body: '{}' });
-assert.equal(created.status, 200, '创建会话（拉起该用户的 Codex 进程）');
+const created = await expectStatus(await fetch(`${url}/sessions`, { method: 'POST', headers, body: '{}' }), 200, '创建会话（拉起该用户的 Codex 进程）');
 const session = await created.json();
 assert.ok(session.id, '会话 ID');
-const state = await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, { headers });
-assert.equal(state.status, 200, '读取会话状态');
+await expectStatus(await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, { headers }), 200, '读取会话状态');
 
 assert.equal((await fetch(`${url}/sessions`, { method: 'POST', body: '{}' })).status, 401, '未登录应被拒绝');
 assert.equal((await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, {

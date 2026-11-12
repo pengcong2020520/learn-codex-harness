@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-codex-agent-e2e}
 cleanup() {
   status=$?
-  if [ "$status" -ne 0 ]; then docker compose logs --tail 80 >&2 || true; fi
+  if [ "$status" -ne 0 ]; then docker compose logs --tail 200 >&2 || true; fi
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f .env
   exit "$status"
