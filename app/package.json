@@ -72,9 +72,7 @@
     "up": "node scripts/ctl.mjs up",
     "down": "node scripts/ctl.mjs down",
     "logs": "node scripts/ctl.mjs logs",
-    "status": "node scripts/ctl.mjs status",
-    "db:up": "node scripts/ctl.mjs up",
-    "gateway:up": "node scripts/ctl.mjs up"
+    "status": "node scripts/ctl.mjs status"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

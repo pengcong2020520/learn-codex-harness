@@ -83,7 +83,7 @@ Codex 已经是一个很强的 Agent：会读文件、跑命令、调工具、�
 | [s17](s17-sharding/README.md) | 分片路由（Sharding） | 用户分到不同节点，从任意入口都能找到他 |
 | [s18](s18-replication/README.md) | 高可用与故障接管（Replication / Failover） | 副本接手继续服务，丢了什么说得清 |
 
-完整项目 [app](../app/README.md) 以 s18 为内核持续开发，Web 工作台和互动课程位于 [course](../course/README.md)；s12–s18 是各自独立的部署快照。
+脚手架 [app](../app/README.md) 以 s18 为内核持续开发，提供多用户网页聊天、CLI 与可选集群，Web 工作台和互动课程位于 [course](../course/README.md)；s12–s18 是各自独立的部署快照。
 
 开工之前，先弄清楚我们要用的这个引擎。
 
@@ -292,3 +292,7 @@ Item 的生命周期设计得很实用：`started` 时界面就能开始画，`d
 - OpenAI：[解锁 Codex 运行框架：我们如何构建 App Server](https://openai.com/zh-Hans-CN/index/unlocking-the-codex-harness/)
 - OpenAI：[Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/)（拆解 harness 里的核心智能体循环）
 - App Server 协议说明：[codex-rs/app-server/README.md](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+
+## 下一步
+
+想动手学，从 [s00](s00-sdk-quickstart/README.md) 开始；想直接部署自己的 Agent，使用 [app/ 脚手架](../app/README.md) 的 `npm run setup`。
