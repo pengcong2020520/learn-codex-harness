@@ -18,9 +18,8 @@ async function required(ask, prompt, options) {
 }
 export function startCommands(stage) {
   if (stage.id === "app") return [
-    "按 app/README.md 填写 .env（默认单节点）并初始化账号。",
-    "cd app", "bash deploy/configure.sh", "docker compose up -d --wait",
-    "export AGENT_SERVER_URL=http://127.0.0.1:4317", "npm run login", "npm run chat",
+    "进入 app/ 运行 npm run setup（默认单节点，包含账号初始化）。",
+    "cd app", "npm run setup", "npm run login", "npm run chat",
   ];
   if (stage.id === "s00") return [`npm --prefix ${stage.relative} run hello`];
   if (["s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id)) return [
@@ -55,18 +54,21 @@ export async function main(argv = process.argv.slice(2), { root = ROOT, env = pr
   try {
     const options = parseArgs(argv, ["--check", "--help"]);
     const all = stages(root);
-    if (options.help) { log("npm run setup:model -- [--stage s05,s06] [--check]；交互默认 s01–s10，C 默认 s11、s12、s13、s14、s15、s16、s17、s18 与 app；--check 默认全部，只读。"); return 0; }
+    if (options.help) { log("npm run setup:model -- [--stage s05,s06] [--check]；交互默认 s01–s10，C 默认 s11、s12、s13、s14、s15、s16、s17、s18；app 请进入 app/ 运行 npm run setup；--check 默认全部，只读。"); return 0; }
     if (options.check) return await checkTable(selectStages(all, options.selectors), { root, env, home, run, log }) ? 0 : 1;
+    const requested = options.selectors.length ? selectStages(all, options.selectors) : all;
+    if (requested.some(stage => stage.id === "app")) log("进入 app/ 运行 npm run setup");
+    if (requested.every(stage => stage.id === "app")) return 0;
     log("s00-sdk-quickstart 保持现状：SDK 直接使用本机登录或 CODEX_API_KEY，本向导不写入 s00。");
-    log("A ChatGPT 账号登录：使用订阅额度，无需 API Key，仅 OpenAI 模型。\nB 一个 API Key：直连兼容 Responses 的服务商。\nC 多个 API Key：模型网关，仅 s11、s12、s13、s14、s15、s16、s17、s18 与 app。");
+    log("A ChatGPT 账号登录：使用订阅额度，无需 API Key，仅 OpenAI 模型。\nB 一个 API Key：直连兼容 Responses 的服务商。\nC 多个 API Key：模型网关，仅 s11、s12、s13、s14、s15、s16、s17、s18。");
     const route = (await ask("选择路线 [A/B/C]：")).trim().toUpperCase();
     if (!["A", "B", "C"].includes(route)) fail("请选择 A、B 或 C。");
-    const defaults = route === "C" ? all.filter(gatewayStage) : loginStages(all);
-    const selectors = options.selectors.length ? options.selectors : [(await ask(`阶段（逗号分隔，回车默认 ${route === "C" ? "s11,s12,s13,s14,s15,s16,s17,s18,app" : "s01–s10"}）：`)).trim()].filter(Boolean);
-    const selected = selectStages(all, selectors, defaults).filter(stage => stage.id !== "s00");
+    const defaults = route === "C" ? all.filter(stage => stage.id !== "app" && gatewayStage(stage)) : loginStages(all);
+    const selectors = options.selectors.length ? options.selectors : [(await ask(`阶段（逗号分隔，回车默认 ${route === "C" ? "s11,s12,s13,s14,s15,s16,s17,s18" : "s01–s10"}）：`)).trim()].filter(Boolean);
+    const selected = selectStages(all, selectors, defaults).filter(stage => !["s00", "app"].includes(stage.id));
     if (!selected.length) return 0;
-    if (route === "C" && selected.some(stage => !gatewayStage(stage))) fail("路线 C 只支持 s11、s12、s13、s14、s15、s16、s17、s18 与 app。");
-    if (route !== "C" && selected.some(gatewayStage)) fail("s11、s12、s13、s14、s15、s16、s17、s18 与 app 请使用路线 C；路线 A/B 用于 s01–s10。");
+    if (route === "C" && selected.some(stage => !gatewayStage(stage))) fail("路线 C 只支持 s11、s12、s13、s14、s15、s16、s17、s18。");
+    if (route !== "C" && selected.some(gatewayStage)) fail("s11、s12、s13、s14、s15、s16、s17、s18 请使用路线 C；路线 A/B 用于 s01–s10。");
     // 同名进程变量优先于文件，先提示，避免写完文件却实际仍用另一套认证。
     if (DIRECT_KEYS.some(key => Object.hasOwn(env, key)) || env.AGENT_GATEWAY_KEY) {
       log("提示：当前终端设置了模型环境变量，会覆盖 .env；启动前请清除同名变量。变量值不显示。");

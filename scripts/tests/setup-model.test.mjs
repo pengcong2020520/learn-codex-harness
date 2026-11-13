@@ -318,9 +318,9 @@ test("C 生成网关 Key，跳过的服务商保留，关闭直连入口，日�
   assert.notEqual(generateGatewayKey(), generateGatewayKey());
 });
 
-test("C 仅用于 s11/app；A/B 不修改网关阶段；s00 只提示", async t => {
+test("C 仅用于网关阶段；A/B 不修改网关阶段；s00/app 只提示", async t => {
   const f = fixture(t);
-  for (const [route, stage] of [["C", "s01"], ["B", "s11"], ["A", "app"]]) {
+  for (const [route, stage] of [["C", "s01"], ["B", "s11"]]) {
     f.answers.push(route);
     assert.equal(await setup(["--stage", stage], f), 1);
   }
@@ -435,13 +435,13 @@ test("A 默认仅 s01–s10；链接共用同一本机文件，未改 s00/s11/ap
   assert.equal(f.calls.length, 11);
 });
 
-test("C 默认只写 s11/s12/s13/s14/s15/s16/s17/s18/app，各生成网关 Key，保留业务配置", async t => {
+test("C 默认只写 s11/s12/s13/s14/s15/s16/s17/s18，各生成网关 Key，保留业务配置", async t => {
   const f = fixture(t);
   const count = Object.values(JSON.parse(fs.readFileSync(path.join(f.root, "app/config/models.json"))).providers).filter(item => item.keyEnv).length;
   f.answers.push("C", "", secret, ...Array(count - 1).fill(""), "", "");
   assert.equal(await setup([], f), 0);
   for (const stage of f.all) {
-    if (["s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id)) {
+    if (["s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18"].includes(stage.id)) {
       const values = envFor(stage).values;
       assert.match(values.AGENT_GATEWAY_KEY, /^sk-bf-[a-f0-9]{64}$/);
       if (["s12", "s13", "s14", "s15", "s16", "s17", "s18", "app"].includes(stage.id)) {
@@ -539,6 +539,19 @@ test('s18 是网关独立部署，排除 link-login，启动说明要求登录',
 
 test('app 使用最终章部署内核，启动指引默认单节点且要求账号登录', () => {
   const commands = startCommands(stages(ROOT).find(stage => stage.id === 'app')).join('\n');
-  for (const text of ['app/README.md', '默认单节点', 'bash deploy/configure.sh', 'docker compose up -d --wait', 'npm run login']) assert.ok(commands.includes(text), text);
+  for (const text of ['进入 app/ 运行 npm run setup', '默认单节点', 'npm run login']) assert.ok(commands.includes(text), text);
   assert.doesNotMatch(commands, /run server|run data:migrate/);
+});
+
+
+test('app 的 setup/model、check 与 doctor 只指向一键上手，不读取或写入配置', async t => {
+  const f = fixture(t), file = path.join(f.root, 'app/.env');
+  fs.writeFileSync(file, 'KEEP=unchanged\n');
+  f.ask = async () => assert.fail('app 不再使用根目录交互向导');
+  f.run = async () => assert.fail('app 不执行根目录模型检查');
+  for (const [command, args] of [[setup, ['--stage', 'app']], [setup, ['--check', '--stage', 'app']], [doctor, ['--stage', 'app', '--handshake']]]) {
+    assert.equal(await command(args, f), 0);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'KEEP=unchanged\n');
+  }
+  assert.match(f.logs.join('\n'), /进入 app\/ 运行 npm run setup/);
 });

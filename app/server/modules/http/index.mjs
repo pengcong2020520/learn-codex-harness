@@ -52,7 +52,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
         const result = await ready();
         const replication = await config.sharding?.replication?.status();
         if (replication?.waiting) { result.status = 'not-ready'; result.waiting = replication.waiting; }
-        if (replication?.replication === 'off') result.replication = 'off';
+        if (replication?.replication) result.replication = replication.replication;
         if (replication?.shards.some(s => s.replica_lagging)) result.degraded = { replica_lagging: replication.shards.filter(s => s.replica_lagging).map(s => s.shardId) };
         return json(result.status === 'ready' ? 200 : 503, result);
       }
@@ -82,7 +82,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       if (route === 'GET /workbench') {
         const definition = config.agent?.definition?.agent;
         const visibleKnowledge = knowledge ? await knowledge.list() : [];
-        return json(200, { agent: definition ? { id: definition.id, version: definition.version,
+        return json(200, { agent: definition ? { id: definition.id, ...(definition.name ? { name: definition.name } : {}), version: definition.version,
           skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
           outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },

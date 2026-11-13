@@ -61,13 +61,13 @@ CODEX_MODEL=kimi/kimi-k2.7-code    # 写成“服务商/模型名”
 
 ```bash
 npm run gateway:key      # 只在第一次：生成访问密钥写进 .env（不在终端显示）
-npm run gateway:up       # 生成 .data/gateway/ 下的配置与模型参数表，并（重新）启动网关容器
+npm run up       # 生成 .data/gateway/ 下的配置与模型参数表，并（重新）启动网关容器
 npm run server
 ```
 
 `.data/gateway/config.json` 里只有 `env.KIMI_API_KEY` 这样的引用，不含密钥本身。密钥由 compose 在启动容器时传入，而且只传 `compose.yaml` 里列出的几个变量，其他 .env 内容不进容器。
 
-改了模型或密钥后，重新运行 `npm run gateway:up`，再重启服务。服务器上运行 `remote.sh gateway`，它会重新生成配置、重建网关并重启服务。
+改了模型或密钥后，重新运行 `npm run up`，再重启服务。服务器上运行 `npm run deploy -- --host root@example.com`，它会重新生成配置、重建网关并重启服务。
 
 ## 模型自带的能力
 
@@ -146,9 +146,9 @@ RAG 配了 `CHROMA_URL` 且没有单独配 `EMBEDDING_BASE_URL` 时，按 `route
 ## 本地向量模型（Ollama）
 
 ```bash
-npm run ollama:up        # 启动 compose 里的 ollama 服务（可选服务，db:up 不会带上它）
+npm run ollama:up        # 启动 compose 里的 ollama 服务（可选服务，默认启动不会带上它）
 npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3-embedding:0.6b，约 639 MB）
-# .env 里加 OLLAMA_BASE_URL=http://ollama:11434，然后 npm run gateway:up
+# .env 里加 OLLAMA_BASE_URL=http://ollama:11434，然后 npm run up
 ```
 
 - 网关经容器名访问 Ollama，Ollama 不对宿主开放端口。
@@ -160,7 +160,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 
 1. 在 `config/models.json` 的 `providers` 和 `models` 里登记，标好 `purposes`；要作为某种用途的默认就加进 `routes`。模型参数（上下文长度、推理档位、向量维数）以官方文档为准。
 2. 新的密钥变量要同时加进 `compose.yaml` 网关的 `environment` 和 `deploy/remote.sh` 的 `PROVIDER_KEYS`。`npm test` 会检查三处是否一致。
-3. 在 .env 填密钥，运行 `npm run gateway:up`。
+3. 在 .env 填密钥，运行 `npm run up`。
 
 ## 备用链
 
@@ -189,7 +189,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 }
 ```
 
-这里不能改名成自定义服务商；`baseUrl` 只写域名，网关自己补 `/api/v3/...`。`.env.example` 提供 `ARK_API_KEY` 占位，compose 和部署脚本同步传入网关。应用只持有 `gatewayEndpoint()` 返回的网关地址和访问密钥，不把方舟密钥传给工具或 Codex。升级先运行 `npm run data:migrate` 安装 `007-media.sql`，配置后重新运行 `npm run gateway:up`。
+这里不能改名成自定义服务商；`baseUrl` 只写域名，网关自己补 `/api/v3/...`。`.env.example` 提供 `ARK_API_KEY` 占位，compose 和部署脚本同步传入网关。应用只持有 `gatewayEndpoint()` 返回的网关地址和访问密钥，不把方舟密钥传给工具或 Codex。升级先运行 `npm run data:migrate` 安装 `007-media.sql`，配置后重新运行 `npm run up`。
 
 - `generate_image`：prompt 最多 8000 字符，n 为 1–4，默认一张、`2048x2048`。调用网关 `/v1/images/generations`，固定 `response_format: "b64_json"`，直接拿图片正文；默认 URL 响应的链接 24 小时后过期，不适合长期产物。返回工作区路径、模型、请求尺寸和版本信息。默认按时间加随机 ID 命名；多张在文件名后加 `-1`、`-2` 等序号。
 - `generate_video`：prompt 最多 8000 字符，seconds 为 2–15 的整数，默认 5 秒、`1280x720`。向 `/v1/videos` 提交后立即返回本地持久化任务 `id` 和远端 `providerId`；无需等待生成。`media_status({id})` 使用本地 ID 查询 `queued / in_progress / completed / failed`，完成返回路径与版本，失败返回原因。

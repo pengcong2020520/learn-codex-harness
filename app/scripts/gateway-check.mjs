@@ -37,12 +37,12 @@ async function probe(endpoint, model, search, timeoutMs) {
 
 export async function checkGateway({ environment, registry, model, search = false, timeoutMs = 60000 }) {
   const endpoint = gatewayEndpoint(environment);
-  if (!endpoint) throw new Error("没有启用模型网关：请先配置服务商密钥，运行 npm run gateway:key 和 npm run gateway:up，再运行 npm run gateway:check。");
+  if (!endpoint) throw new Error("没有启用模型网关：请先配置服务商密钥，运行 npm run setup，再运行 npm run gateway:check。");
   if (!registry) throw new Error("缺少 config/models.json 模型清单。");
   const enabled = enabledProviders(registry, environment);
   const ids = Object.keys(registry.models).filter(id => registry.models[id].purposes.includes("chat") && enabled.has(splitModelId(id).provider));
   if (model && !ids.includes(model)) throw new Error(`模型 ${model} 必须是清单中服务商已启用的对话模型。`);
-  if (!ids.length) throw new Error("没有已启用服务商的对话模型：请配置服务商密钥，再运行 npm run gateway:up。");
+  if (!ids.length) throw new Error("没有已启用服务商的对话模型：请配置服务商密钥，再运行 npm run up。");
   const rows = [], messages = [];
   for (const id of model ? [model] : ids) {
     const start = performance.now();
@@ -74,7 +74,7 @@ export async function main(args = process.argv.slice(2), { environment, registry
     log("| 模型 | 备用链 | 对话 | 联网搜索 | 清单声明 | 耗时 | 用量（输入 / 输出 token） |\n|---|---|---|---|---|---|---|");
     for (const row of report.rows) log(`| ${row.model} | ${row.fallbacks.join(" → ") || "无"} | ${row.chat ? "✓" : "✗"} | ${row.search === null ? "未测" : row.search ? "✓" : "✗"} | ${row.declared ? "web_search" : "无"} | ${row.elapsedMs} ms | ${row.inputTokens ?? "未知"} / ${row.outputTokens ?? "未知"} |`);
     for (const message of report.messages) log(`提示：${message}`);
-    log("用量为本次对话与搜索请求返回的 usage 合计；失败且未返回 usage 的请求不计入。连接失败时请检查网关并运行 npm run gateway:up。");
+    log("用量为本次对话与搜索请求返回的 usage 合计；失败且未返回 usage 的请求不计入。连接失败时请检查网关并运行 npm run up。");
     return report.exitCode;
   } catch (error) {
     log(error.message);

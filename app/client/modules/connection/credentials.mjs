@@ -2,10 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+export function clientDirectory(root) {
+  // Compose 的 .data 属于容器服务；宿主登录凭据放在当前用户可写的独立目录。
+  return path.join(root, fs.existsSync(path.join(root, 'compose.yaml')) ? '.cli' : '.data');
+}
 function file(root) {
-  const directory = path.join(root, '.data');
+  const directory = clientDirectory(root);
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   if (fs.lstatSync(directory).isSymbolicLink()) throw new Error('客户端数据目录不能是链接。');
+  if (path.basename(directory) === '.cli') fs.chmodSync(directory, 0o700);
   return path.join(directory, 'credentials.json');
 }
 export function saveCredentials(root, credentials) {

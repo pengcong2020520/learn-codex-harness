@@ -3,8 +3,11 @@
 import assert from 'node:assert/strict';
 
 const url = `http://127.0.0.1:${process.env.AGENT_PORT || 4317}`;
-const password = process.argv[2];
-if (!password) throw new Error('用法：node scripts/e2e-check.mjs <管理员密码>');
+import { createPrompts } from '../shared/prompts.mjs';
+const prompts = createPrompts();
+let password;
+try { password = await prompts.ask('管理员密码：', { secret: true }); } finally { prompts.close(); }
+if (!password) throw new Error('请经 stdin 提供管理员密码。');
 
 async function until(check, label, ms = 120_000) {
   const deadline = Date.now() + ms;

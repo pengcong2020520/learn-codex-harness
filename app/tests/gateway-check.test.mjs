@@ -115,7 +115,7 @@ test("对话无文本、HTTP 错误、无效 JSON 和超时都失败，不打印
 test("未启用网关、无可用模型和 CLI 参数错误给出中文说明", async () => {
   const disabled = await run([], {});
   assert.equal(disabled.exitCode, 1);
-  assert.match(disabled.output, /没有启用模型网关.*npm run gateway:key.*npm run gateway:up/);
+  assert.match(disabled.output, /没有启用模型网关.*npm run setup/);
   const empty = await run([], { AGENT_GATEWAY_KEY: "sk-bf-test-only" });
   assert.match(empty.output, /没有已启用服务商的对话模型/);
   for (const model of ["unknown/model", "inactive/chat", "sample/embedding"]) {

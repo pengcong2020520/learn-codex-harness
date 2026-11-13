@@ -1,5 +1,5 @@
 import { readCredentials } from './credentials.mjs';
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { PROJECT_ROOT } from "../../../shared/paths.mjs";
 
@@ -8,7 +8,10 @@ export function loadServerAddress(environment = process.env, root = PROJECT_ROOT
   let address = environment.AGENT_SERVER_URL;
   if (!address) {
     try { address = JSON.parse(readFileSync(path.join(root, '.data/connection.json'), 'utf8')).url; }
-    catch { throw new Error('未找到服务地址，请启动服务或设置 AGENT_SERVER_URL。'); }
+    catch {
+      if (existsSync(path.join(root, 'compose.yaml'))) address = 'http://127.0.0.1:4317';
+      else throw new Error('未找到服务地址，请启动服务或设置 AGENT_SERVER_URL。');
+    }
   }
   const url = new URL(address);
   if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('服务地址格式不正确。');

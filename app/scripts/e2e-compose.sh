@@ -9,27 +9,20 @@ cd "$(dirname "$0")/.."
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-codex-agent-e2e}
 cleanup() {
   status=$?
-  if [ "$status" -ne 0 ]; then docker compose logs --tail 200 >&2 || true; fi
+  if [ "$status" -ne 0 ]; then echo "端到端验收失败；请核对上方步骤，不输出未经脱敏的容器日志。" >&2; fi
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f .env
   exit "$status"
 }
 trap cleanup EXIT
 
-# 最小用户配置：模型名与一把占位密钥。网页验收会提交一次任务，预期占位密钥导致任务失败；其余密钥随机生成。
-printf 'CODEX_MODEL=deepseek/deepseek-flash\nDEEPSEEK_API_KEY=sk-e2e-placeholder\n' > .env
-node scripts/deploy-env.mjs "$PWD" > .env.generated
-mv .env.generated .env
-chmod 600 .env
-
-bash deploy/configure.sh
-docker compose up -d --wait
-
+# 密码只在当前 shell 内存里生成；setup 不把它传入任何子进程环境或参数。
 password=$(node -e 'process.stdout.write(require("node:crypto").randomBytes(18).toString("base64url"))')
-printf 'admin\n%s\n' "$password" |
-  docker compose run --rm --no-deps -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts init
+SETUP_ADMIN_PASSWORD="$password" CODEX_MODEL=deepseek/deepseek-flash DEEPSEEK_API_KEY=sk-e2e-placeholder \
+  npm run setup -- --non-interactive
 
-node scripts/e2e-check.mjs "$password"
+printf '%s\n' "$password" | node scripts/e2e-check.mjs
 E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
 npm run -s test:deploy:integration
-echo "端到端验收通过。"
+SETUP_ADMIN_PASSWORD="$password" npm run cluster:enable -- --yes
+echo "端到端验收通过：单节点上手、网页流程、三节点扩容与副本追平。"

@@ -8,7 +8,7 @@ APP=$(cd "$(dirname "$0")/.." && pwd)
 [[ "$APP_DIR" =~ ^/[a-zA-Z0-9_/-]+$ && "$APP_DIR" != / && "$APP_DIR" != *..* ]] || { echo 'APP_DIR 必须是无空格的绝对部署路径。' >&2; exit 1; }
 [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9_@.-]+$ && "$DEPLOY_HOST" != -* ]] || exit 1
 remote() { ssh -o BatchMode=yes "$DEPLOY_HOST" "$@"; }
-excludes=(--exclude=/.env --exclude=/.env.* --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.git/)
+excludes=(--exclude=/.env --exclude=/.cli/ --exclude=/.env.* --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.git/)
 case "${1:-}" in
  check) remote 'bash -s' < "$APP/deploy/check.sh" ;;
  init-env)
@@ -33,12 +33,12 @@ exec 9> .deploy.lock
 flock -n 9 || { echo '另一个部署正在进行。' >&2; exit 75; }
 if [ -f REVISION ]; then
  mkdir -p "$APP_DIR.previous"
- rsync -a --delete --exclude=/.env --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock ./ "$APP_DIR.previous/"
+ rsync -a --delete --exclude=/.env --exclude=/.cli/ --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock ./ "$APP_DIR.previous/"
  if docker image inspect codex-agent:current >/dev/null 2>&1; then docker image tag codex-agent:current codex-agent:previous; fi
 fi
 touch .deploy-pending
 # Fixed path: do not move mounted state or Codex absolute history paths.
-rsync -a --delete --exclude=/.env --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.incoming/" ./
+rsync -a --delete --exclude=/.env --exclude=/.cli/ --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.incoming/" ./
 bash deploy/server-setup.sh </dev/null
 rm .deploy-pending
 REMOTE
@@ -106,7 +106,7 @@ test -f "$APP_DIR.previous/REVISION" || { echo '没有上一版可回滚。' >&2
 docker image inspect codex-agent:previous >/dev/null
 source deploy/topology.sh
 docker compose stop "${cluster_nodes[@]}" </dev/null
-rsync -a --delete --exclude=/.env --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.previous/" ./
+rsync -a --delete --exclude=/.env --exclude=/.cli/ --exclude=/nodes/ --exclude=/.data/ --exclude=/.runs/ --exclude=/workspace/ --exclude=/backups/ --exclude=/node_modules/ --exclude=/.deploy.lock --exclude=/.deploy-pending "$APP_DIR.previous/" ./
 docker image tag codex-agent:previous codex-agent:current
 bash deploy/configure.sh </dev/null
 docker compose up -d --wait --force-recreate gateway "${cluster_nodes[@]}" </dev/null
