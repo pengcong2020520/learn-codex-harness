@@ -39,7 +39,7 @@ Compose 模式下，CLI 凭据保存在 `app/.cli/credentials.json`（相对于�
 | setup 参数 | 行为 |
 | --- | --- |
 | `--non-interactive` | 从调用进程环境读取 `CODEX_MODEL`、对应服务商 Key、`SETUP_ADMIN_USER`（默认 `admin`）、`SETUP_ADMIN_PASSWORD` 和可选的 `SETUP_DOMAIN`；首次配置仍要求合法密码 |
-| `--no-start` | 只生成配置，不检查 Docker、不启动、不创建管理员；随后运行 `npm run up`，尚无账号时需另开终端运行 `npm run auth:init`，就绪检查才可完成 |
+| `--no-start` | 只生成配置，不检查 Docker、不启动、不创建管理员；随后运行 `npm run up`，尚无账号时会在交互终端引导创建管理员，再等待就绪；非交互终端会立即退出并提示初始化方式 |
 | `--reconfigure-model` | 要求已有 `.env`；更新模型与相应服务商 Key，不重新初始化账号 |
 | `--quiet` | 隐藏构建、启动的子进程输出；失败时显示脱敏后的末尾日志，保留步骤提示 |
 
