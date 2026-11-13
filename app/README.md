@@ -15,8 +15,8 @@ configure 会构建镜像、生成网关配置、启动基础服务、迁移数�
 
 ```bash
 # 账号维护仅在临时容器里读取管理员数据库凭据；密码交互输入。
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts init
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts add alice
+bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts init
+bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts add alice
 npm ci
 export AGENT_SERVER_URL=http://127.0.0.1:4317
 npm run login

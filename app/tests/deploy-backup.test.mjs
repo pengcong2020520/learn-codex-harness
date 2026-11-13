@@ -15,7 +15,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'server/modules/runtimes'), { recursive: true });
   fs.copyFileSync(new URL('../server/modules/runtimes/directories.mjs', import.meta.url), path.join(root, 'server/modules/runtimes/directories.mjs'));
-  for (const file of ['scripts/backup.mjs', 'scripts/backup-lib.mjs', 'scripts/restore.mjs', 'shared/paths.mjs', 'shared/errors.mjs', 'server/modules/deployment/index.mjs', 'deploy/backup.sh', 'deploy/restore.sh', 'deploy/download-rsync.sh', 'deploy/topology.sh', 'Dockerfile']) {
+  for (const file of ['scripts/backup.mjs', 'scripts/backup-lib.mjs', 'scripts/restore.mjs', 'shared/paths.mjs', 'shared/errors.mjs', 'server/modules/deployment/index.mjs', 'deploy/backup.sh', 'deploy/restore.sh', 'deploy/env-run.sh', 'deploy/download-rsync.sh', 'deploy/topology.sh', 'Dockerfile']) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), read(file));
   }

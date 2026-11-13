@@ -12,11 +12,11 @@ function fixture(t) {
   fs.mkdirSync(path.join(root, 'deploy'));
   for (const node of ['a','b','c']) fs.mkdirSync(path.join(root,'nodes','node-'+node,'.data'), { recursive:true });
   fs.writeFileSync(path.join(root,'nodes/node-a/.data/identity.json'), JSON.stringify({instanceId:'test',ownerId:'owner'}));
-  for (const name of ['server-setup.sh', 'remote.sh', 'cluster-ready.sh', 'topology.sh']) {
+  for (const name of ['server-setup.sh', 'env-run.sh', 'remote.sh', 'cluster-ready.sh', 'topology.sh']) {
     fs.copyFileSync(new URL(`../deploy/${name}`, import.meta.url), path.join(root, 'deploy', name));
   }
   const executable = (name, source) => fs.writeFileSync(path.join(root, 'bin', name), `#!/bin/bash\n${source}\n`, { mode: 0o755 });
-  executable('bash', 'echo "bash $*" >> "$CALLS"'); // check/configure/enable-service do not touch the host.
+  executable('bash', 'echo "bash $*" >> "$CALLS"\nif [[ "$1" == deploy/env-run.sh ]]; then exec /bin/bash "$@"; fi'); // check/configure/enable-service do not touch the host.
   executable('ssh', 'echo "ssh $*" >> "$CALLS"\n/bin/bash -c "${@: -1}"');
   executable('docker', `if [[ "$*" == *scripts/cluster-config.mjs* ]]; then echo 'node-a node-b node-c'; exit 0; fi
  echo "docker $*" >> "$CALLS"
@@ -43,7 +43,7 @@ test('deploy 执行：首次未初始化成功退出，不启动 agent 或注册
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /账号尚未初始化：运行 DEPLOY_HOST=fixture-host bash deploy\/remote.sh auth-init/);
   assert.match(result.calls, /up -d etcd\n[\s\S]*run --rm --no-deps -T etcd-init\n[\s\S]*up -d --wait etcd postgres redis gateway/);
-  assert.match(result.calls, /run --rm --no-deps --user 0 -T .*node-a node scripts\/cluster-migrate.mjs/);
+  assert.match(result.calls, /run --rm --no-deps --cap-add DAC_READ_SEARCH .*\.env:ro --user 0 -T node-a node scripts\/cluster-migrate.mjs/);
   assert.doesNotMatch(result.calls, /compose up[^\n]* node-a|enable-service|cluster-ready.sh/);
 });
 test('deploy 执行：已初始化启动 agent 并检查 ready；状态查询错误不能误判成功', t => {
@@ -62,7 +62,7 @@ test('remote auth-init：保留 TTY；成功及重复初始化启动 agent，其
   const f = fixture(t);
   for (const code of [0, 3, 1, 130]) {
     const result = f.run('remote.sh', ['auth-init'], { INIT_EXIT: String(code) });
-    assert.match(result.calls, /ssh -t fixture-host .*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts init/);
+    assert.match(result.calls, /ssh -t fixture-host .*bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts init/);
     if (code === 0 || code === 3) {
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.calls, /docker compose up -d --wait node-a node-b node-c/);

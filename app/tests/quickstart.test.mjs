@@ -92,6 +92,8 @@ test('setup 按顺序构建启动初始化，密码只进入 stdin，不进入�
     ['docker', ['compose', 'version']], ['bash', ['deploy/configure.sh']], ['docker', ['compose', 'up', '-d']], ['docker', ['compose', 'run', '--rm']],
   ]);
   const init = f.calls.at(-1);
+  assert.equal(init.args[init.args.indexOf('--cap-add') + 1], 'DAC_READ_SEARCH');
+  assert.ok(init.args.includes(`${f.root}/.env:${f.root}/.env:ro`));
   assert.equal(init.options.input, `admin\n${password}\n`);
   assert.deepEqual(init.args.slice(-3), ['scripts/maintenance.mjs', 'accounts', 'init']);
   for (const call of f.calls) {
@@ -173,7 +175,7 @@ test('ctl Compose 参数覆盖单节点、两节点、三节点、日志与账�
   assert.deepEqual(ctlArgs('logs', ['node-a'], {}, '/app'), ['compose', 'logs', '-f', '--tail', '100', 'node-a']);
   assert.deepEqual(ctlArgs('status', [], {}, '/app'), ['compose', 'ps']);
   for (const [command, args] of [['init', []], ['add', ['bob', '--admin']], ['passwd', ['bob']], ['disable', ['bob']], ['list', []]]) {
-    assert.deepEqual(ctlArgs(command, args, {}, '/app'), ['compose', 'run', '--rm', '--no-deps', '-T', '-v', '/app/.env:/app/.env:ro', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', command, ...args]);
+    assert.deepEqual(ctlArgs(command, args, {}, '/app'), ['compose', 'run', '--rm', '--no-deps', '--cap-add', 'DAC_READ_SEARCH', '-v', '/app/.env:/app/.env:ro', '-T', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', command, ...args]);
   }
   for (const [cmd, args] of [['down', ['-v']], ['add', ['bob', '--bad']], ['logs', ['--help']], ['disable', ['../bob']]]) assert.throws(() => ctlArgs(cmd, args, {}, '/app'));
 });

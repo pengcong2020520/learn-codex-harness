@@ -27,7 +27,7 @@ export async function deploy(argv = process.argv.slice(2), { root = PROJECT_ROOT
   else if (exists !== 'configured') throw new Error('无法确定服务器 .env 是否存在；未继续部署。');
   else log('服务器已有 .env，保留现有配置。');
   await remote(['deploy']);
-  const status = await run('ssh', ['-o', 'BatchMode=yes', host, `cd '${directory}' && docker compose run --rm --no-deps -T -v '${directory}/.env:${directory}/.env:ro' node-a node scripts/maintenance.mjs accounts status`], { root, env: childEnv, capture: true });
+  const status = await run('ssh', ['-o', 'BatchMode=yes', host, `cd '${directory}' && bash deploy/env-run.sh -T node-a node scripts/maintenance.mjs accounts status`], { root, env: childEnv, capture: true });
   if (status.trim() === 'uninitialized') log(`账号尚未初始化，请运行 npm run deploy -- --host ${host} auth-init。`);
   else if (status.trim() === 'initialized') log('部署完成，账号已初始化；可运行 deploy 的 status 或 tunnel 子命令。');
   else throw new Error('无法确定账号初始化状态；请人工核对。');

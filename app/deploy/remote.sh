@@ -45,7 +45,7 @@ REMOTE
   ;;
  auth-init)
   # Interactive SSH must not share stdin with a heredoc. Only exit 3 means already initialized.
-  ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && { docker compose run --rm --no-deps -v '$APP_DIR/.env:$APP_DIR/.env:ro' node-a node scripts/maintenance.mjs accounts init; code=\$?; [ \"\$code\" -eq 0 ] || [ \"\$code\" -eq 3 ] || exit \"\$code\"; }"
+  ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && { bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts init; code=\$?; [ \"\$code\" -eq 0 ] || [ \"\$code\" -eq 3 ] || exit \"\$code\"; }"
   remote "cd '$APP_DIR' && source deploy/topology.sh && docker compose up -d --wait \"\${cluster_nodes[@]}\" && bash deploy/enable-service.sh && bash deploy/cluster-ready.sh"
   ;;
  user)
@@ -55,11 +55,11 @@ REMOTE
    add|passwd|disable)
     name=${4:-}
     [[ $# -eq 4 && "$name" =~ ^[a-z0-9_.-]{1,64}$ ]] || { echo '名称须为 1–64 位小写字母、数字、下划线、点或连字符。' >&2; exit 1; }
-    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && docker compose run --rm --no-deps -v '$APP_DIR/.env:$APP_DIR/.env:ro' node-a node scripts/maintenance.mjs accounts $command '$name'"
+    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts $command '$name'"
     ;;
    list)
     [[ $# -eq 3 ]] || { echo 'user list 不接受名称参数。' >&2; exit 1; }
-    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && docker compose run --rm --no-deps -v '$APP_DIR/.env:$APP_DIR/.env:ro' node-a node scripts/maintenance.mjs accounts list"
+    ssh -t "$DEPLOY_HOST" "cd '$APP_DIR' && bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts list"
     ;;
    *) echo 'user 子命令必须为 add、passwd、disable 或 list。' >&2; exit 1 ;;
   esac

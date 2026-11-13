@@ -75,9 +75,13 @@ export function composeUp(env) {
   return ['compose', ...(nodes.length > 1 ? ['--profile', 'cluster'] : []), 'up', '-d', '--wait',
     ...(nodes.length > 1 ? [...nodes, 'caddy'] : [])];
 }
-export function accountArgs(root, command, args = [], env = {}) {
+export function envRunArgs(root, args, env = {}) {
   const target = env.CONTAINER_APP_DIR || root;
-  return ['compose', 'run', '--rm', '--no-deps', '-T', '-v', `${path.join(root, '.env')}:${target}/.env:ro`, 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', command, ...args];
+  // 与 deploy/env-run.sh 保持一致：只给读取 .env 的一次性容器增加能力。
+  return ['compose', 'run', '--rm', '--no-deps', '--cap-add', 'DAC_READ_SEARCH', '-v', `${path.join(root, '.env')}:${target}/.env:ro`, ...args];
+}
+export function accountArgs(root, command, args = [], env = {}) {
+  return envRunArgs(root, ['-T', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', command, ...args], env);
 }
 export function entryUrl(env) {
   const port = env.AGENT_PORT || '4317';

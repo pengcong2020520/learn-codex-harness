@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source deploy/topology.sh
+source deploy/env-run.sh
 docker compose build "${cluster_nodes[@]}"
 # 宿主只创建挂载点；容器以相同的 root/1000 身份准备目录，不依赖宿主 uid。
 mkdir -p .data .runs workspace backups nodes
@@ -24,6 +25,6 @@ docker compose run --rm --no-deps --user 0 -T -v "$PWD:/prepare" node-a sh -ec '
     prepare "backups/$node"
   done
 ' sh "${cluster_nodes[@]}"
-docker compose run --rm --no-deps --user 0 -T \
-  -v "$PWD/.env:$PWD/.env:ro" -v "$PWD/.data/gateway:$PWD/.data/gateway" node-a node scripts/gateway-config.mjs
+compose_env_run --user 0 -T \
+  -v "$PWD/.data/gateway:$PWD/.data/gateway" node-a node scripts/gateway-config.mjs
 if [ "${1:-}" != --config-only ]; then bash deploy/bootstrap.sh; fi

@@ -14,7 +14,7 @@ test('deployment: each runtime node has only its own database role; migration cr
   const compose = read('compose.yaml').split('  node-a: &node')[1];
   assert.doesNotMatch(compose, /AGENT_DB_PASSWORD|OPENAI_API_KEY|ARK_API_KEY/);
   for (const suffix of ['a','b','c']) assert.ok(compose.includes(`postgresql://agent_node_${suffix}:`));
-  assert.match(read('deploy/server-setup.sh'), /\.env:ro.*cluster-migrate.mjs/);
+  assert.match(read('deploy/server-setup.sh'), /compose_env_run --user 0 -T .*cluster-migrate.mjs/);
   assert.doesNotMatch(compose, /\.env:ro/);
 });
 test('deployment: local coordination hooks cover runtime result, files, dispatch and PG connections', () => {
