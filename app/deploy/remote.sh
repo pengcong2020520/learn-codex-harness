@@ -76,7 +76,7 @@ const port = env.AGENT_PORT || '4317';
 if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
   console.error('AGENT_PORT 必须为 1–65535 的整数。'); process.exit(1);
 }
-console.log(Number(port));
+process.stdout.write(String(port));
 NODE
   )
   target=$(remote "cd '$APP_DIR' && docker compose port caddy 80")

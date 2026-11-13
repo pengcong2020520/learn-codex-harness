@@ -1,5 +1,7 @@
+# 网页通过域名访问时，设置 AGENT_ALLOWED_ORIGINS=https://agent.example.com
+# 并重新创建所有节点，使它们使用同一份入口白名单。下方域名需同步替换。
 # Optional host-side HTTPS proxy. Preserve each client's own Bearer identity.
-example.com {
+agent.example.com {
   reverse_proxy 127.0.0.1:4317 {
     header_up Host {http.request.host}
     flush_interval -1

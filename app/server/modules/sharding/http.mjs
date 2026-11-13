@@ -1,3 +1,4 @@
+import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -205,6 +206,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
   return async (request, response) => {
     const json = (status, value) => { response.writeHead(status, { 'content-type':'application/json', 'cache-control':'no-store', ...(value.error?.code ? { 'x-cluster-error': value.error.code } : {}) }); response.end(JSON.stringify(value)); };
     try {
+      assertAllowedOrigin(request.headers, service.app?.config || runtime.config);
       const pathname = new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/health') return json(200, { status: 'alive' });
       if (!service.isReady()) {
@@ -228,7 +230,6 @@ export function createShardedHandler(coordination, service, runtime, control) {
         return await exclusive(runtime.transfers, userId, () => receiveContent(service.app, request, json, async id => { await check(); await paused(id); }));
       }
       if (pathname.startsWith('/internal/')) return await internal(request, response, pathname, json);
-      if (request.headers.origin !== undefined) throw new AppError('CLI only', 403);
       if (pathname === '/auth/login') return service.app.http.handle(request, response);
       const identity = await service.app.accounts.authenticate(request.headers.authorization);
       runtime.rememberAuthorization?.(identity, request.headers.authorization);

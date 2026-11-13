@@ -62,6 +62,9 @@ jobs:
         run: |
           npm run test:web
           npm run course:check
+      - name: 脚手架网页（Chrome + 假 Codex）
+        if: matrix.package == 'app'
+        run: npm run test:web
       - name: 模型网关（真 Bifrost 容器 + 模拟模型服务 + 真 Codex）
         if: matrix.package == 'app'
         run: npm run test:gateway
@@ -96,5 +99,5 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       # 与服务器部署一致，以 root 运行：configure 会把数据目录交给容器里的 1000 组。
-      - name: 从零生成配置、构建、启动并验收
+      - name: 从零生成配置、构建、启动、API 与网页浏览器验收
         run: sudo env "PATH=$PATH" bash scripts/e2e-compose.sh

@@ -18,6 +18,8 @@ export async function accountStatus(store) {
 
 export async function runAccounts(argv = process.argv.slice(2), { root = PROJECT_ROOT, connect = openDatabase, env, output = console } = {}) {
   const [command, ...args] = argv;
+  // 部署脚本把状态输出当作数据读取，跳过终端格式化并保留可注入的测试输出。
+  if (command === 'status' && output === console) output = { log: value => process.stdout.write(`${String(value)}\n`), error: console.error };
   let pool, prompts, unlock;
   try {
     if (!['init', 'add', 'passwd', 'disable', 'list', 'status'].includes(command)

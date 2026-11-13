@@ -325,7 +325,7 @@ test('topology: remote tunnel 按数据读取本机 AGENT_PORT，缺省 4317 且
     const file = path.join(root,'.env'); if (dotenv === null) fs.rmSync(file,{force:true}); else fs.writeFileSync(file,dotenv);
     fs.writeFileSync(path.join(root,'calls'),'');
     const result = spawnSync('/bin/bash',[path.join(root,'deploy/remote.sh'),'tunnel'], { cwd: root, encoding: 'utf8',
-      env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, CALLS: path.join(root,'calls'), DEPLOY_HOST: 'fixture-host', APP_DIR: '/opt/test-agent' } });
+      env: { ...process.env, FORCE_COLOR: '1', PATH: `${root}/bin:${process.env.PATH}`, CALLS: path.join(root,'calls'), DEPLOY_HOST: 'fixture-host', APP_DIR: '/opt/test-agent' } });
     const calls = fs.readFileSync(path.join(root,'calls'),'utf8');
     if (expected) { assert.equal(result.status,0,result.stderr); assert.ok(calls.includes(`-L ${expected}:127.0.0.1:9876 fixture-host`)); assert.ok(result.stdout.includes(`http://127.0.0.1:${expected}`)); }
     else { assert.equal(result.status,1); assert.match(result.stderr,/AGENT_PORT/); assert.equal(calls,''); }

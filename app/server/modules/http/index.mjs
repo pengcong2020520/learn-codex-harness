@@ -1,3 +1,4 @@
+import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import { shardUser } from '../sharding/fence.mjs';
 import { hubRoute } from '../hub/routes.mjs';
@@ -45,7 +46,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
     };
     try {
       const pathname = new URL(request.url, "http://127.0.0.1").pathname;
-      if (request.headers.origin !== undefined) throw new AppError("当前接口仅供 CLI 使用。", 403);
+      assertAllowedOrigin(request.headers, config);
       if (request.method === 'GET' && pathname === '/health') return json(200, { status: 'alive', version });
       if (request.method === 'GET' && pathname === '/ready') {
         const result = await ready();
@@ -59,7 +60,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       const source = request.socket?.remoteAddress || 'unknown';
       if (request.method === 'POST' && pathname === '/auth/login') {
         limits.request(null, source);
-        const result = await accounts.login(await readBody(request), source);
+        const result = await accounts.login(await readBody(request), source, request.headers.origin ? "Web" : "CLI");
         // 令牌只交付给登录者；不要把认证响应交给日志脱敏器或日志输出。
         response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         response.end(JSON.stringify(result));
