@@ -77,7 +77,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     const permissionHub = data.pool ? new Hub({ pool: data.pool, instanceId: data.scope.instanceId, usage,
       systemSkills: () => baseAgent.skills,
       catalog: () => [
-        { type: 'agent', id: baseAgent.definition.agent.id, planId: path.basename(path.dirname(baseAgent.file)), scope: 'system', owner: null },
+        { type: 'agent', id: baseAgent.definition.agent.id, planId: path.basename(path.dirname(baseAgent.file)), deploymentDefault: true, scope: 'system', owner: null },
         ...fs.readdirSync(path.join(config.root, 'config/tools')).filter(f => f.endsWith('.json')).map(file => {
           const group = JSON.parse(fs.readFileSync(path.join(config.root, 'config/tools', file)));
           return { type: 'tool_group', id: file.replace(/\.json$/, ''), scope: group.scope || 'system', owner: null, tools: group.enabled === false ? [] : group.tools.map(t => t.name) };

@@ -51,14 +51,14 @@ docker compose run --rm --no-deps -T node-a npm run test:runtimes:uid
 ```bash
 bash deploy/configure.sh
 docker compose up -d --wait
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts init
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts add bob
+bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts init
+bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts add bob
 ```
 
 已有账号不要重复 auth:init。迁移可重复执行，日志会明确说明状态。账号禁用命令：
 
 ```bash
-docker compose run --rm --no-deps -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/maintenance.mjs accounts disable bob
+bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts disable bob
 ```
 
 连接服务器的两个终端分别用不同用户 `npm run login`。各自发送唯一的非敏感文本并记录 Thread ID。用以下只读 SQL 查看映射，再核对对应目录的 rollout：

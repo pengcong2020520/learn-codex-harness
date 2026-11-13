@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { hubFixture } from './hub-fixture.mjs';
-import { effectiveTools, PLANS, quota } from '../server/modules/hub/policy.mjs';
+import { decision, effectiveTools, PLANS, quota } from '../server/modules/hub/policy.mjs';
 import { validateUpload } from '../server/modules/hub/skills.mjs';
 import { installSkills } from '../server/modules/codex/skills.mjs';
 import { PermissionGate } from '../server/modules/permissions/index.mjs';
@@ -216,4 +216,28 @@ test('Hub knowledge：basic 最多 3 个库；降级不删除，超额拒绝新�
   await as('alice',()=>hub.assign('bob','pro'));await as('bob',()=>hub.registerKnowledge('bob','fourth',binding('fourth')));
   await as('alice',()=>hub.assign('bob','basic'));assert.equal(state.knowledge.length,4);
   await assert.rejects(as('bob',()=>hub.registerKnowledge('bob','fifth',binding('fifth'))),e=>e.status===403);
+});
+
+
+test('部署默认 Agent 不受 basic 名单限制，额外 Agent 仍按权益检查，管理员不变', async () => {
+  const { hub, as } = hubFixture();
+  const agent = { type: 'agent', id: 'custom-assistant', planId: 'my-agent', scope: 'system', deploymentDefault: true };
+  hub.catalog = () => [agent, { ...agent, id: 'extra-agent', deploymentDefault: false }];
+  await as('bob', () => {
+    hub.checkAgent({ definition: { agent: { id: agent.id } } });
+    assert.deepEqual(hub.visible().filter(item => item.type === 'agent').map(item => item.id), [agent.id]);
+    assert.throws(() => hub.checkResource('agent', 'extra-agent', 'use'), error => error.status === 404);
+  });
+  const user = { id: 'bob', role: 'user', plan: PLANS.basic };
+  assert.equal(decision(user, 'use', { ...agent, deploymentDefault: false, planId: 'writing' }), 200);
+  assert.equal(decision(user, 'use', { ...agent, scope: 'private', owner_id: 'other' }), 404);
+  assert.equal(decision(user, 'use', { ...agent, scope: 'shared', owner_id: 'other' }), 404);
+  assert.equal(decision({ ...user, grants: ['agent:custom-assistant'] }, 'use', { ...agent, scope: 'shared' }), 200);
+  assert.equal(decision({ ...user, disabled_at: 'disabled' }, 'use', agent), 404);
+  assert.equal(decision(null, 'use', agent), 404);
+  assert.equal(decision(user, 'modify', agent), 403);
+  assert.equal(decision(user, 'use', { ...agent, type: 'tool_group', id: 'web' }), 404);
+  await as('alice', () => {
+    for (const id of [agent.id, 'extra-agent']) for (const action of ['use', 'read', 'modify', 'share', 'delete']) hub.checkResource('agent', id, action);
+  });
 });

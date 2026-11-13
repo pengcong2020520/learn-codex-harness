@@ -30,6 +30,7 @@ export async function checkTable(selected, context = {}) {
   log("阶段 | 模式 | 缺项 | 登录状态");
   let ok = true;
   for (const stage of selected) {
+    if (stage.id === "app") { log("app | 进入 app/ 运行 npm run setup；部署状态用 npm run status 检查。"); continue; }
     try {
       const item = await inspectStage(stage, context);
       log(`${stage.id} | ${item.mode} | ${item.missing.join("、") || "无"} | ${item.kind === "login" ? `${item.link}；${item.login.text}` : "不适用"}`);
@@ -48,6 +49,7 @@ export async function main(argv = process.argv.slice(2), { root = ROOT, env = pr
     let ok = true;
     for (const stage of selected) {
       log(`\n${stage.id}`);
+      if (stage.id === "app") { log("进入 app/ 运行 npm run setup；部署状态用 npm run status 检查。"); continue; }
       const report = (passed, label, advice = "") => {
         log(`${passed ? "✓" : "✗"} ${label}${passed || !advice ? "" : `；${advice}`}`);
         if (!passed) ok = false;

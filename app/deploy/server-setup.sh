@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source deploy/topology.sh
+source deploy/env-run.sh
 bash deploy/check.sh
 # Paths are validated by remote.sh. Never source .env as shell code.
 docker compose build "${cluster_nodes[@]}"
@@ -12,7 +13,7 @@ docker compose run --rm --no-deps -T etcd-init
 docker compose up -d --wait etcd postgres redis gateway
 # 网关在启动时读取配置；后续部署仍需加载刚生成的配置。
 docker compose up -d --wait --force-recreate gateway
-docker compose run --rm --no-deps --user 0 -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/cluster-migrate.mjs
+compose_env_run --user 0 -T node-a node scripts/cluster-migrate.mjs
 docker compose run --rm --no-deps -T node-a npm run -s agent:init
 # Copy only the deployment UUID identity; each node keeps independent user files.
 for node in "${cluster_nodes[@]:1}"; do

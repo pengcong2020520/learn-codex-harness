@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source deploy/topology.sh
+source deploy/env-run.sh
 name=${1:-}
 [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}Z$ ]] || { echo '用法：restore.sh <备份目录名> [--yes]' >&2; exit 1; }
 [[ $# -le 2 && ( $# -eq 1 || ${2:-} == --yes ) ]] || { echo '用法：restore.sh <备份目录名> [--yes]' >&2; exit 1; }
@@ -41,7 +42,7 @@ done
 gunzip -c "backups/node-a/$name/database.sql.gz" |
   docker compose exec -T postgres psql --no-password -U agent -d agent -X --set ON_ERROR_STOP=1 --single-transaction
 # pg_dump --no-privileges does not restore runtime role grants. Reapply before restarting nodes.
-docker compose run --rm --no-deps --user 0 -T -v "$PWD/.env:$PWD/.env:ro" node-a node scripts/cluster-migrate.mjs
+compose_env_run --user 0 -T node-a node scripts/cluster-migrate.mjs
 for node in "${cluster_nodes[@]}"; do
   docker compose run --rm --no-deps -T --cap-add DAC_OVERRIDE "$node" node scripts/restore.mjs --files "$name"
 done

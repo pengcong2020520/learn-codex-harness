@@ -112,12 +112,12 @@ test('static: 远程账号命令独立使用 SSH TTY、白名单名称并仅接�
   assert.match(remote, / auth-init\)/);
   assert.match(remote, / user\)/);
   assert.ok(remote.includes('^[a-z0-9_.-]{1,64}$'));
-  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts init/);
-  assert.match(remote, /ssh -t.*docker compose run --rm --no-deps .*node-a node scripts\/maintenance.mjs accounts/);
+  assert.match(remote, /ssh -t.*bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts init/);
+  assert.match(remote, /ssh -t.*bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts/);
   assert.match(remote, /code.*-eq 3/);
   assert.ok(remote.includes('source deploy/topology.sh && docker compose up -d --wait'));
   assert.match(remote, /cluster_nodes.*bash deploy\/cluster-ready.sh/);
-  assert.doesNotMatch(remote, /docker compose run[^\n]*-T[^\n]*(?:auth:init|user:)/);
+  assert.doesNotMatch(remote, /bash deploy\/env-run.sh[^\n]*-T[^\n]*accounts/);
 });
 
 test('static: every node mounts the shared gateway directory so the one-shot generator can write', () => {

@@ -18,7 +18,7 @@ export function decision(user, action, resource) {
   const visible = owner || scope === 'system' || (scope === 'shared' && granted);
   if (!visible) return 404;
   const plan = user.plan || PLANS.basic;
-  if (resource.type === 'agent' && !includes(plan.agents, resource.planId || resource.id)) return 404;
+  if (resource.type === 'agent' && !resource.deploymentDefault && !includes(plan.agents, resource.planId || resource.id)) return 404;
   if (resource.type === 'tool_group' && !includes(plan.tool_groups, resource.id)) return 404;
   if (resource.type === 'knowledge' && action === 'delete' && owner) return 200;
   return ['use', 'read'].includes(action) || (scope !== 'system' && owner) ? 200 : 403;

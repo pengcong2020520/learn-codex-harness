@@ -172,6 +172,8 @@ test('init-env generates distinct node secrets and hashes; Compose exposes only 
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'app-node-secrets-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.mkdirSync(path.join(root,'server/modules/config'),{recursive:true});fs.copyFileSync(new URL('../server/modules/config/cluster.mjs',import.meta.url),path.join(root,'server/modules/config/cluster.mjs'));
   fs.mkdirSync(path.join(root,'scripts'));fs.copyFileSync(new URL('../scripts/deploy-env.mjs',import.meta.url),path.join(root,'scripts/deploy-env.mjs'));
+  fs.copyFileSync(new URL('../scripts/quickstart-lib.mjs',import.meta.url),path.join(root,'scripts/quickstart-lib.mjs'));
+  fs.mkdirSync(path.join(root,'shared')); fs.copyFileSync(new URL('../shared/paths.mjs',import.meta.url),path.join(root,'shared/paths.mjs'));
   fs.copyFileSync(new URL('../.env.example',import.meta.url),path.join(root,'.env.example'));fs.writeFileSync(path.join(root,'.env'),'AGENT_CLUSTER_NODES=node-a,node-b,node-c\n');
   const result=spawnSync(process.execPath,[path.join(root,'scripts/deploy-env.mjs'),'/srv/app'],{encoding:'utf8'});assert.equal(result.status,0);
   const values=parseEnv(result.stdout),keys=['A','B','C'].map(n=>values[`AGENT_NODE_KEY_${n}`]);assert.equal(new Set(keys).size,3);

@@ -98,7 +98,7 @@ test('R3 --check 与 doctor 均拒绝阶段不接受的 URL', async t => {
 });
 
 for (const id of ['s11', 's12', 'app']) {
-  test(`R4 ${id} 缺网关 Key 时始终提示路线 C、不检查登录链接`, async t => {
+  test(`R4 ${id} 缺网关 Key 时提示对应配置入口、不检查登录链接`, async t => {
     const f = fixture(t), stage = f.all.find(s => s.id === id);
     for (const values of [{}, { CODEX_API_KEY: 'fake', CODEX_BASE_URL: 'https://example.com', CODEX_MODEL: 'test' }]) {
       const result = classify(values, false, stage);
@@ -107,9 +107,9 @@ for (const id of ['s11', 's12', 'app']) {
     }
     for (const command of [setup, doctor]) {
       f.logs.length = 0;
-      assert.equal(await command(command === setup ? ['--check', '--stage', id] : ['--stage', id], f), 1);
+      assert.equal(await command(command === setup ? ['--check', '--stage', id] : ['--stage', id], f), id === 'app' ? 0 : 1);
       const output = f.logs.join('\n');
-      assert.match(output, /AGENT_GATEWAY_KEY.*路线 C/);
+      assert.match(output, id === 'app' ? /进入 app\/ 运行 npm run setup/ : /AGENT_GATEWAY_KEY.*路线 C/);
       assert.doesNotMatch(output, /link-login|缺少链接|已有登录/);
     }
     assert.equal(f.calls.some(args => args[0] === 'login'), false);
