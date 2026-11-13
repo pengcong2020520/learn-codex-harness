@@ -34,6 +34,19 @@ test('网页 HTML：无内联脚本、样式或事件属性，入口模块直接
   assert.doesNotMatch(read('web/app.js'), /innerHTML|localStorage|document\.cookie/);
   assert.match(read('web/styles.css'), /prefers-color-scheme:dark/);
 });
+test('网页 HTML：含密码输入框的表单必须使用 POST', () => {
+  const files = fs.readdirSync(new URL('../web/', import.meta.url), { recursive: true }).filter(file => file.endsWith('.html'));
+  for (const file of files) {
+    const visit = (element, form) => {
+      if (element.name === 'form') form = element;
+      if (form && element.name === 'input' && element.attribs.type?.toLowerCase() === 'password') {
+        assert.equal(form.attribs.method?.toLowerCase(), 'post', `${file}: ${form.attribs.id || 'form'} 必须使用 POST`);
+      }
+      for (const child of element.children || []) visit(child, form);
+    };
+    visit(parseDocument(read(`web/${file}`)));
+  }
+});
 test('网页会话事件实现与 CLI 协议保持一致（静态托管只暴露 web）', () => {
   assert.equal(read('web/modules/session-events.mjs'), read('shared/session-events.mjs'));
 });
