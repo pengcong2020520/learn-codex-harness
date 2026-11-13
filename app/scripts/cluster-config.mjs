@@ -9,5 +9,5 @@ try {
   if (process.argv[2] === 'check') {
     validateClusterSecrets(env, nodes);
     console.log(`集群配置检查通过：${nodes.join('、')}`);
-  } else console.log(process.argv[2] === 'upstreams' ? clusterUpstreams(nodes, env) : nodes.join(' '));
+  } else process.stdout.write(`${String(process.argv[2] === 'upstreams' ? clusterUpstreams(nodes, env) : nodes.join(' '))}\n`);
 } catch (error) { console.error(error.message); process.exitCode = 1; }
