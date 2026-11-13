@@ -17,7 +17,18 @@ export function ctlArgs(command, args, env, root) {
   }
   throw new Error('命令或参数无效；使用 up、down、logs [服务名]、status 或账号命令。');
 }
-export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, run = runProcess, ready = waitReady, fetchImpl = fetch, prompts, log = console.log, output = text => process.stdout.write(text) } = {}) {
+async function accountInput(command, args, prompts) {
+  prompts ??= createPrompts();
+  try {
+    const username = command === 'init' ? (await prompts.ask('管理员用户名 [admin]：')).trim() || 'admin' : args[0];
+    validateUsername(username);
+    const password = await prompts.ask('密码（至少 12 位）：', { secret: true });
+    validatePassword(password);
+    if (password !== await prompts.ask('再次输入密码：', { secret: true })) throw new Error('两次密码不一致。');
+    return `${command === 'init' ? `${username}\n` : ''}${password}\n`;
+  } finally { prompts.close(); }
+}
+export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, run = runProcess, ready = waitReady, fetchImpl = fetch, prompts, isTTY = Boolean(process.stdin.isTTY), log = console.log, output = text => process.stdout.write(text) } = {}) {
   const [command, ...raw] = argv, development = raw.includes('--dev'), quiet = command === 'up' && raw.includes('--quiet'), args = raw.filter(arg => arg !== '--dev' && !(quiet && arg === '--quiet'));
   if (raw.filter(arg => arg === '--quiet').length > 1) throw new Error('--quiet 不能重复指定。');
   if (development) {
@@ -31,18 +42,7 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
   }
   const values = readEnv(root), dockerArgs = ctlArgs(command, args, values, root);
   const redact = await commandRedactor(env, values);
-  let input;
-  if (['init', 'add', 'passwd'].includes(command)) {
-    prompts ??= createPrompts();
-    try {
-      const username = command === 'init' ? (await prompts.ask('管理员用户名 [admin]：')).trim() || 'admin' : args[0];
-      validateUsername(username);
-      const password = await prompts.ask('密码（至少 12 位）：', { secret: true });
-      validatePassword(password);
-      if (password !== await prompts.ask('再次输入密码：', { secret: true })) throw new Error('两次密码不一致。');
-      input = `${command === 'init' ? `${username}\n` : ''}${password}\n`;
-    } finally { prompts.close(); }
-  }
+  const input = ['init', 'add', 'passwd'].includes(command) ? await accountInput(command, args, prompts) : undefined;
   if (command === 'up') {
     log('构建镜像并准备数据目录……');
     await run('bash', ['deploy/configure.sh'], { root, env: childEnvironment(env), output, redact, quiet });
@@ -51,7 +51,21 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
   const result = await run('docker', dockerArgs, { root, env: childEnvironment(env), input, capture: !['logs', 'up'].includes(command),
     ...(['logs', 'up'].includes(command) ? { output, redact, quiet } : {}) });
   if (result) log(redact(result));
-  if (command === 'up') await ready(values, { log });
+  if (command === 'up') {
+    let status;
+    try {
+      status = (await run('docker', accountArgs(root, 'status', [], values), { root, env: childEnvironment(env), capture: true })).trim();
+    } catch { throw new Error('无法确认账号状态，请运行 npm run status 核对；请勿自动重试。'); }
+    if (!['initialized', 'uninitialized'].includes(status)) throw new Error('账号状态无法识别，请运行 npm run status 核对；请勿自动重试。');
+    if (status === 'uninitialized') {
+      if (!isTTY) throw new Error('还没有管理员账号，非交互终端无法创建；请运行 npm run auth:init，或通过 SETUP_ADMIN_USER、SETUP_ADMIN_PASSWORD 环境变量运行 npm run setup -- --non-interactive 初始化。');
+      log('还没有管理员账号，现在创建');
+      const input = await accountInput('init', [], prompts);
+      const result = await run('docker', accountArgs(root, 'init', [], values), { root, env: childEnvironment(env), input, capture: true });
+      if (result) log(redact(result));
+    }
+    await ready(values, { log });
+  }
   if (command === 'status') {
     const version = fs.existsSync(path.join(root, 'REVISION')) ? fs.readFileSync(path.join(root, 'REVISION'), 'utf8').trim() : JSON.parse(fs.readFileSync(path.join(root, 'package.json'))).version;
     log(`版本：${redact(version)}`);

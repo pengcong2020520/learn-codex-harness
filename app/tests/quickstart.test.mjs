@@ -13,7 +13,7 @@ import { ctl, ctlArgs } from '../scripts/ctl.mjs';
 import { expandCluster, parseCluster, enableCluster, waitReplicas } from '../scripts/cluster-enable.mjs';
 import { deploy, parseDeploy } from '../scripts/deploy.mjs';
 import { generateDeployEnv } from '../scripts/deploy-env.mjs';
-import { readEnv, writeEnv, runProcess, childEnvironment, composeUp, waitReady } from '../scripts/quickstart-lib.mjs';
+import { readEnv, writeEnv, runProcess, childEnvironment, composeUp, waitReady, envRunArgs } from '../scripts/quickstart-lib.mjs';
 import { clusterNodes, validateClusterSecrets } from '../server/modules/config/cluster.mjs';
 import { AgentDefinition } from '../server/modules/agents/index.mjs';
 import { saveCredentials, readCredentials, clientDirectory } from '../client/modules/connection/credentials.mjs';
@@ -27,7 +27,7 @@ function fixture(t) {
   for (const file of ['.env.example', 'package.json', 'compose.yaml']) fs.copyFileSync(new URL(`../${file}`, import.meta.url), path.join(root, file));
   const calls = [], logs = [], answers = [];
   const context = { root, env: { SETUP_ADMIN_PASSWORD: password, FORCE_COLOR: '1', DEEPSEEK_API_KEY: 'test-provider-key', PATH: process.env.PATH },
-    run: async (command, args, options) => { calls.push({ command, args, options }); return ''; },
+    run: async (command, args, options) => { calls.push({ command, args, options }); return args.at(-1) === 'status' ? 'initialized\n' : ''; },
     portCheck: async port => { assert.equal(port, 4317); }, ready: async () => {}, log: text => logs.push(text),
     prompts: { ask: async () => { assert.ok(answers.length, '测试输入缺失'); return answers.shift(); }, close() {} } };
   return { ...context, calls, logs, answers };
@@ -188,6 +188,93 @@ test('ctl 密码只经 stdin；status 显示 waiting、replication 与版本；u
   assert.match(f.logs.join('\n'), /waiting.*副本准备中.*replication.*on/); assert.match(f.logs.join('\n'), /版本：1.0.0/);
   f.calls.length = 0; await ctl(['up'], f);
   assert.equal(f.calls[0].command, 'bash'); assert.equal(f.calls[0].args[0], 'deploy/configure.sh');
+});
+function upFixture(f, status = 'initialized\n') {
+  const steps = [], run = f.run;
+  f.isTTY = false;
+  f.run = async (command, args, options) => {
+    const step = command === 'bash' ? 'configure' : args.includes('accounts') ? args.at(-1) : 'up';
+    steps.push(step);
+    await run(command, args, options);
+    if (step === 'status') {
+      if (status instanceof Error) throw status;
+      return status;
+    }
+    return '';
+  };
+  f.ready = async () => { steps.push('ready'); };
+  return steps;
+}
+test('up 已初始化时只查询一次账号状态，不提示初始化，随后等待就绪', async t => {
+  for (const isTTY of [false, true]) {
+    const f = await configured(t), steps = upFixture(f);
+    f.isTTY = isTTY;
+    f.prompts = { ask: async () => assert.fail('已有账号不应询问'), close() { assert.fail('不应创建交互'); } };
+    await ctl(['up'], f);
+    assert.deepEqual(steps, ['configure', 'up', 'status', 'ready']);
+    const status = f.calls.at(-1);
+    assert.equal(status.command, 'docker');
+    assert.deepEqual(status.args, envRunArgs(f.root, ['-T', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', 'status'], readEnv(f.root)));
+    assert.equal(status.options.capture, true);
+    assert.equal(status.options.input, undefined);
+  }
+});
+test('up 未初始化且是 TTY 时先查询、隐藏输入两次、经 stdin 初始化，再等就绪', async t => {
+  for (const username of ['', 'operator']) {
+    const f = await configured(t), steps = upFixture(f, 'uninitialized\n'), questions = [];
+    f.isTTY = true;
+    f.answers.push(username, password, password);
+    const ask = f.prompts.ask;
+    f.prompts.ask = async (label, options) => { steps.push('ask'); questions.push({ label, secret: options?.secret }); return ask(); };
+    f.prompts.close = () => steps.push('close');
+    await ctl(['up'], f);
+    assert.deepEqual(steps, ['configure', 'up', 'status', 'ask', 'ask', 'ask', 'close', 'init', 'ready']);
+    assert.match(questions[0].label, /admin/);
+    assert.deepEqual(questions.map(q => q.secret), [undefined, true, true]);
+    const init = f.calls.at(-1);
+    assert.equal(init.command, 'docker');
+    assert.deepEqual(init.args, ctlArgs('init', [], readEnv(f.root), f.root));
+    assert.ok(init.options.input === `${username || 'admin'}\n${password}\n`, '用户名与密码只能经 stdin 传入');
+    for (const call of f.calls) assert.equal(JSON.stringify([call.args, call.options.env]).includes(password), false);
+    assert.equal(f.logs.join('\n').includes(password), false);
+    assert.equal(fs.readFileSync(path.join(f.root, '.env'), 'utf8').includes(password), false);
+    assert.ok(f.logs.includes('还没有管理员账号，现在创建'));
+  }
+});
+test('up 未初始化且非 TTY 时立即拒绝，不读取输入、不初始化、不等待就绪', async t => {
+  const f = await configured(t), steps = upFixture(f, 'uninitialized\n');
+  f.prompts.ask = async () => assert.fail('非 TTY 不应读取输入');
+  await assert.rejects(ctl(['up'], f), error => /npm run auth:init/.test(error.message) && /npm run setup -- --non-interactive/.test(error.message) && /SETUP_ADMIN_PASSWORD/.test(error.message));
+  assert.deepEqual(steps, ['configure', 'up', 'status']);
+});
+for (const [name, status] of [['命令失败', new Error('结果待核对')], ['空输出', ''], ['未知输出', 'unknown\n'], ['混杂输出', 'initialized\nuninitialized\n']]) {
+  test(`up 账号状态${name}时提示 status 核对，不重试、不初始化、不等待`, async t => {
+    const f = await configured(t), steps = upFixture(f, status);
+    f.isTTY = true;
+    f.prompts.ask = async () => assert.fail('状态不明不应读取输入');
+    await assert.rejects(ctl(['up'], f), /npm run status/);
+    assert.deepEqual(steps, ['configure', 'up', 'status']);
+  });
+}
+test('up 初始化密码不一致时关闭交互，不初始化、不等待就绪', async t => {
+  const f = await configured(t), steps = upFixture(f, 'uninitialized\n');
+  f.isTTY = true;
+  f.answers.push('', password, 'different-password');
+  f.prompts.close = () => steps.push('close');
+  await assert.rejects(ctl(['up'], f), /两次密码不一致/);
+  assert.deepEqual(steps, ['configure', 'up', 'status', 'close']);
+});
+test('up 初始化失败时停止，不重试、不等待就绪', async t => {
+  const f = await configured(t), steps = upFixture(f, 'uninitialized\n'), run = f.run;
+  f.isTTY = true;
+  f.answers.push('', password, password);
+  f.run = async (...args) => {
+    const result = await run(...args);
+    if (args[1].at(-1) === 'init') throw new Error('结果待核对');
+    return result;
+  };
+  await assert.rejects(ctl(['up'], f), /待核对/);
+  assert.deepEqual(steps, ['configure', 'up', 'status', 'init']);
 });
 test('子进程调用以 stdin 管道写入且抑制错误原文，无隐式环境继承', async () => {
   let captured, stdin = '';
@@ -376,6 +463,7 @@ for (const command of ['setup', 'up', 'cluster:enable']) {
       f.api = { request: async () => ({}) }; f.wait = async () => {};
       f.run = async (binary, args, options) => {
         calls++;
+        if (args.includes('accounts') && args.at(-1) === 'status') return 'initialized\n';
         const values = fs.existsSync(path.join(f.root, '.env')) ? readEnv(f.root) : {};
         const secrets = [password, f.env.DEEPSEEK_API_KEY, ...Object.entries(values).filter(([key, value]) => /KEY|PASSWORD|TOKEN|SECRET|DATABASE_URL|REDIS_URL/i.test(key) && value).map(([, value]) => value)];
         const chunks = secrets.flatMap(secret => [['stdout', secret.slice(0, 4)], ['stdout', secret.slice(4) + '\n'], ['stderr', secret.slice(0, 6)], ['stderr', secret.slice(6) + '\n']]);
