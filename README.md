@@ -1,5 +1,21 @@
 # learn-codex-harness — 用 Codex 的 harness，亲手做一个云端 Agent
 
+这个仓库包含两部分：**s00–s18 共十九章教程**，以及以 s18 为内核、默认单节点的 **通用云端 Agent 脚手架**。
+
+| 想学怎么做 | 想直接用 |
+| --- | --- |
+| 从 [s00：先体验](stages/s00-sdk-quickstart/README.md) 开始，逐章理解服务、工具、数据、权限和多机副本接管；配套 [互动课程](course/README.md) | 使用 [app/ 脚手架](app/README.md)：多用户、网页聊天、命令行、模型网关，可按需打开集群 |
+
+已克隆仓库并安装 Node.js 24、启动 Docker Compose 后，三行启动脚手架：
+
+```bash
+cd app
+npm ci
+npm run setup
+```
+
+按提示配置模型与管理员账号，打开 <http://127.0.0.1:4317/>。自定义 Agent 与服务器部署见 [脚手架说明](app/README.md)。
+
 ## Agent = 模型 + Harness
 
 模型负责理解和决策；harness 负责把它的决定落到地上：转动"想 → 调工具 → 看结果"的循环、保存会话、执行工具、守住审批边界。
@@ -16,6 +32,8 @@ OpenAI 的 Codex 在 Web、CLI、IDE 扩展和桌面应用里，底层都是同�
 
 ## 快速开始
 
+### 学教程
+
 环境要求：**Node.js ≥ 24**。各阶段都锁定 `@openai/codex` 0.154.0，不用全局安装。
 
 先克隆仓库，再登录 Codex；也可以准备一个兼容 Responses API 的 API Key：
@@ -27,7 +45,7 @@ npx codex login   # 使用 API Key 时跳过登录
 npm run setup:model
 ```
 
-用 `npm run setup:model` 统一配置各阶段，不必逐章重复填写。登录、单个 API Key、模型网关的配置范围及自检方式见 [接入模型](stages/setup-models.md)；s00 直接使用本机登录或 `CODEX_API_KEY`，s11 与 app 按指南选择模型网关路线。
+用 `npm run setup:model` 统一配置各阶段，不必逐章重复填写。登录、单个 API Key、模型网关的配置范围及自检方式见 [接入模型](stages/setup-models.md)；s00 直接使用本机登录或 `CODEX_API_KEY`，s11–s18 按指南选择模型网关路线；脚手架在 `app/` 中单独运行 `npm run setup`。
 
 从 s00 的环境自检和第一次真实调用开始（在仓库根目录运行）：
 
@@ -57,6 +75,12 @@ npm --prefix course ci && npm --prefix course run web
 s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`，步骤见 [数据层说明](stages/s08-data-layer/docs/data-layer.md)。
 
 服务器同时运行 s03–s11 的步骤见 [部署说明](course/deploy/README.md)。教学快照保持不变；部署入口在共享网络内通过 `127.0.0.1:4331` 转发到模型网关，端口与进程管理集中在 `course/deploy/`。
+
+### 用脚手架
+
+从仓库根目录进入 `app/`，执行上方三行命令即可。`setup` 负责生成配置、构建和启动服务、初始化管理员；已有配置时用 `npm run up`。也可在 `app/` 运行 `npm run login`、`npm run chat` 使用 CLI，Compose 模式凭据保存在 `app/.cli/credentials.json`，不要提交或分享。
+
+详细步骤见 [脚手架快速开始](app/README.md#快速开始)。
 
 ---
 
@@ -116,7 +140,7 @@ s08 及之后需要 PostgreSQL 与 Redis，各阶段目录提供 `compose.yaml`�
 >
 > **[s18 副本与故障接管](stages/s18-replication/)** &nbsp; *"主节点坏了有人接手，丢多少说得清"* — 轮次边界异步复制、复制位点；接管后尾部丢失如实标出
 
-完整项目 [app/](app/README.md) 以 s18 为内核持续开发，包含本机 Docker 运行；Web 工作台、互动课程和阶段演示部署在 [course/](course/README.md)；s12–s18 各自保留为可以独立部署的教程快照，用来讲清上云、多用户和多台机器各自要解决什么。
+脚手架 [app/](app/README.md) 以 s18 为内核持续开发，默认单节点，带多用户网页聊天、CLI、模型网关和可选集群；教学工作台、互动课程和阶段演示部署在 [course/](course/README.md)；s12–s18 各自保留为可以独立部署的教程快照，用来讲清上云、多用户和多台机器各自要解决什么。
 
 每章 README 都按「要回答的问题 → 核心概念 → 分工：Codex 做什么，我们做什么 → 跑起来看看 → 关键代码 → 小结 → 下一章」组织；关键代码逐行摘自该阶段源码（`npm test` 会校验）。
 
@@ -142,10 +166,11 @@ learn-codex-harness/
 │   ├── introduction.md     #   导论：Codex harness、App Server 与六个问题
 │   ├── sNN-*/              #   README（章节）、docs/design.md、images/、lessons/（离线实验）、tests/
 │   └── verify.mjs          #   阶段文档、结构与测试的统一检查
-├── app/                    # Agent 服务与终端客户端
+├── app/                    # 云端 Agent 脚手架：网页、CLI、模型网关、可选集群
 ├── course/                 # 互动课程、教学工作台与阶段演示部署
 ├── docs/                   # 路线图等图片、分析报告
-└── scripts/run-all.mjs     # 根目录统一安装与测试
+├── scripts/                # 根目录统一安装、模型配置、测试与隐私检查
+└── AGENTS.md               # 本仓库的工程与协作规范
 ```
 
 ## 开发与验证

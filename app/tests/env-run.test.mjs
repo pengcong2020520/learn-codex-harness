@@ -104,10 +104,11 @@ test('一次性入口：所有直接 .env 挂载集中在两个公共入口，�
   assert.deepEqual(mounts.sort(), ['deploy/env-run.sh', 'scripts/quickstart-lib.mjs']);
   for (const file of ['scripts/setup.mjs', 'scripts/ctl.mjs', 'scripts/cluster-enable.mjs']) assert.match(read(file), /'bash', \['deploy\/configure.sh'\]/);
   assert.match(read('scripts/deploy.mjs'), /bash deploy\/env-run.sh -T node-a node scripts\/maintenance.mjs accounts status/);
-  for (const name of ['README.md', 'docs/isolation-acceptance.md']) {
-    assert.doesNotMatch(read(name), /\.env:/);
-    assert.match(read(name), /bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts/);
-  }
+  for (const name of ['README.md', 'docs/isolation-acceptance.md']) assert.doesNotMatch(read(name), /\.env:/);
+  assert.match(read('docs/isolation-acceptance.md'), /bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts/);
+  assert.doesNotMatch(read('README.md'), /-v "?\$PWD\/\.env/);
+  assert.match(read('README.md'), /npm run auth:init/);
+  assert.match(read('README.md'), /npm run user:add/);
 });
 
 test('Compose 静态检查：长期服务能力集合和继承关系保持原样', () => {

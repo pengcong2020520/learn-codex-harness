@@ -274,10 +274,12 @@ test('FORCE_COLOR 下 shell 捕获的拓扑仍是纯文本', async t => {
   const result = spawnSync(process.execPath, [new URL('../scripts/cluster-config.mjs', import.meta.url).pathname, 'nodes'], { cwd: f.root, encoding: 'utf8', env: { PATH: process.env.PATH, FORCE_COLOR: '1' } });
   assert.equal(result.status, 0); assert.equal(result.stdout, 'node-a\n'); assert.equal(result.stdout.includes('\u001b'), false);
 });
-test('冻结的阶段指南仍引用的旧启动名只做新 up 别名，其余旧停止脚本移除', () => {
+test('脚手架统一使用 up 与 down，不提供数据库和网关的单独启停命令', () => {
   const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url)));
-  assert.equal(pkg.scripts['db:up'], pkg.scripts.up);
-  assert.equal(pkg.scripts['gateway:up'], pkg.scripts.up);
+  assert.equal(pkg.scripts.up, 'node scripts/ctl.mjs up');
+  assert.equal(pkg.scripts.down, 'node scripts/ctl.mjs down');
+  assert.equal(pkg.scripts['db:up'], undefined);
+  assert.equal(pkg.scripts['gateway:up'], undefined);
   assert.equal(pkg.scripts['db:down'], undefined); assert.equal(pkg.scripts['gateway:down'], undefined);
 });
 test('cluster:enable 经 admin 检查后写配置、构建、按新拓扑启动并验证副本', async t => {

@@ -1,5 +1,7 @@
 # 角色提示词评估
 
+当前脚手架是多用户内核，在线执行器（`npm run eval:role`）尚未适配，运行时会给出说明并退出；场景读取与离线评分（`eval:role:score`）仍可用。
+
 改动角色提示词（`agents/writing/role.md`）或 Skill 时，用这套固定场景比较新旧两版：质量不能下降，token 要下降。
 
 ## 场景

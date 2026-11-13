@@ -6,13 +6,15 @@
 npm run setup:model
 ```
 
+本页向导用于教程阶段；脚手架请进入 [app/](../app/README.md) 运行 `npm run setup`，根向导不替 app 写 `.env`。
+
 向导支持多选阶段，只使用 Node 内置模块。先在要运行的阶段安装依赖，例如 `npm --prefix stages/s01-single-turn ci`；也可以在根目录运行 `npm run setup` 安装全部项目依赖。
 
 | 路线 | 适合谁 | 配置范围 |
 | --- | --- | --- |
 | A：ChatGPT 账号登录 | 已有可用订阅，希望使用订阅额度，不单独填写 API Key；仅使用 OpenAI 模型 | 默认 s01–s10 |
 | B：一个 API Key | 已有模型服务商密钥，希望直连一个支持 Responses API 的模型 | 默认 s01–s10 |
-| C：多个 API Key | 需要多家模型、协议转换、备用模型和用量管理 | s11、s12、s13、s14、s15 与 app，默认同时配置 |
+| C：多个 API Key | 需要多家模型、协议转换、备用模型和用量管理 | s11–s18，默认同时配置 |
 
 `s00-sdk-quickstart` 使用 SDK，直接读取本机登录或 `CODEX_API_KEY`。向导只提示，不改 s00；继续按 [s00 说明](s00-sdk-quickstart/README.md) 操作。
 
@@ -73,7 +75,7 @@ Key 和自定义 Base URL 均隐藏输入；地址校验失败只提示原因，
 ## C：通过模型网关使用多个 Key
 
 ```bash
-npm run setup:model -- --stage s11,app
+npm run setup:model -- --stage s11
 ```
 
 选 C，按提示填写 `KIMI_API_KEY`、`DEEPSEEK_API_KEY` 等服务商变量。各项均隐藏输入，回车跳过；已有值会保留。`AGENT_GATEWAY_KEY` 也隐藏输入，回车保留现值；原值为空时生成 `sk-bf-` 开头的随机值，不在终端显示。
@@ -91,7 +93,15 @@ npm --prefix stages/s11-model-gateway run server
 npm --prefix stages/s11-model-gateway start
 ```
 
-app 使用相同脚本，把上述前缀目录换成 `app`。s11 与 app 同时运行时，需另行安排数据库和网关端口，向导不会分配端口。备用链、模型能力和路由见 [模型网关说明](s11-model-gateway/docs/model-gateway.md) 与 [app/config/models.json](../app/config/models.json)。
+脚手架使用独立向导，在仓库根目录运行：
+
+```bash
+cd app
+npm ci
+npm run setup
+```
+
+`setup` 会生成部署配置、启动服务并初始化管理员。打开 `http://127.0.0.1:4317/` 登录；CLI 使用 `npm run login`、`npm run chat`，Compose 凭据位于 `app/.cli/credentials.json`，不要提交。更换模型用 `npm run setup -- --reconfigure-model`，已有配置启动用 `npm run up`。s11 与 app 是独立部署，不能互换启动命令。备用链、模型能力和路由见 [模型网关说明](s11-model-gateway/docs/model-gateway.md) 与 [app/config/models.json](../app/config/models.json)。
 
 ## 检查配置与启动
 
@@ -102,17 +112,17 @@ npm run doctor                            # 默认全部，不调用模型
 npm run doctor -- --stage s01 --handshake
 ```
 
-`--check` 列出阶段、模式、缺项和登录状态，并校验直连 Base URL。对 s01–s10，`.env` 不存在且没有模型环境变量时显示“未配置”；有部分 API 配置（包括空的配置行）时显示 API Key 模式及缺项；三项都未设置时检查已有登录。已有登录（A）下，若 `CODEX_MODEL_CATALOG_ENABLED` 不是 `false`，缺项为“设 CODEX_MODEL_CATALOG_ENABLED=false”。s11、s12、s13、s14、s15 与 app 始终标为“API Key（模型网关）”，缺少 `AGENT_GATEWAY_KEY` 时提示选择路线 C，不检查登录链接。未通过检查时退出码为 1。检查不改写 `.env`。
+`--check` 列出阶段、模式、缺项和登录状态，并校验直连 Base URL。对 s01–s10，`.env` 不存在且没有模型环境变量时显示“未配置”；有部分 API 配置（包括空的配置行）时显示 API Key 模式及缺项；三项都未设置时检查已有登录。已有登录（A）下，若 `CODEX_MODEL_CATALOG_ENABLED` 不是 `false`，缺项为“设 CODEX_MODEL_CATALOG_ENABLED=false”。s11–s18 始终标为“API Key（模型网关）”，缺少 `AGENT_GATEWAY_KEY` 时提示选择路线 C，不检查登录链接。未通过检查时退出码为 1。检查不改写 `.env`。对 app，`--check` 与 `doctor` 只提示进入 `app/` 运行 `npm run setup`、用 `npm run status` 检查部署状态，不读取或验证 app 配置。
 
 s00 是上述“未配置”规则的例外：按本机登录或 `CODEX_API_KEY` 判断；没有 Key 时显示“已有登录”，`--check` 检查本机登录，不要求 `.env`，也不要求阶段登录链接或本地模型目录开关。
 
 `doctor` 检查依赖、`.env`、模式、缺项、Base URL、登录链接和 Codex 版本，并给出修复命令。`--handshake` 额外启动该阶段的 Codex App Server，完成 `initialize/initialized` 后终止整棵进程树并确认退出，不发起对话。握手成功只说明 CLI 协议可以连接，不证明 Key 有效或模型可用；也不检查数据库、网关连通性。
 
-根工具统一使用 `stages/<阶段>/node_modules/.bin/codex`；检查 app 时借用 s11 的 CLI，但仍使用 app 的状态目录，所以也需安装 s11 依赖。Windows 使用同一安装包的 JS 入口启动 CLI。握手结束（含超时）及登录超时均清理整棵进程树：Unix 使用独立进程组，先 `SIGTERM`、必要时 `SIGKILL`；Windows 等待 `taskkill /pid <pid> /t /f` 完成。包装进程先退出不会提前结算；无法确认清理完成时报告失败。
+根工具对教程阶段使用 `stages/<阶段>/node_modules/.bin/codex`；app 的配置与状态检查使用自己的快捷命令。Windows 使用同一安装包的 JS 入口启动 CLI。握手结束（含超时）及登录超时均清理整棵进程树：Unix 使用独立进程组，先 `SIGTERM`、必要时 `SIGKILL`；Windows 等待 `taskkill /pid <pid> /t /f` 完成。包装进程先退出不会提前结算；无法确认清理完成时报告失败。
 
 向导结束时打印所选阶段的启动命令，并询问是否做一次会产生模型用量的验证，默认否。当前自动单轮验证限已选择的 s01/s02，只验证一个阶段，60 秒超时；其他阶段的 smoke 有多轮或服务依赖，不在这个单轮验证中自动运行。模型原始输出隐藏，只显示完成或失败。真实调用另由你在本机终端确认执行。
 
-s08 起还需要 PostgreSQL、Redis 和数据库迁移。s08–s10 按各章说明使用 `docker compose up -d postgres redis`，再运行 `npm run data:migrate`；s11/app 可使用 `npm run db:up`。根目录 `doctor` 只查配置是否存在，不替代数据库准备。
+s08 起还需要 PostgreSQL、Redis 和数据库迁移。s08–s10 按各章说明使用 `docker compose up -d postgres redis`，再运行 `npm run data:migrate`；s11 可使用 `npm run db:up`；app 用自己的 `npm run setup` 或 `npm run up` 准备整套服务。根目录 `doctor` 只查配置是否存在，不替代数据库准备。
 
 ## 常见报错
 
@@ -132,7 +142,7 @@ s08 起还需要 PostgreSQL、Redis 和数据库迁移。s08–s10 按各章说�
 
 配置工具不会打印 Key，也不会转发可能含敏感值的原始子进程错误。真实登录步骤继承 Codex 自身终端交互；它使用的是清除了 API Key 等变量的环境。
 
-s12 使用模型网关配置，不建立 link-login 链接；部署步骤见 [s12 README](s12-deploy/README.md)。它自带 Compose，与 app 的共享 stages 容器独立。
+s12 使用模型网关配置，不建立 link-login 链接；部署步骤见 [s12 README](s12-deploy/README.md)。它自带 Compose，与 `course/` 的共享 stages 容器及 `app/` 脚手架独立。
 
 s13 同样使用模型网关，不进入 link-login 默认列表；独立部署与登录步骤见 [s13 README](s13-auth/README.md)。
 
