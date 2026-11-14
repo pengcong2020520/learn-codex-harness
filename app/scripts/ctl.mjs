@@ -68,6 +68,7 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
       status = (await run('docker', accountArgs(root, 'status', [], values), { root, env: childEnvironment(env), capture: true })).trim();
     } catch { throw new Error('无法确认账号状态，请运行 npm run status 核对；请勿自动重试。'); }
     if (!['initialized', 'uninitialized'].includes(status)) throw new Error('账号状态无法识别，请运行 npm run status 核对；请勿自动重试。');
+    if (status === 'uninitialized' && values.AGENT_ADMIN_BOOTSTRAP) throw new Error('引导管理员未完成，请核对 migrate 服务状态；请勿自动重试。');
     if (status === 'uninitialized') {
       if (!isTTY) throw new Error('还没有管理员账号，非交互终端无法创建；请运行 npm run auth:init，或通过 SETUP_ADMIN_USER、SETUP_ADMIN_PASSWORD 环境变量运行 npm run setup -- --non-interactive 初始化。');
       log('还没有管理员账号，现在创建');

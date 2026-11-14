@@ -21,9 +21,15 @@ export async function initializeAccounts(store, { ownerId, username, password, w
   username = normalizeUsername(username);
   if (!username) throw new Error('用户名不能为空。');
   const hash = await hashPassword(password);
+  return initializeAccountsWithHash(store, { ownerId, username, hash, workspace });
+}
+export async function initializeAccountsWithHash(store, { ownerId, username, hash, workspace, skipExisting = false }) {
+  username = normalizeUsername(username);
+  if (!username || !/^scrypt\$32768\$8\$1\$[a-f0-9]{32}\$[a-f0-9]{128}$/.test(hash || '')) throw new Error('管理员用户名或密码哈希格式无效。');
   return transaction(store.pool, async client => {
     await accountLock(client, store.instanceId);
-    await assertUninitialized(store, client);
+    try { await assertUninitialized(store, client); }
+    catch (error) { if (skipExisting && error.exitCode === 3) return null; throw error; }
     await store.query(`INSERT INTO agent_data.users(instance_id,id,name,username,password_hash,role)
       VALUES($1,$2,'local-owner',$3,$4,'admin') ON CONFLICT(instance_id,id)
       DO UPDATE SET username=$3,password_hash=$4,role='admin',disabled_at=NULL`, [ownerId, username, hash], client);
