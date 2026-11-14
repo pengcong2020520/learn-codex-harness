@@ -79,7 +79,11 @@ check_production() {
 }
 check_production
 grep -q '^! 备份：没有找到完整备份记录。' "$check_dir/container"
-bash deploy/backup.sh
+if [ "$(id -u)" != 0 ]; then
+  sudo env "PATH=$PATH" "FORCE_COLOR=${FORCE_COLOR:-0}" "COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME" bash deploy/backup.sh
+else
+  bash deploy/backup.sh
+fi
 check_production
 grep -q '^✓ 备份：' "$check_dir/container"
 docker compose exec -T node-a node --input-type=module -e '

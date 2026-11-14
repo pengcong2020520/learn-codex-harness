@@ -4,6 +4,10 @@ cd "$(dirname "$0")/.."
 source deploy/topology.sh
 umask 077
 mkdir -p backups
+if [ "$(id -u)" != 0 ] && [ ! -w backups ]; then
+  echo '备份需要 root 权限（定时任务也以 root 运行）：请运行 sudo bash deploy/backup.sh' >&2
+  exit 1
+fi
 # The same inode is held by backup, restore and the entire rsync sender. Never unlink it.
 exec 9>backups/.download.lock
 flock -n 9 || { echo '已有备份、恢复或下载正在进行。' >&2; exit 75; }

@@ -151,12 +151,14 @@ npm run agent:new -- my-agent
 
 ### 备份与恢复
 
-在装有 `flock` 等部署工具的 Linux 部署主机上运行：
+备份与恢复需要 root 权限，定时任务也以 root 运行。在装有 `flock` 等部署工具的 Linux 部署主机上运行：
 
 ```bash
-npm run backup
-npm run restore -- <备份目录名>
+sudo bash deploy/backup.sh
+sudo bash deploy/restore.sh <备份目录名>
 ```
+
+使用 `npm run backup` 或 `npm run restore -- <备份目录名>` 时，同样需要 root 权限。
 
 备份短暂停止 Agent 节点，按节点写入 `backups/<节点>/<UTC时间>/`，包含数据库、workspace 和原生历史，结束时尝试恢复服务。恢复目录名形如 `2026-11-13T12-00-00-000Z`，使用实际备份名。恢复会覆盖数据库及文件，并要求输入 `RESTORE`；无人值守时仅在确认备份后加 `--yes`。取消或失败时节点保持停止，核对结果后再决定后续操作。密钥配置 `.env` 应另行安全保管。备份、恢复与下载互斥。可在服务器部署目录执行 `sudo bash deploy/enable-backup-timer.sh` 启用每日备份；保留策略和定时设置见 [docs/design.md](docs/design.md#定时备份与保留)。
 

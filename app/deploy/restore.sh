@@ -8,6 +8,10 @@ name=${1:-}
 [[ $# -le 2 && ( $# -eq 1 || ${2:-} == --yes ) ]] || { echo '用法：restore.sh <备份目录名> [--yes]' >&2; exit 1; }
 umask 077
 mkdir -p backups
+if [ "$(id -u)" != 0 ] && [ ! -w backups ]; then
+  echo '恢复需要 root 权限（定时任务也以 root 运行）：请运行 sudo bash deploy/restore.sh' >&2
+  exit 1
+fi
 exec 9>backups/.download.lock
 flock -n 9 || { echo '已有备份、恢复或下载正在进行。' >&2; exit 75; }
 failed() {

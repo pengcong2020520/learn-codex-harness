@@ -7,6 +7,11 @@ import { setup, containerDirectory } from '../scripts/setup.mjs';
 import { decodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { verifyPassword } from '../server/modules/accounts/password.mjs';
 
+test('只用 Docker 验收：非 root 备份通过 sudo 保留 PATH、颜色设置与 Compose 项目名', () => {
+  const source = fs.readFileSync(new URL('../scripts/e2e-docker-only.sh', import.meta.url), 'utf8');
+  assert.match(source, /if \[ "\$\(id -u\)" != 0 \]; then\n  sudo env "PATH=\$PATH" "FORCE_COLOR=\$\{FORCE_COLOR:-0\}" "COMPOSE_PROJECT_NAME=\$COMPOSE_PROJECT_NAME" bash deploy\/backup.sh\nelse\n  bash deploy\/backup.sh\nfi/);
+});
+
 for (const user of ['root', 'normal']) test(`只用 Docker CI：${user} 在验收前删除 npm 路径构建的镜像`, () => {
   const source = fs.readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
   const job = source.split('\n  scaffold-e2e:')[1].split(/\n  [\w-]+:/)[0];

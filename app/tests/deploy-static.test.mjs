@@ -8,6 +8,16 @@ const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'ut
 const compose = read('compose.yaml');
 const service = name => compose.match(new RegExp(`^  ${name}:(?: &node)?\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:|^volumes:|$(?![\\s\\S]))`, 'm'))?.[1];
 
+for (const script of ['backup', 'restore']) test(`static: ${script} 在获取下载锁前检查非 root 用户的备份目录写权限`, () => {
+  const source = read(`deploy/${script}.sh`);
+  const guard = source.match(/if \[ "\$\(id -u\)" != 0 \] && \[ ! -w backups \]; then\n([\s\S]*?)\nfi/);
+  assert.ok(guard, '非 root 且 backups 不可写时必须提前退出');
+  assert.ok(guard.index + guard[0].length < source.indexOf('exec 9>backups/.download.lock'), '权限检查必须在获取锁之前');
+  assert.ok(guard[1].includes(`需要 root 权限（定时任务也以 root 运行）：请运行 sudo bash deploy/${script}.sh`));
+  assert.match(guard[1], />&2/);
+  assert.match(guard[1], /\bexit 1\b/);
+});
+
 test('static: Compose 无必填插值，长期业务服务经 prepare 门禁、节点经 migrate 门禁', () => {
   assert.doesNotMatch(compose, /:\?/);
   for (const name of ['postgres', 'redis', 'etcd', 'gateway', 'etcd-init', 'migrate']) {
