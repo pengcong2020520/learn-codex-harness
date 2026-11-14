@@ -53,3 +53,5 @@ dialog { width:min(92vw,600px); max-height:85dvh; overflow:auto; padding:24px; b
   #artifacts { position:fixed; inset:0 0 0 auto; width:min(92vw,600px); z-index:6; box-shadow:-12px 0 30px #0003; }
 }
 @media(max-width:720px) { .shell.artifacts-open { grid-template-columns:1fr; } }
+
+#attachments{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}.attachment{max-width:100%;overflow-wrap:anywhere;font-size:12px}

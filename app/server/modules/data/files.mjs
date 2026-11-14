@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { uploadInfo } from "../../../shared/uploads.mjs";
+import { AppError } from "../../../shared/errors.mjs";
 import { Parser } from "htmlparser2";
 
 
@@ -9,9 +11,22 @@ export const MAX_MEDIA_BYTES = 128 * 1024 * 1024;
 export function mediaFormat(content) {
   if (content.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return 'png';
   if (content[0] === 255 && content[1] === 216 && content[2] === 255) return 'jpeg';
-  if (content.toString('ascii', 0, 4) === 'RIFF' && content.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (content.subarray(0, 4).equals(Buffer.from('RIFF')) && content.subarray(8, 12).equals(Buffer.from('WEBP'))) return 'webp';
   if (content.toString('ascii', 4, 8) === 'ftyp') return 'mp4';
   throw new Error('媒体正文不是支持的 png / jpeg / webp / mp4 格式。');
+}
+
+export function validateUpload(relative, content) {
+  let info;
+  try { info = uploadInfo(relative); } catch (error) { throw new AppError(error.message, 400); }
+  if (!Buffer.isBuffer(content)) throw new AppError('上传正文必须是原始字节。', 400);
+  if (content.length > info.limit) throw new AppError(info.image ? '图片不能超过 5 MiB。' : '文本不能超过 256 KiB。', 413);
+  try {
+    if (info.image) {
+      if (`image/${mediaFormat(content)}` !== info.contentType) throw new Error();
+    } else new TextDecoder('utf-8', { fatal: true }).decode(content);
+  } catch { throw new AppError(info.image ? '文件头与图片扩展名不符。' : '文本必须是合法 UTF-8。', 400); }
+  return info;
 }
 
 // HTML 解析器允许容错；只要求可解析且实际包含 html 或 body 元素。
@@ -103,11 +118,11 @@ export function createFileTools(
 
   function resolve(
     relative = "",
-    { createParents = false, file = false, binary = false, preview = false } = {},
+    { createParents = false, file = false, binary = false, preview = false, upload = false } = {},
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+    if (file && (parts.length < 2 || !(upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
       throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
@@ -129,8 +144,54 @@ export function createFileTools(
     return current;
   }
 
+  function persist(file, content) {
+    try {
+      fs.writeFileSync(file, content, {
+        flag: "wx",
+        mode: uid === undefined ? 0o600 : 0o660,
+        flush: true,
+      });
+    } catch (error) {
+      if (error.code === "EEXIST")
+        throw new AppError("文件已存在，未覆盖，请换名后上传或写入。", 409);
+      throw error;
+    }
+    if (uid !== undefined && process.getuid?.() === 0) fs.chownSync(file, uid, 1000);
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
+      throw new Error("产物检查失败。");
+  }
+
   return {
     workspace: base,
+    write_upload({ path: relative, content }) {
+      assertCurrent();
+      validateUpload(relative, content);
+      // 上传只向用户可读的 inputs 添加原始资料，不开放模型对只读资料的写权限。
+      if (!readable(relative)) throw new AppError('未授权上传到这个资料范围。', 403);
+      const file = resolve(relative, { file: true, upload: true, createParents: true });
+      persist(file, content);
+      return { path: relative, size: content.length, sha256: createHash('sha256').update(content).digest('hex') };
+    },
+    read_upload({ path: relative }) {
+      assertCurrent();
+      let info;
+      try { info = uploadInfo(relative); } catch (error) { throw new AppError(error.message, 400); }
+      if (!readable(relative)) throw new AppError('未授权读取这个资料范围。', 403);
+      const file = resolve(relative, { file: true, upload: true });
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+      try {
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile() || stat.nlink !== 1 || (uid !== undefined && stat.uid !== uid)) throw new AppError('附件必须是当前用户的独立普通文件。', 400);
+        if (stat.size > info.limit) throw new AppError('附件超过大小上限。', 400);
+        const buffer = Buffer.alloc(info.limit + 1);
+        let length = 0, count;
+        while (length < buffer.length && (count = fs.readSync(fd, buffer, length, buffer.length - length, null))) length += count;
+        const content = buffer.subarray(0, length);
+        validateUpload(relative, content);
+        return { path: relative, content, ...info };
+      } finally { fs.closeSync(fd); }
+    },
     check(relative, action, { binary = false } = {}) {
       assertCurrent();
       if (!(action === "create" ? writable(relative) : readable(relative)))
@@ -276,23 +337,7 @@ export function createFileTools(
       if (!binary && path.extname(relative).toLowerCase() === ".html" && outputs?.requiredChecks?.includes("format") && !validHtml(content))
         throw new Error("HTML 格式检查未通过：需要可解析且包含 html 或 body 元素。");
       const file = resolve(relative, { file: true, createParents: true, binary });
-      try {
-        fs.writeFileSync(file, content, {
-          flag: "wx",
-          mode: uid === undefined ? 0o600 : 0o660,
-          flush: true,
-        });
-      } catch (error) {
-        if (error.code === "EEXIST")
-          throw new Error(
-            "文件已存在，未覆盖。请使用新版本文件名，例如 result-v2.md。",
-          );
-        throw error;
-      }
-      if (uid !== undefined && process.getuid?.() === 0) fs.chownSync(file, uid, 1000);
-      const info = fs.lstatSync(file);
-      if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
-        throw new Error("产物检查失败。");
+      persist(file, content);
       return {
         path: relative,
         bytes: Buffer.byteLength(content, "utf8"),

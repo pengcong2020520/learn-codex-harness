@@ -34,7 +34,7 @@
       <div id="warnings" class="banner warning" role="status" hidden></div>
       <div id="queue" class="banner warning" hidden><span id="queue-reason"></span><button id="continue-queue" class="secondary">继续</button></div>
       <div id="messages" role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions text"><p class="empty">从一个问题开始。</p></div>
-      <form id="composer"><label class="sr-only" for="message">消息内容</label><textarea id="message" rows="3" placeholder="输入消息…" required disabled></textarea><div class="composer-bottom"><span class="muted">Enter 发送 · Shift+Enter 换行</span><button id="send" type="submit" disabled>发送</button></div></form>
+      <form id="composer"><div id="attachments" aria-label="待发送附件"></div><label class="sr-only" for="message">消息内容</label><textarea id="message" rows="3" placeholder="输入消息…" required disabled></textarea><div class="composer-bottom"><span class="muted">Enter 发送 · Shift+Enter 换行</span><input id="upload-file" class="sr-only" type="file" accept=".md,.txt,.png,.jpeg,.jpg,.webp" aria-label="选择上传文件"><button id="upload" type="button" class="secondary">上传</button><button id="send" type="submit" disabled>发送</button></div></form>
     </section>
     <aside id="artifacts" aria-label="产物">
       <div class="sidebar-heading"><h2>产物</h2><button id="close-artifacts" class="secondary">收起</button></div>

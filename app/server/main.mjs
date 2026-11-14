@@ -92,8 +92,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     if (config.sharding) attachKnowledge({ accounts, knowledge, resources, permissionHub, gate }, config.sharding);
     if (knowledge) agent.knowledgeModes = knowledge.modes;
     const files = resources ? { get workspace() { return localFiles.workspace; },
-      ...Object.fromEntries(['list_files','read_file','write_file','read_preview'].map(name => [name, async args => {
-        const action = name === 'list_files' ? 'list' : ['read_file', 'read_preview'].includes(name) ? 'read' : 'create';
+      ...Object.fromEntries(['list_files','read_file','write_file','read_preview','write_upload','read_upload'].map(name => [name, async args => {
+        const action = name === 'write_upload' ? 'upload' : name === 'list_files' ? 'list' : ['read_file', 'read_preview', 'read_upload'].includes(name) ? 'read' : 'create';
         gate?.check(action, { path: args.path || '' });
         if (knowledge?.wikiPath(args.path || '')) throw new Error('Wiki 生效内容请使用 kb_read / kb_submit_revision；普通文件写入不产生生效知识。');
         const result = await resources[name](args);
@@ -143,7 +143,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
       const owner = identity(config.root).ownerId;
       return await runOwner(owner, () => runtimes.pool.withOwner(owner, value => ({ config, agent: value.agent, runtime: value.runtime, rpc, sessions, tools, memory, data, resources, gate, knowledge, usage, runtimes, close: () => lifecycle.close() })));
     }
-    messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs, queue: data.queue, gate, usage, permissionHub });
+    messages = new MessageService({ rpc, sessions, hub, config, store: data.jobs, queue: data.queue, gate, usage, permissionHub, files });
     runtimes.attach({ sessions, messages });
     // 单 owner 的 isBusy 查询失败由池记录并跳过；LISTEN 连接断开仍需全局停止。
     lifecycle.defer(await runtimes.open(error => { safeLog(error.message); void messages.fail(error); }));

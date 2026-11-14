@@ -1,3 +1,4 @@
+import { uploadInfo } from "../../../shared/uploads.mjs";
 import { createPreview, verifyPreview, previewPath, previewHash, previewHeaders, previewMissing, previewRateChecked } from './previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
@@ -107,6 +108,21 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
         let output;
         try { output = await files.read_preview({ path: previewPath(body.path) }); } catch { throw previewMissing(); }
         return json(200, createPreview(config.previewSecret, identity.userId, body.path, output.content));
+      }
+      if (route === 'PUT /workspace/files' && files) {
+        const locator = url.searchParams.get('path');
+        let info;
+        try { info = uploadInfo(locator); } catch (error) { throw new AppError(error.message, 400); }
+        if (request.headers['content-type']?.split(';')[0].trim().toLowerCase() !== info.contentType)
+          throw new AppError(`Content-Type 必须为 ${info.contentType}，与扩展名一致。`, 415);
+        gate?.check('upload', { path: locator });
+        const chunks = []; let size = 0;
+        for await (const chunk of request) {
+          size += chunk.length;
+          if (size > info.limit) throw new AppError(info.image ? '图片不能超过 5 MiB。' : '文本不能超过 256 KiB。', 413);
+          chunks.push(chunk);
+        }
+        return json(201, await files.write_upload({ path: locator, content: Buffer.concat(chunks) }));
       }
       if (route === 'GET /workspace' && files) return json(200, await files.list_files({ path: url.searchParams.get('path') || '' }));
       if (route === 'GET /workspace/read' && files) return json(200, await files.read_file({ path: url.searchParams.get('path'), max_chars: 262144 }));

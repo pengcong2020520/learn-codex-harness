@@ -1,3 +1,4 @@
+import { uploadInfo } from "../../../shared/uploads.mjs";
 import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
 import { can } from '../hub/policy.mjs';
 import { runIdentity, currentIdentity } from '../accounts/context.mjs';
@@ -90,14 +91,18 @@ export class PermissionGate {
   }
   check(action, target = {}) {
     const context = this.current();
-    if (!['read','create','list','update','index','tool.call'].includes(action)) denied();
+    if (!['read','create','list','update','index','tool.call','upload'].includes(action)) denied();
+    if (action === 'upload') {
+      if (context.kind !== 'user') denied();
+      try { uploadInfo(target.path); } catch { denied(); }
+    }
     if (target.ownerId && (!target.kbId || !this.permissionHub)) can({ id: context.ownerId }, 'read', { type: 'personal', owner_id: target.ownerId });
     if (context.kind === 'media' && !((action === 'create' && target.path === context.path) || (action === 'tool.call' && target.name === 'generate_video'))) denied();
     if (action === 'tool.call') { if (context.kind === 'media') { if (!this.agent.allowsTool(target.name)) denied(); return; } if (this.permissionHub) this.permissionHub.checkTool(target.name, this.agent); else if (!this.agent.allowsTool(target.name)) denied(); return; }
     if (target.kbId) return this.mount(target.kbId, action);
     if (typeof target.path === 'string') {
       const locator = target.path;
-      if (locator.includes('..') || locator.includes('\\') || locator.startsWith('/')) denied();
+      if (locator.split('/').includes('..') || locator.includes('\\') || locator.startsWith('/')) denied();
       for (const [kbId, binding] of Object.entries(this.bindings())) {
         if (covers(binding.wikiRoot, locator)) denied();
         if (covers(binding.sourceRoot, locator)) { if (!['read','list'].includes(action)) denied(); this.mount(kbId, 'read');
@@ -106,7 +111,7 @@ export class PermissionGate {
         }
       }
       if (action === 'create' && context.kind === 'task' && context.writes && !context.writes.some(root => covers(root, locator))) denied();
-      const permission = action === 'list' ? 'read' : action;
+      const permission = ['list', 'upload'].includes(action) ? 'read' : action;
       const found = this.agent.sources.some(s => s.actions.includes(permission) &&
         (covers(s.locator, locator) || (action === 'list' && (!locator || covers(locator, s.locator)))));
       if (!found && !(action === 'create' && covers(this.agent.outputs.directory, locator))) denied();

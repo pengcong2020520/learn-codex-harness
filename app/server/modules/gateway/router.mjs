@@ -15,7 +15,7 @@ export function createModelRouter(registry, environment = {}, { webSearch = fals
     if (!spec?.purposes.includes(purpose)) return `不能做${LABELS[purpose]}`;
     const provider = registry.providers[splitModelId(id).provider];
     if (!enabled.has(splitModelId(id).provider)) return `服务商未启用（.env 里缺 ${[provider.keyEnv, provider.baseUrlEnv].filter(Boolean).join("、")}）`;
-    if (needs.image && !(spec.inputModalities || ["text"]).includes("image")) return "不能看图";
+    if (needs.image && !(spec.inputs || ["text"]).includes("image")) return "不能看图";
     if (needs.contextTokens && (spec.contextWindow || 0) < needs.contextTokens) return `上下文只有 ${spec.contextWindow || 0}`;
     const missing = (needs.nativeTools || []).filter(tool => !spec.nativeTools?.includes(tool));
     if (missing.length) return `不支持原生能力 ${missing.map(tool => tool === "web_search" ? "联网搜索（web_search）" : tool).join("、")}`;
@@ -64,7 +64,7 @@ export function createModelRouter(registry, environment = {}, { webSearch = fals
       const models = Object.fromEntries(PURPOSES.map(purpose => [purpose, Object.entries(registry.models)
         .filter(([id, spec]) => enabled.has(splitModelId(id).provider) && spec.purposes.includes(purpose))
         .map(([id, spec]) => ({ id, contextWindow: spec.contextWindow || null,
-          image: (spec.inputModalities || []).includes("image"), nativeTools: spec.nativeTools || [],
+          image: (spec.inputs || ["text"]).includes("image"), nativeTools: spec.nativeTools || [],
           reasoningLevels: spec.reasoningLevels || [], priced: Boolean(spec.pricing) }))]));
       const defaults = Object.fromEntries(PURPOSES.map(purpose => {
         try { return [purpose, resolve({ purpose }).id]; }

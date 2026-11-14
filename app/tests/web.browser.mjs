@@ -162,3 +162,42 @@ test('网页产物：脚本可点击运行、不透明来源与 CSP 拦截、图
   assert.deepEqual(page.errors.filter(error => !expectedText.has(error)), []);
   assert.deepEqual(page.networkErrors.filter(error => !expectedText.has(error)), []);
 });
+
+import { TEST_IMAGE } from '../scripts/gateway-check.mjs';
+
+test('网页上传：原始图片上传、标签移除与发送、Codex 收到图片项、inputs 产物预览', { timeout: 90000 }, async t => {
+  assert.ok(chrome, '需要 Chrome；可用 CHROME_PATH 指定路径。');
+  const fixture = await webFixture(t, { vision: true }), page = await browser(t), received = [];
+  fixture.app.rpc.on('notification', message => {
+    if (message.method === 'item/started' && message.params.item?.type === 'userMessage') received.push(message.params.item.content);
+  });
+  await page.beforeLoad(`window.FileReader = class { constructor() { throw new Error('页面不应通过 FileReader 读取图片'); } };`);
+  await page.open(fixture.url + '/ui/');
+  await page.run(`document.querySelector('#username').value='alice';document.querySelector('#password').value='fixture-password';document.querySelector('#login-form').requestSubmit();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#chat-view').hidden, 10000);`), true);
+  await page.run(`document.querySelector('#new-session').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#message').disabled, 10000);`), true);
+  const upload = name => page.run(`
+    const bytes = Uint8Array.from(atob(${JSON.stringify(TEST_IMAGE.split(',')[1])}), char => char.charCodeAt(0));
+    const transfer = new DataTransfer(); transfer.items.add(new File([bytes], ${JSON.stringify(name)}, { type: 'image/png' }));
+    const input = document.querySelector('#upload-file'); input.files = transfer.files; input.dispatchEvent(new Event('change'));
+  `);
+  await upload('移除.png');
+  assert.equal(await page.run(`${helpers} return await until(() => $('#attachments').textContent.includes('移除.png') && !$('#upload').disabled);`), true);
+  await page.run(`document.querySelector('#attachments button').click();`);
+  assert.equal(await page.run(`return document.querySelector('#attachments').children.length`), 0);
+  await upload('参考图.png');
+  assert.equal(await page.run(`${helpers} return await until(() => $('#attachments').textContent.includes('参考图.png'));`), true);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#upload').disabled);`), true);
+  await page.run(`document.querySelector('#message').value='按参考图设计';document.querySelector('#composer').requestSubmit();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.assistant').some(row => row.dataset.status === 'completed'), 10000);`), true);
+  assert.equal(await page.run(`return document.querySelector('#attachments').children.length`), 0);
+  assert.deepEqual(received.flat().filter(item => item.type === 'image'), [{ type: 'image', url: TEST_IMAGE }]);
+  const uploads = fixture.requests.filter(request => request.path.startsWith('/workspace/files'));
+  assert.equal(uploads.length, 2); assert.ok(uploads.every(request => request.method === 'PUT' && request.origin === fixture.url));
+  await page.run(`document.querySelector('#toggle-artifacts').click();document.querySelector('#refresh-artifacts').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $('[data-path="inputs/uploads/参考图.png"]'));`), true);
+  await page.run(`document.querySelector('[data-path="inputs/uploads/参考图.png"]').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $('#artifact-preview img')?.naturalWidth === 8);`), true);
+  assert.deepEqual(page.errors, []); assert.deepEqual(page.networkErrors, []);
+});

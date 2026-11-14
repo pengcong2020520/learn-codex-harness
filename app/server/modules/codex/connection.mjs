@@ -71,7 +71,10 @@ export class CodexConnection extends EventEmitter {
   }
 
   record(direction, message) {
-    const text = this.redact({ direction, message }) + "\n";
+    // 图片原始字节只走 RPC，不复制进协议日志，避免四张图片撑爆日志积压上限。
+    const logged = JSON.parse(JSON.stringify(message, (key, value) =>
+      key === 'url' && typeof value === 'string' && value.startsWith('data:image/') ? '[图片字节已省略]' : value));
+    const text = this.redact({ direction, message: logged }) + "\n";
     if (!this.runtime.isolated) { appendFileSync(path.join(this.runtime.runDir, "protocol.jsonl"), text, { mode: 0o600 }); return; }
     this.recordBuffer = (this.recordBuffer || '') + text;
     if (Buffer.byteLength(this.recordBuffer) > 16 * 1024 * 1024) throw new Error('运行日志写入积压超过上限。');

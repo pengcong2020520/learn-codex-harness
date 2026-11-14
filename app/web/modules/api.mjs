@@ -11,11 +11,11 @@ export function apiError(status, body = {}, retryAfter, now = Date.now()) {
   return Object.assign(new Error(prefix + message + (wait !== null && [429, 503].includes(status) ? ` 请等待 ${wait} 秒。` : '')), { status, retryAfter: wait });
 }
 export function createApi({ getToken, onUnauthorized, fetcher = fetch }) {
-  async function response(route, { body, signal, stream = false } = {}) {
+  async function response(route, { body, signal, stream = false, raw = false, contentType } = {}) {
     const result = await fetcher(route, {
-      method: body === undefined ? 'GET' : 'POST', credentials: 'omit', redirect: 'error',
-      headers: { Authorization: `Bearer ${getToken() || ''}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: signal || AbortSignal.timeout(30000)
+      method: raw ? 'PUT' : body === undefined ? 'GET' : 'POST', credentials: 'omit', redirect: 'error',
+      headers: { Authorization: `Bearer ${getToken() || ''}`, ...(body === undefined ? {} : { 'Content-Type': raw ? contentType : 'application/json' }) },
+      ...(body === undefined ? {} : { body: raw ? body : JSON.stringify(body) }), signal: signal || AbortSignal.timeout(30000)
     });
     if (!result.ok) {
       if (result.status === 401) onUnauthorized();
@@ -25,6 +25,7 @@ export function createApi({ getToken, onUnauthorized, fetcher = fetch }) {
     return stream ? result : result.json();
   }
   return {
+    upload: (path, file, contentType) => response(`/workspace/files?path=${encodeURIComponent(path)}`, { body: file, raw: true, contentType }),
     request: (route, body, signal) => response(route, { body, signal }),
     subscribe(threadId, onEvent, onStatus) {
       const controller = new AbortController(); let attempt;

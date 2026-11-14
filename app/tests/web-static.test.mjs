@@ -50,3 +50,7 @@ test('网页 HTML：含密码输入框的表单必须使用 POST', () => {
 test('网页会话事件实现与 CLI 协议保持一致（静态托管只暴露 web）', () => {
   assert.equal(read('web/modules/session-events.mjs'), read('shared/session-events.mjs'));
 });
+
+test('网页上传约束与服务端共享定义保持一致', () => {
+  assert.equal(read('web/modules/uploads.mjs'), read('shared/uploads.mjs'));
+});
