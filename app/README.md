@@ -30,6 +30,8 @@ docker compose up -d
 
 按提示填写模型、API Key、可选域名与管理员账号。启动就绪后打开 <http://127.0.0.1:4317/> 登录。首次要构建 1 个镜像，并下载 PostgreSQL、Redis、网关、etcd、Caddy、Node 基础镜像，合计约 600 MB，只有第一次需要。
 
+更新代码（`git pull`）之后用 `docker compose up -d --build`，否则会继续使用旧镜像。
+
 向导将用户名与 scrypt 密码哈希编码后写入 `AGENT_ADMIN_BOOTSTRAP`，不保存明文密码；`.env` 权限为 `0600`。该变量只在数据库没有任何账号时生效，已有账号（包括禁用账号）不会被覆盖。保管好 `.env`，不要分享或提交它。
 
 #### 国内网络说明

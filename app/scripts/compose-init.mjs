@@ -64,6 +64,8 @@ export function copyNodeIdentities(root, nodes) {
 export function prepare(root = '/prepare', inherited = process.env) {
   const env = inherited;
   const nodes = validatePrepareEnvironment(env);
+  // 镜像的 WORKDIR 必须与当前挂载目标一致，避免后续 migrate 找不到配置。
+  if (process.cwd() !== env.CONTAINER_APP_DIR) throw new Error('应用镜像是在另一个目录构建的，或代码更新后还没重建镜像：请运行 docker compose up -d --build');
   prepareDirectories(root, nodes);
   // 一次性容器可写宿主目录，配置文件不得借链接指向其他数据。
   for (const name of ['config.json', 'model-parameters.json', 'enabled-providers.json']) {

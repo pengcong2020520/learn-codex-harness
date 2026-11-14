@@ -115,6 +115,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           path: docker-only
+      # 删除 npm 路径的镜像，覆盖全新机器首次 up 自动构建的路径。
+      - name: 清除应用镜像（root）
+        if: matrix.user == 'root'
+        run: sudo env "PATH=$PATH" docker image rm -f codex-agent:current
+      - name: 清除应用镜像（普通用户）
+        if: matrix.user == 'normal'
+        run: docker image rm -f codex-agent:current
       - name: 只用 Docker（root）
         if: matrix.user == 'root'
         working-directory: docker-only/app

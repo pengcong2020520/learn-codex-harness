@@ -9,7 +9,11 @@ export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-codex-agent-e2e-docker-only}
 case "$COMPOSE_PROJECT_NAME" in codex-agent-e2e-*) ;; *) echo '验收项目名必须以 codex-agent-e2e- 开头。' >&2; exit 1 ;; esac
 cleanup() {
   status=$?
-  if [ "$status" -ne 0 ]; then echo '只用 Docker 的验收失败，请核对上方步骤；不输出原始容器日志。' >&2; fi
+  if [ "$status" -ne 0 ]; then
+    echo '只用 Docker 的验收失败，请核对上方步骤与以下初始化服务日志。' >&2
+    # 初始化服务只打印本项目脚本的无密钥提示；长期服务可能包含敏感内容，不输出其日志。
+    docker compose logs --no-color --tail 60 prepare etcd-init migrate || true
+  fi
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f .env
   exit "$status"

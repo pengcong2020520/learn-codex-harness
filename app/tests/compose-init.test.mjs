@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { validatePrepareEnvironment, prepareDirectories, copyNodeIdentities, prepare } from '../scripts/compose-init.mjs';
 
 function fixture(t) {
@@ -86,7 +88,19 @@ test('migrate：身份复制幂等、权限 0600，不一致和符号链接均�
   assert.throws(() => copyNodeIdentities(root, nodes), /身份文件不能是链接/);
 });
 
-test('prepare：先校验再落盘，只用传入环境生成无密钥配置且可重复执行', t => {
+test('prepare：镜像目录不一致时提示重建，非零退出且不落盘', t => {
+  const root = fixture(t), env = { ...environment(), CONTAINER_APP_DIR: path.join(root, 'another-app') };
+  const message = '应用镜像是在另一个目录构建的，或代码更新后还没重建镜像：请运行 docker compose up -d --build';
+  assert.throws(() => prepare(root, env), { message });
+  assert.deepEqual(fs.readdirSync(root), []);
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/compose-init.mjs', import.meta.url)), 'prepare'], { cwd: root, env, encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr.trim(), message);
+  assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test('prepare：镜像目录一致时放行，先校验再落盘，只用传入环境生成无密钥配置且可重复执行', t => {
   const root = fixture(t);
   assert.throws(() => prepare(root, {}), /缺少必填变量/);
   assert.deepEqual(fs.readdirSync(root), []);
@@ -94,7 +108,7 @@ test('prepare：先校验再落盘，只用传入环境生成无密钥配置且�
   // 故意放置不可解析为配置的目录，若读取宿主 .env 就会报错。
   fs.mkdirSync(path.join(root, '.env'));
   t.mock.method(fs, 'chownSync', () => {});
-  const env = { ...environment(), AGENT_GATEWAY_KEY: 'sk-bf-test-only-gateway', DEEPSEEK_API_KEY: 'test-only-provider', CODEX_MODEL: 'deepseek/deepseek-flash' }; // privacy-check: allow（测试夹具，非真实密钥）
+  const env = { ...environment(), CONTAINER_APP_DIR: process.cwd(), AGENT_GATEWAY_KEY: 'sk-bf-test-only-gateway', DEEPSEEK_API_KEY: 'test-only-provider', CODEX_MODEL: 'deepseek/deepseek-flash' }; // privacy-check: allow（测试夹具，非真实密钥）
   prepare(root, env);
   const config = path.join(root, '.data/gateway/config.json'), before = fs.readFileSync(config, 'utf8');
   assert.equal(before.includes(env.AGENT_GATEWAY_KEY), false);

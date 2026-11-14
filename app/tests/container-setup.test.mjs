@@ -7,6 +7,34 @@ import { setup, containerDirectory } from '../scripts/setup.mjs';
 import { decodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { verifyPassword } from '../server/modules/accounts/password.mjs';
 
+for (const user of ['root', 'normal']) test(`只用 Docker CI：${user} 在验收前删除 npm 路径构建的镜像`, () => {
+  const source = fs.readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const job = source.split('\n  scaffold-e2e:')[1].split(/\n  [\w-]+:/)[0];
+  const steps = job.split(/\n      - /).filter(step => step.includes(`if: matrix.user == '${user}'`));
+  const npmIndex = steps.findIndex(step => step.includes('bash scripts/e2e-compose.sh'));
+  const removeIndex = steps.findIndex(step => step.includes('docker image rm -f codex-agent:current'));
+  const dockerIndex = steps.findIndex(step => step.includes('bash scripts/e2e-docker-only.sh'));
+  assert.ok(npmIndex >= 0 && removeIndex > npmIndex && dockerIndex > removeIndex, '必须先完成 npm 路径，再删除镜像，最后验收只用 Docker 路径');
+  assert.match(steps[removeIndex], user === 'root'
+    ? /run: sudo env "PATH=\$PATH" docker image rm -f codex-agent:current\s*$/
+    : /run: docker image rm -f codex-agent:current\s*$/);
+});
+
+test('只用 Docker 验收失败时仅输出三个初始化服务日志，再清理并保留退出码', () => {
+  const source = fs.readFileSync(new URL('../scripts/e2e-docker-only.sh', import.meta.url), 'utf8');
+  const cleanup = source.match(/cleanup\(\) \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(cleanup);
+  const failure = cleanup.match(/if \[ "\$status" -ne 0 \]; then([\s\S]*?)\bfi\b/)?.[1];
+  assert.ok(failure);
+  const logs = 'docker compose logs --no-color --tail 60 prepare etcd-init migrate';
+  assert.match(failure, /docker compose logs --no-color --tail 60 prepare etcd-init migrate \|\| true\s*$/);
+  assert.equal((source.match(/docker compose logs/g) || []).length, 1);
+  assert.ok(cleanup.indexOf(logs) < cleanup.indexOf('docker compose down -v --remove-orphans'));
+  assert.match(cleanup, /status=\$\?/);
+  assert.match(cleanup, /exit "\$status"/);
+  assert.match(source, /trap cleanup EXIT/);
+});
+
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'container-setup-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
