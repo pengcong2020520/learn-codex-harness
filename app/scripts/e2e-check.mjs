@@ -53,7 +53,7 @@ await expectStatus(await fetch(`${url}/state?threadId=${encodeURIComponent(sessi
 
 // 只在独立 Compose 验收项目内写入，不增加线上测试接口。
 // 容器默认身份是 root:1000，且没有 DAC_OVERRIDE。用户进程的 gid 不是 1000，写不了这个目录。
-// 目录 0o2770、文件 flag wx / 0o660 与 files.mjs 相同；属主按服务身份设为 0:1000。chmod 用来抵消 umask。
+// 目录 0o2770、文件 flag wx / 0o660 与 files.mjs 相同；属主取 workspace/users/<id> 的 uid、组 1000。chmod 用来抵消 umask。
 const { user } = await (await expectStatus(await fetch(`${url}/auth/me`, { headers }), 200, '读取当前用户')).json();
 assert.match(user.id, /^[a-f0-9-]{36}$/);
 const seed = spawnSync('docker', ['compose', 'exec', '-T', 'node-a', 'node', '--input-type=module'], {
@@ -69,14 +69,15 @@ const seed = spawnSync('docker', ['compose', 'exec', '-T', 'node-a', 'node', '--
       throw error;
     }
     if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('用户工作区必须是真实目录：workspace/users/' + userId);
+    const uid = fs.statSync(userDir).uid;
     const outputs = path.resolve(process.cwd(), 'workspace/users', userId, 'outputs');
     fs.mkdirSync(outputs, { recursive: true, mode: 0o2770 });
     const directory = fs.lstatSync(outputs);
     if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error('产物目录必须是真实目录：workspace/users/' + userId + '/outputs');
     const file = path.join(outputs, 'e2e-preview.html');
     fs.writeFileSync(file, '<html><body>安全预览验收</body></html>', { flag: 'wx', mode: 0o660 });
-    fs.chownSync(outputs, 0, 1000);
-    fs.chownSync(file, 0, 1000);
+    fs.chownSync(outputs, uid, 1000);
+    fs.chownSync(file, uid, 1000);
     fs.chmodSync(outputs, 0o2770);
     fs.chmodSync(file, 0o660);
   `,
@@ -99,4 +100,4 @@ assert.equal((await fetch(`${url}/state?threadId=${encodeURIComponent(session.id
   headers: { authorization: 'Bearer invalid-token-for-e2e-check-000000' },
 })).status, 401, '无效令牌应被拒绝');
 
-console.log('端到端检查通过：就绪、登录、单节点拓扑（3 个分片都在 node-a、复制关闭）、会话创建、真实 uid 产物写入、Caddy 签名预览及安全头、拒绝未认证请求。');
+console.log('端到端检查通过：就绪、登录、单节点拓扑（3 个分片都在 node-a、复制关闭）、会话创建、按服务端规则写入产物、Caddy 签名预览及安全头、拒绝未认证请求。');
