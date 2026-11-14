@@ -184,7 +184,7 @@ test('路由策略：GET /models 按用途返回能力、定价、场景、默�
 test('路由策略：备用链缺搜索、缺看图分别提醒，相同能力、未启用和非对话不提醒', () => {
   const warnings = fallbackWarnings(registry, environment);
   assert.ok(warnings.some(line => line.includes(`${kimi} 的备用 ${fast} 不支持联网搜索`)));
-  const loss = structuredClone(registry); loss.models[fast].inputModalities = ['text'];
+  const loss = structuredClone(registry); loss.models[kimi].inputs = ['text', 'image']; delete loss.models[fast].inputs;
   assert.ok(fallbackWarnings(loss, environment).some(line => line.includes(`${kimi} 的备用 ${fast} 不能看图`)));
   assert.deepEqual(fallbackWarnings(registry, { KIMI_API_KEY: 'test' }), []);
   const models = structuredClone(registry);
@@ -192,6 +192,32 @@ test('路由策略：备用链缺搜索、缺看图分别提醒，相同能力�
   models.models[kimi].fallbacks = ['kimi/kimi-k2.6'];
   assert.deepEqual(fallbackWarnings(models, environment), []);
   assert.deepEqual(launch().warnings, warnings);
+});
+
+test('路由策略：看图备用告警只比较 inputs，逐条提醒且不改备用链', () => {
+  const models = structuredClone(registry);
+  for (const spec of Object.values(models.models)) delete spec.fallbacks;
+  models.models[kimi].fallbacks = [fast, strong];
+  models.models[kimi].inputs = ['text', 'image'];
+  models.models[kimi].inputModalities = ['text'];
+  for (const id of [fast, strong]) {
+    models.models[id].inputModalities = ['text', 'image'];
+    delete models.models[id].inputs;
+  }
+  models.models[strong].inputs = ['text'];
+  const before = structuredClone(models);
+  const imageWarnings = env => fallbackWarnings(models, env).filter(line => line.includes('不能看图'));
+  assert.deepEqual(imageWarnings(environment), [fast, strong].map(id => `${kimi} 的备用 ${id} 不能看图，主模型出错切换过去时，带图片的请求会失败`));
+  assert.deepEqual(models, before);
+  assert.deepEqual(imageWarnings({ KIMI_API_KEY: 'test' }), []);
+  for (const id of [fast, strong]) models.models[id].inputs = ['text', 'image'];
+  assert.deepEqual(imageWarnings(environment), []);
+  delete models.models[kimi].inputs;
+  models.models[kimi].inputModalities = ['text', 'image'];
+  for (const id of [fast, strong]) models.models[id].inputs = ['text'];
+  assert.deepEqual(imageWarnings(environment), []);
+  models.models[kimi].inputs = ['text', 'image']; models.models[kimi].purposes = ['image'];
+  assert.deepEqual(imageWarnings(environment), []);
 });
 
 test('路由策略：预算比例校验、日月 token/金额触发、无上限不触发和周期恢复', async t => {

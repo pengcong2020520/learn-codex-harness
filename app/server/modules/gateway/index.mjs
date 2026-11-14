@@ -233,8 +233,8 @@ export function fallbackWarnings(registry, environment) {
         const label = tool === "web_search" ? "联网搜索" : tool;
         warnings.push(`${id} 的备用 ${fallback} 不支持${label}：切到备用时那一轮没有${tool === "web_search" ? "搜索" : label}`);
       }
-      if (spec.inputModalities?.includes("image") && !target.inputModalities?.includes("image"))
-        warnings.push(`${id} 的备用 ${fallback} 不能看图：切到备用时那一轮无法处理图片`);
+      if (spec.inputs?.includes("image") && !target.inputs?.includes("image"))
+        warnings.push(`${id} 的备用 ${fallback} 不能看图，主模型出错切换过去时，带图片的请求会失败`);
     }
   }
   return warnings;

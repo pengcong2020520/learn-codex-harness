@@ -4,7 +4,6 @@ import { AppError } from '../../../shared/errors.mjs';
 
 export const HTML_CSP = "sandbox allow-scripts allow-forms allow-modals; default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'";
 export const IMAGE_CSP = "default-src 'none'; img-src 'self'; sandbox";
-export const previewRateChecked = Symbol('previewRateChecked');
 const types = { html: 'text/html; charset=utf-8', png: 'image/png', jpeg: 'image/jpeg', jpg: 'image/jpeg', webp: 'image/webp' };
 export const previewMissing = () => new AppError('资源不存在。', 404, 'NOT_FOUND');
 export const previewHash = content => createHash('sha256').update(content).digest('hex');

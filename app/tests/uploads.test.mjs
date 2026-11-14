@@ -11,6 +11,8 @@ import { uploadInfo } from '../shared/uploads.mjs';
 import { Response, httpFixture, OWNER_A, OWNER_B } from './accounts-fixture.mjs';
 import { tempRoot } from './helpers.mjs';
 import { TEST_IMAGE } from '../scripts/gateway-check.mjs';
+import { createShardedHandler } from '../server/modules/sharding/http.mjs';
+import { RequestLimits } from '../server/modules/deployment/index.mjs';
 import { bufferBody } from '../server/modules/sharding/routing.mjs';
 
 export const samples = {
@@ -33,7 +35,7 @@ function setup(t, deployment = {}) {
   } };
   const http = httpFixture(accounts, { gate, files, config: { launch: {}, deployment, allowedOrigins: ['https://example.com'] }, log() {} });
   t.after(() => http.close());
-  return { http, files, gate, agent };
+  return { http, files, gate, agent, accounts };
 }
 for (const [extension, bytes] of Object.entries(samples)) test(`上传 ${extension}：原始字节、摘要、只读输入区与生产文件权限`, async t => {
   const { http, files } = setup(t), locator = `inputs/uploads/参考_v1-文件.${extension}`;
@@ -110,4 +112,53 @@ test('分片转发：上传按类型限制原始字节，普通请求仍限制 5
   assert.equal((await bufferBody(Readable.from([bytes]), uploadInfo('inputs/uploads/x.png').limit)).length, bytes.length);
   await assert.rejects(bufferBody(Readable.from([Buffer.alloc(bytes.length + 1)]), bytes.length), { status: 413 });
   await assert.rejects(bufferBody(Readable.from([Buffer.alloc(512 * 1024 + 1)])), { status: 413 });
+});
+
+test('分片上传：本地派发共用真实限流器，额度为 1 时首次成功、第二次才超限', async t => {
+  const { http, files, accounts } = setup(t, { rateLimit: 1, now: () => 0 });
+  const locator = 'inputs/uploads/local.png';
+  let queries = 0, admissions = 0;
+  const app = { http, accounts, config: { allowedOrigins: ['https://example.com'] }, data: { pool: { async query(text, values) {
+    assert.equal(text, 'SELECT 1 FROM agent_data.user_shards WHERE user_id=$1');
+    assert.deepEqual(values, [OWNER_A]); queries++;
+    return { rows: [{ '?column?': 1 }] };
+  } } } };
+  const runtime = { nodeId: 'node-a',
+    cache: { routeOf(userId) { assert.equal(userId, OWNER_A); return { primary: 'node-a' }; } },
+    async admit(userId) { assert.equal(userId, OWNER_A); admissions++; },
+  };
+  const coordination = { members: new Map([['node-a', { nodeId: 'node-a', address: 'http://127.0.0.1' }]]) };
+  const handler = createShardedHandler(coordination, { app, isReady: () => true }, runtime, {});
+  assert.ok(http.limits instanceof RequestLimits);
+  const first = await put({ handle: handler }, locator, samples.png);
+  assert.equal(first.statusCode, 201, JSON.stringify(first.body));
+  runOwner(OWNER_A, () => assert.deepEqual(files.read_upload({ path: locator }).content, samples.png));
+  assert.deepEqual([...http.limits.windows.values()], [[0]], '同一个限流器只记录一次上传');
+  const second = await put({ handle: handler }, 'inputs/uploads/second.png', samples.png);
+  assert.equal(second.statusCode, 429); assert.equal(second.body.error.code, 'RATE_LIMITED');
+  assert.equal(queries, 1); assert.equal(admissions, 1);
+  assert.deepEqual([...http.limits.windows.values()], [[0]]);
+});
+
+test('分片上传：认证后按用户和真实来源先限流，超限不读正文、不查路由', async () => {
+  const limits = new RequestLimits({ rateLimit: 1, now: () => 0 }), events = [];
+  limits.request(OWNER_A, 'peer');
+  const app = {
+    accounts: { async authenticate(header) { events.push('认证'); assert.equal(header, 'Bearer alice'); return { userId: OWNER_A }; } },
+    http: { limits: { request(userId, source) {
+      events.push('限流'); assert.equal(userId, OWNER_A); assert.equal(source, 'peer'); limits.request(userId, source);
+    } } },
+    data: { pool: { query: async () => { assert.fail('超限时不应查询路由'); } } },
+  };
+  const handler = createShardedHandler({}, { app, isReady: () => true }, {}, {});
+  for (const locator of ['inputs/uploads/limit.png', '../invalid.png']) {
+    const req = Object.assign(new Readable({ read() { events.push('读取正文'); this.push(samples.png); this.push(null); } }), {
+      method: 'PUT', url: `/workspace/files?path=${encodeURIComponent(locator)}`,
+      headers: { authorization: 'Bearer alice', 'x-forwarded-for': 'untrusted' }, socket: { remoteAddress: 'peer' },
+    });
+    const response = new Response(); await handler(req, response);
+    assert.equal(response.statusCode, 429); assert.equal(response.body.error.code, 'RATE_LIMITED');
+    assert.deepEqual(events.splice(0), ['认证', '限流']); assert.equal(req.readableDidRead, false);
+    req.destroy();
+  }
 });

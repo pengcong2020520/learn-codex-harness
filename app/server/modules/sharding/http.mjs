@@ -1,5 +1,6 @@
 import { uploadInfo } from "../../../shared/uploads.mjs";
-import { verifyPreview, previewRateChecked } from '../http/previews.mjs';
+import { verifyPreview } from '../http/previews.mjs';
+import { rateChecked } from '../deployment/index.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import fs from 'node:fs';
@@ -236,7 +237,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       const preview = request.method === 'GET' && pathname.startsWith('/preview/');
       if (preview) {
         service.app.http.limits.request(null, request.socket?.remoteAddress || 'unknown');
-        request[previewRateChecked] = true;
+        request[rateChecked] = true;
       }
       const identity = preview
         ? { userId: verifyPreview(service.app.config.previewSecret, pathname.slice('/preview/'.length)).userId }
@@ -269,6 +270,8 @@ export function createShardedHandler(coordination, service, runtime, control) {
       if (pathname.startsWith('/auth/')) return service.app.http.handle(request, response);
       let bodyLimit;
       if (request.method === 'PUT' && pathname === '/workspace/files') {
+        service.app.http.limits.request(identity.userId, request.socket?.remoteAddress || 'unknown');
+        request[rateChecked] = true;
         try { bodyLimit = uploadInfo(new URL(request.url, 'http://localhost').searchParams.get('path')).limit; }
         catch (error) { throw new AppError(error.message, 400); }
       }
@@ -287,7 +290,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
       }
       const local = async () => {
         await runtime.admit(owner);
-        const incoming = body === undefined ? request : Object.assign(Readable.from([body]), { url: request.url, method: request.method, headers: request.headers, socket: request.socket });
+        const incoming = body === undefined ? request : Object.assign(Readable.from([body]), { url: request.url, method: request.method, headers: request.headers, socket: request.socket, [rateChecked]: request[rateChecked] });
         runtime.inflight ||= new Map(); runtime.inflight.set(owner, (runtime.inflight.get(owner) || 0) + 1);
         try { await withShardUser(owner, () => service.app.http.handle(incoming, response)); }
         finally { runtime.inflight.set(owner, runtime.inflight.get(owner) - 1); }
