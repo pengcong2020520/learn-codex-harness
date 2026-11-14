@@ -6,6 +6,7 @@ import { encodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { createPrompts } from '../shared/prompts.mjs';
 import { validateClusterSecrets, clusterNodes } from '../server/modules/config/cluster.mjs';
 import { generateDeployEnv } from './deploy-env.mjs';
+import { writeSetupSummary } from './setup-summary.mjs';
 import { PROJECT_ROOT, isMain, readEnv, writeEnv, childEnvironment, commandRedactor, runProcess, composeUp, entryUrl, checkPort, waitReady, validateUsername, validatePassword, checkRuntimeEnvironment, checkDocker } from './quickstart-lib.mjs';
 
 export function parseSetup(argv) {
@@ -103,7 +104,9 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
       if (options.interactive) log(`${summary}；域名 ${domain || '无'}；管理员 ${username}`);
     }
     if (options.container) {
-      const mirror = options.interactive ? /^y$/i.test((await prompts.ask('构建镜像时使用国内 npm/apt 镜像源？[y/N]')).trim()) : env.SETUP_CN_MIRROR === '1';
+      const defaultMirror = env.SETUP_CN_MIRROR === '1';
+      const answer = options.interactive ? (await prompts.ask(`构建镜像时使用国内 npm/apt 镜像源？${defaultMirror ? '[Y/n]' : '[y/N]'}`)).trim() : '';
+      const mirror = answer ? /^y$/i.test(answer) : defaultMirror;
       if (mirror) { values.NPM_REGISTRY = 'https://registry.npmmirror.com'; values.APT_MIRROR = 'http://mirrors.aliyun.com'; }
       values.CONTAINER_APP_DIR = root;
     }
@@ -117,6 +120,7 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
     if (!options.reconfigure) await portCheck(4317);
   }
   writeEnv(root, values);
+  if (!options.reconfigure) writeSetupSummary(root, username);
   log('已写入 .env（权限 0600）。');
   if (values.AGENT_DOMAIN) log('请确认域名的 A 记录已经指向这台服务器，云服务器安全组和本机防火墙放行 80 和 443；证书在首次访问时自动申请。');
   if (options.container) log('下一步执行 docker compose up -d。\n首次要构建 1 个镜像，并下载 PostgreSQL、Redis、网关、etcd、Caddy、Node 基础镜像，合计约 600 MB，只有第一次需要。\n下载很慢时，请看 README 的国内网络说明。');

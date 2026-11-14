@@ -1,5 +1,17 @@
 # HTTPS 与备份运维设计
 
+## 服务器安装器
+
+`deploy/install.sh` 只部署脚本所属检出的 `app/`，不克隆代码，也不支持管道下载执行。要求 root、Ubuntu 22.04/24.04/26.04 或 Debian 12/13，架构为 amd64/arm64；低于 2 GB 内存或 10 GB 可用磁盘仅提示，不自动增加 swap。基础软件只补齐 ca-certificates、curl、gnupg、util-linux、tar、gzip。
+
+Docker 与 Compose 可用时跳过安装；否则使用 apt 仓库、`/etc/apt/keyrings/docker.asc` 和 `docker.sources`，安装 docker-ce、docker-ce-cli、containerd.io、docker-buildx-plugin、docker-compose-plugin，再启用 Docker。仓库配置依据 [Docker Ubuntu 安装文档](https://docs.docker.com/engine/install/ubuntu/) 和 [Debian 安装文档](https://docs.docker.com/engine/install/debian/)。`--cn` 将仓库及密钥切换到阿里云同名路径；`--registry-mirror` 只在 daemon.json 不存在时写入并重启 Docker，已有文件只给手动合并说明。
+
+向导通过 `/dev/tty` 交互；`--non-interactive` 使用环境变量并关闭 TTY。凭据只按变量名传给容器。向导将用户名单独写入 `.data/setup-summary.json`（0600），安装器通过只读 check 容器读取汇总；不读取、source 或打印 `.env`。缺少历史汇总时提示使用已有管理员账号，不猜测用户名。Compose 自行读取 profiles；启用 edge 且 ufw 活动时放行 80/443。安装器与远程部署使用相同的 app 目录结构和 systemd 安装脚本，`.env`、`nodes/`、`.data/`、`backups/` 原地保留；远程部署默认目录不同，切换方式时须将 `APP_DIR` 指向同一 app 目录，不可移动已部署目录。
+
+启动使用 `docker compose up -d --build --wait`。检查结果非零时保留该退出码并打印访问信息，不宣称生产检查通过；没有域名或使用 CI 本地域名时，现有来源检查会返回 1。CI 严格核对唯一错误为本地域名来源，同时验证 HTTPS 就绪、登录、唯一管理员与 systemd。内部 CA 通过测试环境变量生效，systemd 的测试 drop-in 只用于保持独立验收项目及内部 CA，不用于生产。
+
+`--upgrade` 拒绝有本地改动的 Git 工作区，执行 `git pull --ff-only` 后重新加载安装器。`--install-docker-only` 只执行 Docker 安装（包含下载密钥所需基础工具），验证客户端与 Compose，不调用 systemd 或启动 dockerd；CI 在全新系统容器中禁止软件包安装钩子启动服务。
+
 ## HTTPS 入口与生产检查
 
 `edge` 只属于 `https` profile，使用与内部 `caddy` 相同 digest 的镜像，内存上限 64 MB，重启策略为 `unless-stopped`。用户主动填写域名才启用公网入口：发布 `0.0.0.0:80` 与 `0.0.0.0:443`，这是默认回环发布规则的唯一例外。内部入口仍为 `127.0.0.1:4317`。
