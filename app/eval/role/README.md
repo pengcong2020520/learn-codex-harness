@@ -25,11 +25,11 @@ npm run eval:role -- --variant current=agents/writing --variant slim=<候选 Age
 
 # 硬性检查 + token 统计 + 盲评（默认用 deepseek-v4-pro，交换先后各评一次），生成 report.md
 npm run eval:role:score -- --dir .runs/eval-role/<时间> --baseline current --candidate slim
-# 换评审模型（须与 .env 里的 CODEX_BASE_URL 同一服务商）；只看硬性检查与 token 加 --no-judge
-npm run eval:role:score -- --dir .runs/eval-role/<时间> --judge-model <模型名>
+# 换评审模型（使用网关清单中已启用的模型 ID）；只看硬性检查与 token 加 --no-judge
+npm run eval:role:score -- --dir .runs/eval-role/<时间> --judge-model <服务商/模型名>
 ```
 
-- **交付物**取 outputs/ 下最后写入的 .md / .txt（模型常先写长稿、再另存精简的 `_v2` 作为定稿）。
+- **交付物**取 outputs/ 下最后写入的 .md / .txt（模型常先写长稿、再另存精简的 `_v2` 作为定稿）；html 不作为这份评分的交付物，不参与评分。
 - **盲评**用流式请求（评审模型推理几分钟，非流式会被当作超时断开），断线、限流和服务端错误自动重试；每次评审结果存到 `<运行目录>/judge/<评审模型>/` 下，重新打分直接复用，不重复花费。
 - 报告只记运行目录名，不写本机路径，可以直接放进 `docs/reports/`。
 

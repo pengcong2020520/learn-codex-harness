@@ -90,9 +90,9 @@ npm run agent:new -- my-agent
 
 ### Workflow：写确认点与验收条件
 
-编辑 `agent.json` 的 `agent.workflows`。生成的 `solve-task` 先澄清目标，步骤完成后等待用户确认，再交付到 `outputs/` 并检查文件存在与格式。模型通过 `propose_task` 提议，用户确认后才执行；`writes` 只能收窄已有可写范围。`workflows/README.md` 只是说明文件，不会自动加载。见 [s10 的设计说明](../stages/s10-skill-workflow/docs/skill-workflow-design.md)。
+编辑 `agent.json` 的 `agent.workflows`。生成的 `solve-task` 先澄清目标，步骤完成后等待用户确认，再交付到 `outputs/` 并检查文件存在与格式。模型通过 `propose_task` 提议，用户确认后才执行；`writes` 只能收窄已有可写范围。`workflows/README.md` 只是说明文件，不会自动加载。见 [s10 的设计说明](../stages/s10-skill-workflow/docs/skill-workflow-design.md)；s10 是冻结的教学快照，不含“修改重做当前步”，该行为见 [脚手架 Workflow 设计](docs/skill-workflow-design.md)。
 
-确认点支持继续到下一步、按意见修改当前步、结束任务；同一步最多重做 10 次，修改时保留已确认部分，产物使用新文件名。网页在等待确认时显示“继续”“修改”“结束”，点击“修改”填写意见，并可查看本步已重做次数；命令行使用 `/confirm [补充说明]`、`/revise <意见>`、`/reject`。
+确认点支持继续到下一步、按意见修改当前步、结束任务；同一步最多重做 10 次，修改时保留已确认部分，产物使用新文件名。网页在步骤等待确认（`waiting`）时显示“继续”“修改”“结束”，点击“修改”填写意见，并可查看本步已重做次数；模型主动提议的任务（`proposed`）只有“继续”“结束”两个动作；命令行使用 `/confirm [补充说明]`、`/revise <意见>`、`/reject`。
 
 `outputs.formats` 支持 `md`、`txt`、`html`、`png`、`jpeg`、`webp`、`mp4`；HTML 沿用文本大小上限与只能新建规则，格式检查要求可解析并包含 `html` 或 `body` 元素。
 
@@ -253,7 +253,7 @@ Codex App Server 负责原生执行循环；脚手架在外层提供常驻服务
 
 文件名长度为 1–100 个字符，只允许字母、数字、中文、`-`、`_`、`.`，不能以 `.` 开头。文件只能新建；同名返回 409，请换名。文件按用户隔离，上传不会开放模型对只读 `inputs` 资料的写权限。
 
-接口为 `PUT /workspace/files?path=inputs/uploads/<文件名>`，使用原始字节作为请求体，`Content-Type` 与扩展名一致，返回 `{ path, size, sha256 }`。`POST /messages` 的可选字段 `attachments` 为路径数组，路径必须指向当前用户上传目录中已存在的白名单文件；非法项返回 400 并指出序号。附件路径随任务持久化，部署升级需运行 `npm --prefix app run data:migrate`。
+接口为 `PUT /workspace/files?path=inputs/uploads/<文件名>`，使用原始字节作为请求体，`Content-Type` 与扩展名一致，返回 `{ path, size, sha256 }`。`POST /messages` 的可选字段 `attachments` 为路径数组，路径必须指向当前用户上传目录中已存在的白名单文件；非法项返回 400 并指出序号。附件路径随任务持久化；在 `app/` 目录运行 `npm run up` 会执行迁移。
 
 文本附件只在模型输入中追加「用户上传了文件：inputs/uploads/xxx.md（可用 read_file 读取）」，正文由模型按需读取。图片由服务端读取并作为 Codex `image` 输入发送；Workflow 第一步同样携带附件，后续步骤沿用会话历史。
 

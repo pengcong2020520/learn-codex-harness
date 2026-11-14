@@ -33,6 +33,12 @@
 - **CODEX_HOME 的运行时文件**：Codex 会在 `CODEX_HOME/tmp/arg0/` 下建软链接，并以用户 uid 建 0600 文件。遍历、复制、迁移、备份 CODEX_HOME 时：跳过顶层 `tmp/`，不跟随软链接（跳过，而不是报错），读用户文件走同 uid 的辅助进程。
 - **不要为了通过检查而改名、删断言、加跳过**。检查不合理时说出来。
 
+- **给 shell 当数据捕获的 Node 输出**（`$(node …)`、管道）只写纯字符串：`process.stdout.write(String(value))`。不要用 `console.log` 输出数字或对象，终端设了 `FORCE_COLOR` 时会被加上颜色控制符。相关测试要在 `FORCE_COLOR=1` 下也能通过。
+- **模型生成的内容一律当不可信输入**（HTML、Markdown、文件名、图片）：
+  - 网页里的文本只用 `textContent` 显示；
+  - HTML 只在 `sandbox` iframe（不加 `allow-same-origin`）配合 CSP `sandbox` 下预览；
+  - 上传文件同时校验扩展名与文件头。
+
 ## 3. 测试
 
 - 新行为要有测试；修缺陷先写一个能复现它的测试。
@@ -53,6 +59,9 @@
 - 涉及用户隔离、权限、文件属主的改动，要在真实 uid 的 Linux 容器里验证，不能只靠本机测试。
 - **CI 失败先看日志**（`gh run view <id> --log-failed`）找到具体错误，再判断原因；不要当偶发直接重跑。
 - **同一类失败反复出现时**，停下来核对前提是否成立，换思路，不要逐个打补丁。
+
+- **测试替身也会制造假问题**：真实 HTTP 测试报出越权一类的安全问题时，先在真实 PostgreSQL 路径（`npm run test:data`）上核对，再下结论；是替身的问题就修替身，不改断言、不在接口层补判断。
+- **浏览器测试不要按控制台文案匹配**（不同版本措辞不同），用浏览器调试协议的结构化字段判定，例如 `Log.entryAdded` 的 `source`、`securitypolicyviolation` 事件的 `effectiveDirective`。
 
 ## 4. 文档与课程
 

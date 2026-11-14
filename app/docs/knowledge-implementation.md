@@ -165,4 +165,4 @@ Agent API 通过 accounts 的不透明 Bearer 令牌认证用户。CLI 运行 lo
 
 ## 验证状态
 
-实际测试结果见仓库根目录 [`stages/verification.json`](../../stages/verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。运行 npm run test:rag（需 Chroma CLI，或 CHROMA_TEST_BIN），或在演进目录运行 node verify.mjs --integration --rag 生成统一记录。test:data 不带 Chroma 时跳过该项。
+实际测试结果见仓库根目录 [`stages/verification.json`](../../stages/verification.json)。文档不预填通过数量。已知：真实 PG/Redis 测试含真实 Codex 动态工具 Wiki 闭环和任务范围落库（模型为本地模拟 Responses，未验证真实 LLM 知识质量）；真实 Chroma 1.5.0 集成也已验证，embedding 使用本地固定 3 维测试向量，不证明语义质量。在 `app/` 目录运行 `npm run test:rag`（需 Chroma CLI，或 `CHROMA_TEST_BIN`），结果以当次输出为准。`test:data` 不带 Chroma 时跳过该项。

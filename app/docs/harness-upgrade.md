@@ -1,6 +1,6 @@
 # 脚手架升级与验收
 
-当前服务是单机单用户的通用 Agent 脚手架，写作只是默认配置。账号登录、多用户数据库作用域和运行环境隔离尚未实现；本次提供可扩展的身份接口，不能据此宣称已经支持多用户。
+当前服务是默认单节点、多用户的通用 Agent 脚手架，写作只是默认配置。账号登录决定用户身份，业务数据按用户归属访问；每个用户使用独立的 Codex 进程、CODEX_HOME、工作区和 Linux uid。
 
 ## 1. 从配置装配 Agent
 
@@ -17,16 +17,17 @@ config/runtime/project.json 或 AGENT_DEFINITION
 
 两份可复制示例位于 `examples/writing` 和 `examples/customer-support`，各自分成 `agent/`（Agent 包）与 `workspace/`（工作区模板）。客服示例使用 `handbook/policies`、`work/replies`、`knowledge/wiki`，没有 inputs/research/drafts/outputs 依赖。新增同类场景只需修改定义和角色；新增工具实现仍需编写执行函数。
 
+在 `app/` 目录首次运行 `npm run setup -- --no-start` 准备配置，再在 `.env` 设置 `AGENT_DEFINITION=examples/customer-support/agent/agent.json`：
+
 ```bash
-AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run agent:init
-AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run check
-# DATABASE_URL / REDIS_URL 已配置并完成 data:migrate 后：
-AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run server
+npm run up
 ```
+
+`npm run up` 会执行迁移、初始化声明的目录并启动服务；PostgreSQL、Redis 与网关地址由 Compose 注入节点。
 
 同一个服务根目录一次运行一个 Agent，切换示例前停止原服务。切换到不同 Agent 不会继承原 Agent 的会话权限；原会话仍保留。
 
-`bindings.sources.<id>.readOnly=true` 是显式只读策略；目录名字不决定权限。文件工具仍限定 Markdown/TXT、create-only、相对路径、禁止链接与目录穿越。Wiki 路径不能用普通文件工具绕过知识门禁，KB 原文不能由 Agent 的 write_file 改写。知识库原文/Wiki 根不能彼此重叠，服务启动还检查已登记但未挂载的知识库。
+`bindings.sources.<id>.readOnly=true` 是显式只读策略；目录名字不决定权限。文本文件工具限定 md / txt / html、create-only、相对路径、禁止链接与目录穿越。Wiki 路径不能用普通文件工具绕过知识门禁，KB 原文不能由 Agent 的 write_file 改写。知识库原文/Wiki 根不能彼此重叠，服务启动还检查已登记但未挂载的知识库。
 
 静态检查拒绝未知配置字段、缺失引用、只读/输出重叠、重复或缺失 KB 挂载、缺失工具执行函数等。动态原生 Skill 发现、数据库状态和模型调用属于后续验收，`check` 成功不等于真实模型可用。
 
@@ -45,7 +46,7 @@ AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run server
 
 本版只验收 **Codex 0.154.0**，npm 包与实际二进制版本必须一致。未知版本拒绝启动，不尝试修改原会话。版本白名单独立于会话契约；以后通过协议验收且语义兼容的版本可加入白名单，无需仅因版本号变化作废会话。
 
-0.154.0 禁用看图应使用 `features.view_image=false`。旧 `tools.view_image=false` 不再作为限制依据。启动后通过 `experimentalFeature/list` 读取实际开关；shell、view_image、image_generation、multi_agent、apps、hooks、plugins、goals 任一缺失、已移除或仍启用都阻止就绪。`goals` 关闭的原因是线程目标会让 Codex 绕过任务队列自动连续发起轮次。另外以工作区为 `cwd` 调用 `config/read`，核对 `project_doc_max_bytes` 生效为 0：工作区及其上级目录的 `AGENTS.md` 是用户数据，不能进入模型指令。协议测试还检查模型真正收到的工具清单，不能只证明配置字符串写入了文件。0.154.0 关闭上述能力后，剩余的原生辅助工具只有 request_user_input（默认模式下不可用，调用会返回错误）；业务工具在此基础上按白名单装配。
+0.154.0 通过 `features.view_image=false` 禁用原生 `view_image` 工具。用户上传的图片由服务端校验后以 Codex `image` 输入随消息发送，所选模型须声明 `inputs: ["text","image"]`；这条输入路径不依赖原生 `view_image` 工具。上传入口与限制见 [上传 PRD 与参考图](../README.md#上传-prd-与参考图)。启动后通过 `experimentalFeature/list` 读取实际开关；shell、view_image、image_generation、multi_agent、apps、hooks、plugins、goals 任一缺失、已移除或仍启用都阻止就绪。`goals` 关闭的原因是线程目标会让 Codex 绕过任务队列自动连续发起轮次。另外以工作区为 `cwd` 调用 `config/read`，核对 `project_doc_max_bytes` 生效为 0：工作区及其上级目录的 `AGENTS.md` 是用户数据，不能进入模型指令。协议测试还检查模型真正收到的工具清单，不能只证明配置字符串写入了文件。0.154.0 关闭上述能力后，剩余的原生辅助工具只有 request_user_input（默认模式下不可用，调用会返回错误）；业务工具在此基础上按白名单装配。
 
 升级流程：停止服务并备份 PostgreSQL、`.data`、配置和工作区 → 更新并锁定 Codex → 在候选版本分支调整兼容名单并运行 `test:protocol`、工具/记忆集成、数据层与真实冒烟 → 审查协议及工具清单变化 → 确认是否需提升契约 → 部署。候选白名单修改必须随验收结果一起审查，不能仅改版本号便发布。
 
@@ -84,7 +85,7 @@ export function createTools() {
 
 | 字段 | 权威来源 | 含义 |
 |---|---|---|
-| userId | 当前本机认证身份对应的服务端 ownerId | 用户主体；将来替换为登录认证结果 |
+| userId | 登录认证会话对应的服务端 ownerId | 当前任务的用户主体 |
 | threadId | 服务端归属校验过的任务 + Codex Thread | 原生会话 ID |
 | turnId | Codex turn/started 与工具回调的匹配结果 | 原生轮次 ID，不是第几轮数字 |
 | taskId | 持久任务记录 | 业务执行任务；与 turnId 区分 |
@@ -107,9 +108,9 @@ HTTP 先认证，再进入 user 范围，默认请求不再进入 operator。客
 
 为自定义场景复用 `scripts/real-smoke.mjs` 的用例结构：读取一份含随机验证码的资料 → 实际创建产物并核对正文/溯源 → 重启服务续用同一 Thread、确认新 Turn → 如启用知识库则维护并读回 Wiki → 验证身份伪造被拒绝。不要只判断模型说“成功”，必须断言实际文件/业务记录和 ID。
 
-本次真实验收使用 deepseek-flash + Codex 0.154.0，两个示例各通过六项检查；共六个真实 Turn、十三次工具调用。最新完整记录见 [真实模型报告](verification/real-model-smoke.json)。联网搜索、真实模型完整记忆生成和多用户并发不在本次真实验收结论内。研究实验员提供的脚本已接入，使用 `npm run test:protocol:research` 在隔离环境重跑；原件、适配方式和观测边界见 [协议探针说明](../tests/research-protocol/README.md)。其中多连接共享进程的风险属于复现结果，不代表产品已支持多用户。
+本次真实验收使用 deepseek-flash + Codex 0.154.0，两个示例各通过六项检查；共六个真实 Turn、十三次工具调用。最新完整记录见 [真实模型报告](verification/real-model-smoke.json)。联网搜索、真实模型完整记忆生成和多用户并发不在本次真实验收结论内。研究实验员提供的脚本已接入，使用 `npm run test:protocol:research` 在隔离环境重跑；原件、适配方式和观测边界见 [协议探针说明](../tests/research-protocol/README.md)。其中多连接共享进程的风险属于探针复现结果，该探针不能证明多用户隔离。
 
-自动回归：148 项单元/服务测试、15 项真实存储/RAG 集成、5 项原生 Codex 协议/工具/记忆集成通过，共 168 项。汇总见 [回归记录](verification/harness-upgrade.json)。
+[回归记录](verification/harness-upgrade.json) 保存的是该次验收快照；当前通过数量以实际运行 `npm test` 及相应 `test:*` 命令的输出为准。
 
 
 研究探针另有 12 组断言通过，见 [本机探针结果](verification/research-protocol/summary.json)。工具超时现在会独立于 handler 返回错误，轮次结束后抑制迟到回复；不合作插件的底层副作用仍不能靠 Promise 取消强制终止，执行函数必须遵守 signal 并通过受限资源接口访问数据。该修复由真实 Codex + 本地模拟模型验证；上方真实模型报告保留其原执行时间，没有冒称本轮再次调用真实模型。

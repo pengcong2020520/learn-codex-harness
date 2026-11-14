@@ -17,7 +17,7 @@ DATA_TEST_DATABASE_URL='postgresql://agent:TEST_PASSWORD@127.0.0.1:5432/agent' n
 保持现有容器能力和目录配置，运行已安装依赖的测试镜像：
 
 ```bash
-docker compose build agent
+docker compose build node-a
 docker compose run --rm --no-deps node-a npm run test:hub:uid
 docker compose run --rm --no-deps node-a npm run test:runtimes:uid
 ```
