@@ -161,7 +161,7 @@ test('setup no-start 生成全部字段、0600、有效拓扑，管理员密码�
   const f = fixture(t); f.env.SETUP_DOMAIN = 'agent.example.com';
   await setup(['--non-interactive', '--no-start'], f);
   const values = readEnv(f.root), template = parseEnv(fs.readFileSync(path.join(f.root, '.env.example'), 'utf8'));
-  assert.deepEqual(Object.keys(values).sort(), Object.keys(template).sort());
+  assert.deepEqual(Object.keys(values).sort(), [...Object.keys(template), 'AGENT_DOMAIN'].sort());
   validateClusterSecrets(values, clusterNodes(values));
   assert.equal(fs.statSync(path.join(f.root, '.env')).mode & 0o777, 0o600);
   assert.equal(values.CODEX_MODEL, 'deepseek/deepseek-flash');
@@ -753,4 +753,31 @@ test('up 带引导值时不重新索取口令；账号异常未初始化则停�
   f.prompts.ask = async () => assert.fail('不能重新索取口令');
   await assert.rejects(ctl(['up'], f), /引导管理员未完成.*migrate/);
   assert.equal(f.calls.some(call => call.args.at(-1) === 'init'), false);
+});
+
+for (const profiles of ['', 'remote-access', 'cluster,https,cluster']) test(`setup 域名合并 profiles：${profiles || '空'}`, async t => {
+  const f = fixture(t);
+  f.env.SETUP_DOMAIN = 'agent.example.com'; f.env.COMPOSE_PROFILES = profiles;
+  await setup(['--non-interactive', '--no-start'], f);
+  const values = readEnv(f.root);
+  assert.equal(values.AGENT_DOMAIN, 'agent.example.com');
+  assert.equal(values.COMPOSE_PROFILES, [...new Set([...profiles.split(',').filter(Boolean), 'https'])].join(','));
+  assert.match(f.logs.join('\n'), /A 记录.*80.*443.*首次访问/);
+});
+test('setup 不填域名不写 AGENT_DOMAIN 与空 COMPOSE_PROFILES', async t => {
+  const f = await configured(t), values = readEnv(f.root);
+  assert.equal(Object.hasOwn(values, 'AGENT_DOMAIN'), false);
+  assert.equal(Object.hasOwn(values, 'COMPOSE_PROFILES'), false);
+});
+test('集群显式启动列表包含已启用的 HTTPS 入口', () => {
+  assert.deepEqual(composeUp({ AGENT_CLUSTER_NODES: 'node-a,node-b', COMPOSE_PROFILES: 'cluster,https' }).slice(-4), ['node-a', 'node-b', 'caddy', 'edge']);
+});
+
+test('setup 域名同时保留模板和调用环境的 profiles', async t => {
+  const f = fixture(t);
+  const template = path.join(f.root, '.env.example');
+  fs.appendFileSync(template, '\nCOMPOSE_PROFILES=remote-access\n');
+  Object.assign(f.env, { SETUP_DOMAIN: 'agent.example.com', COMPOSE_PROFILES: 'cluster' });
+  const values = await setup(['--non-interactive', '--no-start'], f);
+  assert.equal(values.COMPOSE_PROFILES, 'remote-access,cluster,https');
 });

@@ -61,7 +61,10 @@ export function checkProduction({ root = PROJECT_ROOT, now = Date.now() } = {}) 
   } catch { /* 不输出底层错误，防止包含配置值和路径。 */ }
   finally { if (fd !== undefined) fs.closeSync(fd); }
   const https = hasHttpsDomain(env.AGENT_ALLOWED_ORIGINS);
-  add('origins', https ? 'ok' : 'error', 'AGENT_ALLOWED_ORIGINS', https ? '已声明 HTTPS 域名来源；尚未验证 DNS 和证书。' : '没有有效的 HTTPS 域名来源，还只能按本机入口使用。', '查看 README「域名与 HTTPS」，配置后运行 npm run up。');
+  const edge = Boolean(env.AGENT_DOMAIN?.trim())
+    && (env.COMPOSE_PROFILES || '').split(',').some(profile => ['https', '*'].includes(profile.trim()))
+    && (env.AGENT_ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).includes(`https://${env.AGENT_DOMAIN.trim()}`);
+  add('origins', https ? (edge ? 'ok' : 'warning') : 'error', 'AGENT_ALLOWED_ORIGINS', https ? (edge ? '已声明匹配的 HTTPS 域名来源并启用入口；尚未验证 DNS 和证书。' : '已声明 HTTPS 来源；需要宿主机反向代理，或启用 https profile。') : '没有有效的 HTTPS 域名来源，还只能按本机入口使用。', '查看 README「域名与 HTTPS」，配置后运行 docker compose up -d。');
   add('env-file', readable && secure ? 'ok' : 'error', '.env 文件', readable && secure ? '普通文件，权限为 0600。' : '.env 缺失、不可读、不是独立普通文件或权限不是 0600。', '未初始化时运行 npm run setup；在终端核对文件类型，并运行 chmod 600 .env。');
   const sameDirectory = env.CONTAINER_APP_DIR === path.resolve(root);
   add('deployment-directory', sameDirectory ? 'ok' : 'error', 'CONTAINER_APP_DIR', sameDirectory ? '部署路径与当前目录一致。' : '部署路径不一致；目录搬家会导致旧会话无法恢复。', '查看 README「升级」，核对原部署目录并恢复原路径；不要直接改路径继续运行旧会话。');

@@ -120,7 +120,7 @@ test('agent:check 角色与 Skill 的符号链接被拒绝，修改后的角色�
 
 function productionFixture(t) {
   const f = fixture(t), now = Date.parse('2026-11-14T12:00:00Z');
-  const env = { AGENT_ALLOWED_ORIGINS: 'https://service.example.com', CONTAINER_APP_DIR: f.root,
+  const env = { AGENT_DOMAIN: 'service.example.com', COMPOSE_PROFILES: 'cluster,https', AGENT_ALLOWED_ORIGINS: 'https://service.example.com', CONTAINER_APP_DIR: f.root,
     CODEX_MODEL: 'deepseek/deepseek-flash', DEEPSEEK_API_KEY: 'fixture-default-provider', KIMI_API_KEY: 'fixture-backup-provider',
     AGENT_BUDGET_DAILY_TOKENS: '987654', AGENT_CLUSTER_NODES: 'node-a,node-b', AGENT_DEFINITION: sample };
   const write = () => fs.writeFileSync(path.join(f.root, '.env'), Object.entries(env).map(([key, value]) => `${key}='${value}'\n`).join(''), { mode: 0o600 });
@@ -149,6 +149,9 @@ for (const [name, change, id, level] of [
   ['HTTPS 本机', f => { f.env.AGENT_ALLOWED_ORIGINS = 'https://localhost'; }, 'origins', 'error'],
   ['HTTPS 本机绝对域名', f => { f.env.AGENT_ALLOWED_ORIGINS = 'https://localhost.'; }, 'origins', 'error'],
   ['origin 带路径', f => { f.env.AGENT_ALLOWED_ORIGINS = 'https://service.example.com/path'; }, 'origins', 'error'],
+  ['只有来源没有 edge', f => { delete f.env.COMPOSE_PROFILES; }, 'origins', 'warning'],
+  ['缺少域名', f => { delete f.env.AGENT_DOMAIN; }, 'origins', 'warning'],
+  ['域名与来源不匹配', f => { f.env.AGENT_DOMAIN = 'other.example.com'; }, 'origins', 'warning'],
   ['目录搬家', f => { f.env.CONTAINER_APP_DIR = '/opt/old-deployment'; }, 'deployment-directory', 'error'],
   ['默认 Key 空', f => { f.env.DEEPSEEK_API_KEY = ''; }, 'default-model', 'error'],
   ['默认模型未知', f => { f.env.CODEX_MODEL = 'missing/model'; }, 'default-model', 'error'],

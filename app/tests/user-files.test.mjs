@@ -156,7 +156,15 @@ test('常驻服务无 DAC_*；初始化、备份和文件恢复的一次性命�
   const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
   const services = read('compose.yaml').split('services:\n')[1].split('\nnetworks:')[0];
   for (const [, name, body] of services.matchAll(/^  ([a-z-]+):[^\n]*\n([\s\S]*?)(?=^  [a-z-]+:|(?![\s\S]))/gm)) {
-    if (['prepare', 'migrate'].includes(name)) assert.match(body, /restart: "no"/);
+    if (name === 'check') {
+      assert.match(body, /restart: "no"/);
+      assert.match(body, /profiles: \[tools\]/);
+      assert.match(body, /network_mode: none/);
+      assert.match(body, /cap_drop: \[ALL\]/);
+      assert.match(body, /cap_add: \[DAC_READ_SEARCH\]/);
+      assert.doesNotMatch(body, /DAC_OVERRIDE/);
+      assert.match(body, /read_only: true/);
+    } else if (['prepare', 'migrate'].includes(name)) assert.match(body, /restart: "no"/);
     else assert.doesNotMatch(body, /DAC_(?:OVERRIDE|READ_SEARCH)/, name);
   }
   const commands = ['backup.sh', 'restore.sh'].flatMap(file => read(`deploy/${file}`).split('\n').filter(line => line.trim().startsWith('docker compose')));

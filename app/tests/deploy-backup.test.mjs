@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { archiveFiles, backupName, clearDirectory, postgresIdentity, dumpCommand, psqlCommand } from '../scripts/backup-lib.mjs';
+import { archiveFiles, backupName, pruneBackups, writeManifest, clearDirectory, postgresIdentity, dumpCommand, psqlCommand } from '../scripts/backup-lib.mjs';
 
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
 const name = '2026-01-09T00-00-00-000Z';
@@ -129,6 +129,7 @@ function shellFixture(t) {
     docker: `#!/bin/bash
 set -eu
 if [[ "$*" == *scripts/cluster-config.mjs* ]]; then echo 'node-a node-b node-c'; exit 0; fi
+if [[ "$*" == 'compose config --services' ]]; then printf 'caddy\\n%s\\n' "\${HTTPS_SERVICE:-}"; exit 0; fi
 printf '%s\\n' "$*" >> "$PWD/calls"
 if [[ -n "\${FAIL_AT:-}" && "$*" == *"$FAIL_AT"* ]]; then exit 19; fi
 case "$*" in
@@ -205,4 +206,38 @@ test('backup: 恢复只清空目录内容，保留 bind mount 根目录', t => {
   const inode = fs.statSync(dir).ino;
   clearDirectory(dir);
   assert.equal(fs.statSync(dir).ino, inode); assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('backup: 保留最近 7 份完整备份，跳过 partial、无关目录、残缺备份和链接', async t => {
+  const root = fixture(t), base = path.join(root, 'backups');
+  const names = Array.from({ length: 10 }, (_, i) => `2026-01-${String(i + 1).padStart(2, '0')}T00-00-00-000Z`);
+  for (const name of names) {
+    const dir = path.join(base, name); fs.mkdirSync(dir);
+    for (const file of archiveFiles) fs.writeFileSync(path.join(dir, file), '完整备份');
+    await writeManifest(dir, root);
+  }
+  const untouched = ['.2026-01-11T00-00-00-000Z.partial', 'unrelated', '2026-keepZ', '2026-01-12T00-00-00-000Z'];
+  for (const name of untouched) { fs.mkdirSync(path.join(base, name)); fs.writeFileSync(path.join(base, name, 'manifest.json'), '{}'); }
+  fs.symlinkSync(names[9], path.join(base, '2026-01-13T00-00-00-000Z'));
+  fs.writeFileSync(path.join(base, '.download.lock'), '锁');
+  const lockInode = fs.statSync(path.join(base, '.download.lock')).ino;
+  pruneBackups(root, '0');
+  assert.ok(names.every(name => fs.existsSync(path.join(base, name))));
+  for (const value of ['-1', 'bad', '1.5', '9007199254740992']) assert.throws(() => pruneBackups(root, value), /AGENT_BACKUP_KEEP/);
+  pruneBackups(root);
+  assert.deepEqual(names.filter(name => fs.existsSync(path.join(base, name))), names.slice(3));
+  pruneBackups(root, '2');
+  assert.deepEqual(names.filter(name => fs.existsSync(path.join(base, name))), names.slice(8));
+  assert.ok(untouched.every(name => fs.existsSync(path.join(base, name, 'manifest.json'))));
+  assert.ok(fs.lstatSync(path.join(base, '2026-01-13T00-00-00-000Z')).isSymbolicLink());
+  assert.equal(fs.statSync(path.join(base, '.download.lock')).ino, lockInode);
+});
+
+test('cluster-ready: 已启用 HTTPS 时启动 edge，check 模式不启动服务', t => {
+  const f = shellFixture(t);
+  assert.equal(f.run('cluster-ready', [], { HTTPS_SERVICE: 'edge' }).status, 0);
+  assert.ok(f.calls().includes('compose up -d --wait node-a node-b node-c caddy edge'));
+  const checked = shellFixture(t);
+  assert.equal(checked.run('cluster-ready', ['--check'], { HTTPS_SERVICE: 'edge' }).status, 0);
+  assert.equal(checked.calls().length, 1); assert.match(checked.calls()[0], /caddy wget.*ready/);
 });

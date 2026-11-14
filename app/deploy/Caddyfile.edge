@@ -1,0 +1,8 @@
+{$AGENT_DOMAIN} {
+  {$AGENT_TLS_DIRECTIVE}
+  reverse_proxy caddy:80 {
+    header_up Host {http.request.host}
+    flush_interval -1
+  }
+  # 不启用请求体或 Authorization 日志。
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Codex Agent 定时备份
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@APP_DIR@
+ExecStart=/bin/bash deploy/backup.sh
