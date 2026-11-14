@@ -83,6 +83,34 @@ jobs:
           node --test scripts/privacy-check.test.mjs
           node scripts/privacy-check.mjs
 
+  server-install:
+    name: 服务器一键安装与全新系统 Docker 安装
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FORCE_COLOR: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: 完整安装、HTTPS 登录与重复执行
+        run: sudo env "PATH=$PATH" "FORCE_COLOR=$FORCE_COLOR" bash app/scripts/e2e-server-install.sh
+      - name: 全新 Ubuntu 与 Debian 安装 Docker（不启动 dockerd）
+        run: |
+          for variant in ubuntu:24.04 debian:12 ubuntu:24.04-cn; do
+            image=${variant%-cn}
+            args=()
+            if [ "$variant" != "$image" ]; then args+=(--cn); fi
+            docker run --rm -v "$PWD:/repo:ro" "$image" bash -ec '
+              printf "#!/bin/sh\nexit 101\n" > /usr/sbin/policy-rc.d
+              chmod +x /usr/sbin/policy-rc.d
+              bash /repo/app/deploy/install.sh --install-docker-only "$@"
+              docker --version
+              docker compose version
+            ' bash "${args[@]}"
+          done
+
   scaffold-e2e:
     strategy:
       fail-fast: false

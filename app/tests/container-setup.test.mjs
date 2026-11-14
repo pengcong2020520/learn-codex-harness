@@ -96,6 +96,17 @@ test('容器非交互通过 SETUP_CN_MIRROR 开启国内源', async t => {
   assert.equal(values.APT_MIRROR, 'http://mirrors.aliyun.com');
   assert.throws(() => decodeBootstrap('invalid$secret'), /AGENT_ADMIN_BOOTSTRAP.*格式/);
 });
+for (const answer of ['', 'n']) test(`容器交互 SETUP_CN_MIRROR 默认是，回答 ${answer || '回车'}`, async t => {
+  const f = fixture(t), questions = [];
+  f.env.SETUP_CN_MIRROR = '1';
+  const answers = ['', '', '', '', f.env.SETUP_ADMIN_PASSWORD, f.env.SETUP_ADMIN_PASSWORD, answer];
+  f.prompts = { ask: async label => { questions.push(label); return answers.shift(); }, close() {} };
+  const values = await setup(['--container'], f);
+  assert.equal(questions.at(-1), '构建镜像时使用国内 npm/apt 镜像源？[Y/n]');
+  assert.equal(values.NPM_REGISTRY, answer ? 'https://registry.npmjs.org' : 'https://registry.npmmirror.com');
+  assert.equal(values.APT_MIRROR, answer ? '' : 'http://mirrors.aliyun.com');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.root, '.data/setup-summary.json'), 'utf8')), { username: 'admin' });
+});
 test('setup 服务权限、profile、固定镜像与 PWD 默认值约束', () => {
   const source = fs.readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
   const body = source.split('  setup:\n')[1]?.split(/^  \w[^\n]*:\n/m)[0];

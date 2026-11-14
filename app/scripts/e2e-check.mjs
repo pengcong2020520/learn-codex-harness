@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 
-const url = `http://127.0.0.1:${process.env.AGENT_PORT || 4317}`;
+const url = process.env.E2E_BASE_URL || `http://127.0.0.1:${process.env.AGENT_PORT || 4317}`;
 import { createPrompts } from '../shared/prompts.mjs';
 const prompts = createPrompts();
 let password;
@@ -31,7 +31,7 @@ assert.equal(ready.replication, 'off', '单节点 /ready 应显示复制关闭')
 assert.equal(ready.degraded, undefined, '单节点不应因没有副本而降级');
 
 const login = await fetch(`${url}/auth/login`, {
-  method: 'POST', headers: { 'content-type': 'application/json' },
+  method: 'POST', headers: { 'content-type': 'application/json', origin: new URL(url).origin },
   body: JSON.stringify({ username: 'admin', password }),
 });
 await expectStatus(login, 200, '管理员登录');

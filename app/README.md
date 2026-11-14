@@ -168,6 +168,25 @@ sudo bash deploy/restore.sh <备份目录名>
 
 ## 部署到服务器
 
+### 一条命令部署（推荐）
+
+只有一台全新 Linux 服务器时，以 root 登录后执行：
+
+```bash
+git clone https://github.com/pengcong2020520/learn-codex-harness.git /opt/learn-codex-harness
+bash /opt/learn-codex-harness/app/deploy/install.sh
+```
+
+安装器在当前检出的 `app/` 目录部署，补齐 Docker、运行向导、启动服务，并启用开机自启与每日备份。支持的系统与资源提示见 [安装器设计](docs/design.md#服务器安装器)。如果向导要填写域名，请先将 DNS 的 A 记录指向服务器，并在云安全组放行 80、443；域名可以留空，此时按安装器汇总的 SSH 隧道访问。
+
+国内服务器在安装命令后加 `--cn`，使用阿里云 Docker 安装源，向导的国内 npm/apt 源默认选是。Docker Hub 下载需要加速时，可加 `--registry-mirror '<云厂商控制台提供的加速地址>'`；已有 Docker 配置会保留，按提示手动合并。完整选项用 `--help` 查看。
+
+安装完成与生产就绪是两回事。服务就绪、开机自启和备份启用后，生产检查中的 `✗` 会作为正式上线前的待处理项提示，安装仍以退出码 0 结束；仅通过 SSH 隧道访问也是合理的部署选择。处理后在服务器的 `app/` 目录运行 `docker compose run --rm check` 复查。检查结论的退出码 0 和 1 都属于正常结果；检查本身无法运行、返回其他退出码时，安装会停止并报出退出码。
+
+已有 `.env` 时重跑会跳过向导。升级前先备份，然后在服务器的 `app/` 目录执行 `bash deploy/install.sh --upgrade`；它要求 Git 工作区没有本地改动，只做快进更新。安装步骤失败时以非零退出，不自动重试，请先核对提示。最终汇总会列出入口、向导记录的管理员用户名、备份位置以及状态和日志命令。
+
+### 从本机远程部署
+
 单节点建议 **2 GB 内存**。远端需 Linux、Docker Compose、systemd、rsync、flock、tar、gzip、sha256sum，并使用脚本支持的 root SSH 管理账号；本机需 Node.js 24、Docker、ssh、rsync。先完成本地配置；只准备远端部署时可用 `npm run setup -- --no-start`。
 
 以下 SSH 目标为占位符，替换成自己的服务器：
