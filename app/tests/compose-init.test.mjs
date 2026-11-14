@@ -94,7 +94,7 @@ test('prepare：先校验再落盘，只用传入环境生成无密钥配置且�
   // 故意放置不可解析为配置的目录，若读取宿主 .env 就会报错。
   fs.mkdirSync(path.join(root, '.env'));
   t.mock.method(fs, 'chownSync', () => {});
-  const env = { ...environment(), AGENT_GATEWAY_KEY: 'sk-bf-test-only-gateway', DEEPSEEK_API_KEY: 'test-only-provider', CODEX_MODEL: 'deepseek/deepseek-flash' };
+  const env = { ...environment(), AGENT_GATEWAY_KEY: 'sk-bf-test-only-gateway', DEEPSEEK_API_KEY: 'test-only-provider', CODEX_MODEL: 'deepseek/deepseek-flash' }; // privacy-check: allow（测试夹具，非真实密钥）
   prepare(root, env);
   const config = path.join(root, '.data/gateway/config.json'), before = fs.readFileSync(config, 'utf8');
   assert.equal(before.includes(env.AGENT_GATEWAY_KEY), false);
