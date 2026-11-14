@@ -7,7 +7,9 @@ import { openDatabase, migrate, identity } from '../server/modules/data/database
 import { Accounts } from '../server/modules/accounts/index.mjs';
 import { AccountStore } from '../server/modules/accounts/store.mjs';
 import { hashPassword, verifyPassword } from '../server/modules/accounts/password.mjs';
-import { changeUser } from '../server/modules/accounts/admin.mjs';
+import { httpFixture, request } from './accounts-fixture.mjs';
+import { loadServerConfig } from '../server/modules/config/index.mjs';
+import { changeUser, initializeAccounts, addUser } from '../server/modules/accounts/admin.mjs';
 import { encodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { bootstrapAdmin } from '../scripts/admin-bootstrap.mjs';
 
@@ -37,4 +39,26 @@ test('真实 PostgreSQL：引导管理员并发幂等、可登录，已有禁用
   assert.equal(logs.at(-1), '已有账号，跳过引导管理员');
   await assert.rejects(bootstrapAdmin(store, 'secret-invalid-value', options), error => /格式无效/.test(error.message) && !error.message.includes('secret-invalid-value'));
   assert.equal((await store.query('SELECT count(*)::int AS n FROM agent_data.users WHERE instance_id=$1 AND username IS NOT NULL')).rows[0].n, 1);
+});
+
+
+test('真实 PostgreSQL：workbench 与 readiness 仅信任已认证账号的管理员角色', async t => {
+  const pool = await openDatabase(url, { maintenance: true }); t.after(() => pool.end());
+  await migrate(pool);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workbench-pg-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const dir of ['config', 'agents']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
+  const legacy = identity(root), store = new AccountStore(pool, legacy.instanceId), accounts = new Accounts(store);
+  await initializeAccounts(store, { ownerId: legacy.ownerId, username: 'admin', password: 'fixture-password', workspace: path.join(root, 'workspace') });
+  await addUser(store, { username: 'bob', password: 'fixture-password' });
+  const config = loadServerConfig(root, { CODEX_MODEL: 'unit-model', CODEX_API_KEY: 'fixture-model-key', CODEX_BASE_URL: 'https://provider.invalid/v1' });
+  const http = httpFixture(accounts, { config }); t.after(() => http.close());
+  for (const [username, admin] of [['admin', true], ['bob', false]]) {
+    const { token } = await accounts.login({ username, password: 'fixture-password' }, 'fixture');
+    const workbench = await request(http, '/workbench?admin=true', { token });
+    assert.equal(workbench.statusCode, 200);
+    assert.deepEqual(workbench.body.viewer, { username, admin });
+    const readiness = await request(http, '/admin/readiness?role=admin', { token });
+    assert.equal(readiness.statusCode, admin ? 200 : 403);
+    if (admin) assert.ok(readiness.body.unchecked.some(row => row.id === 'env-file'));
+  }
 });
