@@ -10,6 +10,6 @@ AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run agent:init
 AGENT_DEFINITION=examples/customer-support/agent/agent.json npm run check
 ```
 
-准备 PostgreSQL、Redis 和模型配置后，用同一 AGENT_DEFINITION 启动 `npm run server`。默认示例由 config/runtime/project.json 选择；更换场景无需改内核。两个示例均使用 Wiki，且关闭原生记忆，避免越过知识范围。
+启动服务时，在 `app/` 目录首次运行 `npm run setup -- --no-start` 准备配置，再在 `.env` 设置 `AGENT_DEFINITION=examples/customer-support/agent/agent.json`，然后运行 `npm run up`。`npm run up` 会执行迁移、准备目录并启动服务，PostgreSQL 与 Redis 地址由 Compose 注入节点。默认示例由 `config/runtime/project.json` 选择；更换场景无需改内核。两个示例均使用 Wiki，且关闭原生记忆，避免越过知识范围。
 
 本阶段的配置、运行与验证入口见 [README](../README.md)。

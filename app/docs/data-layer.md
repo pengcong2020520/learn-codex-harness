@@ -43,7 +43,7 @@ Redis 不替代文件，而是加速任务调度唤醒：已落 PG 的 Thread ID
 
 角色文件、Agent JSON、原生 Skill 文件仍是可编辑的权威配置，PG 保存其 hash 和使用关系，不把 PG descriptor 当可编辑配置。
 
-`tasks` 表保存用户输入文本，`preferences` 保存偏好文本；完整聊天历史仍由 Codex 保存，资料正文放在文件存储，不在 PostgreSQL 再维护一份完整副本。
+`tasks` 表保存用户输入文本与 `attachments` 路径数组，`preferences` 保存偏好文本；完整聊天历史仍由 Codex 保存，资料正文放在文件存储，不在 PostgreSQL 再维护一份完整副本。
 
 ### 身份设计
 
@@ -119,7 +119,7 @@ main()
   └─ HTTP 就绪，开始接受请求
 ```
 
-`migration` 仅通过 `npm run data:migrate` 显式执行。`openData` 和 `main` 只做 schema 核验，发现不一致则报错退出，**不自动迁移，不静默回退到 JSON**。
+`npm run up` 会执行迁移：Compose 启动流程通过 `deploy/bootstrap.sh` 调用 `scripts/cluster-migrate.mjs`，再执行 `migrate()`。节点进程的 `openData` 和 `main` 只做 schema 核验，发现不一致则报错退出，**不自动迁移，不静默回退到 JSON**。`npm run data:migrate` 仅用于已单独配置数据库连接的维护环境，不是默认启动入口。
 
 ### 任务调度状态机
 
@@ -158,6 +158,10 @@ queued（未暂停）→ starting/steering（CAS，PG原子）→ running
 后续读取同路径：检测内容是否变化，若变则生成新版本，递归将引用该资源的派生标记为 `stale`。
 
 读取登记失败可能留下未被数据库引用的 blob，暂时保留，不自动删除。写入流程的 pending 恢复见下节。
+
+### 用户上传文件
+
+认证后的 `PUT /workspace/files?path=inputs/uploads/<文件名>` 将原始字节写入当前用户工作区，只能新建，同名返回 409。上传允许 md/txt（合法 UTF-8，单文件最多 256 KiB）与 png/jpeg/jpg/webp（扩展名、Content-Type 和文件头一致，单文件最多 5 MiB）；不接受 HTML 上传。路径和文件归属由服务端校验，上传权限不扩大模型对只读资料的写权限。消息最多引用 4 个已上传文件；任务只保存路径，图片输入在派发时读取，文本正文由模型按需读取。入口与文件名规则见 [上传 PRD 与参考图](../README.md#上传-prd-与参考图)。
 
 ### 写入文件（带来源声明）
 
@@ -389,7 +393,7 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 
 `test:data` 为本机模拟，不声称真实网络断网演练，无真实 DeepSeek 端到端，无真实存量导入验收。
 
-演进目录的 `node verify.mjs --integration` 会执行各阶段测试及数据、工具和记忆集成检查；需要本机提供 `initdb`、`pg_ctl`、`redis-server`。最近结果见演进目录的 `verification.json`，不把历史报告当成这次运行结果。
+仓库根目录运行 `npm test` 执行统一检查；真实数据层回归使用 `npm --prefix app run test:data`，需本机提供 `initdb`、`pg_ctl`、`redis-server`。结果以当次命令输出为准。
 
 ---
 
@@ -426,20 +430,20 @@ node scripts/data.mjs revoke '替换为真实的资源UUID'
 需定期备份（丢失不可恢复）：
 
 - PG 数据库（`pg_dump`）
-- `workspace/`
-- `.data/identity.json`
-- `.data/files/`（不可变 blob）
-- `.data/codex/`（Codex 原生存储）
+- `nodes/<节点>/workspace/`（含各用户工作区）
+- `nodes/<节点>/.data/identity.json`
+- `nodes/<节点>/.data/files/`（不可变 blob）
+- `nodes/<节点>/.data/codex/` 与 `nodes/<节点>/.data/users/`（Codex 原生存储及用户运行环境）
 - 权威配置：`agents/`（Agent 包：`agent.json`、`role.md`、`skills/`）、`config/tools/`
 
 可从 PG 重建或按既有规则清理：
 
 - Redis 调度队列（可从 outbox 重建）
-- `.runs/`（最新 5 个和 7 天内受保护，其余可清理）
+- `nodes/<节点>/.runs/`（最新 5 个和 7 天内受保护，其余可清理）
 
 未登记的孤立 blob 不可擅自清理，需另行核对归属；`reconcile` 只核对数据库里已有的 pending 写入。备份策略需读者自行配置，本文档不承诺已自动实施备份。
 
-启动前请确认：`.env` 中 `DATABASE_URL`/`REDIS_URL` 指向正确实例，工作区和 `.data/identity.json` 未被意外改动。
+以上为宿主路径，挂进对应节点容器后分别是 `workspace/`、`.data/` 和 `.runs/`。启动前确认各节点工作区和 `nodes/<节点>/.data/identity.json` 未被意外改动；数据库与 Redis 地址由 Compose 注入节点，生成的 `.env` 不要求填写 `DATABASE_URL` / `REDIS_URL`。
 
 ---
 

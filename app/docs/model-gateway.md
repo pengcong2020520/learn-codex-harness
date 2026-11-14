@@ -1,10 +1,10 @@
 # 模型网关
 
-所有模型调用走同一层：一份模型清单、一个路由、一个网关。Codex（对话）和我们的工具（向量检索、生图、生视频等）只连本机的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
+所有模型调用走同一层：一份模型清单、一个路由、一个网关。Codex（对话）和我们的工具（向量检索、生图、生视频等）只连容器网络内的模型网关（[Bifrost](https://github.com/maximhq/bifrost)），网关再转给各家模型。填了哪家的密钥就启用哪家，主模型失败时自动改用备用模型。
 
 ```
 Codex（对话）────────────┐   模型路由：按用途 / 场景 / 能力挑模型
-工具层（知识检索的向量…）──┴──▶ 本机网关 127.0.0.1:4330 ──┬─▶ Kimi / DeepSeek / OpenAI / Grok（原样或转成对话接口）
+工具层（知识检索的向量…）──┴──▶ 容器内网关 gateway:8080 ──┬─▶ Kimi / DeepSeek / OpenAI / Grok（原样或转成对话接口）
         （只拿网关访问密钥）     （拿着各家密钥）              ├─▶ Claude / Gemini / 智谱 GLM（转换成各自的协议）
                                                           └─▶ 本地 Ollama（向量模型）
 ```
@@ -41,7 +41,7 @@ Codex 自己能登记多个服务商、按会话选模型，但每个服务商�
 - `providers`：服务商名 → `type`（接口类型，同名表示 Bifrost 内置，如 `openai`、`anthropic`、`gemini`、`xai`、`deepseek`；不同名表示自定义，如 `kimi` 走 `openai` 接口）、`keyEnv`（.env 里的密钥变量）、可选 `baseUrl`（只写到域名，网关自己加 `/v1/...`）。
 - `providers` 里不需要密钥的服务（如本地 Ollama）用 `baseUrlEnv` 代替 `keyEnv`：.env 里填了这个地址变量才启用。容器名或本机地址可以用 http。
 - `models`：`服务商/模型名` → `purposes`（用途，必填）、上下文长度、最大输出（`maxOutputTokens`）、向量维数（`dimensions`，向量模型必填）、输入类型、推理档位、`fallbacks`（备用链，只能指向用途相同的模型）。`verified` 是实测通过的日期；没有这一项的模型，参数来自官方文档，还没有用真实密钥跑过。
-- 用途：`chat`（对话）、`embedding`（向量）、`rerank`（重排序）、`image`（生图）、`video`（生视频）、`tts`（语音合成）、`asr`（语音识别）。看图、长上下文是对话模型的能力（`inputModalities`、`contextWindow`），不单列用途。
+- 用途：`chat`（对话）、`embedding`（向量）、`rerank`（重排序）、`image`（生图）、`video`（生视频）、`tts`（语音合成）、`asr`（语音识别）。看图、长上下文是对话模型的能力，不单列用途。`contextWindow` 声明上下文长度；图片输入须显式声明 `inputs: ["text","image"]`，缺省为 `["text"]`，`inputModalities` 不自动赋予看图许可。
 - `routes`：每种用途的候选，按优先顺序排，第一个服务商已启用的就是默认。对话的默认可以用 .env 的 `CODEX_MODEL` 覆盖。
 - `scenes`：给工作流步骤用的对话模型候选，如 `fast`（快而便宜）、`strong`（更强），同样按顺序取第一个可用的。
 - **走 Claude 格式接口的服务商（`type: "anthropic"`，如 Claude、智谱）必须填 `maxOutputTokens`。** Claude 格式要求每次请求带输出上限，Codex 不发；网关翻译时去查模型参数表，查不到就用 4096（[Bifrost #5331](https://github.com/maximhq/bifrost/issues/5331)）。思考型模型先把额度用掉，写长文件时工具参数会被截断成不完整的 JSON，之后每次请求都在网关报 500。现在 `npm run gateway:config` 按清单生成本地参数表 `.data/gateway/model-parameters.json`，网关只认这张表，不再从官网下载那张约 26 MB 的公开表。
@@ -55,19 +55,18 @@ DEEPSEEK_API_KEY=...
 CODEX_MODEL=kimi/kimi-k2.7-code    # 写成“服务商/模型名”
 ```
 
-设置了 `AGENT_GATEWAY_KEY` 就是网关模式：Codex 的地址和密钥自动指向 `http://127.0.0.1:4330/v1`，不能再同时设置 `CODEX_BASE_URL` / `CODEX_API_KEY`。
+设置了 `AGENT_GATEWAY_KEY` 就是网关模式，不能再同时设置 `CODEX_BASE_URL` / `CODEX_API_KEY`。Compose 通过 `AGENT_GATEWAY_URL=http://gateway:8080/v1` 指定容器内网关；未设置 `AGENT_GATEWAY_URL` 的宿主进程才使用 `http://127.0.0.1:${AGENT_GATEWAY_PORT:-4330}/v1`，这不是默认 Compose 发布的宿主端口。默认宿主入口只有 `127.0.0.1:4317`。
 
 ### 3. 生成配置并启动
 
 ```bash
-npm run gateway:key      # 只在第一次：生成访问密钥写进 .env（不在终端显示）
-npm run up       # 生成 .data/gateway/ 下的配置与模型参数表，并（重新）启动网关容器
-npm run server
+npm run setup -- --no-start  # 首次准备 .env、模型与网关访问密钥
+npm run up                  # 生成网关配置、构建、执行迁移并启动服务
 ```
 
 `.data/gateway/config.json` 里只有 `env.KIMI_API_KEY` 这样的引用，不含密钥本身。密钥由 compose 在启动容器时传入，而且只传 `compose.yaml` 里列出的几个变量，其他 .env 内容不进容器。
 
-改了模型或密钥后，重新运行 `npm run up`，再重启服务。服务器上运行 `npm run deploy -- --host root@example.com`，它会重新生成配置、重建网关并重启服务。
+改了模型或密钥后，重新运行 `npm run up`。服务器上运行 `npm run deploy -- --host 'root@<服务器地址>'`，它会重新生成配置、重建网关并重启服务。
 
 ## 模型自带的能力
 
@@ -111,7 +110,7 @@ npm run gateway:check -- --model kimi/kimi-k2.7-code --search
 }
 ```
 
-`image` 表示需要看图，`contextTokens` 是正整数，表示需要的上下文长度。configure 和 dispatch 都把 needs 传给路由。路由还接受 `needs.nativeTools` 字符串数组；搜索开启时自动合并 `web_search`，不允许步骤取消这项要求。只有清单声明的能力参与选择，不根据厂商名称猜测，也不会从用户文本自动估算上下文或判断有没有图片。
+`image` 表示需要看图，`contextTokens` 是正整数，表示需要的上下文长度。configure 和 dispatch 都把 needs 传给路由。路由还接受 `needs.nativeTools` 字符串数组；搜索开启时自动合并 `web_search`，不允许步骤取消这项要求。看图能力以清单的 `inputs` 为准；路由不根据厂商名称或用户文本猜测能力，也不自动估算上下文长度。消息附件中的图片会在派发时按最终选中的模型检查，不支持则在调用模型前拒绝；步骤、任务、默认路由与预算降级的选择规则仍生效，在途追加沿用当前轮次模型。
 
 `effort` 可选 `none / minimal / low / medium / high / xhigh / max / ultra`。configure 时检查选中模型的 `reasoningLevels`；没有声明就报“不支持调推理档位”，未包含所选值也报错。dispatch 在任务选择或预算降级之后再次核验，把 effort 传给 `turn/start`。未指定时使用当前模型声明的默认推理档位或 null，避免继承上一步的参数。上例需选中的模型支持 high；例如搜索开启选到未声明 reasoningLevels 的 Kimi 时，应移除 effort。按步骤选模型、声明 needs 或 effort 都需要网关模式。
 
@@ -145,21 +144,12 @@ RAG 配了 `CHROMA_URL` 且没有单独配 `EMBEDDING_BASE_URL` 时，按 `route
 
 ## 本地向量模型（Ollama）
 
-```bash
-npm run ollama:up        # 启动 compose 里的 ollama 服务（可选服务，默认启动不会带上它）
-npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3-embedding:0.6b，约 639 MB）
-# .env 里加 OLLAMA_BASE_URL=http://ollama:11434，然后 npm run up
-```
-
-- 网关经容器名访问 Ollama，Ollama 不对宿主开放端口。
-- 同时只加载一个模型，空闲 5 分钟卸载以释放内存；上下文默认 2048 词元（`OLLAMA_CONTEXT_LENGTH`），足够切好的文本块。内存上限默认 1.5 GB（`OLLAMA_MEMORY_LIMIT`）。
-- **内存实测**（qwen3-embedding:0.6b，CPU）：模型加载后推理进程约 1.1 GB（上下文 4096），上下文 2048、批处理 128 时约 0.9 GB。空闲卸载后约 20 MB。2 GB 内存的服务器放不下，要加内存、加交换空间，或在服务器上改用云端向量模型。
-- 官方镜像带显卡加速库，压缩后约 2.7–3.2 GB。没有显卡的机器上也能用，只是镜像偏大。
+脚手架不包含 Ollama 服务或模型下载命令。使用外部 Ollama 时，先准备服务与清单中登记的模型，在 `.env` 设置网关容器可访问的 `OLLAMA_BASE_URL`，再运行 `npm run up`。
 
 ## 加一家服务商或一个模型
 
 1. 在 `config/models.json` 的 `providers` 和 `models` 里登记，标好 `purposes`；要作为某种用途的默认就加进 `routes`。模型参数（上下文长度、推理档位、向量维数）以官方文档为准。
-2. 新的密钥变量要同时加进 `compose.yaml` 网关的 `environment` 和 `deploy/remote.sh` 的 `PROVIDER_KEYS`。`npm test` 会检查三处是否一致。
+2. 新的密钥变量要加进 `compose.yaml` 网关的 `environment`。`npm test` 检查模型清单里的 `keyEnv` 在网关环境中登记，且未传给其他服务。
 3. 在 .env 填密钥，运行 `npm run up`。
 
 ## 备用链
@@ -170,7 +160,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 
 ## 安全
 
-- 网关只监听 `127.0.0.1`。没有访问密钥或密钥不对的请求一律 401（集成测试覆盖）。
+- 网关不对宿主发布端口，节点通过容器网络内的 `gateway:8080` 访问。没有访问密钥或密钥不对的请求一律 401（集成测试覆盖）。
 - Codex 子进程的环境里去掉所有 `*_API_KEY`，只留 `CODEX_API_KEY`（网关访问密钥）。启动参数、模型目录里也没有密钥。
 - 网关不记录请求内容（`disable_content_logging`，日志库关闭）。配置库放在容器的临时目录，重启即清空，每次都以生成的配置文件为准。
 - **对外连接**：除了转发给各家模型，Bifrost 每天会从 getbifrost.ai 下载一次公开的模型价格表，用于成本统计；这个同步不能关闭，只能拉长间隔，下载时不发送请求内容。模型参数表改用本地文件，MCP 目录同步已关闭。
@@ -189,7 +179,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 }
 ```
 
-这里不能改名成自定义服务商；`baseUrl` 只写域名，网关自己补 `/api/v3/...`。`.env.example` 提供 `ARK_API_KEY` 占位，compose 和部署脚本同步传入网关。应用只持有 `gatewayEndpoint()` 返回的网关地址和访问密钥，不把方舟密钥传给工具或 Codex。升级先运行 `npm run data:migrate` 安装 `007-media.sql`，配置后重新运行 `npm run up`。
+这里不能改名成自定义服务商；`baseUrl` 只写域名，网关自己补 `/api/v3/...`。`.env.example` 提供 `ARK_API_KEY` 占位，compose 和部署脚本同步传入网关。应用只持有 `gatewayEndpoint()` 返回的网关地址和访问密钥，不把方舟密钥传给工具或 Codex。配置后运行 `npm run up`；`npm run up` 会执行迁移并启动服务。
 
 - `generate_image`：prompt 最多 8000 字符，n 为 1–4，默认一张、`2048x2048`。调用网关 `/v1/images/generations`，固定 `response_format: "b64_json"`，直接拿图片正文；默认 URL 响应的链接 24 小时后过期，不适合长期产物。返回工作区路径、模型、请求尺寸和版本信息。默认按时间加随机 ID 命名；多张在文件名后加 `-1`、`-2` 等序号。
 - `generate_video`：prompt 最多 8000 字符，seconds 为 2–15 的整数，默认 5 秒、`1280x720`。向 `/v1/videos` 提交后立即返回本地持久化任务 `id` 和远端 `providerId`；无需等待生成。`media_status({id})` 使用本地 ID 查询 `queued / in_progress / completed / failed`，完成返回路径与版本，失败返回原因。
@@ -205,7 +195,7 @@ npm run ollama:pull      # 下载清单里登记的 Ollama 模型（默认 qwen3
 
 ### 账本和估算口径
 
-升级后先运行 `npm run data:migrate`。迁移 `006-usage.sql` 创建 PostgreSQL 用量账本，按 `instance_id`、`owner_id` 隔离，按时间索引；不存提示词、回答或密钥。每条记录包括时间、Thread、Turn、任务 ID（有任务时）、来源 `chat / embedding / image / video`、模型 ID、输入、缓存输入、输出、推理输出、总 token、可空的 `units`、币种和估算花费。
+`npm run up` 会执行迁移。PostgreSQL 用量账本按 `instance_id`、`owner_id` 隔离，按时间索引；不存提示词、回答或密钥。每条记录包括时间、Thread、Turn、任务 ID（有任务时）、来源 `chat / embedding / image / video`、模型 ID、输入、缓存输入、输出、推理输出、总 token、可空的 `units`、币种和估算花费。
 
 - **对话**：监听 `thread/tokenUsage/updated`。Thread 的 `total.totalTokens` 只用来去重：比上次大才记账，金额和 token 取本次 `last`。相等或更小的通知跳过；服务重启后第一条直接取 `last`，不把 Thread 历史累计量再记一遍。停止服务期间的调用不会补账。
 - **模型与任务**：在 `turn/start` 前绑定本轮路由选出的模型和任务 ID，通知早于 RPC 响应也能定位；工作流换步骤时重新选模型，每一步仍归属原任务。直连模型没有服务商前缀时记为 `direct/模型名`；无法识别则为 `direct/unknown`。Codex 的通知不含 Bifrost 最终备用模型，网关内部故障切换只能归属到本轮提交的路由模型，相关花费是估算，不能用来核对供应商账单。
@@ -273,7 +263,7 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
 
 ## 资源
 
-运行时约 150–180 MB 内存。服务器部署前的检查把可用内存门槛从 600 MB 提到 800 MB，并检查 4330 端口。
+网关容器内存上限由 `GATEWAY_MEMORY_LIMIT` 控制，默认 `256m`。部署检查核对 Docker、systemd、rsync 等工具；实际内存、磁盘和模型连通性需在部署环境核验。
 
 ## 已验证与未验证
 
@@ -307,7 +297,7 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
   - 配置文件不含密钥；
   - Codex 环境里没有各家密钥；
   - 模型目录取自清单；
-  - 三处密钥变量列表一致。
+  - 清单 `keyEnv` 在 Compose 网关 `environment` 中登记，且不传给其他服务。
 - `tests/native-search.test.mjs` 覆盖默认模型搜索开关、`off` 和工作流步骤的能力校验；`tests/gateway-check.test.mjs` 使用本地假 HTTP 网关覆盖对话、搜索、声明差异、超时和退出码，不访问真实模型。
 - `npm run test:gateway` 需要 Docker，用 compose 里锁定的真 Bifrost 镜像、两家模拟模型服务和真 Codex，检查：
   - 没有或错误的访问密钥会被拒绝；

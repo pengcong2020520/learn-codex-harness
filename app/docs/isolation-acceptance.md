@@ -46,7 +46,7 @@ docker compose run --rm --no-deps -T node-a npm run test:runtimes:uid
 
 ## 服务器验收
 
-默认部署目录 `/opt/codex-agent`、域名 `example.com`、端口 4317、项目及 systemd 单元 `codex-agent`、数据库 `agent`。停服迁移与初始化后再启动 agent：
+默认部署目录 `/opt/codex-agent`、域名 `example.com`、端口 4317、项目及 systemd 单元 `codex-agent`、数据库 `agent`。日常入口为 `npm run up`；它会执行迁移、启动服务，并在尚无账号时引导创建管理员。需要分步验收时，以下 `configure` 完成停服迁移，再由 Compose 启动 `node-a` 等服务，最后初始化账号：
 
 ```bash
 bash deploy/configure.sh
@@ -55,7 +55,7 @@ bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts init
 bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts add bob
 ```
 
-已有账号不要重复 auth:init。迁移可重复执行，日志会明确说明状态。账号禁用命令：
+上述两条账号命令分别等价于 `npm run auth:init` 和 `npm run user:add -- bob`，日常优先使用 npm 入口。已有账号不要重复 `auth:init`。迁移可重复执行，日志会明确说明状态。账号禁用使用 `npm run user:disable -- bob`，等价底层命令为：
 
 ```bash
 bash deploy/env-run.sh node-a node scripts/maintenance.mjs accounts disable bob

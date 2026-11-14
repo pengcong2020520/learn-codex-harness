@@ -117,7 +117,7 @@ Agent 定义通过 `agent.workflows` 数组声明工作流。只写 `id` 的条�
 ### 4.2 执行链路
 
 ```
-POST /messages { threadId, text, workflow, params }
+POST /messages { threadId, text, workflow, params, attachments? }
   → 解析 workflow：参数校验、计算本任务授权（必须是 Agent 能力的子集）
   → 任务入库（workflow、params、step）
   → 权限模块签发任务上下文（grants 取代现在的 maintenanceKb）
@@ -126,7 +126,9 @@ POST /messages { threadId, text, workflow, params }
   → 有下一步：confirm 则停在 waiting，否则直接发下一步；没有下一步：completed 或 needs-review
 ```
 
-追加消息（`mode: "append"`）沿用当前任务的 workflow 与授权，不能更换 workflow，也不能扩大授权。
+非 `chat` 的 Workflow 任务不接受追加消息（`mode: "append"`），提交会返回 403。等待确认的当前步需要修改时，使用 `POST /tasks/revise`、CLI `/revise <意见>` 或网页“修改”，沿用本步权限重做。
+
+`attachments` 是最多 4 个 `inputs/uploads/` 路径的数组，提交时验证当前用户的文件，派发时重新读取。Workflow 第一步携带附件：文本只注入路径提示，正文由模型按需读取；图片作为 Codex `image` 输入发送，并校验所选模型的 `inputs`。后续步骤沿用会话历史。附件路径保存在任务的 `attachments` 字段（`023-task-attachments.sql`）；`npm run up` 会执行迁移。
 
 ### 4.3 授权类型
 
@@ -143,7 +145,7 @@ POST /messages { threadId, text, workflow, params }
 | 检查 | 通过条件 |
 |------|---------|
 | `file-exists` | 本步至少产生一个产物，且文件实际存在 |
-| `format` | 产物扩展名属于 `outputs.formats` |
+| `format` | 产物扩展名属于 `outputs.formats`，包括 `html`；HTML 与 md/txt 一样遵守文本大小上限和只能新建规则，HTML 格式检查要求可解析且包含 `html` 或 `body` 元素 |
 | `sources-cited` | 产物带非空的 `source_versions` |
 | `wiki-effective` | 本任务内至少一次 `kb_submit_revision` 返回 `effective: true` |
 
@@ -162,8 +164,9 @@ POST /messages { threadId, text, workflow, params }
 - 迁移 `003-workflows.sql`：`tasks` 新增 `workflow`（默认 `chat`）、`params`、`checks`，状态增加 `needs-review`，把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
 - 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。
 - 迁移 `005-task-proposals.sql`：新增 `reason`（提议理由），状态增加 `proposed`。
+- 迁移 `022-workflow-revise.sql`：新增 `revise_count`（任务字段 `reviseCount`），记录本步重做次数，范围为 0–10；继续到下一步时归零。
 - 消息里旧的 `knowledge` 字段兼容一个版本，映射为 `knowledge-maintain`。
-- workflow 属于 Agent 描述符，`CONTRACTS.agent` 为 3。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
+- workflow 属于 Agent 描述符，`CONTRACTS.agent` 为 2。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。
 
 ---
 
@@ -209,5 +212,5 @@ POST /messages { threadId, text, workflow, params }
 
 | 项 | 说明 |
 |----|------|
-| 多步流程中的会话上下文 | 每步是同一会话的新 Turn，模型能看到前面步骤的历史；确认点之间用户可以追加修改意见，追加不得扩大授权 |
+| 多步流程中的会话上下文 | 每步是同一会话的新 Turn，模型能看到前面步骤的历史；步骤处于 `waiting` 时可用 `POST /tasks/revise`、CLI `/revise <意见>` 或网页“修改”按意见重做当前步。同一步最多 10 次，保留已确认部分，产物使用新文件名，权限不扩大 |
 | 旧会话 | 描述符变化后旧会话需 `sessions:upgrade` 登记映射，否则按现有规则拒绝续用、要求新建会话 |
