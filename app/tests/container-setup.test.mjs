@@ -100,7 +100,8 @@ test('setup 服务权限、profile、固定镜像与 PWD 默认值约束', () =>
   assert.ok(body.includes(`image: ${base}`));
   for (const text of ['profiles: [setup]', 'network_mode: none', 'cap_drop: [ALL]', 'cap_add: [SETUID, SETGID]', 'user: "0:0"', 'no-new-privileges:true', '".:${PWD:-/nonexistent}"', 'working_dir: ${PWD:-/nonexistent}', 'HOST_APP_DIR: ${PWD:-/nonexistent}', 'entrypoint: ["node", "scripts/setup.mjs", "--container"]', 'command: []']) assert.ok(body.includes(text), text);
   assert.doesNotMatch(source, /:\?/);
-  assert.equal([...source.matchAll(/\$\{PWD[^}]*\}/g)].length, 3);
+  assert.equal([...body.matchAll(/\$\{PWD[^}]*\}/g)].length, 3);
+  assert.equal([...source.matchAll(/\$\{PWD[^}]*\}/g)].length, 4);
   assert.doesNotMatch(source.replaceAll('${PWD:-/nonexistent}', ''), /\bPWD\b/);
 });
 

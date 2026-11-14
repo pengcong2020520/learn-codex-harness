@@ -195,6 +195,64 @@ test('production:check 七天边界、零预算及最新完整备份', t => {
   assert.equal(checkProduction(f).find(row => row.id === 'backup').detail, rows.find(row => row.id === 'backup').detail);
 });
 
+test('production:check 宿主与 --root 加 HOST_APP_DIR 逐项输出和退出码一致', t => {
+  const f = productionFixture(t);
+  const manifestFile = path.join(f.backup, 'manifest.json'), manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.time = new Date(Date.now() - 1000).toISOString();
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  const mounted = fs.mkdtempSync(path.join(os.tmpdir(), 'production-project-'));
+  t.after(() => fs.rmSync(mounted, { recursive: true, force: true }));
+  const imageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'production-image-'));
+  t.after(() => fs.rmSync(imageRoot, { recursive: true, force: true }));
+  for (const root of [f.root, imageRoot]) {
+    for (const dir of ['scripts', 'server', 'shared']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
+    fs.symlinkSync(fs.realpathSync(new URL('../node_modules', import.meta.url)), path.join(root, 'node_modules'));
+  }
+  const env = { ...process.env }; delete env.HOST_APP_DIR;
+  // 保留强制颜色覆盖，避免继承的 NO_COLOR 让 Node 向 stderr 写入冲突警告。
+  if (env.FORCE_COLOR !== undefined) delete env.NO_COLOR;
+  const run = (args, extra = {}) => spawnSync(process.execPath, ['scripts/production-check.mjs', ...args], { cwd: args.length ? imageRoot : f.root, env: { ...env, ...extra }, encoding: 'utf8' });
+  for (const [name, change, id, level] of [
+    ['配置完整', () => {}, 'deployment-directory', 'ok'],
+    ['目录搬家', () => { f.env.CONTAINER_APP_DIR = '/opt/old-deployment'; f.write(); }, 'deployment-directory', 'error'],
+    ['Agent 无效', () => f.edit(v => { v.agent.outputs.formats = ['pdf']; }), 'agent', 'error'],
+    ['模型目录缺失', () => fs.unlinkSync(path.join(f.root, 'config/models.json')), 'default-model', 'error'],
+    ['备份缺失', () => fs.rmSync(f.backup, { recursive: true }), 'backup', 'warning'],
+    ['环境文件缺失', () => fs.unlinkSync(path.join(f.root, '.env')), 'env-file', 'error'],
+  ]) {
+    change();
+    // 只复制待检查的文件，挂载目录不提供脚本或依赖；两种入口检查同一份配置。
+    for (const entry of ['.env', 'agents', 'config', 'backups']) {
+      const source = path.join(f.root, entry), target = path.join(mounted, entry);
+      fs.rmSync(target, { recursive: true, force: true });
+      if (fs.existsSync(source)) fs.cpSync(source, target, { recursive: true });
+    }
+    const rows = checkProduction({ root: f.root });
+    assert.equal(rows.find(row => row.id === id).level, level, name);
+    if (name === '配置完整') assert.ok(rows.every(row => row.level === 'ok'));
+    const host = run([]), container = run(['--root', mounted], { HOST_APP_DIR: f.root });
+    assert.equal(host.status, errors(rows).length ? 1 : 0, name);
+    assert.equal(host.stdout.trimEnd(), formatProductionChecks(rows), name);
+    assert.equal(container.status, host.status, name);
+    assert.deepEqual(container.stdout.split('\n'), host.stdout.split('\n'), name);
+    assert.equal(host.stderr, '', name); assert.equal(container.stderr, '', name);
+    if (name === '配置完整') {
+      const moved = run(['--root', mounted], { HOST_APP_DIR: '/opt/moved-deployment' });
+      assert.equal(moved.status, 1);
+      assert.match(moved.stdout, /✗ CONTAINER_APP_DIR/);
+    }
+  }
+});
+
+test('production:check CLI 拒绝缺少目录、未知参数和多余参数', () => {
+  for (const args of [['--root'], ['--root', ''], ['--root', '--unknown'], ['--unknown'], ['--root', '', 'extra']]) {
+    const result = spawnSync(process.execPath, ['scripts/production-check.mjs', ...args], { cwd: new URL('../', import.meta.url), encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /用法.*--root/);
+  }
+});
+
 test('三个命令 CLI 退出码与输出脱敏', t => {
   const f = productionFixture(t);
   // CLI 固定从脚本所在应用目录取配置；复制代码只操作临时配置，不碰真实 .env。

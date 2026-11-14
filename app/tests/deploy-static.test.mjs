@@ -221,10 +221,12 @@ test('static: HTTPS 显式启用，只有 edge 公开端口，证书持久化且
   assert.match(caddy, /header_up Host \{http.request.host\}/); assert.match(caddy, /flush_interval -1/);
   assert.doesNotMatch(caddy, /^\s*log(?:\s|$)/m);
 });
-test('static: check 使用镜像依赖、同路径只读项目与 DAC_READ_SEARCH，无网络', () => {
+test('static: check 使用镜像代码和依赖、独立只读项目与 DAC_READ_SEARCH，无网络', () => {
   const check = service('check');
-  for (const text of ['profiles: [tools]', 'image: codex-agent:current', 'network_mode: none', 'read_only: true', 'cap_drop: [ALL]', 'cap_add: [DAC_READ_SEARCH]', 'source: .', 'target: ${CONTAINER_APP_DIR:-/nonexistent}', 'target: ${CONTAINER_APP_DIR:-/nonexistent}/node_modules', 'scripts/production-check.mjs']) assert.ok(check.includes(text), text);
-  assert.doesNotMatch(check, /read_only: false|docker.sock|depends_on:/);
+  for (const text of ['profiles: [tools]', 'image: codex-agent:current', 'network_mode: none', 'read_only: true', 'cap_drop: [ALL]', 'cap_add: [DAC_READ_SEARCH]', 'source: .', 'target: /project', 'HOST_APP_DIR: ${PWD:-/nonexistent}', 'working_dir: ${CONTAINER_APP_DIR:-/nonexistent}', 'command: ["node", "scripts/production-check.mjs", "--root", "/project"]', 'bind: { create_host_path: false }']) assert.ok(check.includes(text), text);
+  assert.equal((check.match(/type: bind/g) || []).length, 1);
+  assert.match(check, /target: \/project\n\s+read_only: true/);
+  assert.doesNotMatch(check, /read_only: false|docker.sock|depends_on:|type: volume|node_modules|target: \$\{CONTAINER_APP_DIR/);
 });
 test('static: 定时备份每天本地 04:00，补跑漏执行任务，安装器启用 timer', () => {
   const timer = read('deploy/systemd/codex-agent-backup.timer'), unit = read('deploy/systemd/codex-agent-backup.service');

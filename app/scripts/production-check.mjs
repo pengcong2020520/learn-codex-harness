@@ -48,7 +48,7 @@ function latestBackup(root, now) {
   return latest;
 }
 
-export function checkProduction({ root = PROJECT_ROOT, now = Date.now() } = {}) {
+export function checkProduction({ root = PROJECT_ROOT, now = Date.now(), hostAppDir = process.env.HOST_APP_DIR } = {}) {
   const rows = [];
   const add = (id, level, title, detail, fix) => rows.push({ id, level, title, detail, fix });
   let env = {}, secure = false, readable = false, fd;
@@ -66,7 +66,8 @@ export function checkProduction({ root = PROJECT_ROOT, now = Date.now() } = {}) 
     && (env.AGENT_ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).includes(`https://${env.AGENT_DOMAIN.trim()}`);
   add('origins', https ? (edge ? 'ok' : 'warning') : 'error', 'AGENT_ALLOWED_ORIGINS', https ? (edge ? '已声明匹配的 HTTPS 域名来源并启用入口；尚未验证 DNS 和证书。' : '已声明 HTTPS 来源；需要宿主机反向代理，或启用 https profile。') : '没有有效的 HTTPS 域名来源，还只能按本机入口使用。', '查看 README「域名与 HTTPS」，配置后运行 docker compose up -d。');
   add('env-file', readable && secure ? 'ok' : 'error', '.env 文件', readable && secure ? '普通文件，权限为 0600。' : '.env 缺失、不可读、不是独立普通文件或权限不是 0600。', '未初始化时运行 npm run setup；在终端核对文件类型，并运行 chmod 600 .env。');
-  const sameDirectory = env.CONTAINER_APP_DIR === path.resolve(root);
+  // 容器中的只读挂载路径不代表部署路径，目录搬家仍以宿主实际位置判断。
+  const sameDirectory = env.CONTAINER_APP_DIR === (hostAppDir || path.resolve(root));
   add('deployment-directory', sameDirectory ? 'ok' : 'error', 'CONTAINER_APP_DIR', sameDirectory ? '部署路径与当前目录一致。' : '部署路径不一致；目录搬家会导致旧会话无法恢复。', '查看 README「升级」，核对原部署目录并恢复原路径；不要直接改路径继续运行旧会话。');
   let registry;
   try { registry = loadModelRegistry(root); } catch { /* 统一给出不含配置值的诊断。 */ }
@@ -104,7 +105,12 @@ export function formatProductionChecks(rows) {
 }
 
 if (isMain(import.meta.url)) {
-  const rows = checkProduction();
-  console.log(formatProductionChecks(rows));
-  if (rows.some(row => row.level === 'error')) process.exitCode = 1;
+  const args = process.argv.slice(2);
+  if (args.length && (args.length !== 2 || args[0] !== '--root' || !args[1]?.trim() || args[1].startsWith('--'))) {
+    console.error('用法：npm run production:check -- [--root <目录>]。'); process.exitCode = 1;
+  } else {
+    const rows = checkProduction({ root: args.length ? path.resolve(args[1]) : PROJECT_ROOT });
+    console.log(formatProductionChecks(rows));
+    if (rows.some(row => row.level === 'error')) process.exitCode = 1;
+  }
 }

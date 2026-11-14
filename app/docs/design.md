@@ -8,7 +8,7 @@
 
 向导把 `https` 加入 `COMPOSE_PROFILES`，保留其他 profile 并去重。Compose 默认从工作目录 `.env` 读取该变量，逗号分隔多个 profile；shell 同名变量优先，使用时应避免意外覆盖。依据：[Compose 预定义环境变量](https://docs.docker.com/compose/how-tos/environment-variables/envvars/) 与 [插值优先级](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)。开机自启脚本通过 `docker compose config --services` 获取实际启用服务，需要时启动 `edge`，仍以内部 Caddy 的 `/ready` 判定应用就绪。
 
-`check` 属于 `tools` profile，显式执行 `docker compose run --rm check` 即可运行。它使用应用镜像，在 `CONTAINER_APP_DIR` 原路径只读挂载整个项目，因此 `.env`、Agent 配置、模型目录和 `backups/` 与宿主一致。`node_modules` 使用镜像复制出的匿名只读卷，支持宿主没有 Node.js 与依赖的部署，`--rm` 退出时删除该匿名卷。容器禁用网络、根文件系统只读，以 `0:1000` 运行，仅保留 `DAC_READ_SEARCH` 读取不同属主的 0600 配置和备份。
+`check` 属于 `tools` profile，显式执行 `docker compose run --rm check` 即可运行。它在 `CONTAINER_APP_DIR` 工作目录使用镜像内的代码和依赖，把宿主项目只读挂载到独立的 `/project`，支持宿主没有 Node.js 与依赖的部署。命令 `node scripts/production-check.mjs --root /project` 从该目录读取 `.env`、Agent 配置、`config/models.json` 和 `backups/`；`--root` 默认是项目根。部署目录检查在容器内比较 `.env` 的 `CONTAINER_APP_DIR` 与通过 `${PWD:-/nonexistent}` 传入的 `HOST_APP_DIR`，宿主模式仍与项目根比较。容器禁用网络、根文件系统只读，以 `0:1000` 运行，仅保留 `DAC_READ_SEARCH` 读取不同属主的 0600 配置和备份。
 
 生产检查只有同时声明域名、启用 `https` profile、包含匹配 HTTPS origin 才将来源项标记为 ✓；仅有有效公网 HTTPS 来源时标记为 !，提示宿主反向代理或启用 profile。本地测试域名仍不算公网来源。此检查只检查配置，不判断 DNS、证书、代理运行状态和 CA 的可信度。
 

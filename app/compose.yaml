@@ -52,17 +52,15 @@ services:
     network_mode: none
     read_only: true
     working_dir: ${CONTAINER_APP_DIR:-/nonexistent}
-    command: ["node", "scripts/production-check.mjs"]
+    environment:
+      HOST_APP_DIR: ${PWD:-/nonexistent}
+    command: ["node", "scripts/production-check.mjs", "--root", "/project"]
     volumes:
       - type: bind
         source: .
-        target: ${CONTAINER_APP_DIR:-/nonexistent}
+        target: /project
         read_only: true
         bind: { create_host_path: false }
-      # 仅 Docker 上手时宿主没有依赖；匿名只读卷使用镜像内依赖，run --rm 后删除。
-      - type: volume
-        target: ${CONTAINER_APP_DIR:-/nonexistent}/node_modules
-        read_only: true
   prepare:
     build: *agent-build
     image: codex-agent:current
