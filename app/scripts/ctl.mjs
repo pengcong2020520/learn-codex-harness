@@ -57,9 +57,7 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
   if (command === 'up') {
     log('检查 Docker Compose 与 Docker 运行状态……');
     await checkDocker({ platform, root, env, run });
-    log('构建镜像并准备数据目录……');
-    await run('bash', ['deploy/configure.sh'], { root, env: childEnvironment(env), output, redact, quiet });
-    log('启动服务……');
+    log('构建镜像、初始化并启动服务……');
   }
   const result = await run('docker', dockerArgs, { root, env: childEnvironment(env), input, capture: !['logs', 'up'].includes(command),
     ...(['logs', 'up'].includes(command) ? { output, redact, quiet } : {}) });

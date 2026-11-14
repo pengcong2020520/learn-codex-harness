@@ -35,6 +35,10 @@ const login = await fetch(`${url}/auth/login`, {
   body: JSON.stringify({ username: 'admin', password }),
 });
 await expectStatus(login, 200, '管理员登录');
+if (process.argv.includes('--login-only')) {
+  console.log('Compose 再启动检查通过：就绪、单节点状态与原管理员登录。');
+  process.exit(0);
+}
 const { token } = await login.json();
 const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
 

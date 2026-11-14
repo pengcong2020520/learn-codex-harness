@@ -90,7 +90,7 @@ export function runProcess(command, args, { root = PROJECT_ROOT, env = childEnvi
 }
 export function composeUp(env) {
   const nodes = clusterNodes(env);
-  return ['compose', ...(nodes.length > 1 ? ['--profile', 'cluster'] : []), 'up', '-d', '--wait',
+  return ['compose', ...(nodes.length > 1 ? ['--profile', 'cluster'] : []), 'up', '-d', '--build', '--wait',
     ...(nodes.length > 1 ? [...nodes, 'caddy'] : [])];
 }
 export function envRunArgs(root, args, env = {}) {

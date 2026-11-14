@@ -24,5 +24,9 @@ SETUP_ADMIN_PASSWORD="$password" CODEX_MODEL=deepseek/deepseek-flash DEEPSEEK_AP
 printf '%s\n' "$password" | node scripts/e2e-check.mjs
 E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
 npm run -s test:deploy:integration
+# 只经 Compose 再起服务，核对同一账号仍能登录；扩容步骤保持独立。
+docker compose stop
+docker compose up -d --wait
+printf '%s\n' "$password" | node scripts/e2e-check.mjs --login-only
 SETUP_ADMIN_PASSWORD="$password" npm run cluster:enable -- --yes
 echo "端到端验收通过：单节点上手、网页流程、三节点扩容与副本追平。"

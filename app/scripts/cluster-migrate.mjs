@@ -31,7 +31,7 @@ export async function provisionNodeRoles(pool, passwords, database = 'agent') {
 if (process.argv[1]?.endsWith('/cluster-migrate.mjs') || process.argv[1] === 'scripts/cluster-migrate.mjs') {
   let pool;
   try {
-    const env = parseEnv(fs.readFileSync(new URL('../.env', import.meta.url), 'utf8'));
+    const env = { ...parseEnv(fs.readFileSync(new URL('../.env', import.meta.url), 'utf8')), ...process.env };
     const url = new URL('postgresql://agent@postgres:5432/agent'); url.password = env.AGENT_DB_PASSWORD;
     pool = await openDatabase(url.href, { maintenance: true }); await migrate(pool);
     await provisionNodeRoles(pool, Object.fromEntries(clusterNodes(env).map(id => id.slice(-1)).map(suffix => [suffix, env[`AGENT_NODE_${suffix.toUpperCase()}_DB_PASSWORD`]])));

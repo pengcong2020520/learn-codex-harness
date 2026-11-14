@@ -31,7 +31,7 @@ function fixture(t) {
     if (args.includes('scripts/cluster-config.mjs') && args.at(-1) === 'nodes') process.stdout.write('node-a\\n');
     if (args.includes('scripts/accounts.mjs') && args.at(-1) === 'status') process.stdout.write('uninitialized\\n');
     if (args.includes('psql')) process.stdin.resume();
-    if (args.some(arg => arg.endsWith('/.env:ro'))) process.exit(Number(process.env.ENV_RUN_EXIT || 0));
+    if (args.some(arg => arg.endsWith('/.env:ro')) || args.at(-1) === 'prepare') process.exit(Number(process.env.ENV_RUN_EXIT || 0));
   `);
   executable('ssh', `const result = require('node:child_process').spawnSync('/bin/bash', ['-c', process.argv.at(-1)], { stdio: 'inherit' }); process.exit(result.status ?? 1);`);
   executable('flock', 'process.exit(0);');
@@ -47,10 +47,10 @@ function fixture(t) {
 }
 
 for (const [script, args, programs] of [
-  ['configure', [], ['scripts/gateway-config.mjs', 'scripts/cluster-migrate.mjs']],
-  ['configure', ['--config-only'], ['scripts/gateway-config.mjs']],
-  ['bootstrap', [], ['scripts/cluster-migrate.mjs']],
-  ['server-setup', [], ['scripts/gateway-config.mjs', 'scripts/cluster-migrate.mjs']],
+  ['configure', [], ['prepare', 'migrate']],
+  ['configure', ['--config-only'], ['prepare']],
+  ['bootstrap', [], ['migrate']],
+  ['server-setup', [], ['prepare', 'scripts/cluster-migrate.mjs']],
   ['restore', ['2026-01-01T00-00-00-000Z', '--yes'], ['scripts/cluster-migrate.mjs']],
   ['remote', ['auth-init'], ['scripts/maintenance.mjs']],
   ...['add', 'passwd', 'disable', 'list'].map(command => ['remote', ['user', '--', command, ...(command === 'list' ? [] : ['bob'])], ['scripts/maintenance.mjs']]),
@@ -59,12 +59,15 @@ for (const [script, args, programs] of [
   const f = fixture(t), before = fs.statSync(path.join(f.root, '.env'));
   const result = f.run(script, args);
   assert.equal(result.status, 0, result.stderr);
-  const calls = result.calls.filter(call => call.some(arg => arg.includes('/.env:')));
-  assert.deepEqual(calls.map(call => call.find(arg => /^scripts\//.test(arg))), programs);
+  const calls = result.calls.filter(call => call.some(arg => arg.includes('/.env:')) || ['prepare', 'migrate'].includes(call.at(-1)));
+  assert.deepEqual(calls.map(call => call.find(arg => /^scripts\//.test(arg)) || call.at(-1)), programs);
   for (const call of calls) {
+    if (['prepare', 'migrate'].includes(call.at(-1))) {
+      assert.deepEqual(call, ['compose', 'run', '--rm', '--no-deps', '-T', call.at(-1)]);
+      continue;
+    }
     assertEnvRun(call, f.root);
     assert.equal(call.includes('-T'), script !== 'remote');
-    if (call.includes('scripts/gateway-config.mjs')) assert.ok(call.includes(`${f.root}/.data/gateway:${f.root}/.data/gateway`));
     if (call.includes('scripts/cluster-migrate.mjs')) assert.equal(call[call.indexOf('--user') + 1], '0');
   }
   const after = fs.statSync(path.join(f.root, '.env'));
@@ -87,12 +90,12 @@ test('一次性入口：失败保留退出码且配置脚本不继续迁移或�
   for (const [script, args] of [['env-run', ['-T', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', 'status']], ['configure', []]]) {
     const result = f.run(script, args, { ENV_RUN_EXIT: '23' });
     assert.equal(result.status, 23);
-    assert.equal(result.calls.filter(call => call.some(arg => arg.endsWith('/.env:ro'))).length, 1);
-    assert.equal(result.calls.some(call => call.includes('scripts/cluster-migrate.mjs')), false);
+    assert.equal(result.calls.filter(call => call.some(arg => arg.endsWith('/.env:ro')) || call.at(-1) === 'prepare').length, 1);
+    assert.equal(result.calls.some(call => call.includes('scripts/cluster-migrate.mjs') || call.at(-1) === 'migrate'), false);
   }
 });
 
-test('一次性入口：所有直接 .env 挂载集中在两个公共入口，扩容复用配置链路', () => {
+test('一次性入口：宿主 .env 挂载集中在两个公共入口，本机入口直接交给 Compose', () => {
   const mounts = [];
   for (const directory of ['deploy', 'scripts']) {
     for (const file of fs.readdirSync(new URL(`../${directory}/`, import.meta.url))) {
@@ -102,7 +105,7 @@ test('一次性入口：所有直接 .env 挂载集中在两个公共入口，�
     }
   }
   assert.deepEqual(mounts.sort(), ['deploy/env-run.sh', 'scripts/quickstart-lib.mjs']);
-  for (const file of ['scripts/setup.mjs', 'scripts/ctl.mjs', 'scripts/cluster-enable.mjs']) assert.match(read(file), /'bash', \['deploy\/configure.sh'\]/);
+  for (const file of ['scripts/setup.mjs', 'scripts/ctl.mjs', 'scripts/cluster-enable.mjs']) assert.doesNotMatch(read(file), /deploy\/configure.sh/);
   assert.match(read('scripts/deploy.mjs'), /bash deploy\/env-run.sh -T node-a node scripts\/maintenance.mjs accounts status/);
   for (const name of ['README.md', 'docs/isolation-acceptance.md']) assert.doesNotMatch(read(name), /\.env:/);
   assert.match(read('docs/isolation-acceptance.md'), /bash deploy\/env-run.sh node-a node scripts\/maintenance.mjs accounts/);
@@ -114,16 +117,29 @@ test('一次性入口：所有直接 .env 挂载集中在两个公共入口，�
 test('Compose 静态检查：长期服务能力集合和继承关系保持原样', () => {
   // 固定检查能力声明全文，新增到其他服务或共享锚点的能力也会被发现。
   for (const [file, expected] of [
-    ['compose.yaml', ['cap_drop: [ALL]', 'cap_add: [SETUID, SETGID, CHOWN, FOWNER]']],
+    ['compose.yaml', ['cap_drop: [ALL]', 'cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]', 'cap_drop: [ALL]', 'cap_add: [FOWNER, DAC_READ_SEARCH]', 'cap_drop: [ALL]', 'cap_drop: [ALL]', 'cap_add: [SETUID, SETGID, CHOWN, FOWNER]']],
     ['deploy/remote.compose.yaml', ['cap_drop: [ALL]', 'cap_add: [SETUID,SETGID,CHOWN,FOWNER]']],
     ['deploy/two-host.compose.yaml', []],
     ['deploy/acceptance.compose.yaml', ['cap_drop: [ALL]', 'cap_add: [CHOWN,FOWNER,SETUID,SETGID]']],
   ]) {
     const source = read(file);
     assert.deepEqual(source.split('\n').filter(line => /cap_(?:add|drop):/.test(line)).map(line => line.trim()), expected, file);
-    assert.doesNotMatch(source, /DAC_READ_SEARCH|DAC_OVERRIDE|privileged:/);
+    assert.doesNotMatch(source, /privileged:/);
+    if (file !== 'compose.yaml') assert.doesNotMatch(source, /DAC_READ_SEARCH|DAC_OVERRIDE/);
   }
   const compose = read('compose.yaml');
   assert.match(compose, /node-a: &node[\s\S]*?cap_drop: \[ALL\]\n    cap_add: \[SETUID, SETGID, CHOWN, FOWNER\]/);
   for (const node of ['node-b', 'node-c']) assert.match(compose, new RegExp(`  ${node}:\\n    profiles: \\["cluster"\\]\\n    <<: \\*node`));
+});
+
+test('Compose 初始化：prepare 仅读环境，migrate 以只读挂载和 DAC_READ_SEARCH 读配置', () => {
+  const source = read('compose.yaml');
+  const prepare = source.split('  prepare:\n')[1].split('  migrate:\n')[0];
+  const migrate = source.split('  migrate:\n')[1].split('  postgres:\n')[0];
+  assert.match(prepare, /network_mode: none/);
+  assert.doesNotMatch(prepare, /source: .*\.env|env_file:/);
+  assert.match(read('scripts/compose-init.mjs'), /writeGatewayConfig\(root, env, \{ readEnv: false \}\)/);
+  assert.match(migrate, /source: \.\/\.env\n        target: \$\{CONTAINER_APP_DIR\}\/\.env\n        read_only: true\n        bind: \{ create_host_path: false \}/);
+  assert.match(migrate, /cap_add: \[FOWNER, DAC_READ_SEARCH\]/);
+  for (const body of [prepare, migrate]) assert.match(body, /restart: "no"/);
 });

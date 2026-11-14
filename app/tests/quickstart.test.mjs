@@ -95,7 +95,7 @@ for (const [platform, install, start] of [
         else assert.equal(fs.existsSync(path.join(f.root, '.env')), false);
       } else {
         await promise;
-        assert.deepEqual(f.calls.slice(0, 3).map(call => [call.command, call.args]), [['docker', ['compose', 'version']], ['docker', ['info']], ['bash', ['deploy/configure.sh']]]);
+        assert.deepEqual(f.calls.slice(0, 3).map(call => [call.command, call.args]), [['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d', '--build', '--wait']]]);
       }
       assert.doesNotMatch(f.logs.join('\n'), /不应显示/);
     }
@@ -297,7 +297,7 @@ test('setup 按顺序构建启动初始化，密码只进入 stdin，不进入�
   const f = fixture(t);
   await setup(['--non-interactive'], f);
   assert.deepEqual(f.calls.map(call => [call.command, call.args.slice(0, 3)]), [
-    ['docker', ['compose', 'version']], ['docker', ['info']], ['bash', ['deploy/configure.sh']], ['docker', ['compose', 'up', '-d']], ['docker', ['compose', 'run', '--rm']],
+    ['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d']], ['docker', ['compose', 'run', '--rm']],
   ]);
   const init = f.calls.at(-1);
   assert.equal(init.args[init.args.indexOf('--cap-add') + 1], 'DAC_READ_SEARCH');
@@ -321,9 +321,9 @@ test('setup 启动检查失败不写入，不重试；no-start 不检查 Docker 
 });
 test('setup 启动操作结果不确定时停止，不自动重发初始化', async t => {
   const f = fixture(t); let count = 0;
-  f.run = async () => { if (++count === 5) throw new Error('结果待核对'); };
+  f.run = async () => { if (++count === 4) throw new Error('结果待核对'); };
   await assert.rejects(setup(['--non-interactive'], f), /待核对/);
-  assert.equal(count, 5); assert.equal(fs.existsSync(path.join(f.root, '.env')), true);
+  assert.equal(count, 4); assert.equal(fs.existsSync(path.join(f.root, '.env')), true);
 });
 test('环境序列化保留美元符号，拒绝换行且不留下临时文件', async t => {
   const f = await configured(t), before = fs.readFileSync(path.join(f.root, '.env'));
@@ -378,8 +378,8 @@ test('副本轮询必须三个分片全部有副本且追平；超时固定为 1
 });
 test('ctl Compose 参数覆盖单节点、两节点、三节点、日志与账号；stop 不删数据', () => {
   assert.deepEqual(ctlArgs('down', [], {}, '/app'), ['compose', 'stop']);
-  assert.deepEqual(ctlArgs('up', [], {}, '/app'), ['compose', 'up', '-d', '--wait']);
-  assert.deepEqual(composeUp({ AGENT_CLUSTER_NODES: 'node-a,node-b' }), ['compose', '--profile', 'cluster', 'up', '-d', '--wait', 'node-a', 'node-b', 'caddy']);
+  assert.deepEqual(ctlArgs('up', [], {}, '/app'), ['compose', 'up', '-d', '--build', '--wait']);
+  assert.deepEqual(composeUp({ AGENT_CLUSTER_NODES: 'node-a,node-b' }), ['compose', '--profile', 'cluster', 'up', '-d', '--build', '--wait', 'node-a', 'node-b', 'caddy']);
   assert.deepEqual(ctlArgs('logs', ['node-a'], {}, '/app'), ['compose', 'logs', '-f', '--tail', '100', 'node-a']);
   assert.deepEqual(ctlArgs('status', [], {}, '/app'), ['compose', 'ps']);
   for (const [command, args] of [['init', []], ['add', ['bob', '--admin']], ['passwd', ['bob']], ['disable', ['bob']], ['list', []]]) {
@@ -395,7 +395,7 @@ test('ctl 密码只经 stdin；status 显示 waiting、replication 与版本；u
   await ctl(['status'], { ...f, fetchImpl: async () => ({ status: 503, json: async () => ({ status: 'not-ready', waiting: '副本准备中', replication: 'on' }) }) });
   assert.match(f.logs.join('\n'), /waiting.*副本准备中.*replication.*on/); assert.match(f.logs.join('\n'), /版本：1.0.0/);
   f.calls.length = 0; await ctl(['up'], f);
-  assert.deepEqual(f.calls.slice(0, 3).map(call => [call.command, call.args]), [['docker', ['compose', 'version']], ['docker', ['info']], ['bash', ['deploy/configure.sh']]]);
+  assert.deepEqual(f.calls.slice(0, 3).map(call => [call.command, call.args]), [['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d', '--build', '--wait']]]);
 });
 function upFixture(f, status = 'initialized\n') {
   const steps = [], run = f.run;
@@ -419,7 +419,7 @@ test('up 已初始化时只查询一次账号状态，不提示初始化，随�
     f.isTTY = isTTY;
     f.prompts = { ask: async () => assert.fail('已有账号不应询问'), close() { assert.fail('不应创建交互'); } };
     await ctl(['up'], f);
-    assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status', 'ready']);
+    assert.deepEqual(steps, ['version', 'info', 'up', 'status', 'ready']);
     const status = f.calls.at(-1);
     assert.equal(status.command, 'docker');
     assert.deepEqual(status.args, envRunArgs(f.root, ['-T', 'node-a', 'node', 'scripts/maintenance.mjs', 'accounts', 'status'], readEnv(f.root)));
@@ -436,7 +436,7 @@ test('up 未初始化且是 TTY 时先查询、隐藏输入两次、经 stdin �
     f.prompts.ask = async (label, options) => { steps.push('ask'); questions.push({ label, secret: options?.secret }); return ask(); };
     f.prompts.close = () => steps.push('close');
     await ctl(['up'], f);
-    assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status', 'ask', 'ask', 'ask', 'close', 'init', 'ready']);
+    assert.deepEqual(steps, ['version', 'info', 'up', 'status', 'ask', 'ask', 'ask', 'close', 'init', 'ready']);
     assert.match(questions[0].label, /admin/);
     assert.deepEqual(questions.map(q => q.secret), [undefined, true, true]);
     const init = f.calls.at(-1);
@@ -453,7 +453,7 @@ test('up 未初始化且非 TTY 时立即拒绝，不读取输入、不初始化
   const f = await configured(t), steps = upFixture(f, 'uninitialized\n');
   f.prompts.ask = async () => assert.fail('非 TTY 不应读取输入');
   await assert.rejects(ctl(['up'], f), error => /npm run auth:init/.test(error.message) && /npm run setup -- --non-interactive/.test(error.message) && /SETUP_ADMIN_PASSWORD/.test(error.message));
-  assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status']);
+  assert.deepEqual(steps, ['version', 'info', 'up', 'status']);
 });
 for (const [name, status] of [['命令失败', new Error('结果待核对')], ['空输出', ''], ['未知输出', 'unknown\n'], ['混杂输出', 'initialized\nuninitialized\n']]) {
   test(`up 账号状态${name}时提示 status 核对，不重试、不初始化、不等待`, async t => {
@@ -461,7 +461,7 @@ for (const [name, status] of [['命令失败', new Error('结果待核对')], ['
     f.isTTY = true;
     f.prompts.ask = async () => assert.fail('状态不明不应读取输入');
     await assert.rejects(ctl(['up'], f), /npm run status/);
-    assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status']);
+    assert.deepEqual(steps, ['version', 'info', 'up', 'status']);
   });
 }
 test('up 初始化密码连续三次不一致时关闭交互，不初始化、不等待就绪', async t => {
@@ -471,7 +471,7 @@ test('up 初始化密码连续三次不一致时关闭交互，不初始化、�
   f.prompts.close = () => steps.push('close');
   await assert.rejects(ctl(['up'], f), /3 次/);
   assert.equal(f.logs.filter(line => line.includes('两次密码不一致')).length, 3);
-  assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status', 'close']);
+  assert.deepEqual(steps, ['version', 'info', 'up', 'status', 'close']);
 });
 test('up 初始化失败时停止，不重试、不等待就绪', async t => {
   const f = await configured(t), steps = upFixture(f, 'uninitialized\n'), run = f.run;
@@ -483,7 +483,7 @@ test('up 初始化失败时停止，不重试、不等待就绪', async t => {
     return result;
   };
   await assert.rejects(ctl(['up'], f), /待核对/);
-  assert.deepEqual(steps, ['version', 'info', 'configure', 'up', 'status', 'init']);
+  assert.deepEqual(steps, ['version', 'info', 'up', 'status', 'init']);
 });
 test('子进程调用以 stdin 管道写入且抑制错误原文，无隐式环境继承', async () => {
   let captured, stdin = '';
@@ -528,14 +528,12 @@ test('ready 只轮询只读请求，固定两分钟超时', async () => {
   await assert.rejects(waitReady({}, { fetchImpl: async () => ({ status: 503 }), now: () => time, wait: async ms => { time += ms; }, log() {} }), /超时/);
   assert.equal(time, 120000);
 });
-test('目录权限由一次性容器统一准备，不依赖宿主 root，不递归覆盖用户文件', () => {
-  const source = fs.readFileSync(new URL('../deploy/configure.sh', import.meta.url), 'utf8');
-  assert.match(source, /docker compose run --rm --no-deps --user 0 -T -v "\$PWD:\/prepare"/);
-  assert.match(source, /chown 0:1000 "\$1" && chmod 2770/);
-  assert.doesNotMatch(source, /id -u|chown -R|chmod -R|DAC_OVERRIDE/);
-  assert.match(source, /prepare "nodes\/\$node\/\$directory"/);
-  const bootstrap = fs.readFileSync(new URL('../deploy/bootstrap.sh', import.meta.url), 'utf8');
-  assert.match(bootstrap, /docker compose run .*--user 0 .*\/prepare-nodes/);
+test('目录与身份准备共用 Compose 一次性服务，不递归覆盖用户文件', () => {
+  const read = name => fs.readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
+  assert.match(read('deploy/configure.sh'), /docker compose run --rm --no-deps -T prepare/);
+  assert.match(read('deploy/bootstrap.sh'), /docker compose run --rm --no-deps -T migrate/);
+  assert.match(read('compose.yaml'), /node scripts\/compose-init.mjs copy-identities/);
+  assert.doesNotMatch(read('deploy/configure.sh') + read('deploy/bootstrap.sh'), /chown -R|chmod -R|cmp|cp /);
 });
 
 test('workbench 返回可选显示名称，旧 Agent 仍回退到 id，认证门禁保持生效', async t => {
@@ -586,10 +584,10 @@ test('cluster:enable 经 admin 检查后写配置、构建、按新拓扑启动�
     run: async (...args) => { events.push(args[0]); return run(...args); },
     ready: async () => { events.push('ready'); }, wait: async () => { events.push('replicas'); },
   });
-  assert.deepEqual(events, ['admin', 'bash', 'docker', 'ready', 'replicas']);
+  assert.deepEqual(events, ['admin', 'docker', 'ready', 'replicas']);
   assert.equal(readEnv(f.root).AGENT_CLUSTER_NODES, 'node-a,node-b');
   validateClusterSecrets(readEnv(f.root), ['node-a', 'node-b']);
-  assert.deepEqual(f.calls.at(-1).args, ['compose', '--profile', 'cluster', 'up', '-d', '--wait', 'node-a', 'node-b', 'caddy']);
+  assert.deepEqual(f.calls.at(-1).args, ['compose', '--profile', 'cluster', 'up', '-d', '--build', '--wait', 'node-a', 'node-b', 'caddy']);
   for (const call of f.calls) assert.equal(JSON.stringify([call.args, call.options.env]).includes(password), false);
 });
 test('cluster:enable 修改后外部操作失败立即停止，保留现场供人工核对', async t => {

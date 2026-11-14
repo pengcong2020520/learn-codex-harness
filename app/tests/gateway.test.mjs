@@ -12,16 +12,22 @@ const registry = loadModelRegistry(app);
 const keys = { KIMI_API_KEY: "sk-kimi-secret-123", DEEPSEEK_API_KEY: "sk-deepseek-secret-456" };
 const gatewayEnv = { AGENT_GATEWAY_KEY: "sk-bf-local-789", CODEX_MODEL: "kimi/kimi-k2.7-code", CODEX_MODEL_CATALOG_ENABLED: "true", ...keys };
 
-test("内置模型清单合法；每家的密钥变量只在 compose 网关服务里登记", () => {
+test("内置模型清单合法；服务商密钥仅交给网关与一次性 prepare", () => {
   assert.ok(registry.models["kimi/kimi-k2.7-code"] && registry.models["deepseek/deepseek-flash"]);
   const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8");
-  const gateway = compose.match(/^  gateway:\n([\s\S]*?)(?=^  [a-z]+:)/m)[1];
-  const outside = compose.replace(gateway, "");
+  const environment = compose.split('x-gateway-env: &gateway-env\n')[1].split('services:\n')[0];
+  const services = [...compose.split('services:\n')[1].split('\nnetworks:')[0].matchAll(/^  ([a-z-]+):[^\n]*\n([\s\S]*?)(?=^  [a-z-]+:|(?![\s\S]))/gm)];
+  const gateway = services.find(([, name]) => name === 'gateway')[2];
+  assert.match(gateway, /environment: \*gateway-env/);
+  assert.match(services.find(([, name]) => name === 'prepare')[2], /<<: \*gateway-env/);
+  for (const [, name, body] of services) {
+    if (name === 'prepare' || name === 'gateway') continue;
+    assert.doesNotMatch(body, /\*gateway-env|[A-Z_]+_API_KEY:/, name);
+  }
   // 密钥用环境变量引用传进网关；不需要密钥的服务（如本地 Ollama）只有地址，地址直接写进生成的配置。
   const keyEnvs = Object.values(registry.providers).map(provider => provider.keyEnv).filter(Boolean);
   for (const keyEnv of keyEnvs) {
-    assert.match(gateway, new RegExp(`^\\s+${keyEnv}: \\$\\{${keyEnv}:-\\}$`, "m"), `compose.yaml 的网关要传入 ${keyEnv}`);
-    assert.doesNotMatch(outside, new RegExp(`^\\s+${keyEnv}:`, "m"), "服务商密钥只能传给网关");
+    assert.match(environment, new RegExp(`^\\s+${keyEnv}: \\$\\{${keyEnv}:-\\}$`, "m"), `compose.yaml 的网关要传入 ${keyEnv}`);
   }
   // 每个模型都标了用途；路由表里每种用途的候选都存在。
   for (const [id, spec] of Object.entries(registry.models)) assert.ok(spec.purposes.length, id);
@@ -106,7 +112,8 @@ test("模型参数表：只放已启用服务商的模型，键是“服务商/�
   assert.equal(params["kimi/kimi-k2.7-code"].max_output_tokens, undefined, "原样转发的模型不用填，网关不替它设上限");
   assert.equal(buildGatewayConfig(registry, gatewayEnv).framework.pricing.model_parameters_url, "file:///app/data/model-parameters.json");
   const compose = fs.readFileSync(path.join(app, "compose.yaml"), "utf8");
-  assert.match(compose, /\.\/\.data\/gateway\/model-parameters\.json:\/app\/data\/model-parameters\.json:ro/, "参数表要挂进网关容器");
+  assert.match(compose, /\.\/\.data\/gateway:\/gateway-config:ro/, "参数表所在目录要只读挂进网关容器");
+  assert.match(compose, /cp \/gateway-config\/config.json \/gateway-config\/model-parameters.json \/app\/data\//, "启动前把参数表复制到网关读取的位置");
 });
 
 test("连接参数：网关模式指向本机网关；与直连的三项同时设置会报错", () => {
