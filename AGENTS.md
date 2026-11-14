@@ -1,5 +1,12 @@
 # AGENTS.md：在本仓库里改代码与文档的规范
 
+## 用这个脚手架做自己的 Agent
+
+创建、扩展和上线 Agent，分别使用 [new-agent](.agents/skills/new-agent/SKILL.md)、[extend-agent](.agents/skills/extend-agent/SKILL.md)、[go-production](.agents/skills/go-production/SKILL.md)；Claude Code 的同名 Skill 位于 `.claude/skills/`。
+不支持 Skill 的助手可用 [可复制提示词](app/docs/prompts.md)。
+在 `app/` 下运行 `npm run agent:check -- <agent.json 路径>` 检查 Agent，运行 `npm run production:check` 检查生产准备。
+本文件其余部分是“修改脚手架本身”的规范。
+
 给在这个仓库里工作的 AI 编码助手和贡献者。人类贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，两份冲突时以本文件为准。所有说明、注释、提交信息、报告都用中文；专有名词与协议方法名原样保留（Thread、Turn、Item、`turn/start`、`thread/resume`、App Server 等）。
 
 ## 1. 先弄清改哪里
