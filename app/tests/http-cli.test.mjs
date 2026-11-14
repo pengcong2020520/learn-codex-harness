@@ -87,7 +87,7 @@ test("CLI 经真实 HTTP/SSE 接收多个流式片段，连续两轮的回复不
   // 每轮开始时显示这一轮用的模型和选择来源。
   assert.match(output, /模型：unit-model（默认路由）\nturn id: turn-1\nAgent：mock reply turn-1\n模型：unit-model（默认路由）\nturn id: turn-2\nAgent：mock reply turn-2\n/);
   assert.equal(output.split("Agent：").length - 1, 2);
-  assert.equal(output.split("Thread id: thread-1").length - 1, 1);
+  assert.equal(output.match(/Thread id: \S+/g).length, 1);
   assert.doesNotMatch(output, /Agent \[|轮次 |消息已接收/);
   assert.ok(!output.includes(app.token));
 });
@@ -176,7 +176,11 @@ test("真实 HTTP 修改当前步：重新执行、SSE 状态、再次等待、�
   const reviseStatus = async (token, body) => (await fetch(app.url + "/tasks/revise", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) })).status;
   assert.equal(await reviseStatus(app.token, { ...args, threadId: other.id }), 404);
   const login = await api.request("/auth/login", { username: "bob", password: "fixture-password" });
+  const foreign = new AgentClient({ url: app.url, token: login.token });
   assert.equal(await reviseStatus(login.token, args), 404);
+  const foreignSession = await foreign.request("/sessions", {});
+  assert.notEqual(foreignSession.id, session.id);
+  assert.equal(await reviseStatus(login.token, { ...args, threadId: foreignSession.id }), 404);
   assert.equal((await api.request("/tasks/revise", args)).step, 0);
   await until(() => app.messages.job("revision").status === "waiting" && app.messages.job("revision").reviseCount === 1);
   await until(() => events.some(event => event.type === "queue" && event.data.jobs.some(job => job.status === "waiting" && job.reviseCount === 1)));
@@ -188,4 +192,48 @@ test("真实 HTTP 修改当前步：重新执行、SSE 状态、再次等待、�
   await until(() => app.messages.job("revision").status === "completed");
   assert.equal(app.messages.job("revision").step, 1);
   assert.equal(app.messages.job("revision").reviseCount, 0);
+});
+
+// 与上面的跨用户修改相同：bob 用自己的会话 ID，带上 alice 的 taskId。
+async function foreignOwnedTask(t) {
+  const workflow = { id: "review", steps: [{ id: "draft", goal: "写初稿", confirm: true }, { id: "final", goal: "交付" }] };
+  const { app, api } = await appFixture(t, [workflow]);
+  const session = await api.request("/sessions", {});
+  await api.request("/messages", { threadId: session.id, clientMessageId: "revision", workflow: "review", text: "初稿" });
+  await until(() => app.messages.job("revision").status === "waiting");
+  const login = await api.request("/auth/login", { username: "bob", password: "fixture-password" });
+  const foreign = new AgentClient({ url: app.url, token: login.token });
+  const foreignSession = await foreign.request("/sessions", {});
+  const call = (route, body) => fetch(app.url + route, { method: "POST", headers: { authorization: `Bearer ${login.token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { app, session, foreignSession, call };
+}
+
+test("真实 HTTP：另一用户用自己的会话确认原用户任务返回 404", async t => {
+  const { app, session, foreignSession, call } = await foreignOwnedTask(t);
+  assert.notEqual(foreignSession.id, session.id);
+  const response = await call("/tasks/confirm", { threadId: foreignSession.id, taskId: "revision" });
+  assert.equal(response.status, 404);
+  assert.equal(app.messages.job("revision").status, "waiting");
+  assert.equal(app.messages.job("revision").step, 0);
+});
+
+test("真实 HTTP：另一用户用自己的会话结束原用户任务返回 404", async t => {
+  const { app, session, foreignSession, call } = await foreignOwnedTask(t);
+  assert.notEqual(foreignSession.id, session.id);
+  const response = await call("/tasks/cancel", { threadId: foreignSession.id, taskId: "revision" });
+  assert.equal(response.status, 404);
+  assert.equal(app.messages.job("revision").status, "waiting");
+});
+
+test("真实 HTTP：另一用户用自己的会话继续队列不能读到或改掉原用户任务，继续对方会话返回 404", async t => {
+  const { app, session, foreignSession, call } = await foreignOwnedTask(t);
+  assert.notEqual(foreignSession.id, session.id);
+  // 继续只认 threadId，请求体里的 taskId 会被忽略。自己的会话应成功，且队列里不能出现别人的任务。
+  const own = await call("/queue/continue", { threadId: foreignSession.id, taskId: "revision" });
+  assert.equal(own.status, 200);
+  const body = await own.json();
+  assert.equal(body.jobs.some(job => job.id === "revision"), false);
+  assert.equal(app.messages.job("revision").status, "waiting");
+  assert.equal(app.messages.job("revision").reviseCount, 0);
+  assert.equal((await call("/queue/continue", { threadId: session.id })).status, 404);
 });
