@@ -23,6 +23,9 @@ export class TestJobs {
       throw new Error("最多 100 条");
     this.state.jobs.push({
       ...job,
+      step: 0,
+      note: null,
+      reviseCount: 0,
       turnId: null,
       status: job.status === "proposed" ? "proposed" : "queued",
       error: null,
@@ -30,7 +33,7 @@ export class TestJobs {
   }
   patch(id, fields, expected) {
     const job = this.get(id);
-    if (expected && !expected.includes(job.status)) return false;
+    if (!job || (expected && !expected.includes(job.status))) return false;
     Object.assign(job, fields);
     return true;
   }
@@ -59,7 +62,14 @@ export async function testDataFactory(config) {
   const { accounts, store } = await accountFixture(), rows = new Map(), mappings = new Map();
   const repository = {
     saveAgent: async () => {},
-    bind: async (id, hash, cwd) => rows.set(id, { id, owner_id: currentIdentity().userId, agent_hash: hash, cwd, name: 'fixture' }),
+    // 与 Repository.bind 的 ON CONFLICT 相同：id 已被别人占用时不能改 owner，否则后创建的会话会接管先创建的。
+    bind: async (id, hash, cwd) => {
+      const owner = currentIdentity().userId;
+      const existing = rows.get(id);
+      if (existing && (existing.owner_id !== owner || existing.agent_hash !== hash))
+        throw new AppError('会话归属或 Agent 版本冲突。', 409);
+      rows.set(id, { id, owner_id: owner, agent_hash: hash, cwd, name: existing?.name || 'fixture' });
+    },
     conversation: async id => { const row = rows.get(id); if (!row || row.owner_id !== currentIdentity().userId) throw new AppError('未找到本项目的这个会话。', 404, 'THREAD_NOT_FOUND'); return row; },
     listConversations: async () => [...rows.values()].filter(row => row.owner_id === currentIdentity().userId),
     recordArtifacts: async () => {},

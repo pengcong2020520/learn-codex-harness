@@ -47,3 +47,34 @@ test('网页真实浏览器：登录、新建、流式回复、终态、重连�
   assert.deepEqual(page.errors, [], '无 JS 异常或 console.error/warn');
   assert.ok(page.networkErrors.every(error => /401/.test(error) && /\/auth\/login/.test(error)), JSON.stringify(page.networkErrors));
 });
+
+
+test('网页 Workflow：等待确认 → 修改 → 重新执行 → 再次等待 → 继续', { timeout: 90000 }, async t => {
+  assert.ok(chrome, '需要 Chrome；可用 CHROME_PATH 指定路径。');
+  const workflows = [{ id: 'review', steps: [{ id: 'draft', goal: '写初稿', confirm: true }, { id: 'final', goal: '交付' }] }];
+  const fixture = await webFixture(t, { workflows }), page = await browser(t);
+  await page.open(fixture.url + '/ui/');
+  await page.run(`document.querySelector('#username').value='alice';document.querySelector('#password').value='fixture-password';document.querySelector('#login-form').requestSubmit();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#chat-view').hidden, 10000);`), true);
+  await page.run(`document.querySelector('#new-session').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#message').disabled && $('.session-button[aria-current="true"]'), 10000);`), true);
+  assert.equal(await page.run(`
+    const threadId = document.querySelector('.session-button[aria-current="true"]').dataset.threadId;
+    const response = await fetch('/messages', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + sessionStorage.getItem('agent.web.token') }, body: JSON.stringify({ threadId, clientMessageId: 'browser-revise', workflow: 'review', text: '页面任务' }) });
+    return response.status;
+  `), 202);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.actions button').some(button => button.textContent === '修改'), 10000);`), true);
+  assert.deepEqual(await page.run(`return [...document.querySelectorAll('.actions button')].map(button => button.textContent)`), ['继续', '修改', '结束']);
+  assert.equal(await page.run(`return document.querySelector('#messages').textContent.includes('本步已重做 0 次')`), true);
+  await page.run(`[...document.querySelectorAll('.actions button')].find(button => button.textContent === '修改').click();const input = document.querySelector('.message textarea');input.value='减少导航层级';input.dispatchEvent(new Event('input'));input.closest('form').requestSubmit();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.user').some(row => row.dataset.status === 'running' && row.textContent.includes('页面任务')), 10000);`), true);
+  assert.equal(await page.run(`${helpers} return await until(() => $('#messages').textContent.includes('本步已重做 1 次') && $$('.actions button').some(button => button.textContent === '继续'), 10000);`), true);
+  assert.equal(fixture.requests.filter(r => r.path === '/tasks/revise' && r.method === 'POST').length, 1);
+  assert.deepEqual(await page.run(`return [...document.querySelectorAll('.actions button')].map(button => button.textContent)`), ['继续', '修改', '结束']);
+  assert.equal(await page.run(`return document.querySelector('#messages').textContent.includes('第 1 次按用户意见重做本步')`), true);
+  await page.run(`[...document.querySelectorAll('.actions button')].find(button => button.textContent === '继续').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.user').some(row => row.dataset.status === 'completed' && row.textContent.includes('页面任务')), 10000);`), true);
+  assert.equal(fixture.requests.filter(r => r.path === '/tasks/confirm' && r.method === 'POST').length, 1);
+  assert.deepEqual(page.errors, []);
+  assert.deepEqual(page.networkErrors, []);
+});

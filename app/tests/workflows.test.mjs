@@ -1,4 +1,5 @@
 import test from "node:test";
+import { runOwner } from "../server/modules/accounts/context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +12,8 @@ import { prepareRun } from "../server/modules/codex/runtime.mjs";
 import { SessionService } from "../server/modules/sessions/index.mjs";
 import { MessageService } from "../server/modules/messages/index.mjs";
 import { EventHub } from "../server/modules/events/index.mjs";
-import { TestJobs } from "./jobs-fixture.mjs";
+import { AppError } from "../shared/errors.mjs";
+import { TestJobs, testDataFactory } from "./jobs-fixture.mjs";
 import { FakeRpc, fixture, installToolFixture, tempRoot, cleanup, until } from "./helpers.mjs";
 
 const base = { skills: [{ id: "outline", required: true }],
@@ -372,4 +374,143 @@ test("per-user workflow checks use the existing workspace without nesting users 
     assert.ok(outcome.checks.every(check => check.passed));
     assert.equal(fs.existsSync(path.join(workspaceDir, 'users')), false);
   }
+});
+
+
+test("修改当前步：意见进入输入，权限和模型不变，串行防重复，十次后拒绝，继续后归零", async t => runOwner("11111111-1111-4111-8111-111111111111", async () => {
+  const starts = [];
+  const gate = { submission: () => null, run: (principal, operation) => operation(), authorize: grants => grants, end() {},
+    start: (job, grants, writes) => starts.push({ grants, writes }) };
+  const workflow = { ...article, grants: [{ type: "knowledge.update", kbId: "general" }],
+    steps: [{ ...article.steps[0], model: "fast" }, { id: "review", goal: "复核", confirm: true }, { id: "done", goal: "交付" }] };
+  const r = await messageRig(t, [workflow], gate, { AGENT_WEB_SEARCH: "off", DEMO_TIMEOUT_MS: "3000", AGENT_GATEWAY_KEY: "sk-bf-unit-test", DEEPSEEK_API_KEY: "unit-provider" });
+  const events = [];
+  r.messages.hub.on("event", event => { if (event.type === "queue") events.push(structuredClone(event.data)); });
+  await r.submit("revise", { workflow: "article" });
+  await r.started(1);
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("revise").status === "waiting");
+  const args = { threadId: r.session.id, taskId: "revise", text: "减少导航层级" };
+  for (let n = 1; n <= 10; n++) {
+    if (n === 1) {
+      const attempts = await Promise.allSettled([r.messages.revise(args), r.messages.revise(args)]);
+      assert.equal(attempts[0].status, "fulfilled");
+      assert.equal(attempts[1].reason.status, 409);
+    } else await r.messages.revise(args);
+    const input = await r.started(n + 1);
+    assert.match(input[0].text, /第 1\/3 步：outline/);
+    assert.match(input[1].text, new RegExp(`这是第 ${n} 次按用户意见重做本步`));
+    assert.match(input[1].text, /用户的修改意见是：减少导航层级/);
+    assert.match(input[1].text, /保留已确认的部分，只按意见修改/);
+    assert.match(input[1].text, /新产物使用新文件名.*不要覆盖之前的版本/);
+    assert.deepEqual(starts.at(-1), starts[0]);
+    assert.equal(r.store.get("revise").step, 0);
+    assert.equal(r.store.get("revise").reviseCount, n);
+    r.rpc.finish(r.session.id);
+    await until(() => r.store.get("revise").status === "waiting");
+  }
+  assert.ok(r.rpc.calls.filter(call => call.method === "turn/start").every(call => call.params.model === "deepseek/deepseek-flash"));
+  await assert.rejects(r.messages.revise(args), { status: 409, message: "本步已重做 10 次，请确认继续或结束任务" });
+  assert.ok(["queued", "running", "waiting"].every(status => events.some(event => event.jobs.some(job => job.id === "revise" && job.reviseCount === 1 && job.status === status))));
+  const confirmed = await r.messages.confirm({ threadId: r.session.id, taskId: "revise" });
+  assert.equal(confirmed.step, 1); assert.equal(confirmed.reviseCount, 0);
+  const next = await r.started(12);
+  assert.equal(next[1].text, "用户已确认上一步，请继续。");
+  r.rpc.finish(r.session.id);
+  await until(() => r.store.get("revise").status === "waiting");
+  await r.messages.revise({ ...args, text: "补充复核依据" });
+  const revised = await r.started(13);
+  assert.match(revised[0].text, /第 2\/3 步：review/);
+  assert.match(revised[1].text, /第 1 次.*补充复核依据/);
+  assert.doesNotMatch(revised[1].text, /减少导航层级|用户已确认上一步/);
+}));
+
+test("修改参数与状态校验：仅 waiting 可用，跨会话返回 404", async t => {
+  const r = await messageRig(t, [article]);
+  r.store.create({ id: "revision", threadId: r.session.id, text: "修改", workflow: "article" });
+  const args = { threadId: r.session.id, taskId: "revision", text: "改" };
+  for (const status of ["proposed", "queued", "starting", "running", "steering", "completed", "failed", "interrupted", "needs-review", "cancelled", "unconfirmed", "replica_missing"]) {
+    r.store.patch("revision", { status });
+    await assert.rejects(r.messages.revise(args), { status: 409, message: "只有等待确认的任务可以按意见重做" });
+  }
+  r.store.patch("revision", { status: "waiting" });
+  for (const text of [undefined, null, 1, {}, [], "", "  ", "字".repeat(2001)])
+    await assert.rejects(r.messages.revise({ ...args, text }), { status: 400 });
+  for (const extra of [{ userId: "forged" }, { step: 1 }, { model: "other" }, { threadId: "../x" }, { taskId: null }])
+    await assert.rejects(r.messages.revise({ ...args, ...extra }), { status: 400 });
+  const other = await r.sessions.create();
+  await assert.rejects(r.messages.revise({ ...args, threadId: other.id }), { status: 404 });
+  await assert.rejects(r.messages.revise({ ...args, taskId: "missing" }), { status: 404 });
+  assert.equal(r.store.get("revision").reviseCount, 0);
+  const accepted = await r.messages.revise({ ...args, text: "字".repeat(2000) });
+  assert.equal(accepted.note.length, 2000);
+  assert.equal(accepted.step, 0);
+  assert.equal(accepted.status, "queued");
+  const restored = new TestJobs(structuredClone(r.store.state));
+  assert.equal(restored.get("revision").reviseCount, 1);
+});
+
+test("HTML 格式验收：解析实际元素，拒绝纯文本、片段、注释与脚本里的伪标签", t => {
+  const workspaceDir = tempRoot(t);
+  fs.mkdirSync(path.join(workspaceDir, "outputs"));
+  for (const [index, [content, passed]] of [
+    ['<!doctype html><html><head><title>页面</title></head><body>正文</body></html>', true],
+    ['<BODY>正文</BODY>', true], ['普通文本', false], ['<div>片段</div>', false],
+    ['<!-- <html> -->', false], ['<script>const text = "<body>";</script>', false], ['<html', false],
+  ].entries()) {
+    const locator = `outputs/page-${index}.html`;
+    fs.writeFileSync(path.join(workspaceDir, locator), content);
+    const turn = { artifacts: { page: { locator, format: "html" } } };
+    assert.equal(runChecks(["format"], turn, { workspaceDir, formats: ["html"] })[0].passed, passed, content);
+    assert.equal(runChecks(["format"], turn, { workspaceDir, formats: ["md"] })[0].passed, false);
+  }
+  assert.equal(runChecks(["format"], { artifacts: { page: { locator: "outputs/missing.html", format: "html" } } }, { workspaceDir, formats: ["html"] })[0].passed, false);
+});
+
+
+test("内存任务修改隔离：经会话仓储检查归属，跨用户访问与借自己的会话修改他人任务均为 404", async t => {
+  const owner = "11111111-1111-4111-8111-111111111111", other = "22222222-2222-4222-8222-222222222222";
+  const r = await runOwner(owner, () => messageRig(t, [article]));
+  const data = await testDataFactory({ root: r.root });
+  r.sessions.repository = data.repository;
+  await runOwner(owner, () => data.repository.bind(r.session.id, r.agent.descriptor.hash, r.root));
+  r.store.create({ id: "private", threadId: r.session.id, userId: owner, text: "任务", workflow: "article" });
+  r.store.patch("private", { status: "waiting" });
+  const foreignSession = await runOwner(other, () => r.sessions.create());
+  await runOwner(other, () => data.repository.bind(foreignSession.id, r.agent.descriptor.hash, r.root));
+  const args = { threadId: r.session.id, taskId: "private", text: "修改" };
+  await runOwner(other, async () => {
+    await assert.rejects(r.messages.revise(args), { status: 404 });
+    await assert.rejects(r.messages.revise({ ...args, threadId: foreignSession.id }), { status: 404 });
+  });
+  assert.equal(r.store.get("private").status, "waiting");
+  assert.equal(r.store.get("private").reviseCount, 0);
+});
+
+test("重做后自动推进：排队已满保留本步计数与意见，容量恢复进入下一步时归零", async t => {
+  const workflow = { ...article, steps: [{ ...article.steps[0], confirm: false }, { id: "final", goal: "交付" }] };
+  const r = await messageRig(t, [workflow]);
+  const patch = r.store.patch.bind(r.store);
+  let full = true;
+  t.mock.method(r.store, "patch", (id, fields, expected) => {
+    if (full && fields.status === "queued" && fields.step === 1) throw new AppError("全局排队已满。", 429, "QUEUE_FULL");
+    return patch(id, fields, expected);
+  });
+  await r.submit("auto", { workflow: "article" });
+  await r.started(1); r.rpc.finish(r.session.id);
+  await until(() => r.store.get("auto").status === "waiting");
+  const args = { threadId: r.session.id, taskId: "auto", text: "精简说明" };
+  await r.messages.revise(args);
+  await r.started(2); r.rpc.finish(r.session.id);
+  await until(() => r.store.get("auto").status === "waiting");
+  assert.equal(r.store.get("auto").reviseCount, 1);
+  assert.equal(r.store.get("auto").note, "精简说明");
+  full = false;
+  await r.messages.revise(args);
+  await r.started(3); r.rpc.finish(r.session.id);
+  const next = await r.started(4);
+  assert.equal(r.store.get("auto").step, 1);
+  assert.equal(r.store.get("auto").reviseCount, 0);
+  assert.equal(r.store.get("auto").note, null);
+  assert.equal(next[1].text, "用户已确认上一步，请继续。");
 });

@@ -208,9 +208,28 @@ export class MessageService {
         const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });
         if (workflow.grants.length) this.gate?.authorize(workflow.grants);
       }
-      const fields = job.status === "proposed" ? { status: "queued", note } : { status: "queued", step: (job.step || 0) + 1, note };
+      const fields = job.status === "proposed" ? { status: "queued", note } : { status: "queued", step: (job.step || 0) + 1, note, reviseCount: 0 };
       if (!(await this.store.patch(taskId, fields, ["waiting", "proposed"])))
         throw new AppError("只有等待确认的任务可以继续。", 409);
+      await this.publish(threadId);
+      await this.wake(threadId);
+      return this.publicJob(await this.job(taskId));
+    });
+  }
+  // 修改意见复用 note；保持当前步，派发时沿用该步的权限与模型配置。
+  async revise({ threadId, taskId, text, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("修改只接受 threadId、taskId 与 text。", 400);
+    requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    const note = requireText(text, "修改意见", 2000);
+    await this.sessions.ensure(threadId);
+    return this.serial(threadId, async () => {
+      const job = await this.job(taskId);
+      if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
+      if (job.status !== "waiting") throw new AppError("只有等待确认的任务可以按意见重做", 409);
+      const reviseCount = job.reviseCount || 0;
+      if (reviseCount >= 10) throw new AppError("本步已重做 10 次，请确认继续或结束任务", 409);
+      if (!(await this.store.patch(taskId, { status: "queued", note, reviseCount: reviseCount + 1 }, ["waiting"])))
+        throw new AppError("只有等待确认的任务可以按意见重做", 409);
       await this.publish(threadId);
       await this.wake(threadId);
       return this.publicJob(await this.job(taskId));
@@ -314,6 +333,8 @@ export class MessageService {
       // 第二步起不重发原文：会话历史里已有原始要求，这里只说明用户已确认，并带上补充说明。
       const extra = job.note ? `\n用户补充：${job.note}` : "";
       let input = step.index ? `用户已确认上一步，请继续。${extra}` : `${job.text}${extra}`;
+      if (job.reviseCount > 0)
+        input = `这是第 ${job.reviseCount} 次按用户意见重做本步，用户的修改意见是：${job.note}；保留已确认的部分，只按意见修改；新产物使用新文件名（产物只能新建、不能覆盖），不要覆盖之前的版本。`;
       if (job.mode === "append") {
         const original = this.sessions
           .getTurn(threadId, job.targetTurnId)
@@ -460,11 +481,14 @@ export class MessageService {
     await this.store.pause(job.threadId);
   }
   async patchOutcome(job, fields, expected) {
+    // 正常完成与提前完成都从这里推进；重做意见不能泄漏到下一步。
+    if (fields.step !== undefined && fields.step !== (job.step || 0))
+      fields = { ...fields, reviseCount: 0, ...(job.reviseCount > 0 ? { note: null } : {}) };
     try { return await this.store.patch(job.id, fields, expected); }
     catch (error) {
       if (error.code !== 'QUEUE_FULL' || fields.status !== 'queued') throw error;
       // Completion must not kill the executor when the next workflow step cannot queue.
-      return this.store.patch(job.id, { ...fields, status: 'waiting', step: job.step || 0,
+      return this.store.patch(job.id, { ...fields, status: 'waiting', step: job.step || 0, note: job.note, reviseCount: job.reviseCount || 0,
         error: '全局排队已满；容量释放后请确认下一步。' }, expected);
     }
   }

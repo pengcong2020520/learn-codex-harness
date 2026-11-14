@@ -125,7 +125,7 @@ test('ownership: A 访问 B 的会话缓存、任务、知识库、工作区资�
   const token = (await accounts.login({ username: 'alice', password: 'fixture-password' }, 'peer')).token;
   const messages = new MessageService({ rpc, sessions: { ...sessions, on() {}, ensure: async () => {} }, config: {}, hub, store: jobs });
   const http = httpFixture(accounts, { sessions, messages, knowledge, resources });
-  for (const [url, body] of [['/state?threadId=thread-b', undefined], ['/tasks/cancel', { threadId: 'thread-a', taskId: 'task-b' }], ['/knowledge/pages?kbId=foreign', undefined], [`/resources/read?id=${OWNER_B}`, undefined]]) {
+  for (const [url, body] of [['/state?threadId=thread-b', undefined], ['/tasks/cancel', { threadId: 'thread-a', taskId: 'task-b' }], ['/tasks/revise', { threadId: 'thread-a', taskId: 'task-b', text: '修改' }], ['/tasks/revise', { threadId: 'thread-b', taskId: 'task-b', text: '修改' }], ['/knowledge/pages?kbId=foreign', undefined], [`/resources/read?id=${OWNER_B}`, undefined]]) {
     const response = await request(http, url, { token, body });
     assert.equal(response.statusCode, 404, url); assert.equal(response.body.error.code, 'NOT_FOUND');
   }
@@ -265,7 +265,7 @@ test('migration: 迁移登记可重入，不重复执行已登记版本；新 SQ
   }, release() {} };
   const pool = { connect: async () => client };
   await migrate(pool); await migrate(pool);
-  assert.equal(rows.length, 21); assert.equal(scripts.length, 1);
+  assert.equal(rows.length, 22); assert.equal(scripts.length, 1);
   assert.match(scripts[0], /CREATE TABLE IF NOT EXISTS agent_data.auth_sessions/);
   assert.match(scripts[0], /role IN \('admin','user'\)/);
   assert.match(scripts[0], /users_username_normalized/);

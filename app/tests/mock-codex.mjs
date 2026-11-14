@@ -1,3 +1,4 @@
+// 每个用户一个进程。若从 thread-1 重新编号，不同 owner 会撞上同一个 Thread id；正式 Codex 的 id 在实例内唯一。
 export const mock = `
 import {createInterface} from 'node:readline';
 import {createToolService} from './server/modules/tools/loader.mjs';
@@ -19,7 +20,7 @@ createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='skills/list') send({id:m.id,result:{data:[{cwd:process.cwd(),skills:[],errors:[]}]}});
  if(m.method==='mcpServerStatus/list') send({id:m.id,result:{data:[{name:'project_tools',runtimeStatus:'connected',tools:Object.fromEntries(registry.specs.map(t=>[t.name,t])),toolsError:null}],nextCursor:null}});
  if(m.method==='thread/list') send({id:m.id,result:{data:[...threads.values()],nextCursor:null}});
- if(m.method==='thread/start') {const thread={id:'thread-'+(threads.size+1),cwd:p.cwd,turns:[]}; threads.set(thread.id,thread);send({id:m.id,result:{thread,model:'unit-model',modelProvider:'project_api'}});}
+ if(m.method==='thread/start') {const thread={id:crypto.randomUUID(),cwd:p.cwd,turns:[]}; threads.set(thread.id,thread);send({id:m.id,result:{thread,model:'unit-model',modelProvider:'project_api'}});}
  if(m.method==='thread/resume') send({id:m.id,result:{thread:threads.get(p.threadId),model:'unit-model',modelProvider:'project_api'}});
  if(m.method==='turn/start') {
   const thread=threads.get(p.threadId); const turn={id:'turn-'+(++number),status:'inProgress',items:[]}; thread.turns.push(turn);

@@ -6,8 +6,12 @@ import { fixture, tempRoot, installToolFixture, testDataFactory, cleanup } from 
 import { mock } from './mock-codex.mjs';
 
 // Mimic Caddy's /ui mount and same-origin reverse proxy; never write an .env.
-export async function webFixture(t) {
+export async function webFixture(t, { workflows } = {}) {
   const root = installToolFixture(tempRoot(t));
+  if (workflows) {
+    const file = `${root}/agents/writing/agent.json`, definition = JSON.parse(await readFile(file, 'utf8'));
+    definition.agent.workflows = workflows; await writeFile(file, JSON.stringify(definition));
+  }
   let backend; const streams = new Set(), requests = [];
   const security = {
     'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",

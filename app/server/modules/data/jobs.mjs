@@ -4,7 +4,7 @@ import { Repository } from "./repository.mjs";
 import { transaction } from "./database.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
-const columns = `(SELECT c.owner_id FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id) AS "userId",t.model,t.selected_model AS "selectedModel",t.model_source AS "modelSource",t.workflow,t.params,t.checks,t.step,t.note,t.reason,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
+const columns = `(SELECT c.owner_id FROM agent_data.conversations c WHERE c.instance_id=t.instance_id AND c.id=t.thread_id) AS "userId",t.model,t.selected_model AS "selectedModel",t.model_source AS "modelSource",t.workflow,t.params,t.checks,t.step,t.note,t.revise_count AS "reviseCount",t.reason,t.id,t.thread_id AS "threadId",t.text,t.mode,t.target_turn_id AS "targetTurnId",
   t.turn_id AS "turnId",t.agent_hash AS "agentHash",t.status,t.error,t.created_at::float8 AS "createdAt"`;
 const owned = `t.instance_id=$1 AND EXISTS(SELECT 1 FROM agent_data.conversations c
   WHERE c.instance_id=t.instance_id AND c.id=t.thread_id AND c.owner_id=$2)`;
@@ -110,7 +110,7 @@ export class PostgresJobs extends Repository {
     });
   }
   async patch(id, fields, expected, { restoreUnsent = false } = {}) {
-    const mapping = { selectedModel: "selected_model", modelSource: "model_source", status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note" };
+    const mapping = { selectedModel: "selected_model", modelSource: "model_source", status: "status", turnId: "turn_id", error: "error", checks: "checks", step: "step", note: "note", reviseCount: "revise_count" };
     // checks 是数组：显式序列化，避免驱动把它当成 PostgreSQL 数组。
     const entries = Object.entries(fields).filter(([key]) => mapping[key])
       .map(([key, value]) => [key, key === "checks" && value != null ? JSON.stringify(value) : value]);
