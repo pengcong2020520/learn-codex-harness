@@ -87,12 +87,25 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       }
       if (route === 'GET /auth/me') return json(200, { user: identity.user });
       if (route === 'POST /auth/logout') { await accounts.logout(identity); return json(200, { loggedOut: true }); }
+      if (route === 'GET /admin/readiness') {
+        if (identity.role !== 'admin') throw new AppError('只有管理员可以查看生产就绪清单。', 403);
+        return json(200, await config.productionReadiness());
+      }
       if (route === 'GET /workbench') {
         const definition = config.agent?.definition?.agent;
         const visibleKnowledge = knowledge ? await knowledge.list() : [];
+        const catalog = config.launch.router?.catalog(), id = catalog?.defaults.chat || config.launch.model;
+        const model = catalog?.models.chat.find(model => model.id === id);
+        const nativeModel = config.launch.catalog?.models.find(model => model.slug === id);
+        const defaultModel = id ? { id, displayName: nativeModel?.display_name || config.registry?.models[id]?.displayName || id,
+          image: model?.image ?? nativeModel?.input_modalities.includes('image') ?? false,
+          webSearch: (catalog?.webSearch || config.launch.webSearch) === 'live' } : null;
         return json(200, { agent: definition ? { id: definition.id, ...(definition.name ? { name: definition.name } : {}), version: definition.version,
+          ...(definition.description !== undefined ? { description: definition.description } : {}),
+          ...(definition.starters !== undefined ? { starters: definition.starters } : {}),
           skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
           outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
+          defaultModel, viewer: { username: identity.user.username, admin: identity.role === 'admin' },
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }

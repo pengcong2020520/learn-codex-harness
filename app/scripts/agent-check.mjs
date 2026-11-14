@@ -5,7 +5,7 @@ import { validateDefinition } from '../server/modules/agents/schema.mjs';
 import { loadRole } from '../server/modules/role/index.mjs';
 import { loadModelRegistry } from '../server/modules/gateway/index.mjs';
 import { createModelRouter, validateEffort } from '../server/modules/gateway/router.mjs';
-import { PLACEHOLDER_ROLE } from './agent-new.mjs';
+import { PLACEHOLDER_ROLE, PLACEHOLDER_DESCRIPTION, PLACEHOLDER_STARTERS } from './agent-new.mjs';
 import { PROJECT_ROOT, isMain } from './quickstart-lib.mjs';
 
 // 仅检查约定的顶层字段是否存在，不解释 YAML，也不加载 Skill 内容为代码。
@@ -53,6 +53,9 @@ export function checkAgent(requested, { root = PROJECT_ROOT } = {}) {
     return rows;
   }
   const { agent, bindings } = definition;
+  if (!agent.description) add('warning', 'agent.description', '缺少 Agent 简介。', '补一句话说明，网页首页会显示');
+  else if (agent.description === PLACEHOLDER_DESCRIPTION) add('warning', 'agent.description', '简介仍是占位文字。', '填写这个 Agent 为谁服务、完成什么任务，网页首页会显示。');
+  if (agent.starters?.some(text => PLACEHOLDER_STARTERS.includes(text))) add('warning', 'agent.starters', '示例请求仍是占位文字。', '替换成贴合角色与已授权能力的示例请求，网页首页会显示。');
   try {
     const role = loadRole(resourceFile(directory, agent.instructions));
     if (role === PLACEHOLDER_ROLE.trim()) add('warning', 'agent.instructions', '角色仍是占位文字。', '编辑角色文件，填写服务对象、任务范围和交付要求。');

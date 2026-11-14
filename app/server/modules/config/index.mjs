@@ -1,4 +1,5 @@
 // 配置模块：只在服务端读取模型密钥，不向客户端返回完整环境变量。
+import { checkProduction } from '../deployment/production.mjs';
 import { allowedOrigins } from "./origins.mjs";
 import { clusterNodes } from "./cluster.mjs";
 import { replicationRateLimit } from "../replication/transport.mjs";
@@ -130,5 +131,9 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
   const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
   if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
-  return { previewSecret: environment.AGENT_PREVIEW_SECRET, allowedOrigins: origins, clusterNodes: nodes, replicationRateLimit: rateLimit, authMemorySetting: environment.AGENT_MEMORY_ENABLED, deployment: deploymentConfig(environment), root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
+  const productionReadiness = async () => {
+    const { productionNodeInputs } = await import('../deployment/production-inputs.mjs');
+    return checkProduction(productionNodeInputs({ root, env: environment, registry, now: Date.now() }));
+  };
+  return { productionReadiness, previewSecret: environment.AGENT_PREVIEW_SECRET, allowedOrigins: origins, clusterNodes: nodes, replicationRateLimit: rateLimit, authMemorySetting: environment.AGENT_MEMORY_ENABLED, deployment: deploymentConfig(environment), root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
 }

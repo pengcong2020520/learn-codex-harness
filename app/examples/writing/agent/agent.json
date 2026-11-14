@@ -2,6 +2,8 @@
   "schemaVersion": "1.2",
   "agent": {
     "id": "writing-assistant",
+    "description": "为有观点和资料的写作者整理思路、研究依据、润色文章，保留个人表达。",
+    "starters": ["请把我的零散想法整理成文章大纲，保留我的核心观点。", "请检查这篇草稿中哪些事实还需要补充依据。", "请润色这段文字，让表达更清楚，并保留原意。"],
     "version": "1.1.0",
     "instructions": "role.md",
     "skills": [],

@@ -10,7 +10,7 @@
 先读仓库根目录 AGENTS.md，再进入 app/。读 README「做你自己的 Agent」、agents/writing/agent.json、对应 role.md 与 Skill，以及 examples/ 里最接近的示例；模型以 config/models.json 为准。
 
 先一次问清最多六个问题：给谁用、完成什么任务、交付物形式、资料来源（上传/知识库/联网）、哪些步骤要人确认、对模型看图/联网/成本的要求。已经说清的不要再问。
-运行 npm run agent:new -- <id>，然后把服务对象与交付要求写入 role.md，把任务方法写入 Skill，把工具、数据绑定、输出、工作流、确认点和步骤模型写入 agent.json。工作流放 agent.workflows，confirm 是本步完成后等待确认，writes 只能收窄已有范围。
+运行 npm run agent:new -- <id>，然后把服务对象与交付要求写入 role.md，把任务方法写入 Skill，把工具、数据绑定、输出、工作流、确认点和步骤模型写入 agent.json。写 description 和 3–6 条 starters，网页首页会展示。工作流放 agent.workflows，confirm 是本步完成后等待确认，writes 只能收窄已有范围。
 运行 npm run agent:check -- agents/<id>/agent.json，按定位与改法修正，直到没有错误。占位角色虽属建议，也应在交付前改掉；说明资料未部署产生的建议。
 运行 npm run agent:use -- <id>，再运行 npm run up。给我三个示例请求和各自应该看到的结果，并说明需要新建会话。
 

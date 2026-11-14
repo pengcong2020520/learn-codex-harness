@@ -2,6 +2,8 @@
   "schemaVersion": "1.2",
   "agent": {
     "id": "customer-support",
+    "description": "为客服人员依据已授权政策资料起草答复，标明依据和待确认事项。",
+    "starters": ["请根据已授权的售后政策，起草一段退货咨询答复。", "请整理这次客户咨询，列出资料依据和需要人工确认的问题。", "请检查这段客服答复是否包含没有政策依据的承诺。"],
     "version": "1.0.0",
     "instructions": "role.md",
     "skills": [],

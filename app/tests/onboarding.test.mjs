@@ -8,7 +8,7 @@ import { parseEnv } from 'node:util';
 import { newAgent } from '../scripts/agent-new.mjs';
 import { checkAgent } from '../scripts/agent-check.mjs';
 import { useAgent } from '../scripts/agent-use.mjs';
-import { checkProduction, formatProductionChecks } from '../scripts/production-check.mjs';
+import { checkProductionFiles as checkProduction, formatProductionChecks } from '../scripts/production-check.mjs';
 
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-onboarding-')));
@@ -111,7 +111,8 @@ test('agent:use 多行目标定义停止核对，空配置可追加并收紧权�
 });
 
 test('agent:check 角色与 Skill 的符号链接被拒绝，修改后的角色不再提示占位', t => {
-  const { root } = fixture(t), role = path.join(root, 'agents/sample/role.md');
+  const { root, edit } = fixture(t), role = path.join(root, 'agents/sample/role.md');
+  edit(value => { value.agent.description = '为客服人员根据资料回答问题'; value.agent.starters = ['请根据政策资料起草答复']; });
   fs.writeFileSync(role, '# 客服助手\n只回答资料里有依据的问题。\n');
   assert.equal(checkAgent(sample, { root }).some(row => /占位/.test(row.detail)), false);
   fs.renameSync(role, `${role}.original`); fs.symlinkSync('role.md.original', role);
