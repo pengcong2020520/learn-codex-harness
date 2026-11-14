@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createPrompts } from '../shared/prompts.mjs';
 import { loadEnvironment } from '../server/modules/config/index.mjs';
-import { PROJECT_ROOT, isMain, readEnv, childEnvironment, commandRedactor, runProcess, composeUp, accountArgs, entryUrl, waitReady, validateUsername, validatePassword } from './quickstart-lib.mjs';
+import { PROJECT_ROOT, isMain, readEnv, childEnvironment, commandRedactor, runProcess, composeUp, accountArgs, entryUrl, waitReady, validateUsername, validatePassword, checkRuntimeEnvironment, checkDocker } from './quickstart-lib.mjs';
 
 export function ctlArgs(command, args, env, root) {
   if (command === 'up' && !args.length) return composeUp(env);
@@ -18,18 +18,25 @@ export function ctlArgs(command, args, env, root) {
   }
   throw new Error('命令或参数无效；使用 up、down、logs [服务名]、status 或账号命令。');
 }
-async function accountInput(command, args, prompts) {
+async function accountInput(command, args, prompts, log) {
   prompts ??= createPrompts();
   try {
     const username = command === 'init' ? (await prompts.ask('管理员用户名 [admin]：')).trim() || 'admin' : args[0];
-    validateUsername(username);
-    const password = await prompts.ask('密码（至少 12 位）：', { secret: true });
-    validatePassword(password);
-    if (password !== await prompts.ask('再次输入密码：', { secret: true })) throw new Error('两次密码不一致。');
-    return `${command === 'init' ? `${username}\n` : ''}${password}\n`;
+    validateUsername(username, '用户名');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      // 与 setup 一致，每次重输整组；取消或读取失败不重问。
+      const password = await prompts.ask('密码（至少 12 位）：', { secret: true });
+      const confirmation = await prompts.ask('再次输入密码：', { secret: true });
+      try {
+        validatePassword(password, '密码');
+        if (password !== confirmation) throw new Error('两次密码不一致。');
+        return `${command === 'init' ? `${username}\n` : ''}${password}\n`;
+      } catch (error) { log(error.message); }
+    }
+    throw new Error('已连续 3 次输入无效，账号未修改；请重新运行当前命令。');
   } finally { prompts.close(); }
 }
-export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, run = runProcess, ready = waitReady, fetchImpl = fetch, prompts, isTTY = Boolean(process.stdin.isTTY), log = console.log, output = text => process.stdout.write(text) } = {}) {
+export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, platform = process.platform, procVersion, run = runProcess, ready = waitReady, fetchImpl = fetch, prompts, isTTY = Boolean(process.stdin.isTTY), log = console.log, output = text => process.stdout.write(text) } = {}) {
   const [command, ...raw] = argv, development = raw.includes('--dev'), quiet = command === 'up' && raw.includes('--quiet'), args = raw.filter(arg => arg !== '--dev' && !(quiet && arg === '--quiet'));
   if (raw.filter(arg => arg === '--quiet').length > 1) throw new Error('--quiet 不能重复指定。');
   if (development) {
@@ -41,12 +48,15 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
     if (code) throw new Error('开发模式账号操作失败，请检查 DATABASE_URL 与输入。');
     return;
   }
+  checkRuntimeEnvironment({ platform, procVersion, root });
   let values = readEnv(root);
   const dockerArgs = ctlArgs(command, args, values, root);
   if (command === 'up') values = ensurePreviewSecret(root);
   const redact = await commandRedactor(env, values);
-  const input = ['init', 'add', 'passwd'].includes(command) ? await accountInput(command, args, prompts) : undefined;
+  const input = ['init', 'add', 'passwd'].includes(command) ? await accountInput(command, args, prompts, log) : undefined;
   if (command === 'up') {
+    log('检查 Docker Compose 与 Docker 运行状态……');
+    await checkDocker({ platform, root, env, run });
     log('构建镜像并准备数据目录……');
     await run('bash', ['deploy/configure.sh'], { root, env: childEnvironment(env), output, redact, quiet });
     log('启动服务……');
@@ -63,7 +73,7 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
     if (status === 'uninitialized') {
       if (!isTTY) throw new Error('还没有管理员账号，非交互终端无法创建；请运行 npm run auth:init，或通过 SETUP_ADMIN_USER、SETUP_ADMIN_PASSWORD 环境变量运行 npm run setup -- --non-interactive 初始化。');
       log('还没有管理员账号，现在创建');
-      const input = await accountInput('init', [], prompts);
+      const input = await accountInput('init', [], prompts, log);
       const result = await run('docker', accountArgs(root, 'init', [], values), { root, env: childEnvironment(env), input, capture: true });
       if (result) log(redact(result));
     }

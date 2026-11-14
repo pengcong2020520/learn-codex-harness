@@ -11,6 +11,24 @@ import { clusterNodes } from '../server/modules/config/cluster.mjs';
 
 export { PROJECT_ROOT };
 export const isMain = url => process.argv[1] && pathToFileURL(fs.realpathSync(process.argv[1])).href === url;
+export function checkRuntimeEnvironment({ platform = process.platform, procVersion, root = PROJECT_ROOT } = {}) {
+  if (platform === 'win32') throw new Error('检测到 Windows 原生环境。脚手架依赖 bash 脚本和 Linux 文件权限，请在 WSL2 里运行：安装 WSL2（Ubuntu）和 Docker Desktop，并在 Docker Desktop 设置里打开 WSL 集成；在 WSL 终端把仓库克隆到 Linux 目录（例如 ~/），再运行 npm run setup。详见 app/README.md 的「运行环境」。');
+  if (platform !== 'linux') return;
+  procVersion ??= fs.readFileSync('/proc/version', 'utf8');
+  if (/microsoft/i.test(procVersion) && path.resolve(root).startsWith('/mnt/')) throw new Error('仓库在 Windows 磁盘（/mnt/…）上，这里不支持 Linux 文件属主和权限，数据目录会准备失败。请把仓库克隆到 WSL 的 Linux 目录（例如 ~/），再运行。');
+}
+export async function checkDocker({ platform = process.platform, root = PROJECT_ROOT, env = process.env, run = runProcess } = {}) {
+  const options = { root, env: childEnvironment(env), capture: true };
+  // 检查输出只供进程捕获，避免回显 Docker 的宿主信息和英文错误。
+  try { await run('docker', ['compose', 'version'], options); }
+  catch {
+    throw new Error(`未安装 Docker 或缺少 Compose v2，请${platform === 'darwin' ? '安装并启动 Docker Desktop、OrbStack 或 Colima（任选其一）' : '安装 Docker Engine 和 Compose 插件；WSL2 里也可以用 Docker Desktop 并打开 WSL 集成'}。`);
+  }
+  try { await run('docker', ['info'], options); }
+  catch {
+    throw new Error(`Docker 已安装但未启动，或当前用户没有权限，请${platform === 'darwin' ? '打开 Docker Desktop 或 OrbStack，或运行 colima start' : '运行 sudo systemctl start docker；如果提示没有权限，把当前用户加入 docker 组后重新登录'}。`);
+  }
+}
 export function readEnv(root) { return parseEnv(fs.readFileSync(path.join(root, '.env'), 'utf8')); }
 export function serializeEnv(values) {
   return Object.entries(values).map(([key, value]) => {
@@ -110,6 +128,6 @@ export async function waitReady(env, { fetchImpl = fetch, now = Date.now, wait =
 export function validateUsername(value, variable = 'SETUP_ADMIN_USER') {
   if (!/^[a-z0-9_.-]{1,64}$/.test(value)) throw new Error(`${variable} 须为 1–64 位小写字母、数字、点、下划线或连字符。`);
 }
-export function validatePassword(value) {
-  if (typeof value !== 'string' || value.length < 12 || /[\r\n\0]/.test(value)) throw new Error('SETUP_ADMIN_PASSWORD 至少 12 位，且不能含换行或空字符。');
+export function validatePassword(value, variable = 'SETUP_ADMIN_PASSWORD') {
+  if (typeof value !== 'string' || value.length < 12 || /[\r\n\0]/.test(value)) throw new Error(`${variable} 至少 12 位，且不能含换行或空字符。`);
 }
