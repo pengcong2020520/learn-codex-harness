@@ -25,13 +25,13 @@ export function loadClientConnection(environment = process.env, root = PROJECT_R
 
 export class AgentClient {
   constructor(connection) { this.connection = connection; }
-  async request(route, body, signal, method) {
+  async request(route, body, signal, method, contentType) {
     let response;
     try {
       response = await fetch(this.connection.url + route, {
         method: method || (body === undefined ? "GET" : "POST"), redirect: "error",
-        headers: { authorization: `Bearer ${this.connection.token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        headers: { authorization: `Bearer ${this.connection.token}`, ...(body === undefined ? {} : { "content-type": contentType || "application/json" }) },
+        ...(body === undefined ? {} : { body: contentType ? body : JSON.stringify(body) }),
         signal: signal || AbortSignal.timeout(15000)
       });
     } catch (error) {
@@ -41,6 +41,10 @@ export class AgentClient {
     if (response.status === 401) throw new Error("请运行 npm run login 重新登录。");
     if (!response.ok) throw new Error(result.error?.message || `HTTP ${response.status}`);
     return result;
+  }
+
+  upload(path, content, contentType) {
+    return this.request(`/workspace/files?path=${encodeURIComponent(path)}`, content, undefined, 'PUT', contentType);
   }
 
   // 重连时带上最后收到的事件 ID，服务端能补发就只补发错过的事件；resync() 放弃断点，重新从快照开始。

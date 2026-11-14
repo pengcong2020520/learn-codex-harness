@@ -766,3 +766,18 @@ test("真实 PG：修改当前步持久化、重启保留计数、十次上限�
   assert.deepEqual([row.step, row.reviseCount, row.note], [1, 0, "继续"]);
   await assert.rejects(r.jobs.patch("revise", { reviseCount: 11 }));
 });
+
+test('真实 PG：附件迁移、落库、重新连接和任务恢复均保留路径', async t => {
+  const r = await setup(t), attachments = ['inputs/uploads/需求.md', 'inputs/uploads/参考.png'];
+  await r.jobs.create({ ...job('attachments'), attachments });
+  assert.deepEqual((await r.jobs.get('attachments')).attachments, attachments);
+  const pool = await openDatabase(databaseUrl); cleanup(r.root, () => pool.end());
+  const restored = new PostgresJobs(pool, r.scope);
+  await restored.recover('重启核对');
+  assert.deepEqual((await restored.get('attachments')).attachments, attachments);
+  assert.equal((await restored.get('attachments')).status, 'queued');
+  await restored.create(job('without-attachments'));
+  assert.deepEqual((await restored.get('without-attachments')).attachments, []);
+  const foreign = new PostgresJobs(pool, { ...r.scope, ownerId: randomUUID() });
+  assert.equal(await foreign.get('attachments'), undefined);
+});

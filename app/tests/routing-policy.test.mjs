@@ -60,7 +60,8 @@ test('路由策略：步骤 needs 校验、看图和长上下文挑选与逐候�
   for (const needs of [{ image: 'true' }, { contextTokens: 0 }, { contextTokens: 1.5 }, { unknown: true }, { nativeTools: [] }])
     assert.throws(() => configure({ needs }), /Agent 定义无效/);
   const models = structuredClone(registry);
-  models.models[fast].inputModalities = ['text'];
+  models.models[fast].inputs = ['text'];
+  models.models[kimi].inputs = ['text', 'image'];
   models.models[fast].contextWindow = 100;
   for (const needs of [{ image: true }, { contextTokens: 200_000 }]) {
     const agent = configure({ model: 'fast', needs }, { AGENT_WEB_SEARCH: 'off' }, models);
@@ -171,7 +172,7 @@ test('路由策略：GET /models 按用途返回能力、定价、场景、默�
   assert.equal(body.models.embedding.length, 0);
   assert.deepEqual(body.scenes.fast, registry.scenes.fast);
   const model = body.models.chat.find(model => model.id === kimi);
-  assert.equal(model.image, true); assert.ok(model.contextWindow > 0);
+  assert.equal(model.image, false, '未实测标注 inputs 的模型不声明看图许可'); assert.ok(model.contextWindow > 0);
   assert.deepEqual(model.nativeTools, ['web_search']); assert.equal(typeof model.priced, 'boolean');
   assert.equal(body.models.image.length, 2); assert.equal(body.models.video.length, 2);
   assert.equal(body.models.image[0].priced, false);
@@ -234,7 +235,8 @@ test('路由策略：预算降级默认与步骤场景，具体模型豁免，�
     await r.submit('normal'); assert.equal((await r.started('normal')).model, kimi);
     assert.equal(r.messages.job('normal').modelSource, '默认路由');
   }
-  const r = await routingRig(t, { env: {}, step: { needs: { image: true } }, budget: { AGENT_BUDGET_DAILY_TOKENS: '100', AGENT_BUDGET_DOWNGRADE_AT: '0.8' } });
+  const visionModels = structuredClone(registry); visionModels.models[kimi].inputs = ['text', 'image'];
+  const r = await routingRig(t, { models: visionModels, env: {}, step: { needs: { image: true } }, budget: { AGENT_BUDGET_DAILY_TOKENS: '100', AGENT_BUDGET_DOWNGRADE_AT: '0.8' } });
   await r.sessions.usage.record({ source: 'chat', model: fast, inputTokens: 80 });
   await r.submit('search', { workflow: 'route-test' });
   assert.equal((await r.started('search')).model, kimi, '降级场景仍要求搜索和看图');

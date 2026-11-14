@@ -362,3 +362,35 @@ test('CLI /files 列出一层子目录并排序，/open 输出完整地址且不
   assert.ok(f.text().indexOf('page.html') < f.text().indexOf('old.md'));
   assert.match(f.text(), /https:\/\/example.com\/preview\/fixture/); assert.match(f.text(), /用法：\/open/);
 });
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { tempRoot } from './helpers.mjs';
+test('CLI /upload 与 /attach：原始字节上传，下一条消息携带附件，帮助和四项上限', async t => {
+  const root = tempRoot(t), local = path.join(root, '用户 需求.md'); fs.writeFileSync(local, '# PRD');
+  const f = terminalFixture(t), calls = [], uploads = [], session = { id: THREAD_ID, turns: [], model: 'fixture' };
+  const api = {
+    async upload(locator, content, contentType) { uploads.push({ locator, content, contentType }); return { path: locator, size: content.length }; },
+    async request(route, body) { calls.push({ route, body }); return route === '/sessions' ? session : { status: 'queued' }; },
+    subscribe() { return { close() {}, done: Promise.resolve() }; },
+  };
+  const done = runChat(api, f.terminal);
+  f.input.end(`/help\n/upload "${local}" 保存.md\n/attach inputs/uploads/保存.md\n/attach inputs/uploads/2.png\n/attach inputs/uploads/3.png\n/attach inputs/uploads/4.png\n/attach inputs/uploads/5.png\n开始设计\n下一条\n/exit\n`);
+  await done;
+  assert.deepEqual(uploads, [{ locator: 'inputs/uploads/保存.md', content: Buffer.from('# PRD'), contentType: 'text/markdown' }]);
+  const messages = calls.filter(call => call.route === '/messages');
+  assert.equal(messages.length, 2); assert.deepEqual(messages[0].body.attachments, ['inputs/uploads/保存.md', 'inputs/uploads/2.png', 'inputs/uploads/3.png', 'inputs/uploads/4.png']);
+  assert.equal(messages[1].body.attachments, undefined); assert.match(f.text(), /最多 4 个/); assert.match(f.text(), /\/upload/); assert.match(f.text(), /\/attach/);
+});
+
+import { AgentClient } from '../client/modules/connection/index.mjs';
+test('CLI 上传连接：PUT 原始 Buffer，保留 Content-Type、认证及服务端同名错误', async t => {
+  const content = Buffer.from('# PRD'), client = new AgentClient({ url: 'https://example.com', token: 'fixture' }); let sent;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    sent = { url, options }; return new Response(JSON.stringify({ error: { message: '文件已存在，请换名。' } }), { status: 409 });
+  });
+  await assert.rejects(client.upload('inputs/uploads/需求.md', content, 'text/markdown'), /请换名/);
+  assert.equal(sent.options.method, 'PUT'); assert.equal(sent.options.body, content);
+  assert.equal(sent.options.headers['content-type'], 'text/markdown'); assert.equal(sent.options.headers.authorization, 'Bearer fixture');
+  assert.equal(new URL(sent.url).searchParams.get('path'), 'inputs/uploads/需求.md');
+});

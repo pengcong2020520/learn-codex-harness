@@ -51,7 +51,7 @@ export function buildModelCatalog(environment, instructions = "", registry = nul
     const spec = listed ? {
       displayName: listed.displayName || slug, description: listed.description || null,
       contextWindow: listed.contextWindow, maxContextWindow: listed.maxContextWindow || listed.contextWindow,
-      modalities: listed.inputModalities || ["text"], reasoningLevels: listed.reasoningLevels || [],
+      modalities: listed.inputs || listed.inputModalities || ["text"], reasoningLevels: listed.reasoningLevels || [],
       defaultReasoning: listed.defaultReasoningLevel || null, reasoningSummary: listed.reasoningSummary || "none",
       originalImages: Boolean(listed.supportsImageDetailOriginal),
       supportVerbosity: Boolean(listed.supportVerbosity), verbosity: listed.defaultVerbosity || "",

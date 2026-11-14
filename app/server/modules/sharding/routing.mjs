@@ -46,9 +46,9 @@ export function forwardHeaders(headers, key, route, userId) {
   Object.assign(result, nodeHeaders(key)); result['x-route-revision'] = route.revision; result['x-route-user'] = userId;
   return result;
 }
-export async function bufferBody(request) {
+export async function bufferBody(request, limit = 512 * 1024) {
   const chunks = []; let size = 0;
-  for await (const c of request) { size += c.length; if (size > 512 * 1024) throw new AppError('请求内容过大。', 413); chunks.push(c); }
+  for await (const c of request) { size += c.length; if (size > limit) throw new AppError('请求内容过大。', 413); chunks.push(c); }
   return Buffer.concat(chunks);
 }
 export async function forwardHttp(request, address, route, userId, key, body, { fetcher = fetch, signal } = {}) {

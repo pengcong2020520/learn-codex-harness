@@ -111,3 +111,24 @@ test('预览文件：真实 uid 属主保持不变，拒绝跨用户路径及符
     assert.equal(fs.statSync(own).uid, before.uid); assert.equal(fs.statSync(own).mode, before.mode);
   });
 });
+
+test('上传文件：真实用户 uid、共享组和权限与生产写入一致，其他 uid 无法读取', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-uid-')); fs.chmodSync(root, 0o755);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owner = '11111111-1111-4111-8111-111111111111', uid = 10001;
+  prepareDirectories(root, { user_id: owner, uid, codex_home: path.join(root, '.data/users', owner, 'codex') }, { isolated: true });
+  const files = createUserFileTools(root, { workspaceDir: path.join(root, 'workspace'),
+    sources: [{ id: 'input', locator: 'inputs', actions: ['read'], readOnly: true }], outputs: { directory: 'outputs', formats: ['md'] } });
+  const file = runOwner(owner, () => {
+    files.write_file({ path: 'outputs/normal.md', content: '模型产物' });
+    files.write_upload({ path: 'inputs/uploads/需求.md', content: Buffer.from('用户 PRD') });
+    const target = path.join(files.workspace, 'inputs/uploads/需求.md');
+    const normal = fs.statSync(path.join(files.workspace, 'outputs/normal.md')), uploaded = fs.statSync(target);
+    assert.equal(uploaded.uid, uid); assert.equal(uploaded.gid, 1000);
+    assert.equal(uploaded.mode & 0o777, normal.mode & 0o777);
+    assert.equal(uploaded.uid, normal.uid); assert.equal(uploaded.gid, normal.gid);
+    return target;
+  });
+  assert.equal((await readAsUser(uid, file, { maxBytes: 256 * 1024 })).toString(), '用户 PRD');
+  await assert.rejects(readAsUser(10002, file, { maxBytes: 256 * 1024 }), error => error.code === 'EACCES');
+});

@@ -106,3 +106,14 @@ test('网页重做多轮：相同 clientId 只显示一组确认动作', () => {
   assert.equal(rows.find(row => row.confirm).reviseCount, 1);
   assert.ok(rows.some(row => row.text === '重做意见'));
 });
+
+test('网页上传 API：直接 PUT File 字节，类型、认证及错误沿用现有处理', async () => {
+  const file = new File(['# PRD'], '需求.md', { type: 'text/markdown' }); let sent;
+  const api = createApi({ getToken: () => 'fixture', onUnauthorized() {}, fetcher: async (route, options) => {
+    sent = { route, options }; return new Response(JSON.stringify({ path: 'inputs/uploads/需求.md', size: file.size }));
+  } });
+  await api.upload('inputs/uploads/需求.md', file, 'text/markdown');
+  assert.equal(sent.options.method, 'PUT'); assert.equal(sent.options.body, file);
+  assert.equal(sent.options.headers['Content-Type'], 'text/markdown'); assert.equal(sent.options.headers.Authorization, 'Bearer fixture');
+  assert.equal(new URL(sent.route, 'https://example.com').searchParams.get('path'), 'inputs/uploads/需求.md');
+});

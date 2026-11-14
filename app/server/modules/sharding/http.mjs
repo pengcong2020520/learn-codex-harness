@@ -1,3 +1,4 @@
+import { uploadInfo } from "../../../shared/uploads.mjs";
 import { verifyPreview, previewRateChecked } from '../http/previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
@@ -266,7 +267,12 @@ export function createShardedHandler(coordination, service, runtime, control) {
         return json(200, result);
       }
       if (pathname.startsWith('/auth/')) return service.app.http.handle(request, response);
-      const body = ['GET','HEAD'].includes(request.method) ? undefined : await bufferBody(request);
+      let bodyLimit;
+      if (request.method === 'PUT' && pathname === '/workspace/files') {
+        try { bodyLimit = uploadInfo(new URL(request.url, 'http://localhost').searchParams.get('path')).limit; }
+        catch (error) { throw new AppError(error.message, 400); }
+      }
+      const body = ['GET','HEAD'].includes(request.method) ? undefined : await bufferBody(request, bodyLimit);
       const owner = await ownerForRequest(service.app, request, identity, body);
       const mapping = (await service.app.data.pool.query('SELECT 1 FROM agent_data.user_shards WHERE user_id=$1', [owner])).rows[0];
       if (!mapping) {

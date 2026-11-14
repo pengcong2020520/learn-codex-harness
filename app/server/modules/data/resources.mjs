@@ -270,6 +270,17 @@ export class Resources extends Repository {
     }
     return { ...result, entries };
   }
+  async write_upload(args) {
+    this.gate?.check('upload', { path: args.path });
+    this.source(args.path, 'read');
+    return this.files.write_upload(args);
+  }
+  async read_upload(args) {
+    this.source(args.path, 'read');
+    const row = await this.row(args.path);
+    if (row) await this.readable(row);
+    return this.files.read_upload(args);
+  }
   async read_preview({ path: locator }) {
     this.source(locator, 'read');
     const row = await this.row(locator);

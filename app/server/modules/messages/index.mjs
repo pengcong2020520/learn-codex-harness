@@ -1,3 +1,4 @@
+import { readAttachments, attachInput } from "./attachments.mjs";
 import { effectiveKnowledgeMounts } from '../knowledge/mounts.mjs';
 import { currentIdentity, runOwner } from "../accounts/context.mjs";
 import { userWorkspace } from "../accounts/workspace.mjs";
@@ -11,8 +12,8 @@ const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, par
 
 // Product input scheduling only. Codex continues to own its Agent loop and context.
 export class MessageService {
-  constructor({ rpc, sessions, hub, config, store, queue, gate, permissionHub, usage = sessions.usage }) {
-    Object.assign(this, { rpc, sessions, hub, config, store, queue, gate, usage, permissionHub });
+  constructor({ rpc, sessions, hub, config, store, queue, gate, permissionHub, files, usage = sessions.usage }) {
+    Object.assign(this, { rpc, sessions, hub, config, store, queue, gate, usage, permissionHub, files });
     if (!store) throw new Error("必须注入任务仓储。");
     this.backend = queue ? "postgres-outbox+redis" : "test";
     this.locks = new Map();
@@ -62,11 +63,14 @@ export class MessageService {
     this.permissionHub?.checkAgent(this.config.agent);
     if (this.closed || this.stopping || this.failure)
       throw new AppError("执行服务不可用；请核对状态，不要盲目重发。", 503);
-    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","workflow","params","knowledge","model"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
+    if (Object.keys(body).some(key => !["threadId","clientMessageId","text","mode","targetTurnId","workflow","params","knowledge","model","attachments"].includes(key))) throw new AppError("消息只接受任务字段，身份由服务端认证确定。", 400);
     const principal = this.gate?.submission();
     const threadId = requireId(body.threadId, "会话 ID"),
       id = requireId(body.clientMessageId, "消息 ID"),
       text = requireText(body.text);
+    const attachments = body.attachments ?? [];
+    if (body.attachments === null) throw new AppError("attachments 必须是最多 4 个路径的数组。", 400);
+    if (body.attachments !== undefined) await this.readAttachments(attachments, principal);
     const model = body.model ?? null;
     if (body.model !== undefined) {
       if (typeof model !== "string" || !model.trim() || model.length > 200) throw new AppError("model 必须是场景名或服务商/模型名。", 400);
@@ -93,6 +97,7 @@ export class MessageService {
         if (
           existing.threadId !== threadId ||
           existing.text !== text ||
+          JSON.stringify(existing.attachments || []) !== JSON.stringify(attachments) ||
           existing.mode !== mode ||
           (existing.model || null) !== model ||
           existing.targetTurnId !== targetTurnId ||
@@ -114,6 +119,7 @@ export class MessageService {
           threadId,
           userId: principal?.userId || currentIdentity()?.userId,
           text,
+          attachments: [...attachments],
           mode,
           targetTurnId,
           workflow: workflow.id,
@@ -134,6 +140,11 @@ export class MessageService {
       if (!this.queue) this.schedule(threadId); // Test-only; production consumes Redis.
       return this.publicJob(await this.job(id));
     });
+  }
+  readAttachments(paths, principal) {
+    if (paths === undefined || (Array.isArray(paths) && !paths.length)) return Promise.resolve([]);
+    const read = () => readAttachments(paths, this.files);
+    return this.gate ? this.gate.run(principal || this.gate.user(), read) : read();
   }
   // 旧字段 knowledge: { kbId, operation: "update" } 等价于 knowledge-maintain，兼容一个版本。
   legacyWorkflow(body) {
@@ -351,7 +362,7 @@ export class MessageService {
           if (this.stopping || this.closed) error.uncertain = true;
           throw error;
         }
-        const prepared = await this.sessions.prepareInput(
+        let prepared = await this.sessions.prepareInput(
           threadId,
           input,
           job.agentHash,
@@ -380,6 +391,8 @@ export class MessageService {
         const chosen = router?.resolve({ model: selection, needs: step.needs });
         if (chosen) validateEffort(chosen, step.effort);
         const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
+        if (step.index === 0 && job.attachments?.length)
+          prepared = attachInput(prepared, await this.readAttachments(job.attachments), chosen?.spec || this.config.registry?.models[model]);
         await this.store.patch(job.id, { selectedModel: model, modelSource });
         await this.publish(threadId);
         this.gate?.start(job, workflow.grants, step.writes);
@@ -432,11 +445,14 @@ export class MessageService {
     let sent = false;
     try {
       const context = this.gate?.forTurn(job.threadId, job.targetTurnId);
-      const input = context && this.permissionHub
+      let input = context && this.permissionHub
         ? await this.gate.run(context, () => this.config.agent.input(job.text))
         : await this.sessions.prepareInput(job.threadId, job.text, job.agentHash);
       const original = (await this.store.list(job.threadId)).find(item => item.turnId === job.targetTurnId && item.selectedModel);
-      await this.store.patch(job.id, { selectedModel: original?.selectedModel || this.sessions.snapshot(job.threadId).model,
+      const model = original?.selectedModel || this.sessions.snapshot(job.threadId).model;
+      if (job.attachments?.length)
+        input = attachInput(input, await this.readAttachments(job.attachments), this.config.registry?.models[model] || this.config.launch.router?.resolve({ model }).spec);
+      await this.store.patch(job.id, { selectedModel: model,
         modelSource: "沿用当前轮次" });
       if (!this.rpc.pool) sent = true;
       const result = await this.rpc.request("turn/steer", {

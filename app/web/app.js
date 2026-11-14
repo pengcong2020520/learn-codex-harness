@@ -1,3 +1,4 @@
+import { uploadInfo } from './modules/uploads.mjs';
 import { artifactPanel } from './modules/artifacts.mjs';
 import { createApi } from './modules/api.mjs';
 import { emptyState, reduceEvent, messagesView, hasLoss, lossMessage, pauseReason } from './modules/view-model.mjs';
@@ -5,12 +6,13 @@ import { emptyState, reduceEvent, messagesView, hasLoss, lossMessage, pauseReaso
 const $ = id => document.getElementById(id);
 const tokenKey = 'agent.web.token';
 let state = emptyState(), stream, epoch = 0, selection = 0, searchVersion = 0, warnings = [], sending = false;
-let pendingMessage = null;
+let pendingMessage = null, attachments = [], uploading = false;
 const revisionDrafts = new Map();
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text != null) el.textContent = String(text); if (className) el.className = className; return el; };
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 function loginView() {
   artifacts.reset();
+  attachments = []; renderAttachments();
   revisionDrafts.clear();
   epoch++; selection++; searchVersion++; stream?.close(); stream = null;
   sessionStorage.removeItem(tokenKey); state = emptyState(); pendingMessage = null; warnings = []; sending = false;
@@ -150,17 +152,40 @@ $('new-session').onclick = () => action($('new-session'), async () => {
   selectSession(session); await listSessions();
 });
 $('search-form').onsubmit = event => { event.preventDefault(); void action(null, listSessions); };
+function renderAttachments() {
+  $('attachments').replaceChildren(...attachments.map(path => {
+    const button = node('button', `${path.split('/').at(-1)} ×`, 'secondary attachment');
+    button.type = 'button'; button.disabled = sending; button.setAttribute('aria-label', `移除附件 ${path}`);
+    button.onclick = () => { attachments = attachments.filter(item => item !== path); renderAttachments(); };
+    return button;
+  }));
+}
+$('upload').onclick = () => { if (!sending && !uploading) $('upload-file').click(); };
+$('upload-file').onchange = () => { void action($('upload'), async () => {
+  const file = $('upload-file').files[0], generation = epoch;
+  $('upload-file').value = '';
+  if (!file || sending || uploading) return;
+  if (attachments.length >= 4) throw new Error('每条消息最多 4 个附件，请先移除附件或发送。');
+  const path = `inputs/uploads/${file.name}`, info = uploadInfo(path);
+  if (file.size > info.limit) throw new Error(info.image ? '图片不能超过 5 MiB。' : '文本不能超过 256 KiB。');
+  uploading = true;
+  try {
+    await api.upload(path, file, info.contentType);
+    if (generation !== epoch) return;
+    attachments.push(path); renderAttachments(); await artifacts.refresh();
+  } finally { uploading = false; }
+}); };
 $('composer').onsubmit = event => { event.preventDefault(); void action($('send'), async () => {
-  if (!state.session || sending || !$('message').value.trim()) return;
+  if (!state.session || sending || uploading || !$('message').value.trim()) return;
   const text = $('message').value.trim(), threadId = state.session.id, generation = epoch;
   // Retain the ID on uncertain network outcomes, so a manual retry cannot duplicate the task.
-  if (!pendingMessage || pendingMessage.text !== text || pendingMessage.threadId !== threadId) pendingMessage = { threadId, text, mode: 'enqueue', clientMessageId: crypto.randomUUID() };
-  sending = true;
+  if (!pendingMessage || pendingMessage.text !== text || pendingMessage.threadId !== threadId || JSON.stringify(pendingMessage.attachments) !== JSON.stringify(attachments)) pendingMessage = { threadId, text, attachments: [...attachments], mode: 'enqueue', clientMessageId: crypto.randomUUID() };
+  sending = true; renderAttachments();
   try {
     await api.request('/messages', pendingMessage);
-    if (generation === epoch && state.session?.id === threadId) { $('message').value = ''; pendingMessage = null; }
+    if (generation === epoch && state.session?.id === threadId) { $('message').value = ''; pendingMessage = null; attachments = []; }
     if (generation === epoch) await listSessions();
-  } finally { sending = false; }
+  } finally { sending = false; renderAttachments(); }
 }); };
 $('message').onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('composer').requestSubmit(); } };
 $('continue-queue').onclick = () => action($('continue-queue'), () => api.request('/queue/continue', { threadId: state.session.id }));

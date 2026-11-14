@@ -1,3 +1,6 @@
+import { open } from "node:fs/promises";
+import path from "node:path";
+import { uploadInfo } from "../../../shared/uploads.mjs";
 import { randomUUID } from "node:crypto";
 import { applySessionEvent, isSessionEvent } from "../../../shared/session-events.mjs";
 
@@ -21,6 +24,8 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /new                切换到新会话；不会取消旧会话任务
 /files              列出 outputs/ 文件
 /open <路径>        获取 10 分钟有效的预览地址
+/upload <本地路径> [保存名]  上传文件（路径含空格时用双引号）
+/attach <inputs/uploads/路径>  加入下一条消息的附件（最多 4 个）
 /help               查看帮助
 /exit               仅退出客户端，服务端任务继续运行`;
 
@@ -49,6 +54,7 @@ export function formatUsage(usage) {
 
 export async function runChat(api, terminal) {
   let current = null;
+  let attachments = [];
   const modelSelections = new Map();
   let pendingModel = null;
   let subscription = null;
@@ -164,6 +170,30 @@ export async function runChat(api, terminal) {
       for (const file of files) terminal.write(`${file.path}  ${file.size} 字节  ${file.updatedAt}`);
       if (!files.length) terminal.write('暂无产物。');
       return;
+    }
+    if (/^\/upload(?:\s|$)/.test(text)) {
+      const match = text.match(/^\/upload\s+(?:"([^"]+)"|(\S+))(?:\s+(\S+))?$/);
+      if (!match) return terminal.write('用法：/upload <本地路径> [保存名]；路径含空格时用双引号。');
+      const local = match[1] || match[2], locator = `inputs/uploads/${match[3] || path.basename(local)}`, info = uploadInfo(locator);
+      const file = await open(local, 'r');
+      let content;
+      try {
+        const stat = await file.stat();
+        if (!stat.isFile() || stat.size > info.limit) throw new Error('请上传大小符合限制的普通文件。');
+        const buffer = Buffer.alloc(info.limit + 1); let size = 0;
+        while (size < buffer.length) { const { bytesRead } = await file.read(buffer, size, buffer.length - size, null); if (!bytesRead) break; size += bytesRead; }
+        if (size > info.limit) throw new Error('文件超过上传上限。');
+        content = buffer.subarray(0, size);
+      } finally { await file.close(); }
+      const result = await api.upload(locator, content, info.contentType);
+      return terminal.write(`已上传 ${result.path}（${result.size} 字节）；用 /attach ${result.path} 加入下一条消息。`);
+    }
+    if (/^\/attach(?:\s|$)/.test(text)) {
+      const locator = text.slice(7).trim(); uploadInfo(locator);
+      if (attachments.includes(locator)) return terminal.write('附件已加入。');
+      if (attachments.length >= 4) return terminal.write('每条消息最多 4 个附件，请先发送。');
+      attachments.push(locator);
+      return terminal.write(`已加入下一条消息：${locator}`);
     }
     if (/^\/open(?:\s|$)/.test(text)) {
       const path = text.slice(5).trim();
@@ -304,7 +334,8 @@ export async function runChat(api, terminal) {
     }
     const model = modelSelections.get(current.id);
     const clientMessageId = randomUUID();
-    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId, ...workflow, ...(model ? { model } : {}) });
+    const result = await api.request("/messages", { threadId: current.id, clientMessageId, mode, text: content, targetTurnId, ...(attachments.length ? { attachments: [...attachments] } : {}), ...workflow, ...(model ? { model } : {}) });
+    attachments = [];
     // UUID 仅用于服务端幂等处理，不作为聊天界面的编号展示。
     if (["failed", "unconfirmed"].includes(result.status)) terminal.write(`消息状态：${result.status}${result.error ? `；${result.error}` : ""}`);
   }

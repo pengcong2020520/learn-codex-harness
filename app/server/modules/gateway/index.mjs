@@ -68,6 +68,8 @@ export function validateRegistry(registry) {
     if (!Array.isArray(purposes) || !purposes.length || purposes.some(item => !PURPOSES.includes(item)) || new Set(purposes).size !== purposes.length) {
       fail(`模型 ${id} 的 purposes 必须是不重复的用途：${PURPOSES.join("、")}。`);
     }
+    if (spec.inputs !== undefined && !['["text"]', '["text","image"]'].includes(JSON.stringify(spec.inputs)))
+      fail(`模型 ${id} 的 inputs 必须为 ["text"] 或 ["text","image"]。`);
     if (spec.nativeTools !== undefined) {
       if (!purposes.includes("chat")) fail(`模型 ${id} 的 nativeTools 只能用于 purposes 含 chat 的模型。`);
       if (!Array.isArray(spec.nativeTools) || spec.nativeTools.some(tool => tool !== "web_search") || new Set(spec.nativeTools).size !== spec.nativeTools.length) {
