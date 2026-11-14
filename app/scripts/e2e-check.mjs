@@ -51,25 +51,39 @@ const session = await created.json();
 assert.ok(session.id, '会话 ID');
 await expectStatus(await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, { headers }), 200, '读取会话状态');
 
-// 只在独立 Compose 验收项目内，按真实文件属主写入；不增加线上测试接口。
+// 只在独立 Compose 验收项目内写入，不增加线上测试接口。
+// 容器默认身份是 root:1000，且没有 DAC_OVERRIDE。用户进程的 gid 不是 1000，写不了这个目录。
+// 目录 0o2770、文件 flag wx / 0o660 与 files.mjs 相同；属主按服务身份设为 0:1000。chmod 用来抵消 umask。
 const { user } = await (await expectStatus(await fetch(`${url}/auth/me`, { headers }), 200, '读取当前用户')).json();
 assert.match(user.id, /^[a-f0-9-]{36}$/);
 const seed = spawnSync('docker', ['compose', 'exec', '-T', 'node-a', 'node', '--input-type=module'], {
   encoding: 'utf8', input: `
     import fs from 'node:fs';
     import path from 'node:path';
-    import { spawnSync } from 'node:child_process';
-    import { userSpawn } from './server/modules/codex/launch.mjs';
-    const directory = path.resolve('workspace/users', ${JSON.stringify(user.id)});
-    const uid = fs.statSync(directory).uid;
-    if (uid < 10001) throw new Error('验收要求真实用户 uid。');
-    const launch = userSpawn(process.execPath, ['--input-type=module', '-e',
-      "import fs from 'node:fs'; fs.mkdirSync('outputs', {recursive:true, mode:0o2770}); fs.writeFileSync('outputs/e2e-preview.html', '<html><body>安全预览验收</body></html>', {flag:'wx', mode:0o660});"], { uid, gid: uid, isolated: true });
-    const result = spawnSync(launch.command, launch.args, { ...launch.options, cwd: directory, env: { PATH: process.env.PATH }, stdio: 'inherit' });
-    process.exit(result.status ?? 1);
+    const userId = ${JSON.stringify(user.id)};
+    const userDir = path.resolve(process.cwd(), 'workspace/users', userId);
+    let info;
+    try { info = fs.lstatSync(userDir); }
+    catch (error) {
+      if (error.code === 'ENOENT') throw new Error('用户工作区不存在：workspace/users/' + userId);
+      throw error;
+    }
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('用户工作区必须是真实目录：workspace/users/' + userId);
+    const outputs = path.resolve(process.cwd(), 'workspace/users', userId, 'outputs');
+    fs.mkdirSync(outputs, { recursive: true, mode: 0o2770 });
+    const directory = fs.lstatSync(outputs);
+    if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error('产物目录必须是真实目录：workspace/users/' + userId + '/outputs');
+    const file = path.join(outputs, 'e2e-preview.html');
+    fs.writeFileSync(file, '<html><body>安全预览验收</body></html>', { flag: 'wx', mode: 0o660 });
+    fs.chownSync(outputs, 0, 1000);
+    fs.chownSync(file, 0, 1000);
+    fs.chmodSync(outputs, 0o2770);
+    fs.chmodSync(file, 0o660);
   `,
 });
-assert.equal(seed.status, 0, '维护容器写入 HTML 产物失败；不输出容器原始日志');
+const seedError = [seed.stderr, seed.error?.message].filter(Boolean).join('\n');
+if (seed.status !== 0) console.error(seedError);
+assert.equal(seed.status, 0, `维护容器写入 HTML 产物失败：${seedError}`);
 const issued = await expectStatus(await fetch(`${url}/previews`, { method: 'POST', headers, body: JSON.stringify({ path: 'outputs/e2e-preview.html' }) }), 200, '申请预览');
 const preview = await issued.json();
 const rendered = await expectStatus(await fetch(new URL(preview.url, url)), 200, '经 Caddy 读取匿名预览');
