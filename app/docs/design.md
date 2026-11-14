@@ -2,7 +2,7 @@
 
 ## 服务器安装器
 
-`deploy/install.sh` 只部署脚本所属检出的 `app/`，不克隆代码，也不支持管道下载执行。要求 root、Ubuntu 22.04/24.04 或 Debian 12，架构为 amd64/arm64；低于 2 GB 内存或 10 GB 可用磁盘仅提示，不自动增加 swap。基础软件只补齐 ca-certificates、curl、gnupg、util-linux、tar、gzip。
+`deploy/install.sh` 只部署脚本所属检出的 `app/`，不克隆代码，也不支持管道下载执行。要求 root、Ubuntu 22.04/24.04/26.04 或 Debian 12/13，架构为 amd64/arm64；低于 2 GB 内存或 10 GB 可用磁盘仅提示，不自动增加 swap。基础软件只补齐 ca-certificates、curl、gnupg、util-linux、tar、gzip。
 
 Docker 与 Compose 可用时跳过安装；否则使用 apt 仓库、`/etc/apt/keyrings/docker.asc` 和 `docker.sources`，安装 docker-ce、docker-ce-cli、containerd.io、docker-buildx-plugin、docker-compose-plugin，再启用 Docker。仓库配置依据 [Docker Ubuntu 安装文档](https://docs.docker.com/engine/install/ubuntu/) 和 [Debian 安装文档](https://docs.docker.com/engine/install/debian/)。`--cn` 将仓库及密钥切换到阿里云同名路径；`--registry-mirror` 只在 daemon.json 不存在时写入并重启 Docker，已有文件只给手动合并说明。
 

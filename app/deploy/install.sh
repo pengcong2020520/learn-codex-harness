@@ -11,7 +11,7 @@ install_usage() {
   --upgrade                工作区干净时先 git pull --ff-only，再部署当前检出
   --install-docker-only    只安装 Docker 与 Compose，不启动 dockerd（供容器验收）
   -h, --help               显示帮助
-支持 root 下的 Ubuntu 22.04/24.04、Debian 12，amd64/arm64。
+支持 root 下的 Ubuntu 22.04/24.04/26.04、Debian 12/13，amd64/arm64。
 HELP
 }
 
@@ -30,8 +30,10 @@ install_detect_system() {
   case "$ID:$VERSION_ID" in
     ubuntu:22.04) install_os=ubuntu; install_suite=jammy ;;
     ubuntu:24.04) install_os=ubuntu; install_suite=noble ;;
+    ubuntu:26.04) install_os=ubuntu; install_suite=resolute ;;
     debian:12) install_os=debian; install_suite=bookworm ;;
-    *) echo '系统不支持：请使用 Ubuntu 22.04/24.04 或 Debian 12；其他系统请手动准备 Docker Compose 后按 README 部署。' >&2; return 1 ;;
+    debian:13) install_os=debian; install_suite=trixie ;;
+    *) echo '系统不支持：请使用 Ubuntu 22.04/24.04/26.04 或 Debian 12/13；其他系统请手动准备 Docker Compose 后按 README 部署。' >&2; return 1 ;;
   esac
   case "$2" in
     amd64|arm64) install_arch=$2 ;;

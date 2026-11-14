@@ -177,7 +177,7 @@ git clone https://github.com/pengcong2020520/learn-codex-harness.git /opt/learn-
 bash /opt/learn-codex-harness/app/deploy/install.sh
 ```
 
-安装器在当前检出的 `app/` 目录部署，补齐 Docker、运行向导、启动服务，并启用开机自启与每日备份。支持的系统与资源提示见 [安装器设计](docs/design.md#服务器安装器)。如果向导要填写域名，请先将 DNS 的 A 记录指向服务器，并在云安全组放行 80、443；域名可以留空，此时按安装器汇总的 SSH 隧道访问。
+安装器在当前检出的 `app/` 目录部署，补齐 Docker、运行向导、启动服务，并启用开机自启与每日备份。支持 Ubuntu 22.04/24.04/26.04、Debian 12/13，架构为 amd64/arm64；资源提示见 [安装器设计](docs/design.md#服务器安装器)。如果向导要填写域名，请先将 DNS 的 A 记录指向服务器，并在云安全组放行 80、443；域名可以留空，此时按安装器汇总的 SSH 隧道访问。
 
 国内服务器在安装命令后加 `--cn`，使用阿里云 Docker 安装源，向导的国内 npm/apt 源默认选是。Docker Hub 下载需要加速时，可加 `--registry-mirror '<云厂商控制台提供的加速地址>'`；已有 Docker 配置会保留，按提示手动合并。完整选项用 `--help` 查看。
 

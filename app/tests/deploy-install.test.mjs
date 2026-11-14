@@ -24,6 +24,7 @@ test('install：Shell 语法、帮助与未知参数不触发安装', () => {
     const result = spawnSync('bash', [installer.pathname, flag], { encoding: 'utf8' });
     assert.equal(result.status, 0);
     assert.match(result.stdout, /--cn[\s\S]*--upgrade[\s\S]*--install-docker-only/);
+    assert.match(result.stdout, /Ubuntu 22\.04\/24\.04\/26\.04、Debian 12\/13/);
   }
   for (const args of [['--unknown'], ['--registry-mirror'], ['--registry-mirror', 'https://name:password@example.com']]) {
     const result = spawnSync('bash', [installer.pathname, ...args], { encoding: 'utf8' });
@@ -35,17 +36,23 @@ test('install：Shell 语法、帮助与未知参数不触发安装', () => {
 for (const [id, version, arch, expected] of [
   ['ubuntu', '22.04', 'amd64', 'ubuntu jammy amd64'],
   ['ubuntu', '24.04', 'arm64', 'ubuntu noble arm64'],
+  ['ubuntu', '26.04', 'amd64', 'ubuntu resolute amd64'],
+  ['ubuntu', '26.04', 'arm64', 'ubuntu resolute arm64'],
   ['debian', '12', 'amd64', 'debian bookworm amd64'],
   ['debian', '12', 'arm64', 'debian bookworm arm64'],
+  ['debian', '13', 'amd64', 'debian trixie amd64'],
+  ['debian', '13', 'arm64', 'debian trixie arm64'],
+  ['ubuntu', '25.10', 'amd64', null],
   ['ubuntu', '20.04', 'amd64', null], ['debian', '11', 'amd64', null],
   ['linuxmint', '22', 'amd64', null], ['ubuntu', '24.04', 'armhf', null],
 ]) test(`install：系统检测 ${id} ${version} ${arch}`, t => {
   const file = path.join(temporary(t), 'os-release');
-  fs.writeFileSync(file, `ID=${id}\nVERSION_ID="${version}"\nID_LIKE=ubuntu\n`);
+  fs.writeFileSync(file, `ID=${id}\nVERSION_ID="${version}"\nID_LIKE=ubuntu\nVERSION_CODENAME=unexpected\nUBUNTU_CODENAME=unexpected\n`);
   const result = shell('source "$1"; install_detect_system "$2" "$3" || exit $?; printf "%s %s %s" "$install_os" "$install_suite" "$install_arch"', [installer.pathname, file, arch]);
   assert.equal(result.status, expected ? 0 : 1, result.stderr);
   if (expected) assert.equal(result.stdout, expected);
   else assert.match(result.stderr, /请手动准备 Docker Compose/);
+  if (!expected && arch !== 'armhf') assert.match(result.stderr, /Ubuntu 22\.04\/24\.04\/26\.04 或 Debian 12\/13/);
 });
 
 test('install：仅缺失基础软件包进入 apt，不重装已有包', () => {
@@ -251,11 +258,14 @@ test('install：不解析密钥文件，交互向导使用终端，Docker apt �
   assert.match(source, /if \[ "\$install_only" = 0 \]; then\n    systemctl enable --now docker/);
 });
 
-test('安装 CI：独立项目、两遍安装、HTTPS 登录、单账号和 systemd，干净容器覆盖三个源组合', () => {
+test('安装 CI：独立项目、两遍安装、HTTPS 登录、单账号和 systemd，干净容器覆盖六个系统与源组合', () => {
   const workflow = fs.readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
   const e2e = fs.readFileSync(new URL('../scripts/e2e-server-install.sh', import.meta.url), 'utf8');
-  assert.match(workflow, /server-install:/);
-  assert.match(workflow, /ubuntu:24.04 debian:12 ubuntu:24.04-cn/);
+  const serverInstall = workflow.split('  server-install:')[1].split('  scaffold-e2e:')[0];
+  assert.match(serverInstall, /runs-on: ubuntu-latest/);
+  assert.match(serverInstall, /for variant in ubuntu:22\.04 ubuntu:24\.04 ubuntu:26\.04 debian:12 debian:13 ubuntu:26\.04-cn; do/);
+  assert.ok(serverInstall.includes('image=${variant%-cn}'));
+  assert.ok(serverInstall.includes('if [ "$variant" != "$image" ]; then args+=(--cn); fi'));
   assert.match(workflow, /--install-docker-only/);
   assert.match(workflow, /policy-rc.d/);
   for (const text of ['COMPOSE_PROJECT_NAME=codex-agent-e2e-server-install', 'for pass in 1 2', 'bash deploy/install.sh --non-interactive', 'systemctl is-enabled', 'docker compose down -v', 'systemctl disable --now', 'E2E_BASE_URL=https://agent.localhost', 'node scripts/e2e-check.mjs --login-only', '[ "$count" = 1 ]', 'AGENT_TLS=internal']) assert.ok(e2e.includes(text), text);
