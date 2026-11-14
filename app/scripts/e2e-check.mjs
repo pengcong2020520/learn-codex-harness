@@ -1,6 +1,7 @@
 // 端到端检查（由 scripts/e2e-compose.sh 调用）：经入口 Caddy 访问已启动的单节点脚手架。
 // 不调用模型：只检查就绪、登录、拓扑、会话创建（会拉起该用户自己的 Codex 进程）和拒绝未认证请求。
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 
 const url = `http://127.0.0.1:${process.env.AGENT_PORT || 4317}`;
 import { createPrompts } from '../shared/prompts.mjs';
@@ -50,9 +51,54 @@ const session = await created.json();
 assert.ok(session.id, '会话 ID');
 await expectStatus(await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, { headers }), 200, '读取会话状态');
 
+// 只在独立 Compose 验收项目内写入，不增加线上测试接口。
+// 容器默认身份是 root:1000，且没有 DAC_OVERRIDE。用户进程的 gid 不是 1000，写不了这个目录。
+// 目录 0o2770、文件 flag wx / 0o660 与 files.mjs 相同；属主按服务身份设为 0:1000。chmod 用来抵消 umask。
+// 这一步验证签名预览经 Caddy 的链路。以服务身份写入即可，read_preview 不依赖文件属主。
+// 生产工具写入后把属主交给用户 uid，这由 uid 集成测试覆盖，维护容器里不重复。
+const { user } = await (await expectStatus(await fetch(`${url}/auth/me`, { headers }), 200, '读取当前用户')).json();
+assert.match(user.id, /^[a-f0-9-]{36}$/);
+const seed = spawnSync('docker', ['compose', 'exec', '-T', 'node-a', 'node', '--input-type=module'], {
+  encoding: 'utf8', input: `
+    import fs from 'node:fs';
+    import path from 'node:path';
+    const userId = ${JSON.stringify(user.id)};
+    const userDir = path.resolve(process.cwd(), 'workspace/users', userId);
+    let info;
+    try { info = fs.lstatSync(userDir); }
+    catch (error) {
+      if (error.code === 'ENOENT') throw new Error('用户工作区不存在：workspace/users/' + userId);
+      throw error;
+    }
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('用户工作区必须是真实目录：workspace/users/' + userId);
+    const outputs = path.resolve(process.cwd(), 'workspace/users', userId, 'outputs');
+    fs.mkdirSync(outputs, { recursive: true, mode: 0o2770 });
+    const directory = fs.lstatSync(outputs);
+    if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error('产物目录必须是真实目录：workspace/users/' + userId + '/outputs');
+    const file = path.join(outputs, 'e2e-preview.html');
+    fs.writeFileSync(file, '<html><body>安全预览验收</body></html>', { flag: 'wx', mode: 0o660 });
+    fs.chownSync(outputs, 0, 1000);
+    fs.chownSync(file, 0, 1000);
+    fs.chmodSync(outputs, 0o2770);
+    fs.chmodSync(file, 0o660);
+  `,
+});
+const seedError = [seed.stderr, seed.error?.message].filter(Boolean).join('\n');
+if (seed.status !== 0) console.error(seedError);
+assert.equal(seed.status, 0, `维护容器写入 HTML 产物失败：${seedError}`);
+const issued = await expectStatus(await fetch(`${url}/previews`, { method: 'POST', headers, body: JSON.stringify({ path: 'outputs/e2e-preview.html' }) }), 200, '申请预览');
+const preview = await issued.json();
+const rendered = await expectStatus(await fetch(new URL(preview.url, url)), 200, '经 Caddy 读取匿名预览');
+assert.equal(await rendered.text(), '<html><body>安全预览验收</body></html>');
+assert.equal(rendered.headers.get('content-security-policy'), "sandbox allow-scripts allow-forms allow-modals; default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'");
+assert.equal(rendered.headers.get('x-content-type-options'), 'nosniff');
+assert.equal(rendered.headers.get('cache-control'), 'no-store');
+assert.equal(rendered.headers.get('referrer-policy'), 'no-referrer');
+assert.equal(rendered.headers.get('cross-origin-resource-policy'), 'same-origin');
+
 assert.equal((await fetch(`${url}/sessions`, { method: 'POST', body: '{}' })).status, 401, '未登录应被拒绝');
 assert.equal((await fetch(`${url}/state?threadId=${encodeURIComponent(session.id)}`, {
   headers: { authorization: 'Bearer invalid-token-for-e2e-check-000000' },
 })).status, 401, '无效令牌应被拒绝');
 
-console.log('端到端检查通过：就绪、登录、单节点拓扑（3 个分片都在 node-a、复制关闭）、会话创建、拒绝未认证请求。');
+console.log('端到端检查通过：就绪、登录、单节点拓扑（3 个分片都在 node-a、复制关闭）、会话创建、服务身份写入产物、Caddy 签名预览及安全头、拒绝未认证请求。');

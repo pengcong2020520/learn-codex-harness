@@ -92,6 +92,7 @@ services:
     init: true
     mem_limit: ${AGENT_MEMORY_LIMIT:-768m}
     environment: &node-env
+      AGENT_PREVIEW_SECRET: ${AGENT_PREVIEW_SECRET:?Set AGENT_PREVIEW_SECRET}
       # All nodes trust the public entry origin, not their internal listening port.
       AGENT_ALLOWED_ORIGINS: ${AGENT_ALLOWED_ORIGINS:-http://127.0.0.1:${AGENT_PORT:-4317},http://localhost:${AGENT_PORT:-4317}}
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}

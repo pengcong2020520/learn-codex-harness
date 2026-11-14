@@ -1,3 +1,4 @@
+import { createPreview, verifyPreview, previewPath, previewHash, previewHeaders, previewMissing, previewRateChecked } from './previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import { shardUser } from '../sharding/fence.mjs';
@@ -41,7 +42,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
   };
   const handle = async (request, response) => {
     const json = (status, data) => {
-      response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       response.end(redact(data));
     };
     try {
@@ -62,14 +63,20 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
         limits.request(null, source);
         const result = await accounts.login(await readBody(request), source, request.headers.origin ? "Web" : "CLI");
         // 令牌只交付给登录者；不要把认证响应交给日志脱敏器或日志输出。
-        response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         response.end(JSON.stringify(result));
         return;
       }
+      const preview = request.method === 'GET' && pathname.startsWith('/preview/');
+      let claim;
+      if (preview) {
+        if (!request[previewRateChecked]) limits.request(null, source);
+        claim = verifyPreview(config.previewSecret, pathname.slice('/preview/'.length));
+      }
       let identity;
-      try { identity = await accounts.authenticate(request.headers.authorization); }
+      try { identity = preview ? { userId: claim.userId } : await accounts.authenticate(request.headers.authorization); }
       catch (error) { limits.request(null, source); throw error; }
-      limits.request(identity.userId, source);
+      if (!preview) limits.request(identity.userId, source);
       const dispatch = async () => {
       const url = new URL(request.url, "http://127.0.0.1");
       const route = `${request.method} ${url.pathname}`;
@@ -87,6 +94,19 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
           outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
+      }
+      if (preview) {
+        if (!files) throw previewMissing();
+        const { content } = await files.read_preview({ path: claim.path });
+        if (previewHash(content) !== claim.sha256) throw new AppError('文件已变化，请刷新预览。', 410);
+        response.writeHead(200, previewHeaders(claim.path)); response.end(content); return;
+      }
+      if (route === 'POST /previews') {
+        const body = await readBody(request);
+        if (!files || Object.keys(body).join(',') !== 'path') throw previewMissing();
+        let output;
+        try { output = await files.read_preview({ path: previewPath(body.path) }); } catch { throw previewMissing(); }
+        return json(200, createPreview(config.previewSecret, identity.userId, body.path, output.content));
       }
       if (route === 'GET /workspace' && files) return json(200, await files.list_files({ path: url.searchParams.get('path') || '' }));
       if (route === 'GET /workspace/read' && files) return json(200, await files.read_file({ path: url.searchParams.get('path'), max_chars: 262144 }));
@@ -204,11 +224,13 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
         };
         const work = () => permissionHub ? permissionHub.withUser(identity.userId, dispatchUser) : dispatchUser();
         return Promise.resolve().then(work).catch(error => {
+          if (preview && error.status !== 410) throw previewMissing();
           if (!error.status || error.status >= 500) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
           throw error;
         });
       });
     } catch (error) {
+      if (request.method === 'GET' && request.url.startsWith('/preview/') && ![410, 429, 403].includes(error.status)) error = previewMissing();
       if ((!error.status || error.status >= 500) && !error.databaseDiagnostic) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
       if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
       if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR" } });

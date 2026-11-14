@@ -270,6 +270,15 @@ export class Resources extends Repository {
     }
     return { ...result, entries };
   }
+  async read_preview({ path: locator }) {
+    this.source(locator, 'read');
+    const row = await this.row(locator);
+    if (row) await this.readable(row);
+    // 预览校验当前文件的原始字节；版本变化由签名中的摘要返回 410。
+    const result = this.sourceFiles(locator).read_preview({ path: locator });
+    if (row) await this.readable(await this.row(locator));
+    return result;
+  }
   check_binary(locator) {
     this.source(locator, 'create');
     return this.files.check_binary(locator);

@@ -249,7 +249,7 @@ function secrets(nodes = all) {
     Object.assign(env, { [`AGENT_NODE_KEY_${suffix}`]: key, [`AGENT_NODE_KEY_${suffix}_HASH`]: nodeKeyHash(key),
       [`ETCD_NODE_${suffix}_PASSWORD`]: `fixture-etcd-${suffix}`, [`AGENT_NODE_${suffix}_DB_PASSWORD`]: `fixture_db-${suffix}` });
   }
-  for (const name of ['ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY']) env[name] = `fixture-${name}`;
+  for (const name of ['ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY','AGENT_PREVIEW_SECRET']) env[name] = `fixture-${name}`;
   return env;
 }
 
@@ -261,7 +261,7 @@ for (const [label, name, value] of [
   ['缺 B 密钥','AGENT_NODE_KEY_B',undefined], ['密钥太短','AGENT_NODE_KEY_B','short-fixture'],
   ['哈希不匹配','AGENT_NODE_KEY_B_HASH','b'.repeat(64)], ['哈希必须小写','AGENT_NODE_KEY_B_HASH','A'.repeat(64)],
   ['数据库口令非法','AGENT_NODE_B_DB_PASSWORD','fixture-bad-password!'],
-  ...['ETCD_NODE_B_PASSWORD','AGENT_NODE_B_DB_PASSWORD','ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY'].map(name => ['口令为空',name,'']),
+  ...['ETCD_NODE_B_PASSWORD','AGENT_NODE_B_DB_PASSWORD','ETCD_ROOT_PASSWORD','ETCD_HEALTH_PASSWORD','AGENT_DB_PASSWORD','REDIS_PASSWORD','AGENT_GATEWAY_KEY','AGENT_PREVIEW_SECRET'].map(name => ['口令为空',name,'']),
 ]) test(`topology: 凭据校验 ${label} ${name}，错误只列变量名不含值`, () => {
   const env = { ...secrets(), [name]: value };
   assert.throws(() => validateClusterSecrets(env, all), error => {
@@ -291,6 +291,7 @@ test('topology: configure 在凭据检查失败时立即停止，检查容器只
   fs.writeFileSync(path.join(root, 'bin/docker'), `#!/bin/bash
 echo "$*" >> "$CALLS"
 case "$*" in
+ *'ensure-preview-secret.mjs') exit 0;;
  *'cluster-config.mjs nodes') echo 'node-a node-b';;
  *'cluster-config.mjs check') echo '集群配置检查失败，请检查变量：AGENT_NODE_KEY_B' >&2; exit 1;;
  *) exit 99;;
@@ -299,7 +300,7 @@ esac
   const result = spawnSync('/bin/bash', [path.join(root,'deploy/configure.sh')], { encoding: 'utf8', env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, CALLS: path.join(root,'calls') } });
   assert.equal(result.status, 1); assert.match(result.stderr, /AGENT_NODE_KEY_B/);
   const calls = fs.readFileSync(path.join(root,'calls'),'utf8').trim().split('\n');
-  assert.equal(calls.length, 2); assert.match(calls[1], /--network none .*:ro .*cluster-config.mjs check$/);
+  assert.equal(calls.length, 3); assert.match(calls[0], /--network none --user 0 .*ensure-preview-secret.mjs$/); assert.match(calls[2], /--network none .*:ro .*cluster-config.mjs check$/);
   assert.equal(fs.existsSync(path.join(root,'.data')), false);
 });
 

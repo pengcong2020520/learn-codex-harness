@@ -41,7 +41,7 @@ import { openData } from "./modules/data/index.mjs";
 export async function startAgentServer({ config = loadServerConfig(), cli, log = console.log, dataFactory = openData, validationOnly = false, generation, externalHttp = false } = {}) {
   if (generation) config = { ...config, generation };
   const lifecycle = createLifecycle();
-  const redact = createLogRedactor(config.launch.env.CODEX_API_KEY, [config.data?.databaseUrl, config.data?.redisUrl, config.rag?.apiKey]);
+  const redact = createLogRedactor(config.launch.env.CODEX_API_KEY, [config.data?.databaseUrl, config.data?.redisUrl, config.rag?.apiKey, config.previewSecret]);
   const safeLog = value => log(redact(value));
   try {
     const isolated = isolationMode({ log: safeLog });
@@ -92,8 +92,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     if (config.sharding) attachKnowledge({ accounts, knowledge, resources, permissionHub, gate }, config.sharding);
     if (knowledge) agent.knowledgeModes = knowledge.modes;
     const files = resources ? { get workspace() { return localFiles.workspace; },
-      ...Object.fromEntries(['list_files','read_file','write_file'].map(name => [name, async args => {
-        const action = name === 'list_files' ? 'list' : name === 'read_file' ? 'read' : 'create';
+      ...Object.fromEntries(['list_files','read_file','write_file','read_preview'].map(name => [name, async args => {
+        const action = name === 'list_files' ? 'list' : ['read_file', 'read_preview'].includes(name) ? 'read' : 'create';
         gate?.check(action, { path: args.path || '' });
         if (knowledge?.wikiPath(args.path || '')) throw new Error('Wiki 生效内容请使用 kb_read / kb_submit_revision；普通文件写入不产生生效知识。');
         const result = await resources[name](args);

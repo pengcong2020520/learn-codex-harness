@@ -37,7 +37,7 @@ test('两台部署：remote-env 输出 262144 字节/秒，compose 三节点继�
   fs.copyFileSync(file('deploy/remote-env.mjs'),path.join(root,'deploy/remote-env.mjs'));
  fs.writeFileSync(path.join(root,'.env'),['AGENT_CLUSTER_NODES=node-a,node-b,node-c',
   'AGENT_NODE_B_DB_PASSWORD=test-password','REDIS_PASSWORD=test-redis','AGENT_NODE_KEY_B=test-node-key',
-  'ETCD_NODE_B_PASSWORD=test-etcd','AGENT_GATEWAY_KEY=test-gateway',
+  'ETCD_NODE_B_PASSWORD=test-etcd','AGENT_GATEWAY_KEY=test-gateway','AGENT_PREVIEW_SECRET=test-preview-secret',
   ...['A','B','C'].map(n=>`AGENT_NODE_KEY_${n}_HASH=${'a'.repeat(64)}`),
  ].join('\n'));
  const result=spawnSync(process.execPath,[path.join(root,'deploy/remote-env.mjs')],{env:{...process.env,NODE_ID:'node-b'},encoding:'utf8'});

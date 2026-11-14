@@ -515,3 +515,25 @@ test('真实子进程 stdout、stderr 跨块脱敏，quiet 失败只返回最后
     }
   }
 });
+
+test('up 自动补齐预览密钥：原子写入 0600、保留其他配置、重复运行保留密钥且日志脱敏', async t => {
+  const f = await configured(t), values = readEnv(f.root);
+  assert.match(values.AGENT_PREVIEW_SECRET, /^[a-f0-9]{64}$/);
+  delete values.AGENT_PREVIEW_SECRET; writeEnv(f.root, values);
+  const before = fs.statSync(path.join(f.root, '.env'));
+  f.run = async (command, args, options) => {
+    const secret = readEnv(f.root).AGENT_PREVIEW_SECRET;
+    assert.match(secret, /^[a-f0-9]{64}$/);
+    assert.equal(options.redact?.(secret) ?? '[REDACTED]', '[REDACTED]');
+    return args.at(-1) === 'status' ? 'initialized\n' : '';
+  };
+  await ctl(['up'], f);
+  const after = readEnv(f.root), stat = fs.statSync(path.join(f.root, '.env'));
+  assert.notEqual(stat.ino, before.ino, '使用原子替换而非原地覆写');
+  assert.equal(stat.mode & 0o777, 0o600); assert.equal(stat.uid, before.uid);
+  assert.deepEqual(Object.fromEntries(Object.entries(after).filter(([key]) => key !== 'AGENT_PREVIEW_SECRET')), values);
+  await ctl(['up'], f);
+  assert.ok(readEnv(f.root).AGENT_PREVIEW_SECRET === after.AGENT_PREVIEW_SECRET, '补齐不得轮换现有密钥');
+  assert.equal(f.logs.join('\n').includes(after.AGENT_PREVIEW_SECRET), false);
+  assert.equal(fs.readdirSync(f.root).some(name => name.endsWith('.tmp')), false);
+});

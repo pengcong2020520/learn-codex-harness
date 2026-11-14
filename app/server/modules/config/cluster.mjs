@@ -23,7 +23,7 @@ export function validateClusterSecrets(env, nodes) {
     const password = `AGENT_NODE_${suffix}_DB_PASSWORD`;
     if (!/^[a-zA-Z0-9_-]+$/.test(env[password] || '')) invalid.add(password);
   }
-  for (const name of ['ETCD_ROOT_PASSWORD', 'ETCD_HEALTH_PASSWORD', 'AGENT_DB_PASSWORD', 'REDIS_PASSWORD', 'AGENT_GATEWAY_KEY']) nonempty(name);
+  for (const name of ['ETCD_ROOT_PASSWORD', 'ETCD_HEALTH_PASSWORD', 'AGENT_DB_PASSWORD', 'REDIS_PASSWORD', 'AGENT_GATEWAY_KEY', 'AGENT_PREVIEW_SECRET']) nonempty(name);
   if (invalid.size) throw new Error(`集群配置检查失败，请检查变量：${[...invalid].join('、')}`);
 }
 export function clusterUpstreams(nodes, env = {}) {

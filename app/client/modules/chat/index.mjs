@@ -19,6 +19,8 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /continue           明确继续暂停的待执行队列，不重发未确认消息
 /resume [关键词]    搜索历史会话，再输入完整 Thread id 恢复
 /new                切换到新会话；不会取消旧会话任务
+/files              列出 outputs/ 文件
+/open <路径>        获取 10 分钟有效的预览地址
 /help               查看帮助
 /exit               仅退出客户端，服务端任务继续运行`;
 
@@ -151,6 +153,24 @@ export async function runChat(api, terminal) {
     if (!text || exiting) return;
     if (text === "/exit") { exiting = true; terminal.close(); return; }
     if (text === "/help") return terminal.write(HELP);
+    if (text === '/files') {
+      const root = await api.request('/workspace?path=outputs');
+      const files = root.entries.filter(entry => entry.type === 'file').map(entry => ({ ...entry, path: `outputs/${entry.name}` }));
+      for (const directory of root.entries.filter(entry => entry.type === 'directory')) {
+        const sub = await api.request(`/workspace?path=${encodeURIComponent(`outputs/${directory.name}`)}`);
+        files.push(...sub.entries.filter(entry => entry.type === 'file').map(entry => ({ ...entry, path: `outputs/${directory.name}/${entry.name}` })));
+      }
+      files.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+      for (const file of files) terminal.write(`${file.path}  ${file.size} 字节  ${file.updatedAt}`);
+      if (!files.length) terminal.write('暂无产物。');
+      return;
+    }
+    if (/^\/open(?:\s|$)/.test(text)) {
+      const path = text.slice(5).trim();
+      if (!path) return terminal.write('用法：/open outputs/文件.html');
+      const preview = await api.request('/previews', { path });
+      return terminal.write(new URL(preview.url, api.connection.url).href);
+    }
     if (/^\/model(?:\s|$)/.test(text)) {
       const selection = text.slice(6).trim();
       if (selection === "default") {

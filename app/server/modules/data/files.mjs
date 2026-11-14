@@ -103,11 +103,11 @@ export function createFileTools(
 
   function resolve(
     relative = "",
-    { createParents = false, file = false, binary = false } = {},
+    { createParents = false, file = false, binary = false, preview = false } = {},
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+    if (file && (parts.length < 2 || !(preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
       throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
@@ -161,14 +161,18 @@ export function createFileTools(
               browsable(relative ? `${relative}/${entry.name}` : entry.name),
           )
           .slice(0, 200)
-          .map((entry) => ({
-            name: entry.name,
-            type: entry.isSymbolicLink()
-              ? "blocked-link"
-              : entry.isDirectory()
-                ? "directory"
-                : "file",
-          })),
+          .map((entry) => {
+            const stat = fs.lstatSync(path.join(base, relative, entry.name));
+            return {
+              size: stat.size, updatedAt: stat.mtime.toISOString(),
+              name: entry.name,
+              type: entry.isSymbolicLink()
+                ? "blocked-link"
+                : entry.isDirectory()
+                  ? "directory"
+                  : "file",
+            };
+          }),
         truncated: entries.length > 200,
       };
     },
@@ -220,6 +224,20 @@ export function createFileTools(
       } finally {
         fs.closeSync(fd);
       }
+    },
+    read_preview({ path: relative }) {
+      assertCurrent();
+      if (!readable(relative)) throw new Error('未授权读取这个资料范围。');
+      const file = resolve(relative, { file: true, preview: true });
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try {
+        const stat = fs.fstatSync(fd), limit = /\.html$/i.test(relative) ? MAX_BYTES : MAX_MEDIA_BYTES;
+        if (!stat.isFile() || stat.nlink !== 1 || stat.size > limit) throw new Error('预览文件过大或不是普通文件。');
+        const buffer = Buffer.alloc(stat.size + 1);
+        const length = fs.readSync(fd, buffer, 0, buffer.length, 0);
+        if (length !== stat.size) throw new Error('读取期间文件已变化。');
+        return { path: relative, content: buffer.subarray(0, length) };
+      } finally { fs.closeSync(fd); }
     },
     check_binary(relative, action = 'create') { return this.check(relative, action, { binary: true }); },
     read_binary({ path: relative }) {

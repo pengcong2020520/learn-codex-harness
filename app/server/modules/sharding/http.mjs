@@ -1,3 +1,4 @@
+import { verifyPreview, previewRateChecked } from '../http/previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import fs from 'node:fs';
@@ -204,7 +205,7 @@ export function createShardedHandler(coordination, service, runtime, control) {
     } finally { db.release(); }
   }
   return async (request, response) => {
-    const json = (status, value) => { response.writeHead(status, { 'content-type':'application/json', 'cache-control':'no-store', ...(value.error?.code ? { 'x-cluster-error': value.error.code } : {}) }); response.end(JSON.stringify(value)); };
+    const json = (status, value) => { response.writeHead(status, { 'content-type':'application/json', 'cache-control':'no-store', 'x-content-type-options':'nosniff', ...(value.error?.code ? { 'x-cluster-error': value.error.code } : {}) }); response.end(JSON.stringify(value)); };
     try {
       assertAllowedOrigin(request.headers, service.app?.config || runtime.config);
       const pathname = new URL(request.url, 'http://localhost').pathname;
@@ -231,8 +232,15 @@ export function createShardedHandler(coordination, service, runtime, control) {
       }
       if (pathname.startsWith('/internal/')) return await internal(request, response, pathname, json);
       if (pathname === '/auth/login') return service.app.http.handle(request, response);
-      const identity = await service.app.accounts.authenticate(request.headers.authorization);
-      runtime.rememberAuthorization?.(identity, request.headers.authorization);
+      const preview = request.method === 'GET' && pathname.startsWith('/preview/');
+      if (preview) {
+        service.app.http.limits.request(null, request.socket?.remoteAddress || 'unknown');
+        request[previewRateChecked] = true;
+      }
+      const identity = preview
+        ? { userId: verifyPreview(service.app.config.previewSecret, pathname.slice('/preview/'.length)).userId }
+        : await service.app.accounts.authenticate(request.headers.authorization);
+      if (!preview) runtime.rememberAuthorization?.(identity, request.headers.authorization);
       if (pathname === '/cluster' || pathname === '/cluster/move' || pathname === '/cluster/route' || pathname === '/cluster/promote') {
         if (identity.role !== 'admin') throw new AppError('需要 admin。', 403);
         if (pathname === '/cluster') { const status=await shardStatus(coordination,runtime.cache,service.app,runtime); const replication=await service.app.replication?.status(); return json(200,replication?{...status,waiting:replication.waiting,shards:replication.shards,replication:replication.replication,replicationStatus:replication}:status); }

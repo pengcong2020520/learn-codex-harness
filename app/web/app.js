@@ -1,3 +1,4 @@
+import { artifactPanel } from './modules/artifacts.mjs';
 import { createApi } from './modules/api.mjs';
 import { emptyState, reduceEvent, messagesView, hasLoss, lossMessage, pauseReason } from './modules/view-model.mjs';
 
@@ -9,6 +10,7 @@ const revisionDrafts = new Map();
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text != null) el.textContent = String(text); if (className) el.className = className; return el; };
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 function loginView() {
+  artifacts.reset();
   revisionDrafts.clear();
   epoch++; selection++; searchVersion++; stream?.close(); stream = null;
   sessionStorage.removeItem(tokenKey); state = emptyState(); pendingMessage = null; warnings = []; sending = false;
@@ -18,6 +20,7 @@ function loginView() {
   $('username').focus();
 }
 const api = createApi({ getToken: () => sessionStorage.getItem(tokenKey), onUnauthorized: loginView });
+const artifacts = artifactPanel(api, action);
 // Event callbacks always catch errors, including fetch failures and storage denial.
 async function action(button, work) {
   if (button?.disabled) return;
@@ -112,7 +115,7 @@ function selectSession(session) {
     if (event.type === 'fatal') notice(event.data?.message || '执行服务不可用。');
     const next = reduceEvent(state, event);
     if (!next) { stream.resync(); return; }
-    state = next; render();
+    state = next; render(); artifacts.event(event);
   }, (status, detail) => {
     if (generation !== epoch || selected !== selection) return;
     $('connection').hidden = status === 'connected';
@@ -125,8 +128,10 @@ async function enter() {
   if (generation !== epoch) return;
   $('username-display').textContent = user.username;
   $('login-view').hidden = true; $('chat-view').hidden = false;
+  const showArtifacts = matchMedia('(min-width:1101px)').matches;
+  $('chat-view').classList.toggle('artifacts-open', showArtifacts); $('toggle-artifacts').setAttribute('aria-expanded', String(showArtifacts));
   $('message').disabled = true; $('send').disabled = true;
-  await Promise.all([listSessions(), (async () => {
+  await Promise.all([listSessions(), artifacts.refresh(), (async () => {
     const [workbench, models] = await Promise.all([api.request('/workbench'), api.request('/models')]);
     if (generation !== epoch) return;
     $('agent-name').textContent = workbench.agent?.name || workbench.agent?.id || 'Agent';

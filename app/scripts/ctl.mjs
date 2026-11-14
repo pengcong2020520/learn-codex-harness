@@ -1,3 +1,4 @@
+import { ensurePreviewSecret } from './ensure-preview-secret.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPrompts } from '../shared/prompts.mjs';
@@ -40,7 +41,9 @@ export async function ctl(argv = process.argv.slice(2), { root = PROJECT_ROOT, e
     if (code) throw new Error('开发模式账号操作失败，请检查 DATABASE_URL 与输入。');
     return;
   }
-  const values = readEnv(root), dockerArgs = ctlArgs(command, args, values, root);
+  let values = readEnv(root);
+  const dockerArgs = ctlArgs(command, args, values, root);
+  if (command === 'up') values = ensurePreviewSecret(root);
   const redact = await commandRedactor(env, values);
   const input = ['init', 'add', 'passwd'].includes(command) ? await accountInput(command, args, prompts) : undefined;
   if (command === 'up') {

@@ -35,3 +35,53 @@ test('真实 HTTP：任意节点登录、POST 代理、STALE_ROUTE 一次重试�
   for(let n=0;n<100&&!sourceClosed;n++)await delay(10);assert.ok(sourceClosed);
   members.delete('node-b');const down=await fetch(addresses[0]+'/messages',{method:'POST',headers,body:'{}'});assert.equal(down.status,503);assert.equal((await down.json()).error.code,'SHARD_UNAVAILABLE');
 });
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { createHttpService } from '../server/modules/http/index.mjs';
+import { createUserFileTools } from '../server/modules/accounts/workspace.mjs';
+import { runOwner } from '../server/modules/accounts/context.mjs';
+import { previewHeaders } from '../server/modules/http/previews.mjs';
+
+test('真实分片 HTTP：非主节点校验预览令牌后按用户转发，主节点无须 Authorization 读取', async t => {
+  const members = new Map(), nodes = [], secret = randomBytes(32).toString('hex');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-shard-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let reads = 0, authentications = 0;
+  for (const nodeId of ['node-a', 'node-b']) {
+    const workspace = path.join(root, nodeId); fs.mkdirSync(workspace);
+    const files = createUserFileTools(root, { workspaceDir: workspace, sources: [{ id: 'output', locator: 'outputs', actions: ['read'] }], outputs: { directory: 'outputs', formats: ['html'] } });
+    if (nodeId === 'node-b') runOwner(user, () => files.write_file({ path: 'outputs/page.html', content: '<html>主节点文件</html>' }));
+    const original = files.read_preview;
+    files.read_preview = args => { assert.equal(nodeId, 'node-b'); reads++; return original(args); };
+    const coordination = { members, checkLease: () => true };
+    const runtime = { nodeId, ...nodeAuth(nodeId), coordination, admit: async owner => assert.equal(owner, user),
+      cache: { revision: '1', routeOf(owner) { assert.equal(owner, user); return { shardId: '1', primary: 'node-b', epoch: 1, revision: '1' }; } } };
+    const config = { previewSecret: secret, deployment: { rateLimit: 20 }, allowedOrigins: ['https://example.com'] };
+    const accounts = { authenticate: async authorization => {
+      authentications++; if (authorization !== 'Bearer test') throw Object.assign(new Error('请登录。'), { status: 401 });
+      return { userId: user };
+    } };
+    const http = createHttpService({ config, accounts, files, sessions: {}, redact: JSON.stringify });
+    const app = { config, accounts, http, data: { pool: { query: async () => ({ rows: [{ exists: 1 }] }) } } };
+    const handler = createShardedHandler(coordination, { isReady: () => true, app }, runtime, {});
+    const server = createServer((req, res) => void handler(req, res));
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+    const address = `http://127.0.0.1:${server.address().port}`;
+    members.set(nodeId, { nodeId, address }); nodes.push({ address, http });
+  }
+  const created = await fetch(nodes[0].address + '/previews', { method: 'POST', headers: { authorization: 'Bearer test', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'outputs/page.html' }) });
+  assert.equal(created.status, 200); const preview = await created.json(), before = authentications;
+  const response = await fetch(nodes[0].address + preview.url);
+  assert.equal(response.status, 200); assert.equal(await response.text(), '<html>主节点文件</html>');
+  assert.equal(authentications, before); assert.equal(reads, 2);
+  for (const [name, value] of Object.entries(previewHeaders('outputs/page.html'))) assert.equal(response.headers.get(name), value);
+  assert.equal((await fetch(nodes[0].address + preview.url, { headers: { origin: 'https://evil.example.com' } })).status, 403);
+  assert.equal((await fetch(nodes[0].address + preview.url + 'tamper')).status, 404); assert.equal(reads, 2);
+  // 有效、无效预览均使用入口节点的来源限额，不能借转发绕过。
+  nodes[0].http.limits.rateLimit = 2;
+  assert.equal((await fetch(nodes[0].address + preview.url)).status, 429);
+});

@@ -143,7 +143,7 @@ export function buildAppServerLaunch(environment, instructions = "", { registry 
   const env = { ...environment };
   // 各家模型的密钥只给网关，Codex 只拿访问模型接口要用的 CODEX_API_KEY。
   for (const key of Object.keys(env)) {
-    if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|AGENT_GATEWAY_KEY|PG[A-Z_]+)$/.test(key) || (/_API_KEY$/.test(key) && key !== "CODEX_API_KEY")) delete env[key];
+    if (/^(DATABASE_URL|REDIS_URL|AGENT_DB_PASSWORD|REDIS_PASSWORD|AGENT_GATEWAY_KEY|AGENT_PREVIEW_SECRET|PG[A-Z_]+)$/.test(key) || (/_API_KEY$/.test(key) && key !== "CODEX_API_KEY")) delete env[key];
   }
   const model = environment.CODEX_MODEL?.trim() || undefined;
   if (model && /[\u0000-\u001f\u007f]/.test(model)) throw new Error("CODEX_MODEL 不能包含控制字符。");

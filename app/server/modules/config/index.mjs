@@ -38,7 +38,7 @@ export function createLogRedactor(apiKey = "", additional = []) {
     .sort((a, b) => b.length - a.length);
   const redact = value => {
     let text = typeof value === "string" ? value : JSON.stringify(value, (key, entry) =>
-      /^(password(?:_hash)?|token(?:_hash)?|api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)$/i.test(key) ? "[REDACTED]" : entry
+      /^(password(?:_hash)?|token(?:_hash)?|api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|AGENT_PREVIEW_SECRET|previewSecret)$/i.test(key) ? "[REDACTED]" : entry
     );
     for (const secret of secrets) text = text.split(secret).join("[REDACTED]");
     return text;
@@ -130,5 +130,5 @@ export function loadServerConfig(root = PROJECT_ROOT, inherited = process.env) {
   // 默认只监听本机；放进容器时设 AGENT_LISTEN_HOST=0.0.0.0（容器网卡），对外仍只发布到宿主的 127.0.0.1（见 compose.yaml）。
   const host = environment.AGENT_LISTEN_HOST?.trim() || "127.0.0.1";
   if (!["127.0.0.1", "0.0.0.0"].includes(host)) throw new Error("AGENT_LISTEN_HOST 只能是 127.0.0.1 或 0.0.0.0（容器里）。");
-  return { allowedOrigins: origins, clusterNodes: nodes, replicationRateLimit: rateLimit, authMemorySetting: environment.AGENT_MEMORY_ENABLED, deployment: deploymentConfig(environment), root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
+  return { previewSecret: environment.AGENT_PREVIEW_SECRET, allowedOrigins: origins, clusterNodes: nodes, replicationRateLimit: rateLimit, authMemorySetting: environment.AGENT_MEMORY_ENABLED, deployment: deploymentConfig(environment), root, agentFile: selectAgentFile(root, environment.AGENT_DEFINITION), port, host, turnTimeoutMs, launch, memory, data, rag, registry, budget, media: { endpoint: gatewayEndpoint(environment) } };
 }

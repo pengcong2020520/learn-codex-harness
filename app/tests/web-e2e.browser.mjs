@@ -11,7 +11,7 @@ test('Docker 网页端到端：Caddy 跳转、管理员登录、发送、失败�
   assert.equal((await fetch(url + '/', { redirect: 'manual' })).status, 302);
   const ui = await fetch(url + '/ui/');
   assert.equal(ui.status, 200);
-  assert.equal(ui.headers.get('content-security-policy'), "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+  assert.equal(ui.headers.get('content-security-policy'), "default-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   assert.equal(ui.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(ui.headers.get('referrer-policy'), 'no-referrer');
   const page = await browser(t);

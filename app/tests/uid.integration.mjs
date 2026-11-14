@@ -80,3 +80,34 @@ test('0600：服务启动成功，10001 可以读取，10002 被拒绝；重启�
   } finally { await service.pool.close(); }
   assert.equal(fs.statSync(native).uid, 10001); assert.equal(fs.statSync(native).mode & 0o777, 0o600);
 });
+
+import { createUserFileTools } from '../server/modules/accounts/workspace.mjs';
+import { runOwner } from '../server/modules/accounts/context.mjs';
+
+test('预览文件：真实 uid 属主保持不变，拒绝跨用户路径及符号链接', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-uid-')); fs.chmodSync(root, 0o755);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owners = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  for (const [index, owner] of owners.entries()) {
+    const uid = 10001 + index;
+    const paths = prepareDirectories(root, { user_id: owner, uid, codex_home: path.join(root, '.data/users', owner, 'codex') }, { isolated: true });
+    const child = userSpawn(process.execPath, ['--input-type=module', '-e', `
+      import fs from 'node:fs';
+      fs.mkdirSync('outputs', { mode: 0o2770 });
+      fs.writeFileSync('outputs/page.html', '<html>用户产物</html>', { mode: 0o660 });
+    `], { uid, gid: uid, isolated: true });
+    const seeded = spawnSync(child.command, child.args, { ...child.options, cwd: paths.workspaceDir, env: { PATH: process.env.PATH }, encoding: 'utf8' });
+    assert.equal(seeded.status, 0, seeded.stderr);
+  }
+  const files = createUserFileTools(root, { workspaceDir: path.join(root, 'workspace'), sources: [{ id: 'output', locator: 'outputs', actions: ['read'] }] });
+  for (const [index, owner] of owners.entries()) runOwner(owner, () => {
+    const own = path.join(root, 'workspace/users', owner, 'outputs/page.html'), before = fs.statSync(own);
+    assert.equal(before.uid, 10001 + index);
+    assert.equal(files.read_preview({ path: 'outputs/page.html' }).content.toString(), '<html>用户产物</html>');
+    const other = path.join(root, 'workspace/users', owners[1 - index], 'outputs/page.html');
+    fs.symlinkSync(other, path.join(files.workspace, 'outputs/link.html'));
+    assert.throws(() => files.read_preview({ path: 'outputs/link.html' }), /符号链接/);
+    assert.throws(() => files.read_preview({ path: `outputs/../../${owners[1 - index]}/outputs/page.html` }), /上级目录/);
+    assert.equal(fs.statSync(own).uid, before.uid); assert.equal(fs.statSync(own).mode, before.mode);
+  });
+});
