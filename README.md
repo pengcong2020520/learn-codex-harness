@@ -6,7 +6,7 @@
 | --- | --- |
 | 从 [s00：先体验](stages/s00-sdk-quickstart/README.md) 开始，逐章理解服务、工具、数据、权限和多机副本接管；配套 [互动课程](course/README.md) | 使用 [app/ 脚手架](app/README.md)：多用户、网页聊天、命令行、模型网关，可按需打开集群 |
 
-已克隆仓库并安装 Node.js 24、启动 Docker Compose 后，三行启动脚手架：
+已克隆仓库并安装 Node.js 24、启动 Docker 后（Windows 需在 WSL2 中运行，见[运行环境](app/README.md#运行环境)），三行启动脚手架：
 
 ```bash
 cd app

@@ -15,12 +15,12 @@ export function createPrompts(input = process.stdin, output = process.stderr) {
         if (next.done) throw new Error('stdin 缺少输入行。');
         return next.value;
       }
-      output.write(label);
-      muted = secret;
       try { return await new Promise((resolve, reject) => {
         const cancel = () => { rl.close(); reject(new Error('输入已取消。')); };
         rl.once('SIGINT', cancel);
-        rl.question('', answer => { rl.off('SIGINT', cancel); resolve(answer); });
+        // 提示交给 readline 刷新；提示写出后才静音，避免一起隐藏提示。
+        rl.question(label, answer => { rl.off('SIGINT', cancel); resolve(answer); });
+        muted = secret;
       }); }
       finally { muted = false; if (secret) output.write('\n'); }
     },

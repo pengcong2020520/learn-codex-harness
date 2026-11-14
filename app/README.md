@@ -9,9 +9,17 @@
 - 模型经网关统一接入，按配置选择模型与管理用量。
 - 需要副本与故障接管时打开集群。
 
+## 运行环境
+
+需要 **Node.js ≥ 24**、**Docker 与 Docker Compose v2**，并启动 Docker。
+
+- **macOS**：Docker Desktop、OrbStack、Colima 任选一个。建议给 Docker 虚拟机分配不少于 **4 GB 内存**；按三节点配置，各常驻容器的内存上限合计约 **3.1 GB**，构建镜像还需要额外内存。
+- **Linux**：安装 Docker Engine 和 Compose 插件。
+- **Windows**：只支持 **WSL2**。安装 WSL2（Ubuntu）和 Docker Desktop，在 Docker Desktop 设置里打开 WSL 集成；在 WSL 终端安装 Node.js ≥ 24，把仓库克隆到 WSL 的 Linux 目录（例如 `~/`），再运行下方命令。仓库不能放在 `/mnt/` 下的 Windows 磁盘上，数据目录依赖 Linux 文件属主与权限。原生 PowerShell/CMD 不支持，因为部署依赖 bash 脚本、Linux 文件属主与权限，以及 `.env` 的 `0600` 权限。
+
 ## 快速开始
 
-需要 **Node.js ≥ 24**、已启动的 **Docker 与 Docker Compose**。克隆仓库后，在仓库根目录运行：
+按上方要求准备运行环境并克隆仓库后，在仓库根目录运行：
 
 ```bash
 cd app
