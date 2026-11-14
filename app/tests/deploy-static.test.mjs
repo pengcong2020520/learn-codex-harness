@@ -1,12 +1,61 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
 const compose = read('compose.yaml');
 const service = name => compose.match(new RegExp(`^  ${name}:(?: &node)?\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:|^volumes:|$(?![\\s\\S]))`, 'm'))?.[1];
 
-test('static: 默认七服务加可选集群、三节点独立卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
-  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'remote-access', 'remote-node-link']);
+test('static: Compose 无必填插值，长期业务服务经 prepare 门禁、节点经 migrate 门禁', () => {
+  assert.doesNotMatch(compose, /:\?/);
+  for (const name of ['postgres', 'redis', 'etcd', 'gateway', 'etcd-init', 'migrate']) {
+    assert.match(service(name), /prepare: \{ condition: service_completed_successfully(?:, restart: true)? \}/, name);
+  }
+  assert.match(service('node-a'), /migrate: \{ condition: service_completed_successfully \}/);
+  for (const name of ['node-b', 'node-c']) assert.match(service(name), /<<: \*node/);
+  assert.match(service('caddy'), /node-a: \{ condition: service_healthy \}/);
+  // 两个显式 remote-access profile 的中继按任务约定保持独立。
+  for (const name of ['remote-access', 'remote-node-link']) assert.doesNotMatch(service(name), /depends_on:/);
+  for (const name of ['prepare', 'migrate', 'etcd-init']) {
+    assert.match(service(name), /image: codex-agent:current/);
+    assert.match(service(name), /build: \*agent-build/);
+    assert.match(service(name), /restart: "no"/);
+  }
+  for (const name of ['postgres', 'redis']) assert.match(service('migrate'), new RegExp(`${name}: \\{ condition: service_healthy \\}`));
+  assert.match(service('migrate'), /etcd-init: \{ condition: service_completed_successfully \}/);
+  assert.match(service('migrate'), /cluster-migrate.mjs && npm run -s agent:init && node scripts\/compose-init.mjs copy-identities/);
+});
+
+test('static: 网关目录复制到 tmpfs，保留官方入口、共享组与健康检查', () => {
+  const gateway = service('gateway');
+  assert.match(gateway, /volumes: \["\.\/\.data\/gateway:\/gateway-config:ro"\]/);
+  assert.doesNotMatch(gateway, /gateway\/[^\s]+\.json:/);
+  assert.match(gateway, /tmpfs: \["\/app\/data:uid=1000,gid=0,mode=0770"\]/);
+  assert.match(gateway, /group_add: \["1000"\]/);
+  assert.match(gateway, /cp \/gateway-config\/config.json \/gateway-config\/model-parameters.json \/app\/data\/; exec \/app\/docker-entrypoint.sh \/app\/main/);
+  assert.match(gateway, /prepare: \{ condition: service_completed_successfully, restart: true \}/);
+  assert.match(gateway, /test: \["CMD", "wget", "-q", "-O", "\/dev\/null", "http:\/\/127.0.0.1:8080\/health"\]/);
+});
+
+test('Dockerfile：缺失或相对部署路径在安装依赖前中文报错', () => {
+  const dockerfile = read('Dockerfile'), guard = dockerfile.match(/^RUN case .*$/m)?.[0];
+  assert.ok(guard);
+  assert.ok(dockerfile.indexOf(guard) < dockerfile.indexOf('apt-get update'));
+  assert.ok(dockerfile.indexOf(guard) < dockerfile.indexOf('WORKDIR'));
+  for (const value of [undefined, '', 'relative', '/srv/agent', '/srv/带空格 agent']) {
+    const result = spawnSync('/bin/sh', ['-c', guard.slice(4)], { env: value === undefined ? {} : { CONTAINER_APP_DIR: value }, encoding: 'utf8' });
+    assert.equal(result.status, value?.startsWith('/') ? 0 : 1);
+    if (result.status) assert.equal(result.stderr.trim(), '缺少 CONTAINER_APP_DIR：请先运行配置向导（npm run setup）生成 .env');
+  }
+});
+
+test('static: E2E 直接 Compose 再启动并以同一账号登录，之后保留三节点扩容', () => {
+  const source = read('scripts/e2e-compose.sh');
+  assert.match(source, /docker compose stop\ndocker compose up -d --wait\nprintf '%s\\n' "\$password" \| node scripts\/e2e-check.mjs --login-only\nSETUP_ADMIN_PASSWORD="\$password" npm run cluster:enable -- --yes/);
+});
+
+test('static: 默认服务含初始化链与可选集群、三节点独立卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
+  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'remote-access', 'remote-node-link']);
   assert.match(compose, /mem_limit: 128m/); assert.match(compose, /mem_limit: 64m/);
   assert.match(compose, /AGENT_MEMORY_LIMIT:-768m/);
   assert.deepEqual([...compose.matchAll(/ports: \["([^"]+)"\]/g)].map(m => m[1]), ['127.0.0.1:${AGENT_PORT:-4317}:80']);
@@ -128,8 +177,8 @@ test('static: every node mounts the shared gateway directory so the one-shot gen
 });
 
 test('static: etcd health uses a dedicated user without shell; both deploy paths initialize before waiting', () => {
-  assert.ok(service('etcd').includes('test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]'));
-  assert.match(service('etcd-init'), /ETCD_HEALTH_PASSWORD: \$\{ETCD_HEALTH_PASSWORD:\?Set ETCD_HEALTH_PASSWORD\}/);
+  assert.ok(service('etcd').includes('test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:-}", "endpoint", "health"]'));
+  assert.match(service('etcd-init'), /ETCD_HEALTH_PASSWORD: \$\{ETCD_HEALTH_PASSWORD:-\}/);
   assert.match(service('etcd-init'), /etcd: \{ condition: service_started \}/);
   assert.match(service('node-a'), /etcd: \{ condition: service_healthy \}/);
   for (const name of ['node-b', 'node-c']) assert.match(service(name), /<<: \*node/);

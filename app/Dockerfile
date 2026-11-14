@@ -4,6 +4,7 @@ ARG NPM_REGISTRY=https://registry.npmjs.org
 ARG APT_MIRROR=
 # 必须与宿主部署路径相同：Codex 原生历史保存绝对路径。
 ARG CONTAINER_APP_DIR
+RUN case "$CONTAINER_APP_DIR" in /*) ;; *) echo '缺少 CONTAINER_APP_DIR：请先运行配置向导（npm run setup）生成 .env' >&2; exit 1 ;; esac
 ENV NODE_ENV=production
 # 备份在宿主机调用 postgres 容器里的客户端，本镜像不安装数据库命令行工具。
 RUN if [ -n "$APT_MIRROR" ]; then sed -i "s#http://deb.debian.org#$APT_MIRROR#g" /etc/apt/sources.list.d/debian.sources; fi \

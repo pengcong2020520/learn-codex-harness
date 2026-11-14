@@ -152,9 +152,13 @@ test('/proc 进程检查包含 real/effective/saved/fs uid，读取失败不放�
   assert.throws(() => uidHasProcesses(10001), /denied/);
 });
 
-test('常驻服务无 DAC_*；只有备份和文件恢复的一次性命令带对应能力', () => {
+test('常驻服务无 DAC_*；初始化、备份和文件恢复的一次性命令按需授权', () => {
   const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
-  assert.doesNotMatch(read('compose.yaml'), /DAC_(?:OVERRIDE|READ_SEARCH)/);
+  const services = read('compose.yaml').split('services:\n')[1].split('\nnetworks:')[0];
+  for (const [, name, body] of services.matchAll(/^  ([a-z-]+):[^\n]*\n([\s\S]*?)(?=^  [a-z-]+:|(?![\s\S]))/gm)) {
+    if (['prepare', 'migrate'].includes(name)) assert.match(body, /restart: "no"/);
+    else assert.doesNotMatch(body, /DAC_(?:OVERRIDE|READ_SEARCH)/, name);
+  }
   const commands = ['backup.sh', 'restore.sh'].flatMap(file => read(`deploy/${file}`).split('\n').filter(line => line.trim().startsWith('docker compose')));
   const elevated = commands.filter(line => line.includes('--cap-add'));
   assert.equal(elevated.length, 2);

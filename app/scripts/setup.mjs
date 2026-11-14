@@ -95,9 +95,7 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
   writeEnv(root, values);
   log('已写入 .env（权限 0600）。');
   if (!options.start) return values;
-  log('构建镜像并准备数据目录……');
-  await execute('bash', ['deploy/configure.sh']);
-  log('启动服务……');
+  log('构建镜像、初始化并启动服务……');
   await execute('docker', composeUp(values));
   if (!options.reconfigure) await execute('docker', accountArgs(root, 'init', [], values), { input: `${username}\n${password}\n` });
   await ready(values, { log });

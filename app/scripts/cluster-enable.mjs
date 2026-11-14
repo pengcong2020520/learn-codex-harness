@@ -67,7 +67,6 @@ export async function enableCluster(argv = process.argv.slice(2), { root = PROJE
   writeEnv(root, values);
   const childEnv = childEnvironment(env), redact = await commandRedactor(env, previous, values, loginSecrets);
   log('准备新增节点并更新集群配置……');
-  await run('bash', ['deploy/configure.sh'], { root, env: childEnv, output, redact, quiet: options.quiet });
   await run('docker', composeUp(values), { root, env: childEnv, output, redact, quiet: options.quiet });
   // 服务重启期间先等只读就绪；权限错误和未知失败不自动重试。
   await ready(values, { fetchImpl, log });

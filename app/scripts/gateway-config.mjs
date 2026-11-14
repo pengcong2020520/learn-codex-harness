@@ -12,8 +12,8 @@ import { createModelRouter } from "../server/modules/gateway/router.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-export function writeGatewayConfig(projectRoot = root, inherited = process.env) {
-  const environment = loadEnvironment(projectRoot, inherited);
+export function writeGatewayConfig(projectRoot = root, inherited = process.env, { readEnv = true } = {}) {
+  const environment = readEnv ? loadEnvironment(projectRoot, inherited) : inherited;
   if (!gatewayEndpoint(environment)) throw new Error("没有启用模型网关：在 .env 里设置 AGENT_GATEWAY_KEY（npm run gateway:key 可以生成），见 docs/model-gateway.md。");
   const registry = loadModelRegistry(projectRoot);
   if (!registry) throw new Error("缺少 config/models.json。");

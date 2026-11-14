@@ -155,12 +155,12 @@ test('topology: Caddy 上游运行时生成与配置一致；单节点无 B/C DN
   assert.equal(result.status, 1); assert.match(result.stderr, /AGENT_CLUSTER_NODES 只能是/);
 });
 
-test('topology: Compose 默认仅七服务，cluster profile 添加 B/C，密钥可空且 Caddy 无 B/C 依赖', () => {
+test('topology: Compose 默认九服务含初始化链，cluster profile 添加 B/C，密钥可空且 Caddy 无 B/C 依赖', () => {
   const compose = read('compose.yaml').split('services:\n')[1].split('\nnetworks:')[0];
   const services = [...compose.matchAll(/^  ([\w-]+):[^\n]*\n([\s\S]*?)(?=^  [\w-]+:|(?![\s\S]))/gm)];
   const active = profile => services.filter(([, , body]) => !body.includes('profiles:') || body.includes(`profiles: ["${profile}"]`)).map(([, name]) => name).sort();
-  assert.deepEqual(active(), ['caddy','etcd','etcd-init','gateway','node-a','postgres','redis']);
-  assert.deepEqual(active('cluster'), ['caddy','etcd','etcd-init','gateway','node-a','node-b','node-c','postgres','redis']);
+  assert.deepEqual(active(), ['caddy','etcd','etcd-init','gateway','migrate','node-a','postgres','prepare','redis']);
+  assert.deepEqual(active('cluster'), ['caddy','etcd','etcd-init','gateway','migrate','node-a','node-b','node-c','postgres','prepare','redis']);
   const caddy = services.find(([, name]) => name === 'caddy')[2];
   assert.doesNotMatch(caddy, /node-[bc]: \{ condition:/);
   assert.match(caddy, /AGENT_CLUSTER_NODES: \$\{AGENT_CLUSTER_NODES-node-a\}/);

@@ -7,14 +7,103 @@ x-runtime: &runtime
     options:
       max-size: "10m"
       max-file: "3"
+x-agent-build: &agent-build
+  context: .
+  args:
+    NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    APT_MIRROR: ${APT_MIRROR:-}
+    CONTAINER_APP_DIR: ${CONTAINER_APP_DIR:-}
+x-gateway-env: &gateway-env
+  AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:-}
+  ARK_API_KEY: ${ARK_API_KEY:-}
+  KIMI_API_KEY: ${KIMI_API_KEY:-}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  XAI_API_KEY: ${XAI_API_KEY:-}
+  ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+  HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
 services:
+  prepare:
+    build: *agent-build
+    image: codex-agent:current
+    restart: "no"
+    user: "0:1000"
+    cap_drop: [ALL]
+    # 首次需在普通用户拥有的项目目录中创建挂载源；不把写权限能力给长期服务。
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    command: ["node", "scripts/compose-init.mjs", "prepare"]
+    volumes: [".:/prepare"]
+    environment:
+      <<: *gateway-env
+      CONTAINER_APP_DIR: ${CONTAINER_APP_DIR:-}
+      AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
+      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:-}
+      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:-}
+      AGENT_PREVIEW_SECRET: ${AGENT_PREVIEW_SECRET:-}
+      AGENT_NODE_KEY_A: ${AGENT_NODE_KEY_A:-}
+      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:-}
+      AGENT_NODE_A_DB_PASSWORD: ${AGENT_NODE_A_DB_PASSWORD:-}
+      ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:-}
+      AGENT_NODE_KEY_B: ${AGENT_NODE_KEY_B:-}
+      AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:-}
+      AGENT_NODE_B_DB_PASSWORD: ${AGENT_NODE_B_DB_PASSWORD:-}
+      ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:-}
+      AGENT_NODE_KEY_C: ${AGENT_NODE_KEY_C:-}
+      AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:-}
+      AGENT_NODE_C_DB_PASSWORD: ${AGENT_NODE_C_DB_PASSWORD:-}
+      ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:-}
+      CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}
+      # 保留生成器对网关/直连互斥及连接参数的检查。
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      AGENT_GATEWAY_URL: ${AGENT_GATEWAY_URL:-}
+      AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-}
+      AGENT_BUDGET_DAILY_TOKENS: ${AGENT_BUDGET_DAILY_TOKENS:-}
+      AGENT_GATEWAY_DAILY_TOKENS: ${AGENT_GATEWAY_DAILY_TOKENS:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+  migrate:
+    build: *agent-build
+    image: codex-agent:current
+    restart: "no"
+    user: "0:1000"
+    cap_drop: [ALL]
+    cap_add: [FOWNER, DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    command: ["sh", "-ec", "node scripts/cluster-migrate.mjs && npm run -s agent:init && node scripts/compose-init.mjs copy-identities"]
+    environment:
+      AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
+      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:-}
+      AGENT_NODE_A_DB_PASSWORD: ${AGENT_NODE_A_DB_PASSWORD:-}
+      AGENT_NODE_B_DB_PASSWORD: ${AGENT_NODE_B_DB_PASSWORD:-}
+      AGENT_NODE_C_DB_PASSWORD: ${AGENT_NODE_C_DB_PASSWORD:-}
+      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
+    volumes:
+      - type: bind
+        source: ./.env
+        target: ${CONTAINER_APP_DIR}/.env
+        read_only: true
+        bind: { create_host_path: false }
+      - "./nodes:/prepare-nodes"
+      - "./nodes/node-a/.data:${CONTAINER_APP_DIR}/.data"
+      - "./nodes/node-a/workspace:${CONTAINER_APP_DIR}/workspace"
+    depends_on:
+      prepare: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      etcd-init: { condition: service_completed_successfully }
   postgres:
     <<: *runtime
     image: postgres:16
     mem_limit: ${POSTGRES_MEMORY_LIMIT:-256m}
     environment:
       POSTGRES_USER: agent
-      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:?Set AGENT_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${AGENT_DB_PASSWORD:-}
       POSTGRES_DB: agent
     # 默认只发布 Caddy；remote-access profile 才开启回环隧道入口。
     volumes: ["postgres-data:/var/lib/postgresql/data"]
@@ -23,38 +112,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      prepare: { condition: service_completed_successfully }
   redis:
     <<: *runtime
     image: redis:7.4
     mem_limit: ${REDIS_MEMORY_LIMIT:-128m}
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
     environment:
-      REDISCLI_AUTH: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-}
     volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      prepare: { condition: service_completed_successfully }
   gateway:
     <<: *runtime
     image: maximhq/bifrost:v2.4.0@sha256:a1c90607dcfd13c1fb2f9476ceb3bb24407a50ade7fdf3e61a59fb42b09e5c57
     mem_limit: ${GATEWAY_MEMORY_LIMIT:-256m}
-    # 网关访问密钥用于校验调用者；服务商密钥只进入这个服务。
-    environment:
-      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
-      ARK_API_KEY: ${ARK_API_KEY:-}
-      KIMI_API_KEY: ${KIMI_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      XAI_API_KEY: ${XAI_API_KEY:-}
-      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
-      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
+    # 网关访问密钥用于校验调用者；长期服务中只有网关接收服务商密钥。
+    environment: *gateway-env
     tmpfs: ["/app/data:uid=1000,gid=0,mode=0770"]
-    volumes: ["./.data/gateway/config.json:/app/data/config.json:ro", "./.data/gateway/model-parameters.json:/app/data/model-parameters.json:ro"]
+    group_add: ["1000"]
+    volumes: ["./.data/gateway:/gateway-config:ro"]
+    # 官方入口：https://github.com/maximhq/bifrost/blob/transports/v2.4.0/transports/Dockerfile
+    entrypoint: ["/bin/sh", "-ec", "cp /gateway-config/config.json /gateway-config/model-parameters.json /app/data/; exec /app/docker-entrypoint.sh /app/main"]
     depends_on:
+      prepare: { condition: service_completed_successfully, restart: true }
       postgres: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
@@ -62,27 +149,27 @@ services:
       timeout: 3s
       retries: 20
   etcd-init:
+    build: *agent-build
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     image: codex-agent:current
-    restart: on-failure
+    restart: "no"
     command: ["node", "scripts/etcd-init.mjs"]
     environment:
       ETCD_ENDPOINT: http://etcd:2379
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
-      ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:?Set ETCD_ROOT_PASSWORD}
-      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}
-      ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      ETCD_ROOT_PASSWORD: ${ETCD_ROOT_PASSWORD:-}
+      ETCD_HEALTH_PASSWORD: ${ETCD_HEALTH_PASSWORD:-}
+      ETCD_NODE_A_PASSWORD: ${ETCD_NODE_A_PASSWORD:-}
       ETCD_NODE_B_PASSWORD: ${ETCD_NODE_B_PASSWORD:-}
       ETCD_NODE_C_PASSWORD: ${ETCD_NODE_C_PASSWORD:-}
     depends_on:
+      prepare: { condition: service_completed_successfully }
       etcd: { condition: service_started }
   node-a: &node
     <<: *runtime
-    build:
-      context: .
-      args:
-        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
-        APT_MIRROR: ${APT_MIRROR:-}
-        CONTAINER_APP_DIR: ${CONTAINER_APP_DIR:?Set to the absolute deployment directory}
+    build: *agent-build
     image: codex-agent:current
     user: "0:1000"
     cap_drop: [ALL]
@@ -92,12 +179,12 @@ services:
     init: true
     mem_limit: ${AGENT_MEMORY_LIMIT:-768m}
     environment: &node-env
-      AGENT_PREVIEW_SECRET: ${AGENT_PREVIEW_SECRET:?Set AGENT_PREVIEW_SECRET}
+      AGENT_PREVIEW_SECRET: ${AGENT_PREVIEW_SECRET:-}
       # All nodes trust the public entry origin, not their internal listening port.
       AGENT_ALLOWED_ORIGINS: ${AGENT_ALLOWED_ORIGINS:-http://127.0.0.1:${AGENT_PORT:-4317},http://localhost:${AGENT_PORT:-4317}}
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
-      AGENT_NODE_KEY: ${AGENT_NODE_KEY_A:?Set AGENT_NODE_KEY_A}
-      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:?Set AGENT_NODE_KEY_A_HASH}
+      AGENT_NODE_KEY: ${AGENT_NODE_KEY_A:-}
+      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:-}
       AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:-}
       AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:-}
       AGENT_REPLICATION_RATE_LIMIT: ${AGENT_REPLICATION_RATE_LIMIT:-0}
@@ -109,14 +196,14 @@ services:
       AGENT_NODE_ID: node-a
       ETCD_ENDPOINT: http://etcd:2379
       ETCD_USERNAME: node-a
-      ETCD_PASSWORD: ${ETCD_NODE_A_PASSWORD:?Set ETCD_NODE_A_PASSWORD}
+      ETCD_PASSWORD: ${ETCD_NODE_A_PASSWORD:-}
       AGENT_DEPLOYED: "true"
       AGENT_LISTEN_HOST: 0.0.0.0
       AGENT_PORT: "4340"
       AGENT_GATEWAY_URL: http://gateway:8080/v1
-      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:?Set AGENT_GATEWAY_KEY}
-      DATABASE_URL: postgresql://agent_node_a:${AGENT_NODE_A_DB_PASSWORD:?Set AGENT_NODE_A_DB_PASSWORD}@postgres:5432/agent
-      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+      AGENT_GATEWAY_KEY: ${AGENT_GATEWAY_KEY:-}
+      DATABASE_URL: postgresql://agent_node_a:${AGENT_NODE_A_DB_PASSWORD:-}@postgres:5432/agent
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CODEX_MODEL_CATALOG_ENABLED: "true"
       CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}
       AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
@@ -148,6 +235,7 @@ services:
       - "./nodes/node-a/workspace:${CONTAINER_APP_DIR}/workspace"
       - "./backups/node-a:${CONTAINER_APP_DIR}/backups"
     depends_on:
+      migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       gateway: { condition: service_healthy }
@@ -201,10 +289,12 @@ services:
     command: ["etcd", "--name=etcd", "--data-dir=/etcd-data", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd:2380", "--initial-cluster=etcd=http://etcd:2380"]
     volumes: ["etcd-data:/etcd-data"]
     healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:?Set ETCD_HEALTH_PASSWORD}", "endpoint", "health"]
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "--user", "health:${ETCD_HEALTH_PASSWORD:-}", "endpoint", "health"]
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      prepare: { condition: service_completed_successfully }
   caddy:
     <<: *runtime
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
