@@ -5,11 +5,16 @@ import { loadEnvironment } from "../server/modules/config/index.mjs";
 import { enabledProviders, gatewayEndpoint, loadModelRegistry, splitModelId } from "../server/modules/gateway/index.mjs";
 import { PROJECT_ROOT } from "../shared/paths.mjs";
 
-// 固定 8×8 纯红色 PNG，不依赖外部图片地址。
+// 内置 8×8 纯色 PNG，不依赖外部图片地址；红图也供附件测试复用。
 export const TEST_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC";
+const TEST_IMAGES = [
+  { color: "红", url: TEST_IMAGE },
+  { color: "绿", url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEElEQVR4nGNg+M+AHQ0tCQDpMD/B9YBzjgAAAABJRU5ErkJggg==" },
+  { color: "蓝", url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEElEQVR4nGNgYPiPAw0pCQCpcD/BFMrqcwAAAABJRU5ErkJggg==" },
+];
 
 async function probe(endpoint, model, search, timeoutMs, image = false, fetcher = fetch) {
-  let usage;
+  let usage, fallbackResult;
   try {
     const response = await fetcher(`${endpoint.baseUrl.replace(/\/$/, "")}/responses`, {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(timeoutMs),
@@ -18,29 +23,38 @@ async function probe(endpoint, model, search, timeoutMs, image = false, fetcher 
       // Kimi 收到简写格式时不会触发联网搜索，测出来的就不是 Codex 运行时的真实情况。
       body: JSON.stringify({ model, input: [{ type: "message", role: "user", content: [{ type: "input_text", text: search
         ? `请联网查找今天（${new Date().toISOString().slice(0, 10)}）最新一条国际新闻，简短给出标题和来源链接。`
-        : image ? "这张图片是什么颜色" : "只回复 OK" }, ...(image ? [{ type: "input_image", image_url: TEST_IMAGE }] : [])] }], ...(search ? { tools: [{ type: "web_search", external_web_access: true }] } : {}) }),
+        : image ? "这张图片是什么颜色" : "只回复 OK" }, ...(image ? [{ type: "input_image", image_url: image.url }] : [])] }], ...(search ? { tools: [{ type: "web_search", external_web_access: true }] } : {}) }),
     });
+    const isFallback = response.headers.get("x-bifrost-routing-info-is-fallback") === "true";
+    const provider = response.headers.get("x-bifrost-provider");
+    const resolvedModel = response.headers.get("x-bifrost-resolved-model");
+    // 这个检查测的是指定模型本身，备用作答不能证明它能用。
+    if (isFallback) fallbackResult = { ok: false, fallbackModel: provider && resolvedModel ? `${provider}/${resolvedModel}` : "备用模型",
+      reason: `主模型没有作答，由${provider && resolvedModel ? `备用 ${provider}/${resolvedModel} ` : "备用模型"}回答` };
     if (!response.ok) {
       await response.body?.cancel();
-      return { ok: false, reason: `HTTP ${response.status}` };
+      return fallbackResult || { ok: false, reason: `HTTP ${response.status}` };
     }
     const result = await response.json();
     usage = result.usage;
+    if (fallbackResult) return { ...fallbackResult, usage };
     if (result.error || result.status === "failed") return { ok: false, reason: "上游返回失败状态", usage };
     const output = Array.isArray(result.output) ? result.output : [];
+    const answer = output.filter(item => item.type === "message").flatMap(item => item.content || [])
+      .filter(part => part.type === "output_text" && typeof part.text === "string").map(part => part.text).join("\n");
     const ok = image
-      ? output.some(item => item.type === "message" && item.content?.some(part => part.type === "output_text" && part.text?.includes("红")))
+      ? answer.includes(image.color) && TEST_IMAGES.every(candidate => candidate.color === image.color || !answer.includes(candidate.color))
       : search
       ? output.some(item => item.type === "web_search_call")
       : output.some(item => item.type === "message" && item.content?.some(part => part.type === "output_text" && part.text?.trim()));
-    return { ok, reason: ok ? null : image ? "回答中没有红色的红字" : search ? "没有 web_search_call" : "没有文本输出", usage };
+    return { ok, reason: ok ? null : image ? `回答须包含「${image.color}」且不能包含其他两种颜色字` : search ? "没有 web_search_call" : "没有文本输出", usage };
   } catch (error) {
     // 不回显上游错误、响应或 fetch 的异常文本，避免服务商把密钥带进终端。
-    return { ok: false, reason: error.name === "TimeoutError" ? "请求超时" : "网关连接失败或响应格式错误", usage };
+    return fallbackResult ? { ...fallbackResult, usage } : { ok: false, reason: error.name === "TimeoutError" ? "请求超时" : "网关连接失败或响应格式错误", usage };
   }
 }
 
-export async function checkGateway({ environment, registry, model, search = false, image = false, fetcher = fetch, timeoutMs = 60000 }) {
+export async function checkGateway({ environment, registry, model, search = false, image = false, fetcher = fetch, timeoutMs = 60000, random = Math.random }) {
   if (image && !model) throw new Error("--image 必须同时指定 --model；看图实测会产生费用，请取得负责人允许后运行。");
   const endpoint = gatewayEndpoint(environment);
   if (!endpoint) throw new Error("没有启用模型网关：请先配置服务商密钥，运行 npm run setup，再运行 npm run gateway:check。");
@@ -54,23 +68,25 @@ export async function checkGateway({ environment, registry, model, search = fals
     const start = performance.now();
     const chat = await probe(endpoint, id, false, timeoutMs, false, fetcher);
     const web = search ? await probe(endpoint, id, true, timeoutMs, false, fetcher) : null;
-    const vision = image ? await probe(endpoint, id, false, timeoutMs, true, fetcher) : null;
+    const testImage = image ? TEST_IMAGES[Math.floor(random() * TEST_IMAGES.length)] : null;
+    const vision = testImage ? await probe(endpoint, id, false, timeoutMs, testImage, fetcher) : null;
     const declared = registry.models[id].nativeTools?.includes("web_search") || false;
     const usages = [chat.usage, web?.usage, vision?.usage].filter(Boolean);
-    rows.push({ model: id, fallbacks: (registry.models[id].fallbacks || []).filter(target => enabled.has(splitModelId(target).provider)), chat: chat.ok, image: vision?.ok ?? null, search: web?.ok ?? null, declared, elapsedMs: Math.round(performance.now() - start),
+    rows.push({ model: id, fallbacks: (registry.models[id].fallbacks || []).filter(target => enabled.has(splitModelId(target).provider)), chat: chat.ok, image: vision?.ok ?? null, imageColor: testImage?.color ?? null, search: web?.ok ?? null, declared, elapsedMs: Math.round(performance.now() - start),
+      chatFallback: chat.fallbackModel ?? null, searchFallback: web?.fallbackModel ?? null, imageFallback: vision?.fallbackModel ?? null,
       inputTokens: usages.length ? usages.reduce((sum, usage) => sum + (usage.input_tokens || 0), 0) : null,
       outputTokens: usages.length ? usages.reduce((sum, usage) => sum + (usage.output_tokens || 0), 0) : null });
     if (vision && !vision.ok) messages.push(`${id}：看图失败（${vision.reason}）。`);
-    if (vision?.ok) messages.push(`${id}：看图实测通过，可在 config/models.json 标注 inputs: ["text","image"]。`);
+    if (vision?.ok) messages.push(`${id}：本次看图实测通过；连续两次通过后，才可在 config/models.json 标注 inputs: ["text","image"]。`);
     if (!chat.ok) messages.push(`${id}：对话失败（${chat.reason}）。`);
     if (web && !web.ok) messages.push(`${id}：联网搜索失败（${web.reason}）。`);
     if (declared && web && !web.ok) messages.push(`${id}：清单已声明 web_search，但实测失败，请检查网关链路或修正 nativeTools。`);
     if (!declared && web?.ok) messages.push(`${id}：实测支持 web_search，但清单未声明；核实后可添加 nativeTools: ["web_search"]。`);
   }
-  return { rows, messages, exitCode: rows.some(row => !row.chat || row.image === false || (row.declared && row.search === false)) ? 1 : 0 };
+  return { rows, messages, exitCode: rows.some(row => !row.chat || row.image === false || row.searchFallback || (row.declared && row.search === false)) ? 1 : 0 };
 }
 
-export async function main(args = process.argv.slice(2), { environment, registry, log = console.log, timeoutMs, fetcher } = {}) {
+export async function main(args = process.argv.slice(2), { environment, registry, log = console.log, timeoutMs, fetcher, random } = {}) {
   try {
     let model, search = false, image = false;
     for (let index = 0; index < args.length; index++) {
@@ -80,10 +96,11 @@ export async function main(args = process.argv.slice(2), { environment, registry
       else throw new Error("用法：npm run gateway:check -- [--model 服务商/模型名] [--search] [--image]（看图实测会产生费用）");
     }
     const report = await checkGateway({ environment: environment ?? loadEnvironment(PROJECT_ROOT),
-      registry: registry ?? loadModelRegistry(PROJECT_ROOT), model, search, image, timeoutMs, fetcher });
-    log("| 模型 | 备用链 | 对话 | 联网搜索 | 清单声明 | 耗时 | 用量（输入 / 输出 token） |\n|---|---|---|---|---|---|---|");
-    for (const row of report.rows) log(`| ${row.model} | ${row.fallbacks.join(" → ") || "无"} | ${row.chat ? "✓" : "✗"} | ${row.search === null ? "未测" : row.search ? "✓" : "✗"} | ${row.declared ? "web_search" : "无"} | ${row.elapsedMs} ms | ${row.inputTokens ?? "未知"} / ${row.outputTokens ?? "未知"} |`);
-    if (image) for (const row of report.rows) log(`看图：${row.model} ${row.image ? "✓" : "✗"}（本次实测会产生费用）`);
+      registry: registry ?? loadModelRegistry(PROJECT_ROOT), model, search, image, timeoutMs, fetcher, random });
+    const status = (ok, fallback) => fallback ? "✗（备用作答）" : ok === null ? "未测" : ok ? "✓" : "✗";
+    log(`| 模型 | 备用链 | 对话 | 联网搜索 | ${image ? "看图 | " : ""}清单声明 | 耗时 | 用量（输入 / 输出 token） |\n|---|---|---|---|---|---|---|${image ? "---|" : ""}`);
+    for (const row of report.rows) log(`| ${row.model} | ${row.fallbacks.join(" → ") || "无"} | ${status(row.chat, row.chatFallback)} | ${status(row.search, row.searchFallback)} | ${image ? `${status(row.image, row.imageFallback)} | ` : ""}${row.declared ? "web_search" : "无"} | ${row.elapsedMs} ms | ${row.inputTokens ?? "未知"} / ${row.outputTokens ?? "未知"} |`);
+    if (image) for (const row of report.rows) log(`看图：${row.model} ${status(row.image, row.imageFallback)}（本次图片：${row.imageColor}色；本次实测会产生少量费用）`);
     for (const message of report.messages) log(`提示：${message}`);
     log("用量为本次对话、搜索与看图请求返回的 usage 合计；失败且未返回 usage 的请求不计入。连接失败时请检查网关并运行 npm run up。");
     return report.exitCode;

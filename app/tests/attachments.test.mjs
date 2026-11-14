@@ -104,7 +104,7 @@ test('附件：排队记录序列化后服务重启仍传图，派发时重新�
 });
 test('inputs：只允许两种声明，缺省纯文本；不从 inputModalities 推断许可', () => {
   const registry = loadModelRegistry(path.resolve(import.meta.dirname, '..'));
-  assert.ok(Object.values(registry.models).every(spec => !spec.inputs?.includes('image')), '真实模型须留待负责人实测');
+  assert.deepEqual(Object.entries(registry.models).filter(([, spec]) => spec.inputs?.includes('image')).map(([id]) => id), ['deepseek/deepseek-flash'], '新增看图标注须经负责人按 README 规则实测（随机颜色、连续两次通过、非备用作答）');
   const id = 'deepseek/deepseek-flash';
   for (const inputs of [[], ['image'], ['text', 'audio'], ['image', 'text'], ['text', 'image', 'image'], null, 'image']) {
     const copy = structuredClone(registry); copy.models[id].inputs = inputs;

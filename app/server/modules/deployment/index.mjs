@@ -35,6 +35,9 @@ export function createReadiness({ config, data, messages, tools, fetcher = fetch
   };
 }
 
+// 这个标记表示分片入口已经对该请求计过一次数。
+export const rateChecked = Symbol('rateChecked');
+
 // Sliding 60-second window, keyed by the actual socket peer; never trust X-Forwarded-For.
 export class RequestLimits {
   constructor({ rateLimit = 120, maxSse = 20, now = Date.now } = {}) {

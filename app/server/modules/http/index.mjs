@@ -1,10 +1,10 @@
 import { uploadInfo } from "../../../shared/uploads.mjs";
-import { createPreview, verifyPreview, previewPath, previewHash, previewHeaders, previewMissing, previewRateChecked } from './previews.mjs';
+import { createPreview, verifyPreview, previewPath, previewHash, previewHeaders, previewMissing } from './previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
 import { shardUser } from '../sharding/fence.mjs';
 import { hubRoute } from '../hub/routes.mjs';
-import { RequestLimits, createReadiness, revision } from "../deployment/index.mjs";
+import { RequestLimits, rateChecked, createReadiness, revision } from "../deployment/index.mjs";
 import { createServer } from "node:http";
 import { runIdentity } from "../accounts/context.mjs";
 import { AppError } from "../../../shared/errors.mjs";
@@ -71,13 +71,13 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
       const preview = request.method === 'GET' && pathname.startsWith('/preview/');
       let claim;
       if (preview) {
-        if (!request[previewRateChecked]) limits.request(null, source);
+        if (!request[rateChecked]) limits.request(null, source);
         claim = verifyPreview(config.previewSecret, pathname.slice('/preview/'.length));
       }
       let identity;
       try { identity = preview ? { userId: claim.userId } : await accounts.authenticate(request.headers.authorization); }
       catch (error) { limits.request(null, source); throw error; }
-      if (!preview) limits.request(identity.userId, source);
+      if (!preview && !request[rateChecked]) limits.request(identity.userId, source);
       const dispatch = async () => {
       const url = new URL(request.url, "http://127.0.0.1");
       const route = `${request.method} ${url.pathname}`;
