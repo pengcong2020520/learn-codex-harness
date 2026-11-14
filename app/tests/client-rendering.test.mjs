@@ -344,3 +344,21 @@ test("/revise：只选等待中的任务，发送意见，校验长度，重做�
   await f.send("/help");
   await until(() => f.text().includes("按意见重做当前等待确认的步骤"));
 });
+
+test('CLI /files 列出一层子目录并排序，/open 输出完整地址且不创建会话', async t => {
+  const f = terminalFixture(t), calls = [];
+  const api = { connection: { url: 'https://example.com' }, async request(route, body) {
+    calls.push([route, body]);
+    if (route === '/previews') return { url: '/preview/fixture', expiresAt: Date.now() + 600000 };
+    if (route === '/workspace?path=outputs') return { entries: [
+      { name: 'old.md', type: 'file', size: 12, updatedAt: '2026-01-01T00:00:00Z' }, { name: 'design', type: 'directory' }, { name: 'link', type: 'blocked-link' },
+    ] };
+    return { entries: [{ name: 'page.html', type: 'file', size: 20, updatedAt: '2026-01-02T00:00:00Z' }, { name: 'deeper', type: 'directory' }] };
+  } };
+  const done = runChat(api, f.terminal);
+  f.input.end('/files\n/open outputs/design/page.html\n/open\n/exit\n'); await done;
+  assert.deepEqual(calls, [['/workspace?path=outputs', undefined], ['/workspace?path=outputs%2Fdesign', undefined], ['/previews', { path: 'outputs/design/page.html' }]]);
+  assert.match(f.text(), /outputs\/design\/page.html\s+20 字节/);
+  assert.ok(f.text().indexOf('page.html') < f.text().indexOf('old.md'));
+  assert.match(f.text(), /https:\/\/example.com\/preview\/fixture/); assert.match(f.text(), /用法：\/open/);
+});

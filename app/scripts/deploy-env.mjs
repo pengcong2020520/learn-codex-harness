@@ -18,6 +18,7 @@ export function nodeSecrets(nodes) {
 export function generateDeployEnv(env, template, directory) {
   const values = Object.fromEntries(Object.keys(template).map(key => [key, env[key] ?? template[key]]));
   Object.assign(values, nodeSecrets(clusterNodes(values)));
+  values.AGENT_PREVIEW_SECRET = randomBytes(32).toString('hex');
   values.AGENT_DB_PASSWORD = randomBytes(24).toString('hex');
   values.REDIS_PASSWORD = randomBytes(24).toString('hex');
   values.ETCD_ROOT_PASSWORD = randomBytes(24).toString('hex');

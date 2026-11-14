@@ -29,13 +29,20 @@
       <div class="account"><span id="username-display"></span><button id="benefits" class="secondary">我的权益与用量</button><button id="logout" class="secondary">登出</button></div>
     </aside>
     <section class="conversation" aria-label="对话">
-      <header><button id="toggle-sidebar" class="mobile-only secondary" aria-label="展开会话列表" aria-controls="sidebar" aria-expanded="false">会话</button><div><h1 id="agent-name">Agent</h1><p id="session-name" class="muted">新建或选择一个会话</p></div><span id="model" class="muted"></span></header>
+      <header><button id="toggle-sidebar" class="mobile-only secondary" aria-label="展开会话列表" aria-controls="sidebar" aria-expanded="false">会话</button><div><h1 id="agent-name">Agent</h1><p id="session-name" class="muted">新建或选择一个会话</p></div><span id="model" class="muted"></span><button id="toggle-artifacts" class="secondary" aria-controls="artifacts" aria-expanded="false">产物</button></header>
       <p id="connection" class="banner" role="status" hidden>连接中断，正在重连</p>
       <div id="warnings" class="banner warning" role="status" hidden></div>
       <div id="queue" class="banner warning" hidden><span id="queue-reason"></span><button id="continue-queue" class="secondary">继续</button></div>
       <div id="messages" role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions text"><p class="empty">从一个问题开始。</p></div>
       <form id="composer"><label class="sr-only" for="message">消息内容</label><textarea id="message" rows="3" placeholder="输入消息…" required disabled></textarea><div class="composer-bottom"><span class="muted">Enter 发送 · Shift+Enter 换行</span><button id="send" type="submit" disabled>发送</button></div></form>
     </section>
+    <aside id="artifacts" aria-label="产物">
+      <div class="sidebar-heading"><h2>产物</h2><button id="close-artifacts" class="secondary">收起</button></div>
+      <button id="refresh-artifacts" class="secondary">刷新列表</button>
+      <p id="artifact-status" class="muted" role="status"></p>
+      <nav id="artifact-list" aria-label="工作区文件"></nav>
+      <div id="artifact-actions"></div><div id="artifact-preview" aria-live="polite"></div>
+    </aside>
   </main>
   <dialog id="plan-dialog" aria-labelledby="plan-title"><div class="sidebar-heading"><h2 id="plan-title">我的权益与用量</h2><button id="close-plan" class="secondary">关闭</button></div><div id="plan-content"></div></dialog>
 </body>

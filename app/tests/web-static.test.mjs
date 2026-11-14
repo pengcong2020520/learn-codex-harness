@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseDocument } from 'htmlparser2';
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
-export const csp = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+export const csp = "default-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 test('网页静态入口：Caddy /ui、302 跳转、安全响应头、只读挂载和统一白名单', () => {
   const caddy = read('deploy/Caddyfile'), compose = read('compose.yaml');
   assert.match(caddy, /redir \/ \/ui\/ 302/); assert.match(caddy, /handle_path \/ui\/\*/);

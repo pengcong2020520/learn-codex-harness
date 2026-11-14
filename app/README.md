@@ -23,7 +23,7 @@ npm run setup
 
 ![网页聊天界面](docs/images/web-chat.png)
 
-[查看网页登录界面](docs/images/web-login.png)。
+[查看网页登录界面](docs/images/web-login.png)。网页右侧“产物”面板可浏览个人工作区文件；文本按原文显示，HTML 在隔离预览中运行，图片可直接查看。任务结束会刷新列表，预览可手动刷新或在新窗口打开，窄屏下可收起。命令行用 `/files` 查看产物、`/open <路径>` 获取预览地址。
 
 后文命令都在 `app/` 下运行。命令行使用同一账号登录：
 

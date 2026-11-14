@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createServer, request } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { startAgentServer } from '../server/main.mjs';
@@ -14,7 +15,7 @@ export async function webFixture(t, { workflows } = {}) {
   }
   let backend; const streams = new Set(), requests = [];
   const security = {
-    'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    'content-security-policy': "default-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer'
   };
   const server = createServer(async (req, res) => {
@@ -42,7 +43,7 @@ export async function webFixture(t, { workflows } = {}) {
   const url = `http://127.0.0.1:${server.address().port}`;
   const cli = `${root}/mock-codex.mjs`;
   await writeFile(cli, mock.replace('30*(index+1)', '150*(index+1)').replace('},150);', '},1200);'));
-  const config = loadServerConfig(root, { ...fixture, AGENT_ALLOWED_ORIGINS: url }); config.port = 0;
+  const config = loadServerConfig(root, { ...fixture, AGENT_ALLOWED_ORIGINS: url, AGENT_PREVIEW_SECRET: randomBytes(32).toString('hex') }); config.port = 0;
   const dataFactory = async config => {
     const data = await testDataFactory(config);
     const list = data.repository.listConversations;

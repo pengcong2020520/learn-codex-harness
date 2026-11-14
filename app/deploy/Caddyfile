@@ -4,7 +4,7 @@
     handle_path /ui/* {
         root * /srv/ui
         header {
-            Content-Security-Policy "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+            Content-Security-Policy "default-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
             X-Content-Type-Options nosniff
             Referrer-Policy no-referrer
         }
