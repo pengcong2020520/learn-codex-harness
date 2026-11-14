@@ -55,11 +55,13 @@ Compose 模式下，CLI 凭据保存在 `app/.cli/credentials.json`（相对于�
 
 ## 做你自己的 Agent
 
+可以把仓库交给 Codex 或 Claude Code，说 `$new-agent`（Codex）或 `/new-agent`（Claude Code），让助手按需求创建 Agent；扩展已有 Agent 用 `extend-agent`，准备上线用 `go-production`。也可以复制 [docs/prompts.md](docs/prompts.md) 里的提示词。
+
 ```bash
 npm run agent:new -- my-agent
 ```
 
-名称为 2–32 位小写字母、数字或连字符，已有目录不会覆盖。命令生成并校验 `agents/my-agent/agent.json`、`role.md`、`skills/task-guide/SKILL.md` 和 `workflows/README.md`。在 `.env` 设置 `AGENT_DEFINITION=agents/my-agent/agent.json`，再运行 `npm run up`，新建会话使用它。
+名称为 2–32 位小写字母、数字或连字符，已有目录不会覆盖。命令生成并校验 `agents/my-agent/agent.json`、`role.md`、`skills/task-guide/SKILL.md` 和 `workflows/README.md`。编辑后运行 `npm run agent:check -- agents/my-agent/agent.json`，再运行 `npm run agent:use -- my-agent` 切换配置，最后运行 `npm run up`，新建会话使用它。上线前运行 `npm run production:check` 查看静态检查结果；它不验证真实登录、对话和服务可用性。
 
 ### agent.json 字段
 
