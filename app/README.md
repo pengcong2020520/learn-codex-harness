@@ -11,13 +11,34 @@
 
 ## 运行环境
 
-需要 **Node.js ≥ 24**、**Docker 与 Docker Compose v2**，并启动 Docker。
+需要 **Docker 与 Docker Compose v2**，并启动 Docker。使用 npm 路径及进阶命令时另需 **Node.js ≥ 24**。
 
 - **macOS**：Docker Desktop、OrbStack、Colima 任选一个。建议给 Docker 虚拟机分配不少于 **4 GB 内存**；按三节点配置，各常驻容器的内存上限合计约 **3.1 GB**，构建镜像还需要额外内存。
 - **Linux**：安装 Docker Engine 和 Compose 插件。
-- **Windows**：只支持 **WSL2**。安装 WSL2（Ubuntu）和 Docker Desktop，在 Docker Desktop 设置里打开 WSL 集成；在 WSL 终端安装 Node.js ≥ 24，把仓库克隆到 WSL 的 Linux 目录（例如 `~/`），再运行下方命令。仓库不能放在 `/mnt/` 下的 Windows 磁盘上，数据目录依赖 Linux 文件属主与权限。原生 PowerShell/CMD 不支持，因为部署依赖 bash 脚本、Linux 文件属主与权限，以及 `.env` 的 `0600` 权限。
+- **Windows**：只支持 **WSL2**。安装 WSL2（Ubuntu）和 Docker Desktop，在 Docker Desktop 设置里打开 WSL 集成；使用 npm 路径时在 WSL 终端安装 Node.js ≥ 24；把仓库克隆到 WSL 的 Linux 目录（例如 `~/`），再运行下方命令。仓库不能放在 `/mnt/` 下的 Windows 磁盘上，数据目录依赖 Linux 文件属主与权限。原生 PowerShell/CMD 不支持，因为部署依赖 bash 脚本、Linux 文件属主与权限，以及 `.env` 的 `0600` 权限。
 
 ## 快速开始
+
+### 只用 Docker
+
+在仓库的 `app/` 目录执行，本机无需安装 Node.js 或 npm：
+
+```bash
+docker compose run --rm setup
+docker compose up -d
+```
+
+按提示填写模型、API Key、可选域名与管理员账号。启动就绪后打开 <http://127.0.0.1:4317/> 登录。首次要构建 1 个镜像，并下载 PostgreSQL、Redis、网关、etcd、Caddy、Node 基础镜像，合计约 600 MB，只有第一次需要。
+
+更新代码（`git pull`）之后用 `docker compose up -d --build`，否则会继续使用旧镜像。
+
+向导将用户名与 scrypt 密码哈希编码后写入 `AGENT_ADMIN_BOOTSTRAP`，不保存明文密码；`.env` 权限为 `0600`。该变量只在数据库没有任何账号时生效，已有账号（包括禁用账号）不会被覆盖。保管好 `.env`，不要分享或提交它。
+
+#### 国内网络说明
+
+下载很慢时，先检查 Docker 的代理或镜像加速配置。向导可选择国内 npm/apt 镜像源：`NPM_REGISTRY=https://registry.npmmirror.com`、`APT_MIRROR=http://mirrors.aliyun.com`（apt 校验签名）。这两项只影响构建，Docker 镜像下载仍使用 Docker 自身的网络配置。非交互容器向导可通过 `docker compose run --rm -e SETUP_CN_MIRROR=1 setup --non-interactive` 开启国内源，同时按下文传入模型与管理员配置。
+
+### 使用 npm
 
 按上方要求准备运行环境并克隆仓库后，在仓库根目录运行：
 
@@ -47,7 +68,7 @@ Compose 模式下，CLI 凭据保存在 `app/.cli/credentials.json`（相对于�
 | setup 参数 | 行为 |
 | --- | --- |
 | `--non-interactive` | 从调用进程环境读取 `CODEX_MODEL`、对应服务商 Key、`SETUP_ADMIN_USER`（默认 `admin`）、`SETUP_ADMIN_PASSWORD` 和可选的 `SETUP_DOMAIN`；首次配置仍要求合法密码 |
-| `--no-start` | 只生成配置，不检查 Docker、不启动、不创建管理员；随后运行 `npm run up`，尚无账号时会在交互终端引导创建管理员，再等待就绪；非交互终端会立即退出并提示初始化方式 |
+| `--no-start` | 只生成配置与管理员引导哈希，不检查 Docker、不启动；随后运行 `docker compose up -d` 或 `npm run up`，迁移服务自动创建管理员 |
 | `--reconfigure-model` | 要求已有 `.env`；更新模型与相应服务商 Key，不重新初始化账号 |
 | `--quiet` | 隐藏构建、启动的子进程输出；失败时显示脱敏后的末尾日志，保留步骤提示 |
 

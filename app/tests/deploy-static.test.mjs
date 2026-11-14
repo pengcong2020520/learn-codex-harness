@@ -55,7 +55,7 @@ test('static: E2E 直接 Compose 再启动并以同一账号登录，之后保�
 });
 
 test('static: 默认服务含初始化链与可选集群、三节点独立卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
-  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'remote-access', 'remote-node-link']);
+  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['setup', 'prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'remote-access', 'remote-node-link']);
   assert.match(compose, /mem_limit: 128m/); assert.match(compose, /mem_limit: 64m/);
   assert.match(compose, /AGENT_MEMORY_LIMIT:-768m/);
   assert.deepEqual([...compose.matchAll(/ports: \["([^"]+)"\]/g)].map(m => m[1]), ['127.0.0.1:${AGENT_PORT:-4317}:80']);

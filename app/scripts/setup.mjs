@@ -1,22 +1,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
+import { hashPassword } from '../server/modules/accounts/password.mjs';
+import { encodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { createPrompts } from '../shared/prompts.mjs';
 import { validateClusterSecrets, clusterNodes } from '../server/modules/config/cluster.mjs';
 import { generateDeployEnv } from './deploy-env.mjs';
-import { PROJECT_ROOT, isMain, readEnv, writeEnv, childEnvironment, commandRedactor, runProcess, composeUp, accountArgs, entryUrl, checkPort, waitReady, validateUsername, validatePassword, checkRuntimeEnvironment, checkDocker } from './quickstart-lib.mjs';
+import { PROJECT_ROOT, isMain, readEnv, writeEnv, childEnvironment, commandRedactor, runProcess, composeUp, entryUrl, checkPort, waitReady, validateUsername, validatePassword, checkRuntimeEnvironment, checkDocker } from './quickstart-lib.mjs';
 
 export function parseSetup(argv) {
-  const allowed = ['--non-interactive', '--no-start', '--reconfigure-model', '--quiet'];
-  if (argv.some(arg => !allowed.includes(arg)) || new Set(argv).size !== argv.length) throw new Error('用法：npm run setup -- [--non-interactive] [--no-start] [--reconfigure-model] [--quiet]。');
-  return { interactive: !argv.includes('--non-interactive'), start: !argv.includes('--no-start'), reconfigure: argv.includes('--reconfigure-model'), quiet: argv.includes('--quiet') };
+  const allowed = ['--container', '--non-interactive', '--no-start', '--reconfigure-model', '--quiet'];
+  if (argv.some(arg => !allowed.includes(arg)) || new Set(argv).size !== argv.length) throw new Error('用法：npm run setup -- [--container] [--non-interactive] [--no-start] [--reconfigure-model] [--quiet]。');
+  return { interactive: !argv.includes('--non-interactive'), start: !argv.includes('--no-start') && !argv.includes('--container'), container: argv.includes('--container'), reconfigure: argv.includes('--reconfigure-model'), quiet: argv.includes('--quiet') };
+}
+export function containerDirectory(env, { stat = fs.statSync, getuid = () => process.getuid?.(), setgroups = value => process.setgroups(value), setgid = value => process.setgid(value), setuid = value => process.setuid(value) } = {}) {
+  const root = env.HOST_APP_DIR;
+  if (!root || !path.isAbsolute(root) || !fs.existsSync(path.join(root, 'compose.yaml'))) throw new Error('请在 app 目录下运行 docker compose run --rm setup');
+  if (getuid() === 0) {
+    const info = stat(root);
+    // 挂载目录的属主代表宿主用户；Docker Desktop 映射为 root 时保持原身份。
+    setgroups([]); setgid(info.gid); setuid(info.uid);
+  }
+  return root;
 }
 function validateDomain(domain, variable = 'SETUP_DOMAIN') {
   if (domain && !/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(domain)) throw new Error(`${variable} 只接受域名，${variable === 'SETUP_DOMAIN' ? '不含协议、路径或端口' : '不要带 https://、路径或端口'}。`);
 }
-export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, platform = process.platform, procVersion, prompts, run = runProcess, portCheck = checkPort, ready = waitReady, log = console.log, output = text => process.stdout.write(text) } = {}) {
+export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT, env = process.env, platform = process.platform, procVersion, privilege, prompts, run = runProcess, portCheck = checkPort, ready = waitReady, log = console.log, output = text => process.stdout.write(text) } = {}) {
+  const options = parseSetup(argv);
+  if (options.container) root = containerDirectory(env, privilege);
   checkRuntimeEnvironment({ platform, procVersion, root });
-  const options = parseSetup(argv), exists = fs.existsSync(path.join(root, '.env'));
+  const exists = fs.existsSync(path.join(root, '.env'));
   if (exists && !options.reconfigure) { log('已配置；要重新生成请先备份并删除 .env'); return; }
   if (!exists && options.reconfigure) throw new Error('尚未配置，请先运行 npm run setup。');
   const previous = exists ? readEnv(root) : {};
@@ -80,8 +94,14 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
       }
       const template = parseEnv(fs.readFileSync(path.join(root, '.env.example'), 'utf8'));
       values = generateDeployEnv(updates, template, path.resolve(root));
+      values.AGENT_ADMIN_BOOTSTRAP = encodeBootstrap({ username, hash: await hashPassword(password) });
       values.AGENT_ALLOWED_ORIGINS = `http://127.0.0.1:4317,http://localhost:4317${domain ? `,https://${domain}` : ''}`;
       if (options.interactive) log(`${summary}；域名 ${domain || '无'}；管理员 ${username}`);
+    }
+    if (options.container) {
+      const mirror = options.interactive ? /^y$/i.test((await prompts.ask('构建镜像时使用国内 npm/apt 镜像源？[y/N]')).trim()) : env.SETUP_CN_MIRROR === '1';
+      if (mirror) { values.NPM_REGISTRY = 'https://registry.npmmirror.com'; values.APT_MIRROR = 'http://mirrors.aliyun.com'; }
+      values.CONTAINER_APP_DIR = root;
     }
   } finally { prompts?.close(); }
   validateClusterSecrets(values, clusterNodes(values));
@@ -94,10 +114,10 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
   }
   writeEnv(root, values);
   log('已写入 .env（权限 0600）。');
+  if (options.container) log('下一步执行 docker compose up -d。\n首次要构建 1 个镜像，并下载 PostgreSQL、Redis、网关、etcd、Caddy、Node 基础镜像，合计约 600 MB，只有第一次需要。\n下载很慢时，请看 README 的国内网络说明。');
   if (!options.start) return values;
   log('构建镜像、初始化并启动服务……');
   await execute('docker', composeUp(values));
-  if (!options.reconfigure) await execute('docker', accountArgs(root, 'init', [], values), { input: `${username}\n${password}\n` });
   await ready(values, { log });
   log(`入口：${entryUrl(values)}/\n下一步：npm run login && npm run chat；npm run agent:new -- my-agent。`);
   return values;

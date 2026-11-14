@@ -117,7 +117,7 @@ test('一次性入口：宿主 .env 挂载集中在两个公共入口，本机�
 test('Compose 静态检查：长期服务能力集合和继承关系保持原样', () => {
   // 固定检查能力声明全文，新增到其他服务或共享锚点的能力也会被发现。
   for (const [file, expected] of [
-    ['compose.yaml', ['cap_drop: [ALL]', 'cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]', 'cap_drop: [ALL]', 'cap_add: [FOWNER, DAC_READ_SEARCH]', 'cap_drop: [ALL]', 'cap_drop: [ALL]', 'cap_add: [SETUID, SETGID, CHOWN, FOWNER]']],
+    ['compose.yaml', ['cap_drop: [ALL]', 'cap_add: [SETUID, SETGID]', 'cap_drop: [ALL]', 'cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]', 'cap_drop: [ALL]', 'cap_add: [FOWNER, DAC_READ_SEARCH]', 'cap_drop: [ALL]', 'cap_drop: [ALL]', 'cap_add: [SETUID, SETGID, CHOWN, FOWNER]']],
     ['deploy/remote.compose.yaml', ['cap_drop: [ALL]', 'cap_add: [SETUID,SETGID,CHOWN,FOWNER]']],
     ['deploy/two-host.compose.yaml', []],
     ['deploy/acceptance.compose.yaml', ['cap_drop: [ALL]', 'cap_add: [CHOWN,FOWNER,SETUID,SETGID]']],

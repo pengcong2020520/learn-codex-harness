@@ -55,7 +55,7 @@ export async function commandRedactor(...environments) {
   const { createLogRedactor } = await import('../server/modules/config/index.mjs');
   // 保留宿主与文件中的同名值，避免配置重写期间遗漏旧凭据。
   return createLogRedactor('', environments.flatMap(values => Object.entries(values)
-    .filter(([key]) => /KEY|PASSWORD|TOKEN|SECRET|DATABASE_URL|REDIS_URL/i.test(key)).map(([, value]) => value)));
+    .filter(([key]) => /KEY|PASSWORD|TOKEN|SECRET|BOOTSTRAP|DATABASE_URL|REDIS_URL/i.test(key)).map(([, value]) => value)));
 }
 export function runProcess(command, args, { root = PROJECT_ROOT, env = childEnvironment(), input, capture = false, output, redact, quiet = false, spawnImpl = spawn } = {}) {
   return new Promise((resolve, reject) => {

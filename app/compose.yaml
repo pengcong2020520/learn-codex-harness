@@ -25,6 +25,20 @@ x-gateway-env: &gateway-env
   ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
   HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
 services:
+  setup:
+    profiles: [setup]
+    image: node:24.19.0-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    volumes: [".:${PWD:-/nonexistent}"]
+    working_dir: ${PWD:-/nonexistent}
+    environment:
+      HOST_APP_DIR: ${PWD:-/nonexistent}
+    entrypoint: ["node", "scripts/setup.mjs", "--container"]
+    command: []
   prepare:
     build: *agent-build
     image: codex-agent:current
@@ -75,8 +89,9 @@ services:
     cap_drop: [ALL]
     cap_add: [FOWNER, DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]
-    command: ["sh", "-ec", "node scripts/cluster-migrate.mjs && npm run -s agent:init && node scripts/compose-init.mjs copy-identities"]
+    command: ["sh", "-ec", "node scripts/cluster-migrate.mjs && npm run -s agent:init && node scripts/compose-init.mjs copy-identities && node scripts/admin-bootstrap.mjs"]
     environment:
+      AGENT_ADMIN_BOOTSTRAP: ${AGENT_ADMIN_BOOTSTRAP:-}
       AGENT_CLUSTER_NODES: ${AGENT_CLUSTER_NODES-node-a}
       AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:-}
       AGENT_NODE_A_DB_PASSWORD: ${AGENT_NODE_A_DB_PASSWORD:-}

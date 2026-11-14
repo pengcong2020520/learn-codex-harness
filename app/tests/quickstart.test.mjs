@@ -134,7 +134,7 @@ test('ctl 账号密码输入取消时立即关闭，不重问或执行命令', a
 });
 
 test('setup 参数仅允许明确的开关，拒绝秘密参数和重复参数', () => {
-  assert.deepEqual(parseSetup(['--non-interactive', '--no-start']), { interactive: false, start: false, reconfigure: false, quiet: false });
+  assert.deepEqual(parseSetup(['--non-interactive', '--no-start']), { interactive: false, start: false, container: false, reconfigure: false, quiet: false });
   for (const args of [['--password', password], ['--no-start', '--no-start'], ['unknown']]) assert.throws(() => parseSetup(args), /用法/);
 });
 test('setup 非交互缺少密码或输入不合法时不写文件、不启动', async t => {
@@ -265,7 +265,8 @@ for (const [name, pair, reason] of [['太短', ['short', 'short'], /至少 12 �
     assert.equal(f.logs.filter(line => reason.test(line)).length, 2);
     assert.equal(f.questions.filter(q => q.label.startsWith('管理员密码')).length, 3);
     assert.equal(f.questions.filter(q => q.label.startsWith('再次输入')).length, 3);
-    assert.ok(f.calls.at(-1).options.input === `admin\n${password}\n`);
+    assert.ok(f.calls.every(call => call.options.input === undefined));
+    assert.ok(readEnv(f.root).AGENT_ADMIN_BOOTSTRAP);
     for (const call of f.calls) {
       const exposed = JSON.stringify([call.args, call.options.env]);
       assert.equal(exposed.includes(password), false);
@@ -293,17 +294,14 @@ test('setup 交互取消后立即关闭，不重问、不写入或启动', async
   assert.equal(fs.existsSync(path.join(f.root, '.env')), false);
   assert.equal(f.calls.length, 0);
 });
-test('setup 按顺序构建启动初始化，密码只进入 stdin，不进入子进程参数或环境', async t => {
+test('setup 写入引导哈希后构建启动，密码不进入子进程 stdin、参数或环境', async t => {
   const f = fixture(t);
   await setup(['--non-interactive'], f);
   assert.deepEqual(f.calls.map(call => [call.command, call.args.slice(0, 3)]), [
-    ['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d']], ['docker', ['compose', 'run', '--rm']],
+    ['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d']],
   ]);
-  const init = f.calls.at(-1);
-  assert.equal(init.args[init.args.indexOf('--cap-add') + 1], 'DAC_READ_SEARCH');
-  assert.ok(init.args.includes(`${f.root}/.env:${f.root}/.env:ro`));
-  assert.equal(init.options.input, `admin\n${password}\n`);
-  assert.deepEqual(init.args.slice(-3), ['scripts/maintenance.mjs', 'accounts', 'init']);
+  assert.ok(readEnv(f.root).AGENT_ADMIN_BOOTSTRAP);
+  assert.ok(f.calls.every(call => call.options.input === undefined));
   for (const call of f.calls) {
     const exposed = JSON.stringify([call.args, call.options.env]);
     assert.equal(exposed.includes(password), false);
@@ -321,9 +319,9 @@ test('setup 启动检查失败不写入，不重试；no-start 不检查 Docker 
 });
 test('setup 启动操作结果不确定时停止，不自动重发初始化', async t => {
   const f = fixture(t); let count = 0;
-  f.run = async () => { if (++count === 4) throw new Error('结果待核对'); };
+  f.run = async () => { if (++count === 3) throw new Error('结果待核对'); };
   await assert.rejects(setup(['--non-interactive'], f), /待核对/);
-  assert.equal(count, 4); assert.equal(fs.existsSync(path.join(f.root, '.env')), true);
+  assert.equal(count, 3); assert.equal(fs.existsSync(path.join(f.root, '.env')), true);
 });
 test('环境序列化保留美元符号，拒绝换行且不留下临时文件', async t => {
   const f = await configured(t), before = fs.readFileSync(path.join(f.root, '.env'));
@@ -398,6 +396,8 @@ test('ctl 密码只经 stdin；status 显示 waiting、replication 与版本；u
   assert.deepEqual(f.calls.slice(0, 3).map(call => [call.command, call.args]), [['docker', ['compose', 'version']], ['docker', ['info']], ['docker', ['compose', 'up', '-d', '--build', '--wait']]]);
 });
 function upFixture(f, status = 'initialized\n') {
+  // 旧配置路径继续验证交互初始化；带引导值的路径由单独测试覆盖。
+  const values = readEnv(f.root); delete values.AGENT_ADMIN_BOOTSTRAP; writeEnv(f.root, values);
   const steps = [], run = f.run;
   f.isTTY = false;
   f.run = async (command, args, options) => {
@@ -744,4 +744,13 @@ test('up 自动补齐预览密钥：原子写入 0600、保留其他配置、重
   assert.ok(readEnv(f.root).AGENT_PREVIEW_SECRET === after.AGENT_PREVIEW_SECRET, '补齐不得轮换现有密钥');
   assert.equal(f.logs.join('\n').includes(after.AGENT_PREVIEW_SECRET), false);
   assert.equal(fs.readdirSync(f.root).some(name => name.endsWith('.tmp')), false);
+});
+
+test('up 带引导值时不重新索取口令；账号异常未初始化则停下核对', async t => {
+  const f = await configured(t);
+  const run = f.run;
+  f.run = async (command, args, options) => { await run(command, args, options); return args.at(-1) === 'status' ? 'uninitialized\n' : ''; };
+  f.prompts.ask = async () => assert.fail('不能重新索取口令');
+  await assert.rejects(ctl(['up'], f), /引导管理员未完成.*migrate/);
+  assert.equal(f.calls.some(call => call.args.at(-1) === 'init'), false);
 });

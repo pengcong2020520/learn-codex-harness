@@ -111,3 +111,22 @@ jobs:
       - name: 普通用户路径：上手、API、网页与三节点副本
         if: matrix.user == 'normal'
         run: bash scripts/e2e-compose.sh
+      # 单独检出，避免 npm 路径留下的节点目录影响从零启动。
+      - uses: actions/checkout@v5
+        with:
+          path: docker-only
+      # 删除 npm 路径的镜像，覆盖全新机器首次 up 自动构建的路径。
+      - name: 清除应用镜像（root）
+        if: matrix.user == 'root'
+        run: sudo env "PATH=$PATH" docker image rm -f codex-agent:current
+      - name: 清除应用镜像（普通用户）
+        if: matrix.user == 'normal'
+        run: docker image rm -f codex-agent:current
+      - name: 只用 Docker（root）
+        if: matrix.user == 'root'
+        working-directory: docker-only/app
+        run: sudo env "PATH=$PATH" "FORCE_COLOR=$FORCE_COLOR" "COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME-docker-only" bash scripts/e2e-docker-only.sh
+      - name: 只用 Docker（普通用户）
+        if: matrix.user == 'normal'
+        working-directory: docker-only/app
+        run: COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME-docker-only" bash scripts/e2e-docker-only.sh
