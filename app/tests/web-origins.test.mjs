@@ -51,3 +51,24 @@ test('Origin 节点转发：保留 Origin，两端按同一白名单校验', asy
   assert.equal((await request(http, '/auth/login', { headers: { origin: 'https://example.com' }, body: {} })).statusCode, 403);
   await local.close();
 });
+
+
+test('修改 HTTP 路由：沿用认证和来源白名单，仅 POST 将请求交给消息层', async () => {
+  const { accounts } = await accountFixture();
+  const calls = [];
+  const http = httpFixture(accounts, { config: { launch: {}, deployment: {}, allowedOrigins: DEFAULT_ALLOWED_ORIGINS },
+    messages: { revise: async body => { calls.push(body); return { status: 'queued', step: 0, reviseCount: 1 }; } } });
+  const { token } = await accounts.login({ username: 'alice', password: 'fixture-password' }, 'peer');
+  const body = { threadId: 't', taskId: 'w', text: '简化布局' };
+  assert.equal((await request(http, '/tasks/revise', { body })).statusCode, 401);
+  assert.equal((await request(http, '/tasks/revise', { token, body, headers: { origin: 'https://untrusted.invalid' } })).statusCode, 403);
+  assert.equal((await request(http, '/tasks/revise', { token })).statusCode, 404);
+  assert.equal(calls.length, 0);
+  for (const headers of [{}, { origin: 'http://localhost:4317' }]) {
+    const response = await request(http, '/tasks/revise', { token, body, headers });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body, { status: 'queued', step: 0, reviseCount: 1 });
+  }
+  assert.deepEqual(calls, [body, body]);
+  await http.close();
+});

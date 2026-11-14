@@ -246,3 +246,20 @@ test("skill_read：只读已启用 Skill 的白名单文件；未启用、越界
   agent.availableSkills = [];
   assert.throws(() => agent.readSkill("outline"), /未启用/, "核验后未启用的 Skill 读不到");
 });
+
+
+test("HTML 产物：Agent schema 接受 html，文本工具可新建和读取，禁止覆盖并限制 256 KiB", async t => {
+  const { root, files, agent } = await assemble(t, v => { v.agent.outputs.formats.push("html"); });
+  assert.ok(agent.outputs.formats.includes("html"));
+  const content = "<!doctype html><html><body>交互页面</body></html>";
+  const saved = files.write_file({ path: "outputs/page.html", content });
+  assert.equal(saved.artifact.format, "html");
+  assert.equal(files.read_file({ path: "outputs/page.html" }).content, content);
+  assert.throws(() => files.write_file({ path: "outputs/page.html", content }), /未覆盖/);
+  assert.throws(() => files.write_file({ path: "outputs/large.html", content: "字".repeat(90000) }), /256 KiB/);
+  files.write_file({ path: "outputs/limit.html", content: "<body>" + "x".repeat(256 * 1024 - 13) + "</body>" });
+  assert.throws(() => files.write_file({ path: "outputs/invalid.html", content: "<!-- <html> -->" }), /HTML 格式检查未通过/);
+  assert.equal(fs.existsSync(path.join(root, "workspace/outputs/invalid.html")), false, "requiredChecks 未通过不落盘");
+  const restricted = await assemble(t);
+  assert.throws(() => restricted.files.write_file({ path: "outputs/page.html", content }), /格式不在允许列表/);
+});

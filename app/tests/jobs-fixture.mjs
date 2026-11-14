@@ -23,6 +23,9 @@ export class TestJobs {
       throw new Error("最多 100 条");
     this.state.jobs.push({
       ...job,
+      step: 0,
+      note: null,
+      reviseCount: 0,
       turnId: null,
       status: job.status === "proposed" ? "proposed" : "queued",
       error: null,
@@ -30,7 +33,7 @@ export class TestJobs {
   }
   patch(id, fields, expected) {
     const job = this.get(id);
-    if (expected && !expected.includes(job.status)) return false;
+    if (!job || (expected && !expected.includes(job.status))) return false;
     Object.assign(job, fields);
     return true;
   }

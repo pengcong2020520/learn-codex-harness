@@ -7,6 +7,7 @@ const HELP = `普通文字：提交普通队列；可连续输入，不必等待
 /workflow           列出当前 Agent 启用的 Workflow
 /workflow ID [键=值 ...] 内容  按 Workflow 提交新任务，如 /workflow knowledge-maintain kbId=general 整理新资料
 /confirm [补充说明]  确认等待中的 Workflow 步骤，或执行 Agent 的任务提议
+/revise <意见>  按意见重做当前等待确认的步骤（最多 10 次）
 /reject             结束等待确认的 Workflow 任务，或忽略 Agent 的提议
 /model [场景|服务商/模型名|default]  查看模型；选择本会话后续任务的模型；default 恢复默认
 /queue              查看队列
@@ -125,17 +126,17 @@ export async function runChat(api, terminal) {
         queuePaused = queue.paused;
         // Workflow 任务结束后报告一次验收结果；快照里的历史任务只记下，不重复刷屏。
         for (const job of queue.jobs) {
-          const modelKey = `model:${job.id}:${job.step || 0}:${job.selectedModel}`;
+          const modelKey = `model:${job.id}:${job.step || 0}:${job.reviseCount || 0}:${job.selectedModel}`;
           if (job.selectedModel && ["starting", "running", "steering"].includes(job.status) && !reported.has(modelKey)) {
             reported.add(modelKey);
             terminal.write(`模型：${job.selectedModel}（${job.modelSource}）`);
           }
-          const key = `${job.id}:${job.status}:${job.step || 0}`;
+          const key = `${job.id}:${job.status}:${job.step || 0}:${job.reviseCount || 0}`;
           if (reported.has(key) || !(["waiting", "proposed", "replica_missing"].includes(job.status) || (job.checks && ["completed", "needs-review"].includes(job.status)))) continue;
           reported.add(key);
           if (job.status === "replica_missing") terminal.write(`${job.id}：${job.error || "该轮结果在故障接管时丢失，请核对"}`);
           else if (job.status === "proposed") terminal.write(`Agent 提议执行工作流 ${job.workflow}${job.params ? ` ${JSON.stringify(job.params)}` : ""}：${job.text}\n理由：${job.reason}\n/confirm [补充说明] 执行，/reject 忽略。确认前不会执行，也不授予权限。`);
-          else if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/reject 结束。`);
+          else if (job.status === "waiting") terminal.write(`工作流 ${job.workflow} 第${progress(job)} 步（${job.stepId}）已完成，等待确认：/confirm [补充说明] 继续，/revise <意见> 修改，/reject 结束；本步已重做 ${job.reviseCount || 0} 次。`);
           else if (event.type !== "snapshot") terminal.write(job.status === "completed" ? `验收通过（${job.workflow}）` : `验收未通过（${job.workflow}）：${failedChecks(job)}`);
         }
       }
@@ -226,11 +227,18 @@ export async function runChat(api, terminal) {
       if (!state.queue.jobs.length) terminal.write("暂无消息。");
       return;
     }
-    if (/^\/(confirm|reject)(?:\s|$)/.test(text)) {
+    if (/^\/(confirm|revise|reject)(?:\s|$)/.test(text)) {
       if (!current) return terminal.write("请先选择会话。");
       const state = await api.request(`/state?threadId=${encodeURIComponent(current.id)}`);
-      const job = state.queue.jobs.find(item => ["waiting", "proposed"].includes(item.status));
+      const revising = /^\/revise(?:\s|$)/.test(text);
+      const job = state.queue.jobs.find(item => (revising ? ["waiting"] : ["waiting", "proposed"]).includes(item.status));
       if (!job) return terminal.write("当前会话没有等待确认的 Workflow 任务或提议。");
+      if (revising) {
+        const note = text.slice(7).trim();
+        if (!note || note.length > 2000) return terminal.write("修改意见不能为空，且不能超过 2000 个字符。用法：/revise <意见>");
+        await api.request("/tasks/revise", { threadId: current.id, taskId: job.id, text: note });
+        return terminal.write(`工作流 ${job.workflow} 已排队，将按意见重做当前步。`);
+      }
       const proposal = job.status === "proposed";
       if (text.startsWith("/confirm")) {
         const note = text.slice(8).trim();

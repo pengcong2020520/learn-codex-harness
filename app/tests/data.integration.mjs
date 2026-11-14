@@ -10,6 +10,7 @@ import {
   acquireDatabaseLock,
 } from "../server/modules/data/database.mjs";
 import { Repository } from "../server/modules/data/repository.mjs";
+import { MessageService } from "../server/modules/messages/index.mjs";
 import { PostgresJobs } from "../server/modules/data/jobs.mjs";
 import { Resources } from "../server/modules/data/resources.mjs";
 import { RedisQueue } from "../server/modules/data/queue.mjs";
@@ -722,4 +723,46 @@ test("真实 PG：任务模型选择与路由决策持久化，旧任务默认�
   await reopened.create(job('default-model'));
   const plain = await reopened.get('default-model');
   assert.equal(plain.model, null); assert.equal(plain.selectedModel, null); assert.equal(plain.modelSource, null);
+});
+
+
+test("真实 PG：修改当前步持久化、重启保留计数、十次上限、跨用户和跨会话隔离", async t => {
+  const r = await setup(t);
+  await r.jobs.create({ ...job("revise"), workflow: "article" });
+  await r.repo.bind("thread-2", "v1", r.root);
+  const service = (store, repository) => Object.assign(Object.create(MessageService.prototype), {
+    store, locks: new Map(), sessions: { ensure: id => repository.conversation(id) },
+    resolve: () => ({ steps: [{ id: "outline" }, { id: "final" }] }),
+    publish: async () => {}, wake: async () => {},
+  });
+  let messages = service(r.jobs, r.repo);
+  const args = { threadId: "thread-1", taskId: "revise", text: "调整层级" };
+  await assert.rejects(messages.revise(args), { status: 409 });
+  await r.jobs.patch("revise", { status: "waiting" });
+  await assert.rejects(messages.revise({ ...args, threadId: "thread-2" }), { status: 404 });
+  const foreignScope = { ...r.scope, ownerId: randomUUID() };
+  const foreignRepo = new Repository(r.pool, foreignScope), foreignJobs = new PostgresJobs(r.pool, foreignScope);
+  await foreignRepo.initialize(); await foreignRepo.bind("foreign-thread", "v1", r.root);
+  const foreign = service(foreignJobs, foreignRepo);
+  await assert.rejects(foreign.revise(args), { status: 404 });
+  await assert.rejects(foreign.revise({ ...args, threadId: "foreign-thread" }), { status: 404 });
+  r.jobs.maxQueued = 0;
+  await assert.rejects(messages.revise(args), { status: 429 });
+  assert.equal((await r.jobs.get("revise")).reviseCount, 0, "排队失败时计数与意见不提交");
+  r.jobs.maxQueued = 200;
+  for (let n = 1; n <= 10; n++) {
+    const row = await messages.revise(args);
+    assert.deepEqual([row.status, row.step, row.reviseCount, row.note], ["queued", 0, n, "调整层级"]);
+    assert.ok((await r.jobs.deliveries()).some(row => row.thread_id === "thread-1"), "重做与 outbox 同事务唤醒");
+    const restarted = new PostgresJobs(r.pool, r.scope);
+    assert.equal((await restarted.get("revise")).reviseCount, n);
+    await restarted.patch("revise", { status: "waiting" }, ["queued"]);
+    await restarted.recover("重启");
+    assert.equal((await restarted.get("revise")).status, "waiting");
+    messages = service(restarted, r.repo);
+  }
+  await assert.rejects(messages.revise(args), { status: 409, message: "本步已重做 10 次，请确认继续或结束任务" });
+  const row = await messages.confirm({ threadId: "thread-1", taskId: "revise", text: "继续" });
+  assert.deepEqual([row.step, row.reviseCount, row.note], [1, 0, "继续"]);
+  await assert.rejects(r.jobs.patch("revise", { reviseCount: 11 }));
 });

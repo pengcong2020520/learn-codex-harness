@@ -84,3 +84,25 @@ test('网页缺口恢复：resync 立即中止旧流并重新获取快照，关�
   assert.deepEqual(events, ['delta', 'snapshot']); assert.equal(calls, 2);
   assert.deepEqual(statuses, [], '被主动中止的旧流不得触发 connected 或自动重试提示');
 });
+
+
+test('网页确认点：waiting 显示三个动作及重做次数，提议不提供修改，重新排队收起动作', () => {
+  const state = { session: { id: 't', turns: [] }, queue: { jobs: [{ id: 'w', text: '任务', status: 'waiting', reviseCount: 3 }] } };
+  const row = messagesView(state)[0];
+  assert.deepEqual(row.actions, ['继续', '修改', '结束']);
+  assert.equal(row.reviseCount, 3);
+  const next = reduceEvent(state, { type: 'queue', threadId: 't', data: { jobs: [{ ...row.job, status: 'queued', reviseCount: 4 }] } });
+  assert.deepEqual(messagesView(next)[0].actions, []);
+  assert.equal(messagesView(next)[0].reviseCount, 4);
+  assert.deepEqual(messagesView({ ...state, queue: { jobs: [{ ...row.job, status: 'proposed' }] } })[0].actions, ['继续', '结束']);
+});
+
+
+test('网页重做多轮：相同 clientId 只显示一组确认动作', () => {
+  const job = { id: 'task', text: '原始任务', status: 'waiting', turnId: 'turn-2', reviseCount: 1 };
+  const session = { id: 't', turns: [1, 2].map(n => ({ id: `turn-${n}`, status: 'completed', messages: [{ id: `message-${n}`, clientId: 'task', text: n === 1 ? '原始任务' : '重做意见' }] })) };
+  const rows = messagesView({ session, queue: { jobs: [job] } });
+  assert.equal(rows.filter(row => row.confirm).length, 1);
+  assert.equal(rows.find(row => row.confirm).reviseCount, 1);
+  assert.ok(rows.some(row => row.text === '重做意见'));
+});

@@ -5,9 +5,11 @@ const $ = id => document.getElementById(id);
 const tokenKey = 'agent.web.token';
 let state = emptyState(), stream, epoch = 0, selection = 0, searchVersion = 0, warnings = [], sending = false;
 let pendingMessage = null;
+const revisionDrafts = new Map();
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text != null) el.textContent = String(text); if (className) el.className = className; return el; };
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 function loginView() {
+  revisionDrafts.clear();
   epoch++; selection++; searchVersion++; stream?.close(); stream = null;
   sessionStorage.removeItem(tokenKey); state = emptyState(); pendingMessage = null; warnings = []; sending = false;
   $('chat-view').hidden = true; $('login-view').hidden = false; $('plan-dialog').close();
@@ -61,22 +63,45 @@ function render() {
     if (row.error) card.append(node('p', row.error, 'error'));
     if (row.job?.checks) for (const check of row.job.checks) if (!check.passed) card.append(node('p', check.message || [check.label, check.detail].filter(Boolean).join('：') || check.id || '验收未通过', 'error'));
     if (row.confirm) {
+      if (row.job.status === 'waiting') card.append(node('p', `本步已重做 ${row.reviseCount} 次（最多 10 次）`, 'muted'));
       const buttons = node('div', null, 'actions');
-      for (const [label, route] of [['继续', '/tasks/confirm'], ['结束', '/tasks/cancel']]) {
+      const draft = revisionDrafts.get(row.job.id) || { text: '', open: false };
+      const form = node('form'); form.hidden = !draft.open;
+      const labelInput = node('label', '修改意见');
+      const input = node('textarea'); input.required = true; input.maxLength = 2000; input.value = draft.text;
+      input.dataset.actionKey = `${row.job.id}:revision-text`;
+      input.oninput = () => { draft.text = input.value; revisionDrafts.set(row.job.id, draft); };
+      labelInput.append(input);
+      const submit = node('button', '提交修改', 'secondary'); submit.type = 'submit'; submit.disabled = Boolean(draft.pending); submit.dataset.actionKey = `${row.job.id}:revision-submit`;
+      form.append(labelInput, submit);
+      form.onsubmit = event => { event.preventDefault(); void action(submit, async () => {
+        if (draft.pending) return;
+        draft.pending = true;
+        const selected = selection;
+        try {
+          await api.request('/tasks/revise', { threadId: state.session.id, taskId: row.job.id, text: input.value });
+          revisionDrafts.delete(row.job.id);
+        } finally { draft.pending = false; if (selected === selection) render(); }
+      }); };
+      for (const label of row.actions) {
+        const route = { '继续': '/tasks/confirm', '修改': '/tasks/revise', '结束': '/tasks/cancel' }[label];
         const button = node('button', label, 'secondary'); button.dataset.actionKey = `${row.job.id}:${route}`;
         button.setAttribute('aria-label', `${label}任务：${row.job.text.slice(0, 40)}`);
-        button.onclick = () => action(button, async () => { await api.request(route, { threadId: state.session.id, taskId: row.job.id }); });
+        button.type = 'button';
+        button.onclick = label === '修改' ? () => { draft.open = !draft.open; revisionDrafts.set(row.job.id, draft); form.hidden = !draft.open; if (draft.open) input.focus(); } : () => action(button, async () => { await api.request(route, { threadId: state.session.id, taskId: row.job.id }); });
         buttons.append(button);
       }
       card.append(buttons);
+      if (row.job.status === 'waiting') card.append(form);
     }
     return card;
   });
   box.replaceChildren(...(cards.length ? cards : [node('p', '从一个问题开始。', 'empty')]));
-  if (focused) [...box.querySelectorAll('button')].find(button => button.dataset.actionKey === focused)?.focus({ preventScroll: true });
+  if (focused) [...box.querySelectorAll('[data-action-key]')].find(button => button.dataset.actionKey === focused)?.focus({ preventScroll: true });
   if (nearBottom) box.scrollTop = box.scrollHeight;
 }
 function selectSession(session) {
+  revisionDrafts.clear();
   stream?.close(); const selected = ++selection, generation = epoch;
   state = { ...emptyState(), session }; warnings = (session.warnings || []).map(warning => warning.message || String(warning)); pendingMessage = null;
   for (const button of $('sessions').querySelectorAll('button')) button.setAttribute('aria-current', String(button.dataset.threadId === session.id));

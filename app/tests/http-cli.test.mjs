@@ -17,8 +17,12 @@ function writeClientCredentials(root, app) {
   mkdirSync(path.join(root, ".data"), { recursive: true, mode: 0o700 });
   writeFileSync(path.join(root, ".data/credentials.json"), JSON.stringify({ url: app.url, token: app.token }) + "\n", { mode: 0o600 });
 }
-async function appFixture(t) {
+async function appFixture(t, workflows) {
   const root = installToolFixture(tempRoot(t));
+  if (workflows) {
+    const file = path.join(root, "agents/writing/agent.json"), definition = JSON.parse(readFileSync(file));
+    definition.agent.workflows = workflows; writeFileSync(file, JSON.stringify(definition));
+  }
   const cli = path.join(root, "mock-codex.mjs");
   writeFileSync(cli, mock);
   const config = loadServerConfig(root, fixture); config.port = 0;
@@ -157,4 +161,31 @@ test("GET /tools 返回工具组默认 scope，保持原工具清单", async t =
   assert.ok(state.groups.length > 0);
   assert.ok(state.groups.every(group => group.scope === "system" && group.id.endsWith(".json")));
   assert.deepEqual(state.groups.flatMap(group => group.tools).sort(), state.tools.map(tool => tool.name).sort());
+});
+
+
+test("真实 HTTP 修改当前步：重新执行、SSE 状态、再次等待、继续；跨用户与跨会话返回 404", async t => {
+  const workflow = { id: "review", steps: [{ id: "draft", goal: "写初稿", confirm: true }, { id: "final", goal: "交付" }] };
+  const { app, api } = await appFixture(t, [workflow]);
+  const session = await api.request("/sessions", {}), other = await api.request("/sessions", {});
+  const events = [], stream = api.subscribe(session.id, event => events.push(event));
+  t.after(async () => { stream.close(); await stream.done; });
+  await api.request("/messages", { threadId: session.id, clientMessageId: "revision", workflow: "review", text: "初稿" });
+  await until(() => app.messages.job("revision").status === "waiting");
+  const args = { threadId: session.id, taskId: "revision", text: "减少一层" };
+  const reviseStatus = async (token, body) => (await fetch(app.url + "/tasks/revise", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) })).status;
+  assert.equal(await reviseStatus(app.token, { ...args, threadId: other.id }), 404);
+  const login = await api.request("/auth/login", { username: "bob", password: "fixture-password" });
+  assert.equal(await reviseStatus(login.token, args), 404);
+  assert.equal((await api.request("/tasks/revise", args)).step, 0);
+  await until(() => app.messages.job("revision").status === "waiting" && app.messages.job("revision").reviseCount === 1);
+  await until(() => events.some(event => event.type === "queue" && event.data.jobs.some(job => job.status === "waiting" && job.reviseCount === 1)));
+  for (const status of ["queued", "running", "waiting"])
+    assert.ok(events.some(event => event.type === "queue" && event.data.jobs.some(job => job.status === status && job.reviseCount === 1)), status);
+  const state = await api.request(`/state?threadId=${session.id}`);
+  assert.match(state.session.turns.at(-1).messages.map(message => message.text).join("\n"), /第 1 次按用户意见重做.*减少一层/);
+  await api.request("/tasks/confirm", { threadId: session.id, taskId: "revision" });
+  await until(() => app.messages.job("revision").status === "completed");
+  assert.equal(app.messages.job("revision").step, 1);
+  assert.equal(app.messages.job("revision").reviseCount, 0);
 });

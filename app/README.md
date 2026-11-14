@@ -92,6 +92,10 @@ npm run agent:new -- my-agent
 
 编辑 `agent.json` 的 `agent.workflows`。生成的 `solve-task` 先澄清目标，步骤完成后等待用户确认，再交付到 `outputs/` 并检查文件存在与格式。模型通过 `propose_task` 提议，用户确认后才执行；`writes` 只能收窄已有可写范围。`workflows/README.md` 只是说明文件，不会自动加载。见 [s10 的设计说明](../stages/s10-skill-workflow/docs/skill-workflow-design.md)。
 
+确认点支持继续到下一步、按意见修改当前步、结束任务；同一步最多重做 10 次，修改时保留已确认部分，产物使用新文件名。网页在等待确认时显示“继续”“修改”“结束”，点击“修改”填写意见，并可查看本步已重做次数；命令行使用 `/confirm [补充说明]`、`/revise <意见>`、`/reject`。
+
+`outputs.formats` 支持 `md`、`txt`、`html`、`png`、`jpeg`、`webp`、`mp4`；HTML 沿用文本大小上限与只能新建规则，格式检查要求可解析并包含 `html` 或 `body` 元素。
+
 ### 知识库：绑定原始资料与 Wiki
 
 新生成的 Agent 不预挂载知识库。需要时在 `agent.knowledge` 声明库、模式与动作，在 `bindings.knowledgeBases` 绑定该用户工作区内的原始资料和 Wiki 目录，并按业务加入 `kb_list`、`kb_read`、`kb_search` 等工具。可参考写作助手的 `general` 库：`inputs/general` 存原始资料，`research/general/wiki` 存 Wiki。资源仍需通过 Hub 归属与授权，填写路径不等于获得其他用户的知识。Wiki 修订走提议、确认与提交；RAG 还需检索服务和索引配置，不能只改 `mode` 就启用。见 [s09 知识层](../stages/s09-knowledge-layer/README.md) 与 [知识实现说明](../stages/s09-knowledge-layer/docs/knowledge-implementation.md)。挂载知识库时保持 `AGENT_MEMORY_ENABLED=false`。

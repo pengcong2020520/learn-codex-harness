@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { Parser } from "htmlparser2";
 
 
 const MAX_BYTES = 256 * 1024;
@@ -11,6 +12,16 @@ export function mediaFormat(content) {
   if (content.toString('ascii', 0, 4) === 'RIFF' && content.toString('ascii', 8, 12) === 'WEBP') return 'webp';
   if (content.toString('ascii', 4, 8) === 'ftyp') return 'mp4';
   throw new Error('媒体正文不是支持的 png / jpeg / webp / mp4 格式。');
+}
+
+// HTML 解析器允许容错；只要求可解析且实际包含 html 或 body 元素。
+export function validHtml(content) {
+  try {
+    let root = false, failed = false;
+    const parser = new Parser({ onopentag(name) { if (name === "html" || name === "body") root = true; }, onerror() { failed = true; } });
+    parser.end(content);
+    return root && !failed;
+  } catch { return false; }
 }
 
 // 这是受限文件工具，不是隔离同机恶意进程的 OS 沙箱。
@@ -96,8 +107,8 @@ export function createFileTools(
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt)$/i).test(relative)))
-      throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md 和 .txt 文件。");
+    if (file && (parts.length < 2 || !(binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+      throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
       current = path.join(current, part);
@@ -244,6 +255,8 @@ export function createFileTools(
       }
       if (Buffer.byteLength(content, "utf8") > (binary ? MAX_MEDIA_BYTES : MAX_BYTES))
         throw new Error(binary ? "媒体正文不能超过 128 MiB。" : "写入内容不能超过 256 KiB。");
+      if (!binary && path.extname(relative).toLowerCase() === ".html" && outputs?.requiredChecks?.includes("format") && !validHtml(content))
+        throw new Error("HTML 格式检查未通过：需要可解析且包含 html 或 body 元素。");
       const file = resolve(relative, { file: true, createParents: true, binary });
       try {
         fs.writeFileSync(file, content, {

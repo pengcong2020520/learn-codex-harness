@@ -155,7 +155,7 @@ async function chatFixture(t) {
       calls.push({ route, body });
       if (route === "/messages") return { status: "queued" };
       if (route.startsWith("/state?")) return { session: structuredClone(session), queue: { paused: false, jobs: structuredClone(jobs) } };
-      if (route === "/tasks/confirm" || route === "/tasks/cancel") return { status: "queued" };
+      if (route === "/tasks/confirm" || route === "/tasks/revise" || route === "/tasks/cancel") return { status: "queued" };
       if (route === "/sessions" || route === "/sessions/resume") return structuredClone(session);
       if (route.startsWith("/sessions?q=")) return { sessions: [{ ...structuredClone(session), preview: "历史会话" }] };
       if (route === "/workbench") return { agent: { workflows: [{ id: "chat", label: "普通对话", params: null, checks: [] },
@@ -319,4 +319,28 @@ test("多步 workflow：等待确认时提示一次，/confirm 带补充说明�
   f.jobs.length = 0;
   await f.send("/confirm");
   await until(() => /没有等待确认/.test(f.text()));
+});
+
+
+test("/revise：只选等待中的任务，发送意见，校验长度，重做后再次提示并在 help 说明", async t => {
+  const f = await chatFixture(t);
+  await f.start();
+  f.jobs.push({ id: "proposal", status: "proposed", workflow: "article", text: "提议" });
+  await f.send("/revise 修改布局");
+  assert.equal(f.calls.filter(call => call.route === "/tasks/revise").length, 0);
+  const job = { id: "waiting", status: "waiting", workflow: "article", text: "文章", step: 0, steps: 2, stepId: "outline", reviseCount: 0 };
+  f.jobs.push(job);
+  f.event("queue", { jobs: f.jobs });
+  await f.send("/revise");
+  await f.send("/revise " + "字".repeat(2001));
+  assert.equal(f.calls.filter(call => call.route === "/tasks/revise").length, 0);
+  await f.send("/revise 修改布局");
+  await until(() => f.calls.some(call => call.route === "/tasks/revise"));
+  assert.deepEqual(f.calls.find(call => call.route === "/tasks/revise").body, { threadId: THREAD_ID, taskId: "waiting", text: "修改布局" });
+  job.reviseCount = 1;
+  f.event("queue", { jobs: f.jobs });
+  f.event("queue", { jobs: f.jobs });
+  assert.equal(f.text().split("本步已重做 1 次").length - 1, 1);
+  await f.send("/help");
+  await until(() => f.text().includes("按意见重做当前等待确认的步骤"));
 });

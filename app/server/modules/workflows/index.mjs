@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Ajv from "ajv";
+import { validHtml } from "../data/files.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 
 // Workflow 只规定边界与终点：本任务额外的授权、注入哪个 Skill、做完后检查什么。
@@ -112,8 +113,13 @@ export function runChecks(checks, turn, { workspaceDir, formats = [] } = {}) {
       return result(id, artifacts.length > 0 && !missing.length, !artifacts.length ? "本轮没有产生产物。" : missing.length ? `文件不存在：${missing.map(a => a.locator).join("、")}` : `${artifacts.length} 个产物`);
     }
     if (id === "format") {
-      const wrong = artifacts.filter(artifact => !formats.includes(artifact.format));
-      return result(id, artifacts.length > 0 && !wrong.length, !artifacts.length ? "本轮没有产生产物。" : wrong.length ? `格式不在允许范围：${wrong.map(a => a.locator).join("、")}` : formats.join("/"));
+      const wrong = artifacts.filter(artifact => {
+        if (!formats.includes(artifact.format)) return true;
+        if (path.extname(artifact.locator).toLowerCase() !== ".html") return false;
+        try { return !validHtml(fs.readFileSync(path.join(workspaceDir, artifact.locator), "utf8")); }
+        catch { return true; }
+      });
+      return result(id, artifacts.length > 0 && !wrong.length, !artifacts.length ? "本轮没有产生产物。" : wrong.length ? `格式不在允许范围或 HTML 缺少 html/body 元素、无法解析：${wrong.map(a => a.locator).join("、")}` : formats.join("/"));
     }
     if (id === "sources-cited") {
       const uncited = artifacts.filter(artifact => !(artifact.sources > 0));
