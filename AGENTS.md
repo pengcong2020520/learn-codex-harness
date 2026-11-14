@@ -2,6 +2,8 @@
 
 ## 用这个脚手架做自己的 Agent
 
+设计 Agent 的页面时，用 [agent-design-flow](.agents/skills/agent-design-flow/SKILL.md) 以及它串起的各阶段 Skill。
+
 创建、扩展和上线 Agent，分别使用 [new-agent](.agents/skills/new-agent/SKILL.md)、[extend-agent](.agents/skills/extend-agent/SKILL.md)、[go-production](.agents/skills/go-production/SKILL.md)；Claude Code 的同名 Skill 位于 `.claude/skills/`。
 不支持 Skill 的助手可用 [可复制提示词](app/docs/prompts.md)。
 在 `app/` 下运行 `npm run agent:check -- <agent.json 路径>` 检查 Agent，运行 `npm run production:check` 检查生产准备。
