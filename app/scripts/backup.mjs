@@ -3,11 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PROJECT_ROOT } from '../shared/paths.mjs';
-import { backupName, run, writeManifest, pruneBackups } from './backup-lib.mjs';
+import { backupName, backupKeep, run, writeManifest, pruneBackups } from './backup-lib.mjs';
 
 // The host owns the flock and stopped service; this container only finalizes the snapshot.
 export async function backup(root, name) {
   backupName(name);
+  const keep = backupKeep(process.env.AGENT_BACKUP_KEEP);
   prepareServiceDirectories(root, process.getuid?.() === 0);
   const temporary = path.join(root, 'backups', `.${name}.partial`);
   if (!fs.existsSync(temporary)) throw new Error('partial 目录不存在。');
@@ -23,7 +24,7 @@ export async function backup(root, name) {
   await run('tar', ['--numeric-owner', '-czf', path.join(temporary, 'state.tar.gz'), '-C', path.join(root, '.data'), 'identity.json', 'files']);
   await writeManifest(temporary, root);
   fs.renameSync(temporary, destination);
-  pruneBackups(root);
+  pruneBackups(root, keep);
   console.log(`backups/${name}/manifest.json`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

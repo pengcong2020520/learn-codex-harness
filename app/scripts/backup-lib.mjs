@@ -34,11 +34,31 @@ export async function verifyManifest(dir) {
   }
   return manifest;
 }
-export function pruneBackups(root) {
-  const base = path.join(root, 'backups');
-  const names = fs.readdirSync(base, { withFileTypes: true }).filter(e => e.isDirectory() && /^\d{4}-.*Z$/.test(e.name) && fs.existsSync(path.join(base, e.name, 'manifest.json'))).map(e => backupName(e.name)).sort().reverse();
-  for (const name of names.slice(7)) fs.rmSync(path.join(base, name), { recursive: true });
+export function backupKeep(value = '7') {
+  if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value))) throw new Error('AGENT_BACKUP_KEEP 必须是非负整数；0 表示不清理。');
+  return Number(value);
 }
+export function pruneBackups(root, value = '7') {
+  const keep = backupKeep(value);
+  if (keep === 0) return;
+  const base = path.join(root, 'backups');
+  // 调用方持有宿主 backups/.download.lock；仅清理已发布且文件齐全的快照，不跟随链接。
+  const names = fs.readdirSync(base, { withFileTypes: true }).filter(entry => {
+    if (!entry.isDirectory()) return false;
+    try {
+      backupName(entry.name);
+      const directory = path.join(base, entry.name), manifestFile = path.join(directory, 'manifest.json');
+      if (!fs.lstatSync(manifestFile).isFile()) return false;
+      const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      return archiveFiles.every(name => {
+        const info = fs.lstatSync(path.join(directory, name));
+        return info.isFile() && info.size === manifest.files?.[name]?.size;
+      });
+    } catch { return false; }
+  }).map(entry => entry.name).sort().reverse();
+  for (const name of names.slice(keep)) fs.rmSync(path.join(base, name), { recursive: true });
+}
+
 function sqlName(value, label) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value || '')) throw new Error(`${label}无效。`);
   return value;

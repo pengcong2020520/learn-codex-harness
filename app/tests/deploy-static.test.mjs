@@ -1,10 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
 const compose = read('compose.yaml');
 const service = name => compose.match(new RegExp(`^  ${name}:(?: &node)?\\n([\\s\\S]*?)(?=^  [a-z][a-z-]*:|^volumes:|$(?![\\s\\S]))`, 'm'))?.[1];
+
+for (const script of ['backup', 'restore']) test(`static: ${script} 在获取下载锁前检查非 root 用户的备份目录写权限`, () => {
+  const source = read(`deploy/${script}.sh`);
+  const guard = source.match(/if \[ "\$\(id -u\)" != 0 \] && \[ ! -w backups \]; then\n([\s\S]*?)\nfi/);
+  assert.ok(guard, '非 root 且 backups 不可写时必须提前退出');
+  assert.ok(guard.index + guard[0].length < source.indexOf('exec 9>backups/.download.lock'), '权限检查必须在获取锁之前');
+  assert.ok(guard[1].includes(`需要 root 权限（定时任务也以 root 运行）：请运行 sudo bash deploy/${script}.sh`));
+  assert.match(guard[1], />&2/);
+  assert.match(guard[1], /\bexit 1\b/);
+});
 
 test('static: Compose 无必填插值，长期业务服务经 prepare 门禁、节点经 migrate 门禁', () => {
   assert.doesNotMatch(compose, /:\?/);
@@ -55,7 +67,7 @@ test('static: E2E 直接 Compose 再启动并以同一账号登录，之后保�
 });
 
 test('static: 默认服务含初始化链与可选集群、三节点独立卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
-  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['setup', 'prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'remote-access', 'remote-node-link']);
+  assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['setup', 'check', 'prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'edge', 'remote-access', 'remote-node-link']);
   assert.match(compose, /mem_limit: 128m/); assert.match(compose, /mem_limit: 64m/);
   assert.match(compose, /AGENT_MEMORY_LIMIT:-768m/);
   assert.deepEqual([...compose.matchAll(/ports: \["([^"]+)"\]/g)].map(m => m[1]), ['127.0.0.1:${AGENT_PORT:-4317}:80']);
@@ -197,4 +209,50 @@ test('static: etcd health uses a dedicated user without shell; both deploy paths
 test('static: nodes never tighten the shared gateway config directory (gateway container reads it as another uid)', () => {
   const source = fs.readFileSync(new URL('../server/modules/runtimes/directories.mjs', import.meta.url), 'utf8');
   assert.match(source, /'gateway'\]\.includes\(entry\)\) secureTree/);
+});
+
+test('static: HTTPS 显式启用，只有 edge 公开端口，证书持久化且保留 SSE 与 Host', () => {
+  const edge = service('edge');
+  assert.match(edge, /profiles: \[https\]/);
+  assert.equal(edge.match(/image: (.*)/)[1], service('caddy').match(/image: (.*)/)[1]);
+  assert.match(edge, /<<: \*runtime/); assert.match(edge, /mem_limit: 64m/);
+  assert.match(edge, /caddy: \{ condition: service_healthy \}/);
+  assert.match(edge, /edge-data:\/data/); assert.match(edge, /edge-config:\/config/);
+  assert.deepEqual([...edge.matchAll(/"(0\.0\.0\.0:[^"\n]+)"/g)].map(m => m[1]), ['0.0.0.0:80:80', '0.0.0.0:443:443']);
+  for (const [, name] of compose.matchAll(/^  ([a-z-]+):(?: &node)?$/gm)) {
+    const block = service(name).match(/    ports:([^]*?)(?=\n    \w|$)/)?.[1];
+    if (block && name !== 'edge') {
+      const ports = [...block.matchAll(/"([^"\n]+)"/g)].map(m => m[1]);
+      assert.ok(ports.length > 0); assert.ok(ports.every(port => port.startsWith('127.0.0.1:')), name);
+    }
+  }
+  const caddy = read('deploy/Caddyfile.edge');
+  assert.match(caddy, /\{\$AGENT_DOMAIN\}/); assert.match(caddy, /reverse_proxy caddy:80/);
+  assert.match(caddy, /header_up Host \{http.request.host\}/); assert.match(caddy, /flush_interval -1/);
+  assert.doesNotMatch(caddy, /^\s*log(?:\s|$)/m);
+});
+test('static: check 使用镜像代码和依赖、独立只读项目与 DAC_READ_SEARCH，无网络', () => {
+  const check = service('check');
+  for (const text of ['profiles: [tools]', 'image: codex-agent:current', 'network_mode: none', 'read_only: true', 'cap_drop: [ALL]', 'cap_add: [DAC_READ_SEARCH]', 'source: .', 'target: /project', 'HOST_APP_DIR: ${PWD:-/nonexistent}', 'working_dir: ${CONTAINER_APP_DIR:-/nonexistent}', 'command: ["node", "scripts/production-check.mjs", "--root", "/project"]', 'bind: { create_host_path: false }']) assert.ok(check.includes(text), text);
+  assert.equal((check.match(/type: bind/g) || []).length, 1);
+  assert.match(check, /target: \/project\n\s+read_only: true/);
+  assert.doesNotMatch(check, /read_only: false|docker.sock|depends_on:|type: volume|node_modules|target: \$\{CONTAINER_APP_DIR/);
+});
+test('static: 定时备份每天本地 04:00，补跑漏执行任务，安装器启用 timer', () => {
+  const timer = read('deploy/systemd/codex-agent-backup.timer'), unit = read('deploy/systemd/codex-agent-backup.service');
+  assert.match(timer, /^OnCalendar=\*-\*-\* 04:00:00$/m); assert.match(timer, /^Persistent=true$/m);
+  assert.match(unit, /^WorkingDirectory=@APP_DIR@$/m); assert.match(unit, /^ExecStart=\/bin\/bash deploy\/backup.sh$/m);
+  const installer = read('deploy/enable-backup-timer.sh');
+  assert.match(installer, /systemctl daemon-reload/); assert.match(installer, /systemctl enable --now codex-agent-backup.timer/);
+});
+
+test('edge 入口只接受空 TLS 或 internal，环境不能注入任意 Caddy 指令', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-entrypoint-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'caddy'), '#!/bin/sh\nprintf "%s" "$AGENT_TLS_DIRECTIVE"\n', { mode: 0o755 });
+  for (const [domain, tls, status, directive] of [['agent.example.com', '', 0, ''], ['agent.localhost', 'internal', 0, 'tls internal'], ['', '', 1, ''], ['agent.example.com', 'internal\nlog', 1, '']]) {
+    const result = spawnSync('sh', ['deploy/edge-entrypoint.sh'], { cwd: new URL('../', import.meta.url), env: { PATH: `${root}:${process.env.PATH}`, AGENT_DOMAIN: domain, AGENT_TLS: tls }, encoding: 'utf8' });
+    assert.equal(result.status, status); assert.equal(result.stdout, directive);
+    if (status) assert.match(result.stderr, /AGENT_DOMAIN|AGENT_TLS/);
+  }
 });

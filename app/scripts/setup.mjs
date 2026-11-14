@@ -94,6 +94,10 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
       }
       const template = parseEnv(fs.readFileSync(path.join(root, '.env.example'), 'utf8'));
       values = generateDeployEnv(updates, template, path.resolve(root));
+      if (domain) {
+        values.AGENT_DOMAIN = domain;
+        values.COMPOSE_PROFILES = [...new Set([...`${values.COMPOSE_PROFILES || ''},${env.COMPOSE_PROFILES || ''}`.split(',').map(value => value.trim()).filter(Boolean), 'https'])].join(',');
+      } else if (!values.COMPOSE_PROFILES) delete values.COMPOSE_PROFILES;
       values.AGENT_ADMIN_BOOTSTRAP = encodeBootstrap({ username, hash: await hashPassword(password) });
       values.AGENT_ALLOWED_ORIGINS = `http://127.0.0.1:4317,http://localhost:4317${domain ? `,https://${domain}` : ''}`;
       if (options.interactive) log(`${summary}；域名 ${domain || '无'}；管理员 ${username}`);
@@ -114,6 +118,7 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
   }
   writeEnv(root, values);
   log('已写入 .env（权限 0600）。');
+  if (values.AGENT_DOMAIN) log('请确认域名的 A 记录已经指向这台服务器，云服务器安全组和本机防火墙放行 80 和 443；证书在首次访问时自动申请。');
   if (options.container) log('下一步执行 docker compose up -d。\n首次要构建 1 个镜像，并下载 PostgreSQL、Redis、网关、etcd、Caddy、Node 基础镜像，合计约 600 MB，只有第一次需要。\n下载很慢时，请看 README 的国内网络说明。');
   if (!options.start) return values;
   log('构建镜像、初始化并启动服务……');

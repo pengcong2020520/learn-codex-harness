@@ -151,14 +151,16 @@ npm run agent:new -- my-agent
 
 ### 备份与恢复
 
-在装有 `flock` 等部署工具的 Linux 部署主机上运行：
+备份与恢复需要 root 权限，定时任务也以 root 运行。在装有 `flock` 等部署工具的 Linux 部署主机上运行：
 
 ```bash
-npm run backup
-npm run restore -- <备份目录名>
+sudo bash deploy/backup.sh
+sudo bash deploy/restore.sh <备份目录名>
 ```
 
-备份短暂停止 Agent 节点，按节点写入 `backups/<节点>/<UTC时间>/`，包含数据库、workspace 和原生历史，结束时尝试恢复服务。恢复目录名形如 `2026-11-13T12-00-00-000Z`，使用实际备份名。恢复会覆盖数据库及文件，并要求输入 `RESTORE`；无人值守时仅在确认备份后加 `--yes`。取消或失败时节点保持停止，核对结果后再决定后续操作。密钥配置 `.env` 应另行安全保管。备份、恢复与下载互斥。
+使用 `npm run backup` 或 `npm run restore -- <备份目录名>` 时，同样需要 root 权限。
+
+备份短暂停止 Agent 节点，按节点写入 `backups/<节点>/<UTC时间>/`，包含数据库、workspace 和原生历史，结束时尝试恢复服务。恢复目录名形如 `2026-11-13T12-00-00-000Z`，使用实际备份名。恢复会覆盖数据库及文件，并要求输入 `RESTORE`；无人值守时仅在确认备份后加 `--yes`。取消或失败时节点保持停止，核对结果后再决定后续操作。密钥配置 `.env` 应另行安全保管。备份、恢复与下载互斥。可在服务器部署目录执行 `sudo bash deploy/enable-backup-timer.sh` 启用每日备份；保留策略和定时设置见 [docs/design.md](docs/design.md#定时备份与保留)。
 
 ### 升级
 
@@ -182,15 +184,11 @@ npm run deploy -- --host 'root@<服务器地址>' tunnel
 
 ### 域名与 HTTPS
 
-将 `agent.example.com` 指向服务器，在服务器部署目录的 `.env` 中设置：
+在 `setup` 中填写域名，会写入 `AGENT_DOMAIN`、添加 HTTPS 来源，并把 `https` 合并到 `COMPOSE_PROFILES`。确认域名的 A 记录已指向服务器，安全组和本机防火墙放行 80、443，再运行 `docker compose up -d`。容器 `edge` 自动管理证书并代理到内部 Caddy；域名与 HTTPS 的配置细节见 [docs/design.md](docs/design.md#https-入口与生产检查)。
 
-```dotenv
-AGENT_ALLOWED_ORIGINS=https://agent.example.com
-```
+多个入口用逗号分隔完整 origin，不带路径或末尾 `/`；需要本机或隧道网页登录时，也保留对应的本机来源。`docker compose run --rm check` 可在容器内执行生产静态检查，无需宿主安装 Node.js；检查不验证 DNS、证书或真实服务可用性。
 
-多个入口用逗号分隔完整 origin，不带路径或末尾 `/`；需要本机或隧道网页登录时，也保留对应的 `http://127.0.0.1:4317`、`http://localhost:4317`。`setup` 中填写域名只会添加白名单，不配置 DNS、证书或公网代理。
-
-在宿主安装并配置 Caddy，使用 [deploy/Caddyfile.example](deploy/Caddyfile.example) 的示例：
+**已有反向代理时**，可以继续由宿主 Caddy 提供 HTTPS，使用 [deploy/Caddyfile.example](deploy/Caddyfile.example) 的示例：
 
 ```caddyfile
 agent.example.com {
@@ -201,7 +199,7 @@ agent.example.com {
 }
 ```
 
-域名与证书签发条件由部署者准备，公网入口交给宿主 Caddy；Compose 端口保持发布到回环地址。修改 `.env` 后在服务器部署目录运行 `npm run up`（需 Node.js 24 和依赖），让全部节点加载同一白名单。域名 CLI 在终端设置 `export AGENT_SERVER_URL=https://agent.example.com`，再运行 `npm run login`；登录凭据仍写本机 `app/.cli/credentials.json`。
+此时不启用 `https` profile，由宿主代理管理公网入口与证书；在 `.env` 中声明 `AGENT_ALLOWED_ORIGINS=https://agent.example.com`，运行 `docker compose up -d` 让节点加载白名单。域名 CLI 在终端设置 `export AGENT_SERVER_URL=https://agent.example.com`，再运行 `npm run login`；登录凭据仍写本机 `app/.cli/credentials.json`。
 
 ## 打开集群
 
@@ -240,7 +238,9 @@ npm run cluster -- status
 | `AGENT_MEMORY_USE` / `AGENT_MEMORY_GENERATE` | `true` / `true` | 总开关开启后控制使用与生成，还受 Agent 声明约束 |
 | `AGENT_BUDGET_DAILY_TOKENS` / `AGENT_BUDGET_MONTHLY_TOKENS` | 空 | 设置每日 / 每月 token 预算 |
 | `AGENT_BUDGET_DAILY_COST` / `AGENT_BUDGET_MONTHLY_COST` | 空 | 设置每日 / 每月费用预算，计价依据模型目录 |
-| `AGENT_CLUSTER_NODES` / `COMPOSE_PROFILES` | `node-a` / 空 | 用 `cluster:enable` 扩容时由脚本更新 |
+| `AGENT_CLUSTER_NODES` / `COMPOSE_PROFILES` | `node-a` / 空 | 扩容时加入 `cluster`，配置域名时加入 `https` |
+| `AGENT_DOMAIN` / `AGENT_TLS` | 空 / 空 | HTTPS 域名；`internal` 仅测试使用 |
+| `AGENT_BACKUP_KEEP` | `7` | 每节点完整备份保留份数，`0` 不清理 |
 | `POSTGRES_MEMORY_LIMIT` / `REDIS_MEMORY_LIMIT` | `256m` / `128m` | 调整基础服务内存上限 |
 | `GATEWAY_MEMORY_LIMIT` / `AGENT_MEMORY_LIMIT` | `256m` / `768m` | 调整网关 / 每个 Agent 节点的内存上限 |
 | `NPM_REGISTRY` / `APT_MIRROR` | npm 官方源 / 空 | 构建环境需要镜像源时设置 |

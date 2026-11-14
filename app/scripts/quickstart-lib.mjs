@@ -91,7 +91,7 @@ export function runProcess(command, args, { root = PROJECT_ROOT, env = childEnvi
 export function composeUp(env) {
   const nodes = clusterNodes(env);
   return ['compose', ...(nodes.length > 1 ? ['--profile', 'cluster'] : []), 'up', '-d', '--build', '--wait',
-    ...(nodes.length > 1 ? [...nodes, 'caddy'] : [])];
+    ...(nodes.length > 1 ? [...nodes, 'caddy', ...((env.COMPOSE_PROFILES || '').split(',').some(profile => ['https', '*'].includes(profile.trim())) ? ['edge'] : [])] : [])];
 }
 export function envRunArgs(root, args, env = {}) {
   const target = env.CONTAINER_APP_DIR || root;

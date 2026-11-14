@@ -1,0 +1,10 @@
+[Unit]
+Description=Codex Agent 每日备份
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=codex-agent-backup.service
+
+[Install]
+WantedBy=timers.target

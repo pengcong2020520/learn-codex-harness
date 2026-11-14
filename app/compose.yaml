@@ -37,8 +37,30 @@ services:
     working_dir: ${PWD:-/nonexistent}
     environment:
       HOST_APP_DIR: ${PWD:-/nonexistent}
+      COMPOSE_PROFILES: ${COMPOSE_PROFILES:-}
     entrypoint: ["node", "scripts/setup.mjs", "--container"]
     command: []
+  check:
+    profiles: [tools]
+    restart: "no"
+    build: *agent-build
+    image: codex-agent:current
+    user: "0:1000"
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    read_only: true
+    working_dir: ${CONTAINER_APP_DIR:-/nonexistent}
+    environment:
+      HOST_APP_DIR: ${PWD:-/nonexistent}
+    command: ["node", "scripts/production-check.mjs", "--root", "/project"]
+    volumes:
+      - type: bind
+        source: .
+        target: /project
+        read_only: true
+        bind: { create_host_path: false }
   prepare:
     build: *agent-build
     image: codex-agent:current
@@ -202,6 +224,7 @@ services:
       AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:-}
       AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:-}
       AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:-}
+      AGENT_BACKUP_KEEP: ${AGENT_BACKUP_KEEP:-7}
       AGENT_REPLICATION_RATE_LIMIT: ${AGENT_REPLICATION_RATE_LIMIT:-0}
       AGENT_REQUEST_TIMEOUT_MS: ${AGENT_REQUEST_TIMEOUT_MS:-30000}
       AGENT_TRANSFER_MAX_BYTES: ${AGENT_TRANSFER_MAX_BYTES:-1073741824}
@@ -328,6 +351,26 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
+  edge:
+    <<: *runtime
+    profiles: [https]
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    mem_limit: 64m
+    # 唯一公网端口例外：用户主动填写域名、启用 https profile 后才开放。
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    environment:
+      AGENT_DOMAIN: ${AGENT_DOMAIN:-}
+      AGENT_TLS: ${AGENT_TLS:-}
+    entrypoint: ["/bin/sh", "/etc/caddy/edge-entrypoint.sh"]
+    volumes:
+      - "./deploy/Caddyfile.edge:/etc/caddy/Caddyfile:ro"
+      - "./deploy/edge-entrypoint.sh:/etc/caddy/edge-entrypoint.sh:ro"
+      - "edge-data:/data"
+      - "edge-config:/config"
+    depends_on:
+      caddy: { condition: service_healthy }
   remote-access:
     <<: *runtime
     profiles: [remote-access]
@@ -366,3 +409,5 @@ volumes:
   etcd-data:
   postgres-data:
   redis-data:
+  edge-data:
+  edge-config:

@@ -7,6 +7,11 @@ import { setup, containerDirectory } from '../scripts/setup.mjs';
 import { decodeBootstrap } from '../server/modules/accounts/bootstrap.mjs';
 import { verifyPassword } from '../server/modules/accounts/password.mjs';
 
+test('只用 Docker 验收：非 root 备份通过 sudo 保留 PATH、颜色设置与 Compose 项目名', () => {
+  const source = fs.readFileSync(new URL('../scripts/e2e-docker-only.sh', import.meta.url), 'utf8');
+  assert.match(source, /if \[ "\$\(id -u\)" != 0 \]; then\n  sudo env "PATH=\$PATH" "FORCE_COLOR=\$\{FORCE_COLOR:-0\}" "COMPOSE_PROJECT_NAME=\$COMPOSE_PROJECT_NAME" bash deploy\/backup.sh\nelse\n  bash deploy\/backup.sh\nfi/);
+});
+
 for (const user of ['root', 'normal']) test(`只用 Docker CI：${user} 在验收前删除 npm 路径构建的镜像`, () => {
   const source = fs.readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
   const job = source.split('\n  scaffold-e2e:')[1].split(/\n  [\w-]+:/)[0];
@@ -100,7 +105,8 @@ test('setup 服务权限、profile、固定镜像与 PWD 默认值约束', () =>
   assert.ok(body.includes(`image: ${base}`));
   for (const text of ['profiles: [setup]', 'network_mode: none', 'cap_drop: [ALL]', 'cap_add: [SETUID, SETGID]', 'user: "0:0"', 'no-new-privileges:true', '".:${PWD:-/nonexistent}"', 'working_dir: ${PWD:-/nonexistent}', 'HOST_APP_DIR: ${PWD:-/nonexistent}', 'entrypoint: ["node", "scripts/setup.mjs", "--container"]', 'command: []']) assert.ok(body.includes(text), text);
   assert.doesNotMatch(source, /:\?/);
-  assert.equal([...source.matchAll(/\$\{PWD[^}]*\}/g)].length, 3);
+  assert.equal([...body.matchAll(/\$\{PWD[^}]*\}/g)].length, 3);
+  assert.equal([...source.matchAll(/\$\{PWD[^}]*\}/g)].length, 4);
   assert.doesNotMatch(source.replaceAll('${PWD:-/nonexistent}', ''), /\bPWD\b/);
 });
 
