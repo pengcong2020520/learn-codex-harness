@@ -10,7 +10,10 @@ export function previewProbe() {
       if (event.effectiveDirective === 'connect-src') resolve();
     });
   });
+  let clicked = false;
   document.querySelector('#probe').onclick = async () => {
+    if (clicked) { report('click-repeat'); return; }
+    clicked = true;
     report('click');
     document.querySelector('#probe').textContent = '脚本已运行';
     window.probe.text = document.querySelector('#probe').textContent;
