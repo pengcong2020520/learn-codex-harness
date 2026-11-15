@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "clarificationRounds": 3,
+  "currentStage": "clarify",
+  "events": [
+    {
+      "stage": "clarify",
+      "operation": "modify",
+      "artifact": "brief-v1.md",
+      "inputs": [],
+      "confirmedAt": null,
+      "confirmedBy": null,
+      "recordedAt": null,
+      "feedback": "保持只管理个人事项"
+    },
+    {
+      "stage": "clarify",
+      "operation": "modify",
+      "artifact": "brief-v1.md",
+      "inputs": [],
+      "confirmedAt": null,
+      "confirmedBy": null,
+      "recordedAt": null,
+      "feedback": "提交第 1 轮澄清答案"
+    },
+    {
+      "stage": "clarify",
+      "operation": "modify",
+      "artifact": "brief-v1.md",
+      "inputs": [],
+      "confirmedAt": null,
+      "confirmedBy": null,
+      "recordedAt": null,
+      "feedback": "提交第 2 轮澄清答案"
+    },
+    {
+      "stage": "clarify",
+      "operation": "continue",
+      "artifact": "brief-v1.md",
+      "inputs": [],
+      "confirmedAt": "2026-11-14T12:01:00Z",
+      "confirmedBy": "测试管理员",
+      "feedback": "测试输入：确认此版本"
+    }
+  ]
+}

@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "stage": "hifi",
+  "version": 2,
+  "artifact": "prototype-v2.html",
+  "prd": "prd-v1.md",
+  "inputs": [
+    "prd-v1.md",
+    "wireframe-v1.html",
+    "theme-v1.json"
+  ],
+  "designReports": [
+    {
+      "artifact": "prototype-v2.html",
+      "reportPath": "qa/prototype-v2-fixture-layout.json",
+      "status": "completed",
+      "errors": 0,
+      "warnings": 0
+    }
+  ],
+  "result": "pass",
+  "items": [
+    {
+      "screen": "web-list",
+      "state": "default",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=default；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-list",
+      "state": "default",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=default；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-list",
+      "state": "default",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=default；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-list",
+      "state": "default",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=default；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=empty；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=empty；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=empty；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=empty；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=first-use；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=first-use；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=first-use；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=first-use；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=permission；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=permission；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=permission；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-list&state=permission；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=default；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=default；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=default；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=default；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=error；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=error；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=error；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-create&state=error；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=default；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=default；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=default；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=default；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=loading；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=loading；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=loading；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-review&state=loading；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=default；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=default；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=default；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=default；显示该状态明确文案及下一步操作；共享事项内容。"
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "check": "页面与状态覆盖",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=recovery；与 PRD 第 4 节对应，section 与大纲有相同标识。"
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "check": "操作目标",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=recovery；actions 的 hash 均存在，返回入口可达。"
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "check": "一屏与排版",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=recovery；预期在两种桌面视口检查，无整页滚动、重叠或截断；真实运行记录以测试报告为准。"
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "check": "内容与恢复",
+      "conclusion": "pass",
+      "evidence": "测试报告夹具：prototype-v2.html#screen=web-result&state=recovery；显示该状态明确文案及下一步操作；共享事项内容。"
+    }
+  ],
+  "remaining": []
+}

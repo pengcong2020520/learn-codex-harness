@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "clarificationRounds": 3,
+  "fields": {
+    "name": {
+      "value": "事项整理助手",
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "positioning": {
+      "value": "帮助个人整理并确认每日事项",
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "audienceAndScenarios": {
+      "value": [
+        "个人早晨整理工作"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "coreTasks": {
+      "value": [
+        "整理事项",
+        "确认后保存清单"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "deliverables": {
+      "value": [
+        "事项清单"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "sources": {
+      "value": [
+        "用户手动输入"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "confirmationPoints": {
+      "value": [
+        "保存清单前"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "platforms": {
+      "value": [
+        "Web"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "requiredPagesAndFeatures": {
+      "value": [
+        "事项列表",
+        "输入事项",
+        "确认清单",
+        "保存结果"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "outOfScope": {
+      "value": [
+        "团队共享",
+        "外部消息",
+        "自动执行事项"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "references": {
+      "value": [],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "successCriteria": {
+      "value": [
+        "编辑内容与确认、结果、列表一致"
+      ],
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "modelRequirements": {
+      "value": {
+        "image": false,
+        "web": false,
+        "cost": "使用现有模型"
+      },
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    },
+    "permissionsAndPrivacy": {
+      "value": {
+        "visibility": "仅本人",
+        "retention": "按既有账号数据规则"
+      },
+      "source": "user",
+      "evidence": "测试场景：用户填写资料卡并在澄清时确认该范围。"
+    }
+  }
+}

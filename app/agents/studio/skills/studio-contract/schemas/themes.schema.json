@@ -1,0 +1,280 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/themes.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "wireframe": {
+      "type": "string",
+      "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sourceScreenId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "state": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          }
+        },
+        "required": [
+          "sourceScreenId",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "styles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "traits": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "tokens": {
+            "$ref": "style-tokens.schema.json"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "traits",
+          "tokens"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "traits": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "tokens": {
+            "$ref": "theme-tokens.schema.json"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "traits",
+          "tokens"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "shown": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+      },
+      "minItems": 6,
+      "uniqueItems": true
+    },
+    "shownHistory": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "style"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "traits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "tokens": {
+                "$ref": "style-tokens.schema.json"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "name",
+              "traits",
+              "tokens"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "theme"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "traits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "tokens": {
+                "$ref": "theme-tokens.schema.json"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "name",
+              "traits",
+              "tokens"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minItems": 6
+    },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "artifact": {
+            "type": "string",
+            "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+          },
+          "styleId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "themeId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "designReport": {
+            "type": "object",
+            "properties": {
+              "artifact": {
+                "type": "string",
+                "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+              },
+              "reportPath": {
+                "type": "string",
+                "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed"
+                ]
+              },
+              "errors": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "warnings": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "artifact",
+              "reportPath",
+              "status",
+              "errors",
+              "warnings"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "artifact",
+          "styleId",
+          "themeId",
+          "designReport"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "round",
+    "wireframe",
+    "screens",
+    "styles",
+    "themes",
+    "shown",
+    "shownHistory",
+    "samples"
+  ],
+  "additionalProperties": false
+}

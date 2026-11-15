@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/manifest.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "productId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "agentId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "packageVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "confirmation": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "proposed",
+            "confirmed"
+          ]
+        },
+        "confirmedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "confirmedBy": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "status",
+        "confirmedAt",
+        "confirmedBy"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "proposed"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "confirmedAt": {
+                "type": "null"
+              },
+              "confirmedBy": {
+                "type": "null"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "confirmedAt": {
+                "type": "string"
+              },
+              "confirmedBy": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "scaffold": {
+      "type": "object",
+      "properties": {
+        "minimumVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiredCapabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "minimumVersion",
+        "requiredCapabilities"
+      ],
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "confirmedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+          },
+          "confirmedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "version",
+          "source",
+          "inputs",
+          "confirmedAt",
+          "confirmedBy"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "landing": {
+      "type": "object",
+      "properties": {
+        "agentSource": {
+          "const": "agent/"
+        },
+        "uiSource": {
+          "const": "agent/ui/"
+        },
+        "designSource": {
+          "const": "design/"
+        },
+        "replaceDefaultUi": {
+          "const": true
+        },
+        "removeStudio": {
+          "const": true
+        },
+        "checks": {
+          "const": [
+            "agent:check"
+          ]
+        },
+        "rebuild": {
+          "const": true
+        }
+      },
+      "required": [
+        "agentSource",
+        "uiSource",
+        "designSource",
+        "replaceDefaultUi",
+        "removeStudio",
+        "checks",
+        "rebuild"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "productId",
+    "agentId",
+    "packageVersion",
+    "createdAt",
+    "confirmation",
+    "scaffold",
+    "files",
+    "artifacts",
+    "landing"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "version": 2,
+  "prototype": "prototype-v2.html",
+  "items": [
+    {
+      "id": "move-confirm",
+      "change": "将确认按钮移到独立底部栏；未经同意前不应用。",
+      "reason": "用户提出需要固定确认入口，涉及按钮位置变动。",
+      "affects": [
+        "web-review"
+      ]
+    }
+  ]
+}

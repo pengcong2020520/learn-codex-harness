@@ -1,0 +1,109 @@
+{
+  "groups": [
+    {
+      "id": "daily",
+      "title": "整理今日事项",
+      "order": 1,
+      "screens": [
+        {
+          "id": "web-list",
+          "title": "事项列表",
+          "position": 1,
+          "actions": [
+            {
+              "label": "输入事项",
+              "to": "#screen=web-create&state=default"
+            },
+            {
+              "label": "查看空列表",
+              "to": "#screen=web-list&state=empty"
+            },
+            {
+              "label": "首次使用",
+              "to": "#screen=web-list&state=first-use"
+            },
+            {
+              "label": "权限说明",
+              "to": "#screen=web-list&state=permission"
+            }
+          ],
+          "states": [
+            "default",
+            "empty",
+            "first-use",
+            "permission"
+          ]
+        },
+        {
+          "id": "web-create",
+          "title": "输入事项",
+          "position": 2,
+          "actions": [
+            {
+              "label": "整理并检查",
+              "to": "#screen=web-review&state=default"
+            },
+            {
+              "label": "查看输入错误",
+              "to": "#screen=web-create&state=error"
+            },
+            {
+              "label": "返回列表",
+              "to": "#screen=web-list&state=default"
+            }
+          ],
+          "states": [
+            "default",
+            "error"
+          ]
+        },
+        {
+          "id": "web-review",
+          "title": "确认清单",
+          "position": 3,
+          "actions": [
+            {
+              "label": "修改事项",
+              "to": "#screen=web-create&state=default"
+            },
+            {
+              "label": "确认保存",
+              "to": "#screen=web-review&state=loading"
+            },
+            {
+              "label": "查看保存结果",
+              "to": "#screen=web-result&state=default"
+            },
+            {
+              "label": "查看恢复状态",
+              "to": "#screen=web-result&state=recovery"
+            }
+          ],
+          "states": [
+            "default",
+            "loading"
+          ]
+        },
+        {
+          "id": "web-result",
+          "title": "保存结果",
+          "position": 4,
+          "actions": [
+            {
+              "label": "返回列表",
+              "to": "#screen=web-list&state=default"
+            },
+            {
+              "label": "核对保存结果",
+              "to": "#screen=web-result&state=default"
+            }
+          ],
+          "states": [
+            "default",
+            "recovery"
+          ]
+        }
+      ]
+    }
+  ]
+}

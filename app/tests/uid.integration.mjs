@@ -198,3 +198,39 @@ test('草稿：真实 uid 原子覆盖保持属主，其他 uid 无法读取，�
     const other = read(uid === 10001 ? 10002 : 10001); assert.notEqual(other.status, 0); assert.match(other.stderr, /EACCES/);
   }
 });
+
+import { AgentDefinition } from '../server/modules/agents/index.mjs';
+
+test('skill_read：隔离模式读取用户安装的 schemas JSON 与 themes Markdown', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-text-uid-')); fs.chmodSync(root, 0o755);
+  const home = path.join(root, 'codex'), uid = 10001;
+  fs.mkdirSync(home, { mode: 0o755 }); fs.chownSync(home, uid, uid);
+  t.after(() => {
+    const cleanup = spawnSync(process.execPath, ['-e', `const fs=require('node:fs'),p=require('node:path');for(const name of fs.readdirSync(process.argv[1]))fs.rmSync(p.join(process.argv[1],name),{recursive:true,force:true});`, home], { uid, gid: uid, cwd: '/tmp', encoding: 'utf8' });
+    assert.equal(cleanup.status, 0, cleanup.stderr);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const app = path.resolve(import.meta.dirname, '..');
+  const agent = new AgentDefinition(app, path.join(app, 'agents/studio/agent.json'));
+  const skills = agent.skills.filter(skill => ['studio-contract', 'theme-factory'].includes(skill.id));
+  // 安装和读取都走真实 uid；不设置 contents，避免绕过 readAsUser 的文件读取分支。
+  const module = new URL('../server/modules/codex/skills.mjs', import.meta.url).href;
+  const child = userSpawn(process.execPath, ['--input-type=module', '-e', `
+    import fs from 'node:fs';
+    import { installSkills } from ${JSON.stringify(module)};
+    const { skills, home } = JSON.parse(fs.readFileSync(0, 'utf8'));
+    process.stdout.write(JSON.stringify([...installSkills({ skills }, home)]));
+  `], { uid, gid: uid, isolated: true });
+  const result = spawnSync(child.command, child.args, { ...child.options, cwd: '/tmp', env: { PATH: process.env.PATH }, input: JSON.stringify({ skills, home }), encoding: 'utf8' });
+  assert.equal(result.status, 0, result.error?.message || result.stderr);
+  const installed = new Map(JSON.parse(result.stdout));
+  agent.availableSkills = skills.map(skill => ({ ...skill, name: skill.id, path: installed.get(skill.id) }));
+  agent.runtime = { isolated: true, uid };
+  for (const [name, file] of [['studio-contract', 'schemas/clarify.schema.json'], ['theme-factory', 'themes/ocean-depths.md']]) {
+    const skill = skills.find(item => item.id === name), target = path.join(path.dirname(installed.get(name)), file);
+    const response = await agent.readSkill(name, file);
+    assert.equal(response.content, fs.readFileSync(path.join(skill.source, file), 'utf8'));
+    assert.equal(response.file, file); assert.ok(response.files.includes(file));
+    await assert.rejects(readAsUser(10002, target, { maxBytes: 128 * 1024, isolated: true }), error => error.code === 'EACCES');
+  }
+});

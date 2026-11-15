@@ -105,10 +105,9 @@ const artifacts = {
   'prd-spec': ['brief-v1.md', 'prd-v1.md'],
   'lofi-wireframe': ['prd-v1.md', 'wireframe-v1.html'],
   'theme-factory': ['wireframe-v1.html', 'themes-r1.json', 'theme-sample-v1.html', 'theme-v1.json'],
-  'frontend-design': ['prd-v1.md', 'wireframe-v1.html', 'theme-v1.json', 'prototype-v1.html', 'structure-changes-v1.md'],
+  'frontend-design': ['prd-v1.md', 'wireframe-v1.html', 'theme-v1.json', 'prototype-v1.html', 'structure-changes-v1.json'],
   'prototype-builder': ['prototype-v1.html'],
-  'flow-walkthrough': ['prototype-v1.html', 'walkthrough-plan-v1.json', 'walkthrough-r1.json', 'walkthrough-v1.html'],
-  'design-handoff': ['brief-v1.md', 'prd-v1.md', 'wireframe-v1.html', 'themes-r1.json', 'theme-sample-v1.html', 'theme-v1.json', 'prototype-v1.html', 'walkthrough-plan-v1.json', 'walkthrough-r1.json', 'package-v1/'],
+  'design-handoff': ['brief-v1.md', 'prd-v1.md', 'wireframe-v1.html', 'themes-r1.json', 'theme-sample-v1.html', 'theme-v1.json', 'prototype-v1.html', 'package-v1/'],
 };
 test('各阶段文件名与总流程产物约定一致', () => {
   const flow = read('agent-design-flow');
@@ -120,8 +119,8 @@ test('各阶段文件名与总流程产物约定一致', () => {
     }
   }
 });
-test('HTML 生产与走查共用屏幕定位、大纲和状态词表', () => {
-  for (const name of ['agent-design-flow', 'lofi-wireframe', 'theme-factory', 'frontend-design', 'prototype-builder', 'flow-walkthrough']) {
+test('设计 HTML 共用屏幕定位、大纲和状态词表', () => {
+  for (const name of ['agent-design-flow', 'lofi-wireframe', 'theme-factory', 'frontend-design', 'prototype-builder']) {
     for (const term of ['data-screen', 'data-state', 'data-group', '#screen=<id>&state=<状态>', 'design-outline', 'default、first-use、permission、loading、empty、error、recovery']) assert.ok(read(name).includes(term), `${name} 缺 ${term}`);
   }
 });
@@ -137,9 +136,11 @@ test('资料卡、主题、走查与交付的 JSON 示例合法且引用衔接',
   assert.equal(plan.groups[0].screens[0].id, round.groups[0].screens[0].id);
   assert.deepEqual(plan.groups[0].screens[0].states, round.groups[0].screens[0].states.map(state => state.state));
   for (const state of round.groups[0].screens[0].states) {
-    assert.ok(state.preview.hash.startsWith('#screen='));
+    assert.equal(round.mode, 'product');
+    assert.ok('screenshot' in state && 'diagnostics' in state && 'unavailableReason' in state);
+    assert.equal('preview' in state, false, '真实产品巡查不使用原型 iframe');
     assert.ok(['可以', '待改', '阻塞', null].includes(state.feedback.mark));
-    for (const key of ['previousFeedback', 'htmlHash', 'changeStatus', 'reproduce']) assert.ok(key in state, key);
+    for (const key of ['previousFeedback', 'changeEvidence', 'changeStatus', 'reproduce']) assert.ok(key in state, key);
   }
   const [manifest] = jsonBlocks('design-handoff');
   for (const artifact of manifest.artifacts) for (const key of ['path', 'version', 'confirmedAt', 'confirmedBy']) assert.ok(key in artifact, key);
@@ -149,7 +150,7 @@ test('资料卡、主题、走查与交付的 JSON 示例合法且引用衔接',
 test('代码与落地包包含完整目录和带哈希、确认及落地信息的 manifest', () => {
   const handoff = read('design-handoff'), flow = read('agent-design-flow');
   for (const term of ['package-v1/', 'manifest.json', 'agent/', 'ui/', 'design/', 'DEPLOY.md', 'PROMPT.md']) assert.ok(handoff.includes(term), term);
-  assert.ok(flow.includes('7 代码与落地包'));
+  assert.ok(flow.includes('7 代码与落地'));
   assert.ok(flow.includes('package-v1/…'));
   for (const source of [handoff, flow]) assert.ok(!source.includes('handoff-v'));
   const [manifest] = jsonBlocks('design-handoff');
@@ -178,7 +179,7 @@ test('代码与落地包包含完整目录和带哈希、确认及落地信息�
 
 test('落地包禁止宿主机脚本并说明固定命令、部署和无 K5 的继续开发方式', () => {
   const handoff = read('design-handoff'), flow = read('agent-design-flow');
-  for (const term of ['代码包不含宿主机脚本', '不得使用内联脚本和样式', '不得引用外部资源', '按 K2 约定', '示例数据不能写死', '需要开发', 'docker compose run --rm land', 'npm run design:land', 'npm run deploy', 'deploy/install.sh', 'app/agents/<id>/', 'app/design/<产品 id>/', '先读 AGENTS.md', 'K5', '不依赖', 'flow-walkthrough', '真实产品模式']) assert.ok(handoff.includes(term), term);
+  for (const term of ['代码包不含宿主机脚本', '不得使用内联脚本和样式', '不得引用外部资源', '按 K2 约定', '示例数据不能写死', '需要开发', 'docker compose run --rm land', 'npm run design:land', 'npm run deploy', 'deploy/install.sh', 'app/agents/<id>/', 'app/design/<产品 id>/', '先读 AGENTS.md', 'K5', '不依赖', 'flow-walkthrough', '真实产品巡查', 'production:check']) assert.ok(handoff.includes(term), term);
   for (const term of ['只有管理员能进入工作室', '一份脚手架只有一个设计项目', '生成代码包，不修改服务端代码', 'app/design/<产品 id>/']) assert.ok(flow.includes(term), term);
 });
 
@@ -195,11 +196,11 @@ test('落地前端接口表的方法和路径对应现有 HTTP 路由', () => {
 
 // 固定评审形成的跨阶段契约；用户原文仍由上面的逐条断言保护。
 const reviewContracts = {
-  'agent-design-flow': ['一问一答', '只给摘要', '思考中', '快捷回复', '自然语言', '`steer`', '`revise`', '资料卡、澄清、走查计划、走查', '不显示聊天', '最多 3 轮', '表单', '每轮最多 5 题', '每题带选项和推荐项', '低保真、主题样页、高保真', 'layout-qa', 'themes-r1.json', 'theme-sample-v1.html'],
+  'agent-design-flow': ['一问一答', '只给摘要', '思考中', '快捷回复', '自然语言', '`steer`', '`revise`', '资料卡、澄清', '不显示聊天', '最多 3 轮', '表单', '每轮最多 5 题', '每题带选项和推荐项', '低保真、主题样页、高保真', 'layout-qa', 'themes-r1.json', 'theme-sample-v1.html'],
   'lofi-wireframe': ['打开即是产品的一屏', '一屏原则', '预览不使用标签条', '醒目的左侧目录', '默认收起的评审切换器', '悬停提示', '平铺查看作为可选模式', '&auto=1', '约 2 秒', '目录或直接 hash', 'layout-qa'],
   'frontend-design': ['一屏原则', '预览区和聊天区尽量占满', '不放说明条、操作条或标注框', '`<`、`>`', 'layout-qa'],
   'theme-factory': ['两道三选一', '视觉风格', '配色与字体', '完全不同', '各自带“换一换”', '新选项不与已展示过的重复', '进入本阶段前，在聊天里询问', '多张和拖拽上传', 'themes-r<n>.json', 'theme-sample-v<n>.html', '`theme=`', 'base64url', 'JSON 令牌', 'CSS 变量', 'hashchange', '即时换肤', '两道题都选定后', '只有一道题选定时不能写', 'theme-v<n>.json', 'layout-qa'],
-  'flow-walkthrough': ['计划页和走查页均不显示聊天', '左侧目录按分组和屏导航', '实时预览缩略图', '可以放大', '页面名称、当前状态、复现方式', '三个标记和反馈框', '每组末尾有流程反馈', '页面底部', '导出 Markdown', '导出 JSON', '按反馈改版', '走查通过', '勾选、增删后再确认'],
+  'flow-walkthrough': ['没有聊天区', '左侧按流程分组列目录', '真实截图（可放大）', '复现方式', '可以 / 待改 / 阻塞', '每组末尾另有流程反馈', '底部显示本轮计数与保存状态', '导出 Markdown', '导出 JSON', '确认本轮巡查通过', '不放“按反馈修复”', '截图上不叠加任何标签或按钮', '计划变动新建版本重新确认', 'localStorage', 'unmatchedPrevious', '前端', '后端', '整体', 'K5', 'production:check'],
   'prototype-builder': ['主题令牌通过 CSS 变量注入', '所有 `(screen,state)` 都能用 hash 定位', 'layout-qa'],
   'layout-qa': ['任何线框、主题样页、高保真原型', '先通过布局校验才能给用户看', '`check_design`', 'K3a-2', 'node app/scripts/layout-check.mjs', '最多自动修 2 轮', '不能声称已通过', '长文本截断', '定宽容器溢出', '绝对定位重叠', '区域内滚动', 'CHROME_PATH', '返回 1', '返回 2'],
 };
@@ -212,4 +213,33 @@ test('设计 Skill 不保留冲突的默认平铺与三套并排产物约定', (
   for (const name of ['agent-design-flow', 'lofi-wireframe', 'theme-factory', 'design-handoff']) {
     for (const term of ['themes-r1.html', 'themes-r<n>.html', '无定位 hash 时按组和顺序平铺', '无定位时三套并排', '每屏统一标注']) assert.ok(!read(name).includes(term), `${name} 仍含冲突约定 ${term}`);
   }
+});
+
+test('巡查仅本机开发后执行，工作室总流程和交付不再依赖走查产物', () => {
+  const flow = read('agent-design-flow'), handoff = read('design-handoff'), walkthrough = read('flow-walkthrough');
+  for (const source of [flow, handoff]) {
+    assert.doesNotMatch(source, /walkthrough-(?:plan|v1|r1)/);
+    assert.doesNotMatch(source, /原型和走查均已/);
+  }
+  assert.doesNotMatch(walkthrough, /iframe|原型走查|实时预览缩略图/);
+  for (const term of ['开发完成', '部署之前', '用户本机', '先列计划', '等确认', '不虚构已有脚本', '反馈原话', '已修改']) assert.ok(walkthrough.includes(term), term);
+  const instructions = handoff.slice(handoff.indexOf('## PROMPT.md'));
+  let previous = -1;
+  for (const term of ['1. 落地', '2. 按设计开发', '3. 检查与构建', '4. 本机运行', '5. 真实产品巡查', '6. 按反馈修复', '7. 下一轮回归', '8. 生产检查', '9. 部署']) {
+    const index = instructions.indexOf(term); assert.ok(index > previous, term); previous = index;
+  }
+});
+
+test('lofi-wireframe 用户提示词完整段落逐字节保留', () => {
+  const source = read('lofi-wireframe');
+  const part = source.slice(source.indexOf('## 用户提示词原文'));
+  const prompt = part.slice(0, part.indexOf('\n## ', 4));
+  assert.equal(createHash('sha256').update(prompt).digest('hex'), '9414dddbdf3b0e909a4baff560d5d8888bdd6b04d0ce71c8a5cec79165be3da2');
+});
+
+test('flow-walkthrough 用户提示词完整段落逐字节保留', () => {
+  const source = read('flow-walkthrough');
+  const part = source.slice(source.indexOf('## 用户提示词原文'));
+  const prompt = part.slice(0, part.indexOf('\n## ', 4));
+  assert.equal(createHash('sha256').update(prompt).digest('hex'), '49f449dc4c56c9d4e50e8dd1cf8c73b1698b00d155216e860a7cba176a2d45ee');
 });

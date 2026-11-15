@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "round": 2,
+  "final": false,
+  "questions": [
+    {
+      "id": "q2",
+      "text": "谁可以查看事项？推荐仅本人，匹配个人工作清单的用途。",
+      "options": [
+        {
+          "label": "仅本人",
+          "recommended": true
+        },
+        {
+          "label": "需要团队共享",
+          "recommended": false
+        }
+      ],
+      "allowFree": true
+    }
+  ]
+}
