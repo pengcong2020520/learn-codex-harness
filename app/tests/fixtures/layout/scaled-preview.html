@@ -1,4 +1,5 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>缩放缩略图夹具</title>
-<style>html,body{margin:0;width:100%;height:100%;font:14px system-ui}*{box-sizing:border-box}section{height:100%;position:relative;padding:20px}.wprev{width:240px;height:140px;overflow:hidden}.page{pointer-events:none;width:960px;height:560px;transform:scale(.25);transform-origin:top left;padding:40px;font-size:48px}.page p{margin:0 0 40px}</style>
-<section data-screen="web-home" data-state="default" data-group="main"><div class="wprev"><div class="page"><p>整页缩略图标题</p><p>缩放后完整可见的正文</p></div></div></section>
+<style>html,body{margin:0;width:100%;height:100%;font:14px monospace}*{box-sizing:border-box}section{height:100%;position:relative;padding:20px}.wprev{width:240px;height:140px;overflow:hidden}.page{pointer-events:none;width:960px;height:560px;transform:scale(.25);transform-origin:top left;padding:40px;font-size:48px;line-height:60px}.page p{margin:0 0 40px}.page span{display:inline-block;width:600px;white-space:nowrap;text-align:justify;text-align-last:justify}</style>
+<!-- 两端对齐让文字 Range 横跨定宽行内块；缩放后为 150px，含左边距后仍小于 240px、确定大于 90px。 -->
+<section data-screen="web-home" data-state="default" data-group="main"><div class="wprev"><div class="page"><p><span>Preview page title</span></p><p><span>Preview body text</span></p></div></div></section>
 <script id="design-outline" type="application/json">{"groups":[{"id":"main","screens":[{"id":"web-home","states":["default"]}]}]}</script></html>

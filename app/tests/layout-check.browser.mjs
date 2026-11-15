@@ -29,16 +29,16 @@ test('布局浏览器夹具：标题与角标 padding 相交不报错，只有�
   for (const i of report.issues) {
     assert.equal(i.state, 'overlap');
     assert.equal(i.code, 'text-overlap');
-    assert.match(i.element, /b「标题标题标题」.*span\.badge「已修改」/);
+    assert.match(i.element, /b「UI title」.*span\.badge「V 2」/);
   }
 });
 
 test('布局浏览器：遮罩本身的文字重叠仍报错', options, async t => {
-  const html = fs.readFileSync(fixture('occlusion'), 'utf8').replace('</style>', '.drawer p{position:absolute;left:20px;top:20px}.drawer p+p{left:40px;top:26px}</style>')
-    .replace('<p>版本历史</p>', '<p>版本历史记录</p><p>另一段抽屉文字</p>');
+  const html = fs.readFileSync(fixture('occlusion'), 'utf8').replace('</style>', '.drawer p{position:absolute;left:20px;top:20px;width:160px;font:14px/20px monospace;white-space:nowrap;text-align:justify;text-align-last:justify}.drawer p+p{left:40px;top:26px}</style>')
+    .replace('<p>版本历史</p>', '<p>Version history</p><p>Other drawer text</p>');
   const report = await checkDesign(temporary(t, html));
   assert.equal(report.errors, 2, JSON.stringify(report));
-  assert.ok(report.issues.every(i => i.code === 'text-overlap' && i.element.includes('版本历史记录') && i.element.includes('另一段抽屉文字')), JSON.stringify(report));
+  assert.ok(report.issues.every(i => i.code === 'text-overlap' && i.element.includes('Version history') && i.element.includes('Other drawer text')), JSON.stringify(report));
 });
 
 test('布局浏览器：禁用鼠标事件的缩略图文字实际超出时仍报截断', options, async t => {
