@@ -9,7 +9,8 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'design-e2e-'));
 try {
   const workspaceDir = path.join(root, 'workspace');
   fs.mkdirSync(path.join(workspaceDir, 'inputs'), { recursive: true });
-  const files = createFileTools(root, { workspaceDir, sources: [{ locator: 'inputs', actions: ['read'] }, { locator: 'outputs', actions: ['read'] }], outputs: { directory: 'outputs' } });
+  fs.mkdirSync(path.join(workspaceDir, 'outputs'));
+  const files = createFileTools(root, { workspaceDir, sources: [{ locator: 'inputs', actions: ['read'] }, { locator: 'outputs', actions: ['read'] }], outputs: { directory: 'outputs', formats: ['html', 'json'] } });
   const tools = createDesignTools({ files });
   const clean = fs.readFileSync(new URL('../tests/fixtures/layout/clean.html', import.meta.url), 'utf8');
   const broken = clean.replace('</style>', 'body{height:2000px}p{position:absolute;top:0;left:0}</style>').replace('<p>干净页面</p>', '<p>Overlapping text</p><p>Overlapping text</p>');
