@@ -697,8 +697,16 @@ function chooseTask() {
   }
 }
 async function refreshState() {
-  if (!s.thread) return;
-  s.state = await api.request(`/state?threadId=${encodeURIComponent(s.thread)}`); chooseTask();
+  const thread = s.thread, before = s.state;
+  if (!thread) return;
+  const snapshot = await api.request(`/state?threadId=${encodeURIComponent(thread)}`);
+  if (thread !== s.thread) return;
+  // 会话和队列各自通过 SSE 更新。等待 HTTP 时已推进的部分不能被迟到的快照覆盖。
+  s.state = {
+    session: s.state.session === before.session ? snapshot.session : s.state.session,
+    queue: s.state.queue === before.queue ? snapshot.queue : s.state.queue,
+  };
+  chooseTask();
   // 不等待产物队列：final 澄清在产物读取中触发继续，等待自身会形成循环。
   void refreshArtifacts(); renderMessages();
 }

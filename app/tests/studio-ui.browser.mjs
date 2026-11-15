@@ -128,8 +128,10 @@ test('Studio 浏览器：欢迎到复制指令，真实 feedback 分流、两轮
   assert.deepEqual(await page.run(`return [...document.querySelectorAll('#directory button')].map(node=>node.textContent)`), ['样页 · 事项列表', '样页 · 输入事项']);
   await click(page, '样页 · 输入事项'); assert.match(await page.run(`return document.querySelector('#preview').src`), /screen=web-create&state=default/);
   assert.equal(await page.run(`return document.querySelector('.context').textContent`), '当前：主题×');
+  const previousState = fixture.holdNextState();
   await page.run(`document.querySelector('[data-kind="theme"] .choice-option').click();document.querySelector('[data-kind="style"] button:last-child').click();`);
   await fixture.started(9); assert.equal(fixture.responses.at(-1).body.mode, 'revise');
+  await previousState.captured;
   const themes = JSON.parse(read('themes-r1.json')); themes.round = 2;
   for (const item of themes.styles) {
     item.id = item.id.replace('r1-', 'r2-'); item.name += '新版'; item.tokens['--radius-sm'] = '6px';
@@ -138,6 +140,8 @@ test('Studio 浏览器：欢迎到复制指令，真实 feedback 分流、两轮
   for (const sample of themes.samples) sample.styleId = sample.styleId.replace('r1-', 'r2-');
   await fixture.produce(['themes-r2.json'], 3, 'waiting', { 'themes-r2.json': JSON.stringify(themes) });
   await wait(page, `document.querySelectorAll('.choice-option').length === 6 && $('[data-choice="r2-style-1"]')`);
+  previousState.release();
+  await wait(page, `$('[data-choice="r2-style-1"]') && $('[data-kind="style"] [data-action]:not(:disabled)')`);
   await page.run(`document.querySelector('[data-choice="r2-style-1"]').click();`);
   assert.match(await page.run(`return document.querySelector('#preview').src`), /theme=/);
   await wait(page, `$('#theme-choices').textContent.includes('确认，生成高保真')`); await checkpoint('11-theme-selected', { themeConfirm: true });
