@@ -13,6 +13,7 @@ import { checkProduction } from '../server/modules/deployment/production.mjs';
 import { productionFileInputs } from '../server/modules/deployment/production-inputs.mjs';
 import { loadServerConfig } from '../server/modules/config/index.mjs';
 import { accountFixture, httpFixture, request } from './accounts-fixture.mjs';
+import { createModelRouter } from '../server/modules/gateway/router.mjs';
 
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workbench-')));
@@ -107,6 +108,44 @@ test('workbench 复用默认路由覆盖与搜索开关，不从请求选模型'
   const f = await service(t, { env: { CODEX_MODEL: 'zhipu/glm-5.3', ZHIPU_API_KEY: 'fixture-zhipu-secret', AGENT_WEB_SEARCH: 'off' } });
   const response = await request(f.http, '/workbench?model=kimi/kimi-k2.7-code', { token: f.bob });
   assert.deepEqual(response.body.defaultModel, { id: 'zhipu/glm-5.3', displayName: f.config.registry.models['zhipu/glm-5.3'].displayName, image: false, webSearch: false });
+});
+
+test('workbench：imageInput 按默认对话路由试解析，遵守覆盖、启用状态和搜索要求', async t => {
+  const f = await service(t);
+  const registry = { providers: { sample: { type: 'openai', keyEnv: 'SAMPLE_API_KEY' }, vision: { type: 'openai', keyEnv: 'VISION_API_KEY' } }, models: {
+    'sample/text': { purposes: ['chat'], inputs: ['text'], nativeTools: ['web_search'] },
+    'vision/image': { purposes: ['chat'], inputs: ['text', 'image'] },
+  }, routes: { chat: ['sample/text', 'vision/image'] } };
+  f.config.registry = registry;
+  for (const [environment, webSearch, expected] of [
+    [{ SAMPLE_API_KEY: 'fixture', VISION_API_KEY: 'fixture' }, false, true],
+    [{ SAMPLE_API_KEY: 'fixture' }, false, false],
+    [{ SAMPLE_API_KEY: 'fixture', VISION_API_KEY: 'fixture', CODEX_MODEL: 'sample/text' }, false, false],
+    [{ SAMPLE_API_KEY: 'fixture', VISION_API_KEY: 'fixture' }, true, false],
+  ]) {
+    f.config.launch.router = createModelRouter(registry, environment, { webSearch });
+    const response = await request(f.http, '/workbench', { token: f.bob });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.defaultModel.image, false, '默认模型本身的能力保持不变');
+    assert.equal(response.body.imageInput, expected);
+    assert.equal(JSON.stringify(response.body).includes('fixture'), false, '不返回配置环境值');
+  }
+  registry.routes.chat = ['sample/text'];
+  f.config.launch.router = createModelRouter(registry, { SAMPLE_API_KEY: 'fixture', VISION_API_KEY: 'fixture' });
+  assert.equal((await request(f.http, '/workbench', { token: f.bob })).body.imageInput, false, '不使用默认路由外的图片模型');
+});
+
+test('workbench：直连 imageInput 只依据当前模型 spec.inputs，不依据原生目录猜测', async t => {
+  const f = await service(t);
+  delete f.config.launch.router;
+  f.config.launch.model = 'direct-model';
+  f.config.launch.catalog = { models: [{ slug: 'direct-model', input_modalities: ['text', 'image'] }] };
+  for (const spec of [{ inputs: ['text', 'image'] }, { inputs: ['text'] }, { inputModalities: ['text', 'image'] }, undefined]) {
+    f.config.registry.models['direct-model'] = spec;
+    const response = await request(f.http, '/workbench', { token: f.bob });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.imageInput, spec?.inputs?.includes('image') || false);
+  }
 });
 
 test('管理员 readiness 沿用认证、来源与限流，普通用户不能通过参数冒充管理员', async t => {

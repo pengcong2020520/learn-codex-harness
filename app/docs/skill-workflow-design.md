@@ -131,7 +131,7 @@ POST /messages { threadId, text, workflow, params, attachments? }
 
 非 `chat` 的 Workflow 任务不接受追加消息（`mode: "append"`），提交会返回 403。等待确认的当前步需要修改时，使用 `POST /tasks/revise`、CLI `/revise <意见>` 或网页“修改”，沿用本步权限重做。
 
-`attachments` 是最多 4 个 `inputs/uploads/` 路径的数组，提交时验证当前用户的文件，派发时重新读取。Workflow 第一步携带附件：文本只注入路径提示，正文由模型按需读取；图片作为 Codex `image` 输入发送，并校验所选模型的 `inputs`。后续步骤沿用会话历史。附件路径保存在任务的 `attachments` 字段（`023-task-attachments.sql`）；`npm run up` 会执行迁移。
+`attachments` 是最多 4 个 `inputs/uploads/` 路径的数组，提交时验证当前用户的文件，派发时重新读取。Workflow 第一步携带附件：文本只注入路径提示，正文由模型按需读取；图片作为 Codex `image` 输入发送，并校验所选模型的 `inputs`。网关模式下，带图片的步骤（含本步待合并的 feedback 附件）会自动选能看图的模型，无需为了可选参考图给步骤写死 `needs.image`；没有可用模型时，在 `config/models.json` 声明图片模型的 `inputs` 并启用、纳入所用路由，或去掉图片后重试，具体规则见 [模型路由](model-gateway.md#步骤能力与推理档位)。后续步骤沿用会话历史。附件路径保存在任务的 `attachments` 字段（`023-task-attachments.sql`）；`npm run up` 会执行迁移。
 
 `POST /tasks/feedback` 接受 `{ taskId, text, context?, attachments? }`，仅任务属主可操作。`text` 为非空意见，最多 2000 字符；`context` 只接受 `screen`、`state`、`label` 字符串，按此顺序用 ` / ` 拼接，合计最多 200 字，作为 `【当前：…】` 前缀。附件沿用上述路径、数量、大小与模型能力规则。
 

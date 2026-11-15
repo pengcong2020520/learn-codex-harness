@@ -100,6 +100,11 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
         const workflowActivity = workflows.some(item => item.interactive || item.single) ? await messages.workflowActivity(workflows) : null;
         const visibleKnowledge = knowledge ? await knowledge.list() : [];
         const catalog = config.launch.router?.catalog(), id = catalog?.defaults.chat || config.launch.model;
+        let imageInput = (config.registry?.models[id]?.inputs || []).includes('image');
+        if (config.launch.router) {
+          try { config.launch.router.resolve({ needs: { image: true } }); imageInput = true; }
+          catch { imageInput = false; }
+        }
         const model = catalog?.models.chat.find(model => model.id === id);
         const nativeModel = config.launch.catalog?.models.find(model => model.slug === id);
         const defaultModel = id ? { id, displayName: nativeModel?.display_name || config.registry?.models[id]?.displayName || id,
@@ -111,7 +116,7 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
           skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
           outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows } : null,
           ...(workflowActivity ? { workflowActivity } : {}),
-          defaultModel, viewer: { username: identity.user.username, admin: identity.role === 'admin' },
+          defaultModel, imageInput, viewer: { username: identity.user.username, admin: identity.role === 'admin' },
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }

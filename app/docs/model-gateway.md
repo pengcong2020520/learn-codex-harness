@@ -110,7 +110,14 @@ npm run gateway:check -- --model kimi/kimi-k2.7-code --search
 }
 ```
 
-`image` 表示需要看图，`contextTokens` 是正整数，表示需要的上下文长度。configure 和 dispatch 都把 needs 传给路由。路由还接受 `needs.nativeTools` 字符串数组；搜索开启时自动合并 `web_search`，不允许步骤取消这项要求。看图能力以清单的 `inputs` 为准；路由不根据厂商名称或用户文本猜测能力，也不自动估算上下文长度。消息附件中的图片会在派发时按最终选中的模型检查，不支持则在调用模型前拒绝；步骤、任务、默认路由与预算降级的选择规则仍生效，在途追加沿用当前轮次模型。
+`image` 表示需要看图，`contextTokens` 是正整数，表示需要的上下文长度。configure 和 dispatch 都把 needs 传给路由。路由还接受 `needs.nativeTools` 字符串数组；搜索开启时自动合并 `web_search`，不允许步骤取消这项要求。看图能力以清单的 `inputs` 为准；路由不根据厂商名称或用户文本猜测能力，也不自动估算上下文长度。网关模式在派发时按本步实际附件（首步附件及本步待合并的 feedback 附件）自动追加 `needs.image: true`，选择能看图的模型，无图片时保留步骤原有要求。步骤、任务、默认路由、`CODEX_MODEL` 覆盖与预算降级的选择规则仍生效；当前选择范围内没有满足要求的模型时，本步失败且不自动重试。请在 `config/models.json` 为支持图片输入的对话模型声明 `inputs: ["text","image"]`，启用其服务商并将模型纳入所用路由或场景；若具体模型或 `CODEX_MODEL` 固定了纯文本模型，需更换该选择，或去掉图片后重试。直连模式仍按当前模型检查，在途追加沿用当前轮次模型。
+
+带图片的步骤因 `MODEL_UNAVAILABLE` 失败时，保留错误码，不自动重试，也不发送 `turn/start`，提示按实际选择区分：
+
+- 步骤或任务最终指定了具体模型（`step.model` 或 `job.model` 含 `/`），且其 `inputs` 不支持图片：`这一步指定的模型 <模型 id> 不支持看图，不能处理图片。请改用能看图的模型，或去掉图片后重试。`
+- 场景或默认路由没有可用的能看图的候选：`这一步带有图片，但没有可用的能看图的模型。请在 config/models.json 为支持图片输入的模型标注 inputs 并启用它，或去掉图片后重试。` `CODEX_MODEL` 属于默认路由的覆盖，使用这一文案。
+
+`GET /workbench` 的顶层 `imageInput` 表示默认对话路由能否接收图片，前端可据此禁用上传参考图入口：网关模式按默认路由和 `needs.image: true` 试选，包含 `CODEX_MODEL` 与搜索约束；直连模式只检查当前模型 spec 的 `inputs`。它与 `defaultModel.image`（默认模型自身的能力）含义不同，也不保证步骤或任务指定的其他模型可以看图。
 
 `effort` 可选 `none / minimal / low / medium / high / xhigh / max / ultra`。configure 时检查选中模型的 `reasoningLevels`；没有声明就报“不支持调推理档位”，未包含所选值也报错。dispatch 在任务选择或预算降级之后再次核验，把 effort 传给 `turn/start`。未指定时使用当前模型声明的默认推理档位或 null，避免继承上一步的参数。上例需选中的模型支持 high；例如搜索开启选到未声明 reasoningLevels 的 Kimi 时，应移除 effort。按步骤选模型、声明 needs 或 effort 都需要网关模式。
 
