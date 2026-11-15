@@ -22,6 +22,16 @@ export function validateCheck(body) {
   return { html: body.html, viewports };
 }
 
+export function chromiumEnv(directory) {
+  // 容器根文件系统只读，Crashpad 需要可写的 HOME 与 XDG 目录；只传启动必需的环境变量。
+  const config = path.join(directory, '.config'), cache = path.join(directory, '.cache');
+  for (const target of [config, cache]) fs.mkdirSync(target, { mode: 0o700 });
+  return {
+    PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TMPDIR: directory, HOME: directory,
+    XDG_CONFIG_HOME: config, XDG_CACHE_HOME: cache, CHROME_PATH: '/usr/bin/chromium',
+  };
+}
+
 // 整个进程组退出后才释放串行槽，避免超时的 Chromium 继续占用内存。
 export async function runCheck({ html, viewports }, signal) {
   signal.throwIfAborted();
@@ -38,7 +48,7 @@ export async function runCheck({ html, viewports }, signal) {
       let result, failure;
       child = fork(new URL('./worker.mjs', import.meta.url), [], {
         detached: true, cwd: directory, execArgv: [],
-        env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TMPDIR: directory, CHROME_PATH: '/usr/bin/chromium' },
+        env: chromiumEnv(directory),
         stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
       });
       const abort = () => { failure = signal.reason; kill(); };

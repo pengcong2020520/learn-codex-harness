@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { chromeArgs } from './worker.mjs';
+import { chromiumEnv } from './service.mjs';
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'design-network-'));
 try {
@@ -20,7 +21,7 @@ try {
   const { stdout } = await promisify(execFile)('/usr/bin/chromium', [
     '--headless=new', '--disable-gpu', '--disable-background-networking', ...chromeArgs,
     `--user-data-dir=${path.join(directory, 'profile')}`, '--dump-dom', '--virtual-time-budget=3000', pathToFileURL(file).href,
-  ], { timeout: 60000, maxBuffer: 2 * 1024 * 1024 });
+  ], { env: chromiumEnv(directory), timeout: 60000, maxBuffer: 2 * 1024 * 1024 });
   assert.match(stdout, /<body id="result">已阻断,已阻断,已阻断<\/body>/);
   process.stdout.write('Chromium 网络验收通过：域名、直接 IP 和内部节点均不可访问。\n');
 } finally { fs.rmSync(directory, { recursive: true, force: true }); }

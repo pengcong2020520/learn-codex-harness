@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createFileTools } from '../server/modules/data/files.mjs';
 import { createDesignTools, summarizeDesign } from '../server/modules/design/index.mjs';
 import { checkAgentPackage } from '../server/modules/design/package.mjs';
-import { createCheckHandler, createCheckQueue, validateCheck, HTML_LIMIT } from '../server/design-check/service.mjs';
+import { chromiumEnv, createCheckHandler, createCheckQueue, validateCheck, HTML_LIMIT } from '../server/design-check/service.mjs';
 import { nodeKeyHash, nodeHeaders } from '../server/modules/sharding/node-auth.mjs';
 import { createToolService } from '../server/modules/tools/loader.mjs';
 import { AgentDefinition } from '../server/modules/agents/index.mjs';
@@ -116,6 +116,22 @@ test('布局服务不可用、非法响应、超时均不伪造成功或重试',
   assert.throws(() => summarizeDesign({ ...cleanReport(), errors: 1 }), /报告格式无效/);
   fs.writeFileSync(path.join(files.workspace, 'inputs/page.html'), 'x'.repeat(HTML_LIMIT + 1));
   await assert.rejects(createDesignTools({ files, env }).check_design({ path: 'inputs/page.html' }), /上限/);
+});
+
+test('Chromium 环境仅含白名单变量，HOME 与 XDG 位于临时目录且 XDG 权限为 0700', t => {
+  const directory = tempRoot(t);
+  const environment = chromiumEnv(directory);
+  assert.deepEqual(Object.keys(environment).sort(), ['PATH', 'LANG', 'TMPDIR', 'HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'CHROME_PATH'].sort());
+  assert.deepEqual(environment, {
+    PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TMPDIR: directory, HOME: directory,
+    XDG_CONFIG_HOME: path.join(directory, '.config'), XDG_CACHE_HOME: path.join(directory, '.cache'),
+    CHROME_PATH: '/usr/bin/chromium',
+  });
+  for (const key of ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME']) {
+    const stat = fs.statSync(environment[key]);
+    assert.equal(stat.isDirectory(), true);
+    assert.equal(stat.mode & 0o777, 0o700);
+  }
 });
 
 test('检查接口按解码后的 UTF-8 字节限制 2 MiB，并严格验证视口', () => {
