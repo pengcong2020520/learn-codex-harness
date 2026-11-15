@@ -27,7 +27,7 @@ npm run up
 
 同一个服务根目录一次运行一个 Agent，切换示例前停止原服务。切换到不同 Agent 不会继承原 Agent 的会话权限；原会话仍保留。
 
-`bindings.sources.<id>.readOnly=true` 是显式只读策略；目录名字不决定权限。文本文件工具限定 md / txt / html、create-only、相对路径、禁止链接与目录穿越。Wiki 路径不能用普通文件工具绕过知识门禁，KB 原文不能由 Agent 的 write_file 改写。知识库原文/Wiki 根不能彼此重叠，服务启动还检查已登记但未挂载的知识库。
+`bindings.sources.<id>.readOnly=true` 是显式只读策略；目录名字不决定权限。文本文件工具支持 md / txt / html；json / js / css 只在 `outputs.directory` 内、且经 `outputs.formats` 显式声明时开放，读取还需资料源授权，JSON 写入前校验合法性。文本均限制 256 KiB、create-only、相对路径，禁止链接与目录穿越；预览、上传及草稿各自遵守独立格式规则。Wiki 路径不能用普通文件工具绕过知识门禁，KB 原文不能由 Agent 的 write_file 改写。知识库原文/Wiki 根不能彼此重叠，服务启动还检查已登记但未挂载的知识库。
 
 静态检查拒绝未知配置字段、缺失引用、只读/输出重叠、重复或缺失 KB 挂载、缺失工具执行函数等。动态原生 Skill 发现、数据库状态和模型调用属于后续验收，`check` 成功不等于真实模型可用。
 

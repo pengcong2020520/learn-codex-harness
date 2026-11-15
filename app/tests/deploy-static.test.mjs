@@ -63,6 +63,7 @@ test('Dockerfile：缺失或相对部署路径在安装依赖前中文报错', (
 
 test('static: E2E 直接 Compose 再启动并以同一账号登录，之后保留三节点扩容', () => {
   const source = read('scripts/e2e-compose.sh');
+  assert.match(source, /docker compose exec -T node-a node --test tests\/design-check-uid.integration.mjs\n(?:#[^\n]*\n)?docker compose exec -T node-a node --test tests\/uid.integration.mjs\ndocker compose exec -T design-check node server\/design-check\/network-check.mjs/);
   assert.match(source, /docker compose stop\ndocker compose up -d --wait\nprintf '%s\\n' "\$password" \| node scripts\/e2e-check.mjs --login-only\nSETUP_ADMIN_PASSWORD="\$password" npm run cluster:enable -- --yes/);
 });
 

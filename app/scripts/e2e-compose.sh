@@ -36,6 +36,8 @@ E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
 docker compose --profile studio up -d --build --wait design-check
 docker compose exec -T node-a node scripts/design-check-e2e.mjs
 docker compose exec -T node-a node --test tests/design-check-uid.integration.mjs
+# node-a 权限与 uid 验收容器一致，在此运行让 CI 覆盖真实 uid。
+docker compose exec -T node-a node --test tests/uid.integration.mjs
 docker compose exec -T design-check node server/design-check/network-check.mjs
 docker compose exec -T design-check node server/design-check/lifecycle-check.mjs
 npm run -s test:deploy:integration

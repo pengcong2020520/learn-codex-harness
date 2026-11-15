@@ -123,7 +123,11 @@ export function createFileTools(
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(draft ? /\.(json|md)$/ : report ? /\.json$/ : upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+    const format = path.extname(relative).slice(1).toLowerCase();
+    // 新增文本格式仅供显式声明的产物使用，不能扩大上传、预览或其他资料目录的范围。
+    const outputText = !draft && !report && !upload && !preview && !binary &&
+      ["json", "js", "css"].includes(format) && outputs && covers(outputs.directory, relative) && outputs.formats.includes(format);
+    if (file && (parts.length < 2 || (!outputText && !(draft ? /\.(json|md)$/ : report ? /\.json$/ : upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative))))
       throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
@@ -396,6 +400,9 @@ export function createFileTools(
       }
       if (Buffer.byteLength(content, "utf8") > (binary ? MAX_MEDIA_BYTES : MAX_BYTES))
         throw new Error(binary ? "媒体正文不能超过 128 MiB。" : "写入内容不能超过 256 KiB。");
+      if (!binary && path.extname(relative).toLowerCase() === ".json") {
+        try { JSON.parse(content); } catch { throw new AppError("产物 JSON 格式不正确。", 400); }
+      }
       if (!binary && path.extname(relative).toLowerCase() === ".html" && outputs?.requiredChecks?.includes("format") && !validHtml(content))
         throw new Error("HTML 格式检查未通过：需要可解析且包含 html 或 body 元素。");
       const file = resolve(relative, { file: true, createParents: true, binary });

@@ -84,6 +84,43 @@ test('0600：服务启动成功，10001 可以读取，10002 被拒绝；重启�
 import { createUserFileTools } from '../server/modules/accounts/workspace.mjs';
 import { runOwner } from '../server/modules/accounts/context.mjs';
 
+test('JSON/JS/CSS 产物：隔离模式按声明读写，属主辅助进程可读回且跨用户拒绝', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'output-formats-uid-')); fs.chmodSync(root, 0o755);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owners = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  const options = { workspaceDir: path.join(root, 'workspace'),
+    sources: [{ id: 'output', locator: 'outputs', actions: ['read'] }, { id: 'input', locator: 'inputs', actions: ['read', 'create'] }],
+    outputs: { directory: 'outputs/design', formats: ['json', 'js', 'css'] } };
+  const files = createUserFileTools(root, options);
+  for (const [index, owner] of owners.entries()) {
+    const uid = 10001 + index;
+    prepareDirectories(root, { user_id: owner, uid, codex_home: path.join(root, '.data/users', owner, 'codex') }, { isolated: true });
+    await runOwner(owner, async () => {
+      for (const [format, content] of [['json', JSON.stringify({ value: index })], ['js', `export const value = ${index};`], ['css', `body { z-index: ${index}; }`]]) {
+        const relative = `outputs/design/package-v1/file.${format}`;
+        files.write_file({ path: relative, content });
+        assert.equal(files.read_file({ path: relative }).content, content);
+        const file = path.join(files.workspace, relative);
+        assert.equal(fs.statSync(file).uid, uid);
+        assert.equal((await readAsUser(uid, file, { maxBytes: 256 * 1024 })).toString(), content);
+        await assert.rejects(readAsUser(uid === 10001 ? 10002 : 10001, file, { maxBytes: 256 * 1024 }), error => error.code === 'EACCES');
+        assert.throws(() => files.write_file({ path: relative, content }), error => error.status === 409);
+        assert.throws(() => files.write_file({ path: `inputs/file.${format}`, content }), /只支持/);
+        assert.throws(() => files.read_preview({ path: relative }), /只支持/);
+        const undeclared = createUserFileTools(root, { ...options, outputs: { ...options.outputs, formats: ['md'] } });
+        assert.throws(() => undeclared.write_file({ path: relative, content }), /格式不在允许列表/);
+        assert.throws(() => undeclared.read_file({ path: relative }), /只支持/);
+        const writeOnly = createUserFileTools(root, { ...options, sources: [] });
+        assert.throws(() => writeOnly.read_file({ path: relative }), /未授权/);
+      }
+      const relative = 'outputs/design/invalid.json';
+      assert.throws(() => files.write_file({ path: relative, content: '{' }), error => error.status === 400 && error.message === '产物 JSON 格式不正确。');
+      assert.equal(fs.existsSync(path.join(files.workspace, relative)), false);
+    });
+  }
+  runOwner(owners[0], () => assert.equal(files.read_file({ path: 'outputs/design/package-v1/file.json' }).content, '{"value":0}'));
+});
+
 test('预览文件：真实 uid 属主保持不变，拒绝跨用户路径及符号链接', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-uid-')); fs.chmodSync(root, 0o755);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -146,7 +183,13 @@ test('草稿：真实 uid 原子覆盖保持属主，其他 uid 无法读取，�
       assert.equal(files.read_draft({ name: 'brief.json' }).content, JSON.stringify({ value: index + 1 }));
     });
     const file = path.join(paths.workspaceDir, 'inputs/drafts/brief.json');
-    assert.equal(fs.statSync(file).uid, uid); assert.equal(fs.statSync(file).mode & 0o777, 0o660);
+    assert.equal(fs.statSync(file).uid, uid);
+    // persist 请求 0660，实际受 umask 约束（容器 022 下为 0640），这里断言与 umask 无关的安全要求。
+    const mode = fs.statSync(file).mode;
+    assert.equal(mode & 0o600, 0o600);
+    assert.equal(mode & 0o007, 0);
+    assert.equal(mode & 0o111, 0);
+    assert.equal(mode & 0o070 & ~0o060, 0);
     const read = targetUid => {
       const child = userSpawn(process.execPath, ['-e', "require('node:fs').readFileSync(process.argv[1])", file], { uid: targetUid, gid: targetUid, isolated: true });
       return spawnSync(child.command, child.args, { ...child.options, cwd: '/tmp', env: { PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
