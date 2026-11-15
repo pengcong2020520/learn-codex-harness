@@ -891,3 +891,61 @@ test('真实 PG：管理员并发接管仅一次成功，审计通知与锁释�
   assert.equal((await r.pool.query("SELECT * FROM agent_data.notifications WHERE instance_id=$1 AND task_id='held' AND status='cancelled'", [r.scope.instanceId])).rowCount, 1);
   await actors[winner].create({ ...job('released'), threadId: `admin-thread-${winner}`, workflow: 'design', single: true });
 });
+
+
+test('真实 PG：按工作流接管校验属主角色、占用时间、运行态，并发只提交一次', async t => {
+  const r = await setup(t), pool = await openDatabase(databaseUrl); t.after(() => pool.end());
+  await r.repo.query("UPDATE agent_data.users SET role='admin' WHERE instance_id=$1 AND id=$2");
+  const actors = [];
+  for (const [index, connection] of [r.pool, pool].entries()) {
+    const scope = { ...r.scope, ownerId: randomUUID() }, repo = new Repository(connection, scope);
+    await repo.initialize(); await repo.bind(`operator-${index}`, 'v1', r.root);
+    await repo.query("UPDATE agent_data.users SET username=$3,role='admin' WHERE instance_id=$1 AND id=$2", [`operator-${index}`]);
+    actors.push(new PostgresJobs(connection, scope));
+  }
+  await r.jobs.create({ ...job('workflow-held'), workflow: 'design', single: true });
+  const { startedAt } = await r.jobs.workflowOccupancy('design');
+  const cancel = (store = actors[0], time = startedAt, workflows = ['design']) => store.cancelTakeoverWorkflow('design', time, workflows);
+  assert.equal(await actors[0].takeoverWorkflowOwner('design', ['design']), r.scope.ownerId);
+  assert.equal(await actors[0].takeoverWorkflowOwner('design', []), undefined);
+  await assert.rejects(cancel(actors[0], startedAt, []), { status: 404 });
+  await assert.rejects(cancel(actors[0], startedAt - 1), { status: 409, message: '占用已变化，请刷新后核对' });
+  await assert.rejects(cancel(r.jobs), { status: 404 });
+  await actors[0].query("UPDATE agent_data.users SET role='user' WHERE instance_id=$1 AND id=$2");
+  await assert.rejects(cancel(), { status: 403 });
+  await actors[0].query("UPDATE agent_data.users SET role='admin' WHERE instance_id=$1 AND id=$2");
+  await r.repo.query("UPDATE agent_data.users SET role='user' WHERE instance_id=$1 AND id=$2");
+  await assert.rejects(cancel(), { status: 404 });
+  await r.repo.query("UPDATE agent_data.users SET role='admin' WHERE instance_id=$1 AND id=$2");
+  for (const status of ['starting', 'running', 'steering']) {
+    await r.jobs.patch('workflow-held', { status }); await assert.rejects(cancel(), { status: 409 });
+  }
+  await r.jobs.patch('workflow-held', { status: 'failed' });
+  const results = await Promise.allSettled(actors.map(store => cancel(store)));
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.deepEqual(results.find(result => result.status === 'fulfilled').value, { id: 'workflow-held', threadId: 'thread-1', userId: r.scope.ownerId, status: 'cancelled' });
+  assert.equal(results.find(result => result.status === 'rejected').reason.status, 404);
+  assert.equal(await r.jobs.workflowOccupancy('design'), null);
+  assert.equal((await r.pool.query("SELECT * FROM agent_data.permission_events WHERE instance_id=$1 AND resource_id='workflow-held'", [r.scope.instanceId])).rowCount, 1);
+  assert.equal((await r.pool.query("SELECT * FROM agent_data.notifications WHERE instance_id=$1 AND task_id='workflow-held' AND status='cancelled'", [r.scope.instanceId])).rowCount, 1);
+});
+
+test('真实 PG：失败步骤 patch 重排清理旧结果，解除暂停后可投递且并发只增加一次计数', async t => {
+  const r = await setup(t), allowed = ['failed', 'interrupted', 'needs-review', 'unconfirmed'];
+  for (const status of allowed) {
+    const id = `retry-${status}`;
+    await r.jobs.create({ ...job(id), workflow: 'design' });
+    await r.jobs.patch(id, { status, error: '失败', checks: [{ id: 'format', passed: false }], turnId: 'old', reviseCount: 2 });
+    await r.jobs.pause('thread-1');
+    const fields = { status: 'queued', note: '核对后重新生成', reviseCount: 3, error: null, checks: null, turnId: null };
+    const results = await Promise.all([r.jobs.patch(id, fields, allowed), r.jobs.patch(id, fields, allowed)]);
+    assert.deepEqual(results.sort(), [false, true]);
+    await r.jobs.pause('thread-1', false);
+    const row = await r.jobs.get(id);
+    for (const [key, value] of Object.entries(fields)) assert.deepEqual(row[key], value);
+    assert.equal(row.step, 0); assert.equal(await r.jobs.paused('thread-1'), false);
+    assert.ok((await r.jobs.deliveries()).some(row => row.thread_id === 'thread-1'));
+    await r.jobs.patch(id, { status: 'completed' });
+    assert.equal(await r.jobs.patch(id, fields, allowed), false);
+  }
+});

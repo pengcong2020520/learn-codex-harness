@@ -234,3 +234,23 @@ test('skill_read：隔离模式读取用户安装的 schemas JSON 与 themes Mar
     await assert.rejects(readAsUser(10002, target, { maxBytes: 128 * 1024, isolated: true }), error => error.code === 'EACCES');
   }
 });
+
+
+test('草稿权限门：隔离 uid 的 user 成功写入，task 拒绝且保留正文', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const { PermissionGate } = await import('../server/modules/permissions/index.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'draft-gate-uid-')); fs.chmodSync(root, 0o755);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owner = '11111111-1111-4111-8111-111111111111', uid = 10001;
+  const paths = prepareDirectories(root, { user_id: owner, uid, codex_home: path.join(root, '.data/users', owner, 'codex') }, { isolated: true });
+  const sources = [{ id: 'inputs', locator: 'inputs', actions: ['read'] }];
+  const files = createUserFileTools(root, { workspaceDir: path.join(root, 'workspace'), sources });
+  const agent = { assertCurrent() {}, sources, outputs: { directory: 'outputs' }, definition: { agent: { id: 'test' }, bindings: {} } };
+  const gate = new PermissionGate({ scope: { ownerId: owner }, agent }); t.after(() => gate.close());
+  const write = content => { gate.check('draft', { path: 'inputs/drafts/brief.json' }); files.write_draft({ name: 'brief.json', content: Buffer.from(content) }); };
+  await gate.run(gate.user(), async () => write('{"value":1}'));
+  gate.start({ id: 'task', userId: owner, threadId: 'thread' }); gate.started('thread', 'turn');
+  await gate.run(gate.forTurn('thread', 'turn'), async () => assert.throws(() => write('{"value":2}'), { status: 403 }));
+  const file = path.join(paths.workspaceDir, 'inputs/drafts/brief.json');
+  assert.equal(fs.statSync(file).uid, uid);
+  assert.equal((await readAsUser(uid, file, { maxBytes: 256 * 1024 })).toString(), '{"value":1}');
+});

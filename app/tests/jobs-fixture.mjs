@@ -23,12 +23,17 @@ export class TestJobs {
     const job = this.state.jobs.find(job => job.single && job.workflow === workflow && !['completed', 'cancelled'].includes(job.status));
     return job ? { taskId: job.userId === currentIdentity()?.userId ? job.id : null, username: job.username || 'fixture', startedAt: job.createdAt } : null;
   }
-  async cancelTakeover(threadId, taskId, workflows) {
+  async cancelTakeoverWorkflow(workflow, startedAt, workflows) {
+    return this.cancelTakeover(null, null, workflows, { workflow, startedAt });
+  }
+  async cancelTakeover(threadId, taskId, workflows, byWorkflow) {
     const actor = this.users?.find(user => user.id === currentIdentity()?.userId && user.role === 'admin' && !user.disabled_at);
     if (!actor) throw new AppError('只有管理员可以接管结束任务。', 403);
-    const job = this.state.jobs.find(job => job.id === taskId && job.threadId === threadId && job.userId !== actor.id
+    const job = this.state.jobs.find(job => (byWorkflow ? job.workflow === byWorkflow.workflow && !['completed', 'cancelled'].includes(job.status) : job.id === taskId && job.threadId === threadId) && job.userId !== actor.id
       && job.single && workflows.includes(job.workflow) && this.users.some(user => user.id === job.userId && user.role === 'admin'));
-    if (!job) throw new AppError('任务不存在或不允许接管结束。', 404);
+    if (!job) throw new AppError(byWorkflow ? '任务不存在或不允许接管结束' : '任务不存在或不允许接管结束。', 404);
+    if (byWorkflow && job.createdAt !== byWorkflow.startedAt) throw new AppError('占用已变化，请刷新后核对', 409);
+    ({ id: taskId, threadId } = job);
     if (['starting', 'running', 'steering'].includes(job.status)) throw new AppError('任务正在运行，请等这一步完成或失败后再操作。', 409);
     if (!['queued', 'waiting', 'proposed', 'failed', 'needs-review', 'unconfirmed'].includes(job.status)) throw new AppError('当前状态不能接管结束，请刷新后核对任务记录。', 409);
     job.status = 'cancelled'; job.error = `已被管理员 ${actor.username} 结束`;

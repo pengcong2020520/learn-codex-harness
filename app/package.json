@@ -64,7 +64,7 @@
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs",
     "test:protocol:research": "node scripts/test-research-protocol.mjs",
-    "test:web": "node --test tests/web.browser.mjs tests/layout-check.browser.mjs",
+    "test:web": "node --test tests/web.browser.mjs tests/layout-check.browser.mjs tests/studio-ui.browser.mjs",
     "setup": "node scripts/setup.mjs",
     "agent:new": "node scripts/agent-new.mjs",
     "agent:check": "node scripts/agent-check.mjs",
@@ -88,5 +88,8 @@
   },
   "optionalDependencies": {
     "chromadb": "3.5.0"
+  },
+  "devDependencies": {
+    "marked": "17.0.6"
   }
 }

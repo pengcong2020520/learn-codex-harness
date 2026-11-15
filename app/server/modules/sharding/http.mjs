@@ -36,10 +36,11 @@ async function ownerForRequest(app, request, identity, body) {
   if (request.method === 'POST' && url.pathname === '/tasks/cancel' && identity.role === 'admin' && body?.length) {
     let value;
     try { value = JSON.parse(body); } catch {}
-    if (value?.takeover === true && typeof value.taskId === 'string' && typeof value.threadId === 'string') {
+    const byWorkflow = value?.takeover === true && typeof value.workflow === 'string' && typeof value.startedAt === 'number' && !Object.hasOwn(value, 'threadId') && !Object.hasOwn(value, 'taskId');
+    if (byWorkflow || (value?.takeover === true && typeof value.taskId === 'string' && typeof value.threadId === 'string' && !Object.hasOwn(value, 'workflow') && !Object.hasOwn(value, 'startedAt'))) {
       const workflows = app.config.agent?.workflows?.list().filter(item => item.single && item.access === 'admin').map(item => item.id) || [];
       // 只路由到数据库认定的属主；目标节点仍须验证请求身份、工作流和任务状态。
-      const owner = await runIdentity(identity, () => app.data.jobs.takeoverOwner(value.threadId, value.taskId, workflows));
+      const owner = await runIdentity(identity, () => byWorkflow ? app.data.jobs.takeoverWorkflowOwner(value.workflow, workflows) : app.data.jobs.takeoverOwner(value.threadId, value.taskId, workflows));
       if (owner) return owner;
     }
   }

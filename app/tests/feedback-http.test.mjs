@@ -58,3 +58,30 @@ test('cancel HTTP：接管沿用认证、来源与限流，不能伪造管理员
   t.mock.method(limits, 'request', owner => { assert.equal(owner, OWNER_B); throw Object.assign(new Error('请求过于频繁，请稍后再试。'), { status: 429 }); });
   assert.equal((await request(http, '/tasks/cancel', { body, token: bob })).statusCode, 429);
 });
+
+test('workflow 接管与 retry HTTP：真实入口、字段校验、并发标记和属主门禁', async t => {
+  const { accounts, store: users } = await accountFixture(), store = new TestJobs(), sessions = new EventEmitter();
+  const config = { launch: {}, deployment: {}, agent: { workflows: defineWorkflows({ workflows: [{ id: 'design', single: true, access: 'admin' }] }) } };
+  store.users = users.users; sessions.ensure = async () => {};
+  const messages = new MessageService({ rpc: new EventEmitter(), sessions, store, config });
+  messages.publish = async () => {}; messages.wake = async () => {}; t.after(() => messages.close());
+  store.create({ id: 'held', userId: OWNER_A, threadId: 'thread', workflow: 'design', single: true, createdAt: 123, text: '设计', mode: 'enqueue' });
+  store.patch('held', { status: 'unconfirmed' }); store.pause('thread');
+  const http = httpFixture(accounts, { sessions, messages, config }); t.after(() => http.close());
+  const alice = (await accounts.login({ username: 'alice', password: 'fixture-password' }, 'fixture')).token;
+  const bob = (await accounts.login({ username: 'bob', password: 'fixture-password' }, 'fixture')).token;
+  const retry = { threadId: 'thread', taskId: 'held', text: '重新核对' }, body = { workflow: 'design', startedAt: 123, takeover: true };
+  assert.equal((await request(http, '/tasks/retry', { body: retry })).statusCode, 401);
+  assert.equal((await request(http, '/tasks/retry', { body: retry, token: bob })).statusCode, 404);
+  const queued = await request(http, '/tasks/retry', { body: retry, token: alice });
+  assert.equal(queued.statusCode, 200); assert.equal(queued.body.status, 'queued'); assert.equal(store.paused('thread'), false);
+  assert.equal((await request(http, '/tasks/cancel', { body, token: bob })).statusCode, 403);
+  users.users[1].role = 'admin';
+  assert.equal((await request(http, '/tasks/cancel', { body: { ...body, taskId: 'held' }, token: bob })).statusCode, 400);
+  const stale = await request(http, '/tasks/cancel', { body: { ...body, startedAt: 122 }, token: bob });
+  assert.equal(stale.statusCode, 409); assert.equal(stale.body.error.message, '占用已变化，请刷新后核对');
+  const missing = await request(http, '/tasks/cancel', { body: { ...body, workflow: 'chat' }, token: bob });
+  assert.equal(missing.statusCode, 404); assert.equal(missing.body.error.message, '任务不存在或不允许接管结束');
+  const result = await request(http, '/tasks/cancel', { body, token: bob });
+  assert.equal(result.statusCode, 200); assert.deepEqual(result.body, { status: 'cancelled' });
+});

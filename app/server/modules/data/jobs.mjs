@@ -91,31 +91,50 @@ export class PostgresJobs extends Repository {
       [threadId, taskId, workflows])).rows[0];
     return row?.owner_id;
   }
-  async cancelTakeover(threadId, taskId, workflows) {
+  async takeoverWorkflowOwner(workflow, workflows) {
+    const row = (await this.query(`SELECT c.owner_id FROM agent_data.tasks t
+      JOIN agent_data.conversations c ON c.instance_id=t.instance_id AND c.id=t.thread_id
+      JOIN agent_data.users u ON u.instance_id=c.instance_id AND u.id=c.owner_id
+      WHERE t.instance_id=$1 AND c.owner_id<>$2 AND t.workflow=$3 AND t.workflow=ANY($4::text[])
+      AND t.single_workflow AND t.status NOT IN ('completed','cancelled') AND u.role='admin'
+      AND EXISTS(SELECT 1 FROM agent_data.users a WHERE a.instance_id=$1 AND a.id=$2 AND a.role='admin' AND a.disabled_at IS NULL)`,
+      [workflow, workflows])).rows[0];
+    return row?.owner_id;
+  }
+  async cancelTakeoverWorkflow(workflow, startedAt, workflows) {
+    return this.cancelTakeover(null, null, workflows, { workflow, startedAt });
+  }
+  async cancelTakeover(threadId, taskId, workflows, byWorkflow) {
     return transaction(this.pool, async client => {
       const actor = (await this.query(`SELECT username FROM agent_data.users
         WHERE instance_id=$1 AND id=$2 AND role='admin' AND disabled_at IS NULL FOR SHARE`, [], client)).rows[0];
       if (!actor) throw new AppError("只有管理员可以接管结束任务。", 403);
       // 跨属主只取接管必需的标识；锁内核对状态，与派发和其他管理员的接管互斥。
-      const job = (await this.query(`SELECT t.id,t.thread_id AS "threadId",c.owner_id AS "userId",t.status
+      const selector = byWorkflow ? "t.workflow=$3 AND t.status NOT IN ('completed','cancelled') AND $4::text IS NULL" : 't.thread_id=$3 AND t.id=$4';
+      const job = (await this.query(`SELECT t.id,t.thread_id AS "threadId",c.owner_id AS "userId",t.status,t.created_at::float8 AS "createdAt"
         FROM agent_data.tasks t JOIN agent_data.conversations c ON c.instance_id=t.instance_id AND c.id=t.thread_id
         JOIN agent_data.users u ON u.instance_id=c.instance_id AND u.id=c.owner_id
-        WHERE t.instance_id=$1 AND c.owner_id<>$2 AND t.thread_id=$3 AND t.id=$4
+        WHERE t.instance_id=$1 AND c.owner_id<>$2 AND ${selector}
         AND t.single_workflow AND t.workflow=ANY($5::text[]) AND u.role='admin' FOR UPDATE OF t`,
-        [threadId, taskId, workflows], client)).rows[0];
-      if (!job) throw new AppError("任务不存在或不允许接管结束。", 404);
-      if (executing.includes(job.status)) throw new AppError("任务正在运行，请等这一步完成或失败后再操作。", 409);
-      if (!cancellable(true).includes(job.status)) throw new AppError("当前状态不能接管结束，请刷新后核对任务记录。", 409);
-      await this.query(`UPDATE agent_data.tasks SET status='cancelled',error=$5
-        WHERE instance_id=$1 AND $2::uuid IS NOT NULL AND id=$3 AND thread_id=$4`,
-        [taskId, threadId, `已被管理员 ${actor.username} 结束`], client);
-      // 复用只追加的审计表；before_state 只存属主，也使审计行沿用任务属主的分片门禁。
-      await this.query(`INSERT INTO agent_data.permission_events(instance_id,actor_id,action,resource_type,resource_id,before_state)
-        VALUES($1,$2,'task:cancel-takeover','task',$3,jsonb_build_object('owner_id',$4::text))`, [taskId, job.userId], client);
-      await this.query(`INSERT INTO agent_data.notifications(instance_id,thread_id,task_id,status)
-        SELECT $1,$3,$4,'cancelled' WHERE $2::uuid IS NOT NULL`, [threadId, taskId], client);
-      return { ...job, status: 'cancelled' };
+        [byWorkflow?.workflow ?? threadId, taskId, workflows], client)).rows[0];
+      if (!job) throw new AppError(byWorkflow ? "任务不存在或不允许接管结束" : "任务不存在或不允许接管结束。", 404);
+      if (byWorkflow && job.createdAt !== byWorkflow.startedAt) throw new AppError("占用已变化，请刷新后核对", 409);
+      return this.finishTakeover(client, actor, job);
     });
+  }
+  async finishTakeover(client, actor, job) {
+    const { id: taskId, threadId } = job;
+    if (executing.includes(job.status)) throw new AppError("任务正在运行，请等这一步完成或失败后再操作。", 409);
+    if (!cancellable(true).includes(job.status)) throw new AppError("当前状态不能接管结束，请刷新后核对任务记录。", 409);
+    await this.query(`UPDATE agent_data.tasks SET status='cancelled',error=$5
+      WHERE instance_id=$1 AND $2::uuid IS NOT NULL AND id=$3 AND thread_id=$4`,
+      [taskId, threadId, `已被管理员 ${actor.username} 结束`], client);
+    // 复用只追加的审计表；before_state 只存属主，也使审计行沿用任务属主的分片门禁。
+    await this.query(`INSERT INTO agent_data.permission_events(instance_id,actor_id,action,resource_type,resource_id,before_state)
+      VALUES($1,$2,'task:cancel-takeover','task',$3,jsonb_build_object('owner_id',$4::text))`, [taskId, job.userId], client);
+    await this.query(`INSERT INTO agent_data.notifications(instance_id,thread_id,task_id,status)
+      SELECT $1,$3,$4,'cancelled' WHERE $2::uuid IS NOT NULL`, [threadId, taskId], client);
+    return { id: taskId, threadId, userId: job.userId, status: 'cancelled' };
   }
   async feedback(id, note, attachments) {
     return transaction(this.pool, async client => {

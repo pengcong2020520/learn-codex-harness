@@ -315,15 +315,43 @@ export class MessageService {
       return this.publicJob(await this.job(taskId));
     });
   }
-  // 异常 single 任务由人明确结束；接管不能绕过正在执行的轮次。
-  async cancel({ threadId, taskId, takeover, ...rest }) {
-    if (Object.keys(rest).length || (takeover !== undefined && typeof takeover !== 'boolean')) throw new AppError("结束任务只接受 threadId、taskId 与布尔值 takeover。", 400);
+  // 只在用户核对失败结果后重排当前步骤；沿用 revise 计数和新建产物的约束。
+  async retry({ threadId, taskId, text, ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("重新生成只接受 threadId、taskId 与 text。", 400);
     requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    const note = text == null || text === '' ? null : requireText(text, "修改意见", 2000);
+    await this.sessions.ensure(threadId);
+    return this.serial(threadId, async () => {
+      const job = await this.ownedJob(taskId);
+      if (job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
+      if (job.workflow === 'chat' || !job.workflow) throw new AppError("普通对话不能重新生成工作流步骤。", 409);
+      const allowed = ['failed', 'interrupted', 'needs-review', 'unconfirmed'];
+      if (!allowed.includes(job.status)) throw new AppError("只有失败、中断、验收未过或待核对的步骤可以重新生成。", 409);
+      const reviseCount = job.reviseCount || 0;
+      if (reviseCount >= 10) throw new AppError("本步已重做 10 次，请确认继续或结束任务", 409);
+      if (!(await this.store.patch(taskId, { status: 'queued', note, reviseCount: reviseCount + 1, error: null, checks: null, turnId: null }, allowed)))
+        throw new AppError("任务状态已变化，请刷新后核对。", 409);
+      await this.store.pause(threadId, false);
+      await this.publish(threadId);
+      await this.wake(threadId);
+      return this.publicJob(await this.job(taskId));
+    });
+  }
+  // 异常 single 任务由人明确结束；两种定位方式共用仓储状态校验、审计与发布。
+  async cancel(input) {
+    const { threadId, taskId, workflow, startedAt, takeover, ...rest } = input;
+    const byWorkflow = Object.hasOwn(input, 'workflow') || Object.hasOwn(input, 'startedAt');
+    if (Object.keys(rest).length || (takeover !== undefined && typeof takeover !== 'boolean')) throw new AppError("结束任务只接受 threadId、taskId、takeover，或 workflow、startedAt、takeover。", 400);
+    if (byWorkflow) {
+      if (Object.hasOwn(input, 'threadId') || Object.hasOwn(input, 'taskId') || takeover !== true || typeof workflow !== 'string' || !workflow || typeof startedAt !== 'number' || !Number.isFinite(startedAt))
+        throw new AppError("按工作流接管必须提供 workflow、startedAt 和 takeover:true，不能混用 threadId、taskId。", 400);
+    } else { requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID"); }
     if (takeover === true) {
       if (currentIdentity()?.role !== 'admin') throw new AppError("只有管理员可以接管结束任务。", 403);
       this.permissionHub?.checkAgent(this.config.agent);
       const workflows = this.config.agent?.workflows?.list().filter(item => item.single && item.access === 'admin').map(item => item.id) || [];
-      const job = await this.store.cancelTakeover(threadId, taskId, workflows);
+      if (byWorkflow && !workflows.includes(workflow)) throw new AppError("任务不存在或不允许接管结束", 404);
+      const job = byWorkflow ? await this.store.cancelTakeoverWorkflow(workflow, startedAt, workflows) : await this.store.cancelTakeover(threadId, taskId, workflows);
       await runOwner(job.userId, async () => this.permissionHub
         ? this.permissionHub.run(await this.permissionHub.snapshot(job.userId, { allowDisabled: true }), () => this.publish(job.threadId))
         : this.publish(job.threadId));
