@@ -183,7 +183,13 @@ test('草稿：真实 uid 原子覆盖保持属主，其他 uid 无法读取，�
       assert.equal(files.read_draft({ name: 'brief.json' }).content, JSON.stringify({ value: index + 1 }));
     });
     const file = path.join(paths.workspaceDir, 'inputs/drafts/brief.json');
-    assert.equal(fs.statSync(file).uid, uid); assert.equal(fs.statSync(file).mode & 0o777, 0o660);
+    assert.equal(fs.statSync(file).uid, uid);
+    // persist 请求 0660，实际受 umask 约束（容器 022 下为 0640），这里断言与 umask 无关的安全要求。
+    const mode = fs.statSync(file).mode;
+    assert.equal(mode & 0o600, 0o600);
+    assert.equal(mode & 0o007, 0);
+    assert.equal(mode & 0o111, 0);
+    assert.equal(mode & 0o070 & ~0o060, 0);
     const read = targetUid => {
       const child = userSpawn(process.execPath, ['-e', "require('node:fs').readFileSync(process.argv[1])", file], { uid: targetUid, gid: targetUid, isolated: true });
       return spawnSync(child.command, child.args, { ...child.options, cwd: '/tmp', env: { PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
