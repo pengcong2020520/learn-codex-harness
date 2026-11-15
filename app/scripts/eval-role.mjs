@@ -2,7 +2,7 @@
 // 需要与正式服务相同的数据层（PostgreSQL / Redis）和模型配置。每次运行都用新的项目目录和数据身份，不影响正在运行的服务；
 // 会真实调用模型、产生费用。
 //
-// node scripts/eval-role.mjs --variant current=agents/writing --variant slim=<Agent 包目录> [--repeat 3] [--only s1-local-doc,s4-report]
+// node scripts/eval-role.mjs --variant current=examples/writing-assistant --variant slim=<Agent 包目录> [--repeat 3] [--only s1-local-doc,s4-report]
 //   [--env .env] [--out .runs/eval-role/<时间>] [--timeout-min 20] [--capture]
 // --capture 在 Codex 与模型服务之间放一个透传代理，记下每次请求的内容与组成（不改动请求和响应）。
 // 之后用 scripts/eval-role-score.mjs 打分并生成报告。

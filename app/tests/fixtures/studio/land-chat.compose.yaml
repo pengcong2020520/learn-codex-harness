@@ -1,0 +1,15 @@
+# 只在一次性落地验收项目中使用。真实 Codex 经 Responses 协议与确定性替身对话。
+services:
+  node-a:
+    environment: { AGENT_GATEWAY_URL: "http://fixture-model:8098/v1" }
+  node-b:
+    environment: { AGENT_GATEWAY_URL: "http://fixture-model:8098/v1" }
+  node-c:
+    environment: { AGENT_GATEWAY_URL: "http://fixture-model:8098/v1" }
+  fixture-model:
+    image: codex-agent:current
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["node", "tests/fixtures/studio/land-chat-model.mjs"]

@@ -4,6 +4,7 @@ import { requireIdentity } from './context.mjs';
 import { createFileTools } from '../data/files.mjs';
 import { AppError } from '../../../shared/errors.mjs';
 import { resourcePath } from '../data/paths.mjs';
+import { userFileOperation } from '../runtimes/user-files.mjs';
 
 function directory(target, parent = false, uid) {
   try { fs.mkdirSync(target, { mode: 0o700 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
@@ -37,8 +38,17 @@ export function createUserFileTools(root, options) {
     return createFileTools(root, { ...options, workspaceDir: base, uid: fs.statSync(base).uid });
   };
   return Object.defineProperties(Object.fromEntries(['check', 'check_binary', 'list_files', 'read_file', 'write_file', 'read_binary', 'write_binary', 'read_preview', 'write_upload', 'read_upload', 'write_draft', 'read_draft', 'design_path', 'write_design_report'].map(name => [name, (...args) => {
-    try { return files()[name](...args); }
-    catch (error) { if (error.code === 'ENOENT') throw new AppError('资源不存在。', 404, 'NOT_FOUND'); throw error; }
+    let local;
+    try { local = files(); return local[name](...args); }
+    catch (error) {
+      // 工作室留下的私有目录由属主列举，保留原权限和当前 Agent 的可见范围。
+      if (local && name === 'list_files' && error.code === 'EACCES' && process.getuid?.() === 0) {
+        const uid = fs.statSync(local.workspace).uid;
+        if (uid !== 0) return userFileOperation(uid, 'list-workspace', { workspace: local.workspace, sources: options.sources, path: args[0].path });
+      }
+      if (error.code === 'ENOENT') throw new AppError('资源不存在。', 404, 'NOT_FOUND');
+      throw error;
+    }
   }])), { workspace: { get: workspace, enumerable: true }, workspaceFor: { value: owner => {
     if (!/^[a-f0-9-]{36}$/.test(owner || '')) throw new Error('无效 owner。');
     return path.join(options.workspaceDir, 'users', owner);

@@ -7,7 +7,7 @@ description: 用户要给已有 Agent 加工作流、知识库、工具或调整
 
 以下路径和命令均相对于 `app/`；先进入 `app/`。
 
-1. 确认目标 Agent 和新增能力；用户已明确的内容不重复询问。先读 README「做你自己的 Agent」、目标包的 `agent.json`、`role.md` 与 Skill。参考 `agents/writing`、`examples/` 中最接近的示例；分配模型前读 `config/models.json`。不要通过读取 `.env` 查找当前 Agent。
+1. 确认目标 Agent 和新增能力；用户已明确的内容不重复询问。先读 README「做你自己的 Agent」、目标包的 `agent.json`、`role.md` 与 Skill。参考 `examples/writing-assistant`、`examples/` 中最接近的示例；分配模型前读 `config/models.json`。不要通过读取 `.env` 查找当前 Agent。
 2. 先运行 `npm run agent:check -- agents/<id>/agent.json` 了解现有问题，再做本次所需的最小改动：
    - 工作流放在 `agent.workflows`。明确确认点、验收检查与写入范围；`confirm` 是本步结束后等人确认，`checks` 选现有检查，`writes` 只收窄可写范围，不扩大权限。
    - 知识库按 README「知识库：绑定原始资料与 Wiki」设置 `agent.knowledge` 与 `bindings.knowledgeBases`，区分读、更新、索引权限；需要用户初始化或导入资料时给出具体步骤。挂载知识库时共享原生记忆必须关闭，需要配置时请用户在终端操作。

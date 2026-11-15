@@ -109,7 +109,16 @@ export function collectLayout() {
   const ids = new Map(all.map((e, i) => [e, i]));
   const rect = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
   const text = e => (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement ? e.value || e.placeholder : e.innerText ?? e.textContent) || '';
-  const styleVisible = e => e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+  const emptyClip = new WeakSet();
+  const styleVisible = e => {
+    // 读屏标签保留在可访问性树中，但 CSS 的零面积裁剪不绘制文字或后代。
+    const style = getComputedStyle(e);
+    const bounds = ['absolute', 'fixed'].includes(style.position) && style.clip.match(/^rect\((-?[\d.]+)px, (-?[\d.]+)px, (-?[\d.]+)px, (-?[\d.]+)px\)$/);
+    if (emptyClip.has(e.parentElement) || style.clipPath === 'inset(50%)' || (bounds && (+bounds[3] <= +bounds[1] || +bounds[2] <= +bounds[4]))) {
+      emptyClip.add(e); return false;
+    }
+    return e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+  };
   const positive = r => r.right > r.left && r.bottom > r.top;
   const geometry = new Map(all.filter(e => !['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(e.tagName) && styleVisible(e)).map(e => {
     const r = e.getBoundingClientRect(), s = getComputedStyle(e);
@@ -218,7 +227,7 @@ export function findChrome(env = process.env) {
   return candidates.find(file => { try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; } });
 }
 const timeoutMs = 10000;
-async function startChrome(chromePath, chromeArgs = []) {
+export async function startChrome(chromePath, chromeArgs = []) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-check-'));
   const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', ...chromeArgs, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let ws;
@@ -255,7 +264,7 @@ async function startChrome(chromePath, chromeArgs = []) {
       const msg = JSON.parse(data);
       if (pending.has(msg.id)) {
         const { resolve, reject, timer } = pending.get(msg.id); pending.delete(msg.id); clearTimeout(timer);
-        msg.error ? reject(Error('Chrome 调试命令失败，请核对 Chrome 版本与页面状态。')) : resolve(msg.result);
+        msg.error ? reject(Object.assign(Error('Chrome 调试命令失败，请核对 Chrome 版本与页面状态。'), { protocolCode: msg.error.code })) : resolve(msg.result);
       } else for (const listener of listeners) listener(msg);
     });
     const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {

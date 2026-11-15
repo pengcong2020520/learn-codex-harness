@@ -99,6 +99,11 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
         const workflows = (config.agent?.workflows?.list() || []).filter(item => item.access !== 'admin' || identity.role === 'admin');
         const workflowActivity = workflows.some(item => item.interactive || item.single) ? await messages.workflowActivity(workflows) : null;
         const visibleKnowledge = knowledge ? await knowledge.list() : [];
+        const artifactRoots = files ? ['outputs', 'inputs'].filter(root => {
+          if (!gate) return config.agent?.sources?.some(source => source.actions.includes('read') && (source.locator === root || source.locator.startsWith(root + '/')));
+          try { gate.check('list', { path: root }); return true; }
+          catch (error) { if (error.status === 403) return false; throw error; }
+        }) : [];
         const catalog = config.launch.router?.catalog(), id = catalog?.defaults.chat || config.launch.model;
         let imageInput = (config.registry?.models[id]?.inputs || []).includes('image');
         if (config.launch.router) {
@@ -117,7 +122,7 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
           outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows } : null,
           ...(workflowActivity ? { workflowActivity } : {}),
           defaultModel, imageInput, viewer: { username: identity.user.username, admin: identity.role === 'admin' },
-          queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
+          queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge), artifactRoots },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
       }
       if (preview) {

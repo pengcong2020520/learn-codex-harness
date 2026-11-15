@@ -22,7 +22,7 @@
 ```text
 请扩展 agents/[id]/ 下的 Agent，增加：[能力]。
 
-先读仓库根目录 AGENTS.md，再进入 app/。读 README「做你自己的 Agent」、目标 agent.json、role.md、Skill，以及 agents/writing 和 examples/ 中最接近的示例；涉及模型时读 config/models.json，知识库按 README「知识库：绑定原始资料与 Wiki」。不要读取 .env 来确认当前 Agent。
+先读仓库根目录 AGENTS.md，再进入 app/。读 README「做你自己的 Agent」、目标 agent.json、role.md、Skill，以及 examples/writing-assistant 和 examples/ 中最接近的示例；涉及模型时读 config/models.json，知识库按 README「知识库：绑定原始资料与 Wiki」。不要读取 .env 来确认当前 Agent。
 
 先运行 npm run agent:check -- agents/<id>/agent.json，区分现有问题和本次变更。只做满足需求的最小修改：工作流明确确认点、验收 checks 和 writes 范围；知识库声明绑定及读/更新/索引权限；工具通过 agent.tools.allow 增加或收窄，并核对 dataBindings 与 bindings.sources；步骤模型核对 chat 用途、needs 和 effort，看图要求 inputs 含 image。confirm 是本步完成后确认，writes 不能扩大已有权限。挂知识库时需关闭共享原生记忆，配置由我在终端修改。
 每次改完运行 npm run agent:check -- agents/<id>/agent.json，修正错误，解释建议。要切换目标时用 npm run agent:use -- <id>，再运行 npm run up。给出新建会话后的验证请求、预期结果、确认点和越界请求应有的拒绝行为；不承诺旧会话继续兼容。

@@ -113,4 +113,4 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 
 ## 设计结束后在本机推进
 
-落地 → 开发 → 本机运行 → 巡查 → 修复 → 部署。先按包内 PROMPT.md 核对 K4 固定落地命令，前端按确认原型、后端按 PRD 开发，执行检查与构建，再启动真实产品。开发完成后、部署前在本机使用 [flow-walkthrough](../flow-walkthrough/SKILL.md)：先列计划等用户确认，再操作截图、收集反馈，按前端 / 后端 / 整体归类修复、回归；巡查通过后才运行 production:check 和部署。巡查产物保存到 app/design/<项目 id>/walkthrough/，不属于工作室工作流或工作室产物约定。K5 的脚本与模板未提供时使用本机可用浏览器手段并说明实际验证范围。
+落地 → 开发 → 本机运行 → 巡查 → 修复 → 部署。先按包内 PROMPT.md 核对 K4 固定落地命令，前端按确认原型、后端按 PRD 开发，执行检查与构建，再启动真实产品。开发完成后、部署前在本机使用 [flow-walkthrough](../flow-walkthrough/SKILL.md)：先列计划等用户确认，再操作截图、收集反馈，按前端 / 后端 / 整体归类修复、回归；巡查通过后才运行 production:check 和部署。巡查产物保存到 app/design/<项目 id>/walkthrough/，不属于工作室工作流或工作室产物约定。使用 bash deploy/walkthrough.sh 运行确认计划，打开轮次目录的 index.html 填写并导出反馈。

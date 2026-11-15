@@ -3,8 +3,9 @@ const node = (tag, text) => { const element = document.createElement(tag); if (t
 export function artifactPanel(api, action) {
   const $ = id => document.getElementById(id);
   let generation = 0, listing = 0, selection = 0, selected;
+  let roots = [];
   function reset() {
-    generation++; listing++; selection++; selected = null;
+    generation++; listing++; selection++; selected = null; roots = [];
     $('artifact-list').replaceChildren(); $('artifact-preview').replaceChildren(); $('artifact-actions').replaceChildren();
     $('artifact-status').textContent = ''; $('chat-view').classList.remove('artifacts-open');
     $('toggle-artifacts').setAttribute('aria-expanded', 'false');
@@ -22,7 +23,7 @@ export function artifactPanel(api, action) {
         }
       } catch (error) { problems.push(`${path}：${error.message}`); }
     }
-    await Promise.all(['outputs', 'inputs'].map(path => list(path, 1)));
+    await Promise.all(roots.map(path => list(path, 1)));
     if (version !== listing || epoch !== generation) return;
     files.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || a.path.localeCompare(b.path));
     $('artifact-list').replaceChildren(...files.map(file => {
@@ -72,7 +73,7 @@ export function artifactPanel(api, action) {
   $('toggle-artifacts').onclick = () => toggle(!$('chat-view').classList.contains('artifacts-open'));
   $('close-artifacts').onclick = () => toggle(false);
   $('refresh-artifacts').onclick = () => action($('refresh-artifacts'), refresh);
-  return { refresh, reset, event(event) {
+  return { refresh, reset, configure(allowedRoots) { roots = allowedRoots; return refresh(); }, event(event) {
     if (event.type === 'snapshot' || (event.type === 'turn' && event.data.turn.status !== 'inProgress') ||
         (event.type === 'queue' && event.data.jobs.some(job => ['completed', 'waiting', 'needs-review'].includes(job.status)))) void action(null, refresh);
   } };

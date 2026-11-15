@@ -13,7 +13,8 @@ RUN if [ -n "$APT_MIRROR" ]; then sed -i "s#http://deb.debian.org#$APT_MIRROR#g"
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=prototype /app/server/design-check/template server/design-check/template
-COPY scripts/layout-check.mjs scripts/layout-check.mjs
+COPY scripts/layout-check.mjs scripts/walkthrough.mjs scripts/
+COPY scripts/walkthrough/ scripts/walkthrough/
 COPY shared/errors.mjs shared/errors.mjs
 COPY server/modules/sharding/node-auth.mjs server/modules/sharding/node-auth.mjs
 COPY server/design-check/*.mjs server/design-check/

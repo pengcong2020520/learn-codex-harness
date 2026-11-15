@@ -28,7 +28,7 @@ services:
   design-check:
     <<: *runtime
     profiles: [studio]
-    build:
+    build: &browser-build
       context: .
       dockerfile: server/design-check/Dockerfile
       args:
@@ -53,6 +53,30 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  walkthrough:
+    profiles: [tools]
+    restart: "no"
+    build: *browser-build
+    image: codex-agent-design-check:current
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    mem_limit: 512m
+    tmpfs: ["/tmp:mode=1777"]
+    networks: [walkthrough]
+    volumes:
+      - type: bind
+        source: ${WALKTHROUGH_DIR:-./design}
+        target: /review
+        bind:
+          create_host_path: false
+    environment:
+      HOME: /tmp
+      WALKTHROUGH_CONTAINER: "1"
+      WALKTHROUGH_BASE_URL: http://127.0.0.1:${AGENT_PORT:-4317}
+    entrypoint: ["node", "scripts/walkthrough.mjs"]
+    command: []
   land:
     profiles: [land]
     restart: "no"
@@ -382,6 +406,7 @@ services:
       prepare: { condition: service_completed_successfully }
   caddy:
     <<: *runtime
+    networks: [default, walkthrough]
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     mem_limit: 64m
     ports: ["127.0.0.1:${AGENT_PORT:-4317}:80"]
@@ -447,6 +472,8 @@ services:
       RELAY_BIND: ${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}
       RELAYS: '[[4341,"127.0.0.1",14341]]'
 networks:
+  walkthrough:
+    internal: true
   design-check:
     internal: true
   default:

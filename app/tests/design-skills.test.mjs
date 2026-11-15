@@ -177,9 +177,9 @@ test('代码与落地包包含完整目录和带哈希、确认及落地信息�
   assert.ok(manifest.landing.checks.includes('agent:check'));
 });
 
-test('落地包禁止宿主机脚本并说明固定命令、部署和无 K5 的继续开发方式', () => {
+test('落地包禁止宿主机脚本并说明固定命令、部署与真实产品巡查入口', () => {
   const handoff = read('design-handoff'), flow = read('agent-design-flow');
-  for (const term of ['代码包不含宿主机脚本', '不得使用内联脚本和样式', '不得引用外部资源', '按 K2 约定', '示例数据不能写死', '需要开发', 'docker compose run --rm land', 'npm run design:land', 'npm run deploy', 'deploy/install.sh', 'app/agents/<id>/', 'app/design/<产品 id>/', '先读 AGENTS.md', 'K5', '不依赖', 'flow-walkthrough', '真实产品巡查', 'production:check']) assert.ok(handoff.includes(term), term);
+  for (const term of ['代码包不含宿主机脚本', '不得使用内联脚本和样式', '不得引用外部资源', '按 K2 约定', '示例数据不能写死', '需要开发', 'docker compose run --rm land', 'npm run design:land', 'npm run deploy', 'deploy/install.sh', 'app/agents/<id>/', 'app/design/<产品 id>/', '先读 AGENTS.md', 'build-from-design', 'deploy/walkthrough.sh', 'flow-walkthrough', '真实产品巡查', 'production:check']) assert.ok(handoff.includes(term), term);
   for (const term of ['只有管理员能进入工作室', '一份脚手架只有一个设计项目', '生成代码包，不修改服务端代码', 'app/design/<产品 id>/']) assert.ok(flow.includes(term), term);
 });
 
@@ -200,7 +200,7 @@ const reviewContracts = {
   'lofi-wireframe': ['打开即是产品的一屏', '一屏原则', '预览不使用标签条', '醒目的左侧目录', '默认收起的评审切换器', '悬停提示', '平铺查看作为可选模式', '&auto=1', '约 2 秒', '目录或直接 hash', 'layout-qa'],
   'frontend-design': ['一屏原则', '预览区和聊天区尽量占满', '不放说明条、操作条或标注框', '`<`、`>`', 'layout-qa'],
   'theme-factory': ['两道三选一', '视觉风格', '配色与字体', '完全不同', '各自带“换一换”', '新选项不与已展示过的重复', '进入本阶段前，在聊天里询问', '多张和拖拽上传', 'themes-r<n>.json', 'theme-sample-v<n>.html', '`theme=`', 'base64url', 'JSON 令牌', 'CSS 变量', 'hashchange', '即时换肤', '两道题都选定后', '只有一道题选定时不能写', 'theme-v<n>.json', 'layout-qa'],
-  'flow-walkthrough': ['没有聊天区', '左侧按流程分组列目录', '真实截图（可放大）', '复现方式', '可以 / 待改 / 阻塞', '每组末尾另有流程反馈', '底部显示本轮计数与保存状态', '导出 Markdown', '导出 JSON', '确认本轮巡查通过', '不放“按反馈修复”', '截图上不叠加任何标签或按钮', '计划变动新建版本重新确认', 'localStorage', 'unmatchedPrevious', '前端', '后端', '整体', 'K5', 'production:check'],
+  'flow-walkthrough': ['没有聊天区', '左侧按流程分组列目录', '真实截图（可放大）', '复现方式', '可以 / 待改 / 阻塞', '每组末尾另有流程反馈', '底部显示本轮计数与保存状态', '导出 Markdown', '导出 JSON', '确认本轮巡查通过', '不放“按反馈修复”', '截图上不叠加任何标签或按钮', '计划变动新建版本重新确认', 'localStorage', 'unmatchedPrevious', '前端', '后端', '整体', 'deploy/walkthrough.sh', 'production:check'],
   'prototype-builder': ['主题令牌通过 CSS 变量注入', '所有 `(screen,state)` 都能用 hash 定位', 'layout-qa'],
   'layout-qa': ['任何线框、主题样页、高保真原型', '先通过布局校验才能给用户看', '`check_design`', 'K3a-2', 'node app/scripts/layout-check.mjs', '最多自动修 2 轮', '不能声称已通过', '长文本截断', '定宽容器溢出', '绝对定位重叠', '区域内滚动', 'CHROME_PATH', '返回 1', '返回 2'],
 };
@@ -222,7 +222,7 @@ test('巡查仅本机开发后执行，工作室总流程和交付不再依赖�
     assert.doesNotMatch(source, /原型和走查均已/);
   }
   assert.doesNotMatch(walkthrough, /iframe|原型走查|实时预览缩略图/);
-  for (const term of ['开发完成', '部署之前', '用户本机', '先列计划', '等确认', '不虚构已有脚本', '反馈原话', '已修改']) assert.ok(walkthrough.includes(term), term);
+  for (const term of ['开发完成', '部署之前', '用户本机', '先列计划', '等确认', 'deploy/walkthrough.sh', '反馈原话', '已修改']) assert.ok(walkthrough.includes(term), term);
   const instructions = handoff.slice(handoff.indexOf('## PROMPT.md'));
   let previous = -1;
   for (const term of ['1. 落地', '2. 按设计开发', '3. 检查与构建', '4. 本机运行', '5. 真实产品巡查', '6. 按反馈修复', '7. 下一轮回归', '8. 生产检查', '9. 部署']) {

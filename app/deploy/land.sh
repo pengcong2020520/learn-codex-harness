@@ -14,4 +14,6 @@ stage=关闭工作室校验服务
 docker compose --profile studio rm --stop --force design-check
 stage=重建并切换到产品
 docker compose up -d --build --wait
+stage=核对产品就绪与首页
+docker compose exec -T node-a node scripts/design-land.mjs --verify-live
 echo '产品已就绪。重新打开本机入口可进入产品，设计记录位于 design/。'

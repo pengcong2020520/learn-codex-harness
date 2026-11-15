@@ -254,7 +254,7 @@ export class Resources extends Repository {
     }
   }
   async list_files(args) {
-    const result = this.sourceFiles(args.path || "").list_files(args);
+    const result = await this.sourceFiles(args.path || "").list_files(args);
     const entries = [];
     for (const entry of result.entries) {
       const locator = result.path === "." ? entry.name : `${result.path}/${entry.name}`;

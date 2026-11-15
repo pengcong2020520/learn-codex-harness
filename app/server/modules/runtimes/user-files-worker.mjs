@@ -11,6 +11,14 @@ try {
     fs.writeFileSync(1, data); fs.writeFileSync(3, JSON.stringify(metadata));
   } else {
     switch (task.operation) {
+      case 'list-workspace': {
+        const { createFileTools } = await import('../data/files.mjs');
+        const { assertRealPath } = await import('./directories.mjs');
+        assertRealPath(task.workspace);
+        if (fs.statSync(task.workspace).uid !== process.getuid()) throw new Error('工作区属主不匹配。');
+        const files = createFileTools(task.workspace, { workspaceDir: task.workspace, sources: task.sources });
+        value = files.list_files({ path: task.path }); break;
+      }
       case 'write-design-report': {
         const { createFileTools } = await import('../data/files.mjs');
         const { assertRealPath } = await import('./directories.mjs');

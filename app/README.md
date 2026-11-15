@@ -19,6 +19,14 @@ bash deploy/land.sh
 
 默认选择唯一设计项目的最新包。指定项目或旧版时追加 `--package <包相对 app 的目录>`。命令校验清单、设计确认引用和文件摘要，将 Agent 装进 `agents/<id>/`，把设计与交付指令存入 `design/<产品 id>/`，切换配置并重建容器。完成后重新打开首页即可进入产品。安装记录在 `.land/receipt.json`；中断时按提示核对记录和容器状态，人工重新执行同一条命令可以继续。已有同名 Agent 或设计目录会保留。
 
+开发完成后，按 [真实产品巡查](../.agents/skills/flow-walkthrough/SKILL.md) 准备确认计划，在 app/ 执行：
+
+```bash
+bash deploy/walkthrough.sh design/<产品 id>/walkthrough/plan-v1.json
+```
+
+打开同目录 `r1/index.html` 逐屏核对。截图来自本机产品，页面附控制台、接口、慢请求和布局诊断。可逐屏或按流程填写反馈并导出 Markdown / JSON。下一轮在命令最后追加上一轮反馈 JSON；各轮截图和原话分开保存。
+
 原写作助手在 [examples/writing-assistant](examples/writing-assistant/agent.json)。显式配置过该助手的项目继续沿用原选择。
 
 ## 运行环境
