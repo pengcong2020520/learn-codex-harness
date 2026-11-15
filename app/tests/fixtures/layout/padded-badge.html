@@ -1,0 +1,20 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>标题与角标字形夹具</title>
+<style>html,body{margin:0;width:100%;height:100%;font:16px/24px monospace}*{box-sizing:border-box}section{height:100%;position:relative}b,.badge{position:absolute;white-space:nowrap;text-align:justify;text-align-last:justify}b{left:20px;top:20px;padding:30px;width:156px}.badge{padding:12px;width:72px}</style>
+<section data-screen="web-home" data-state="default" data-group="main"><b>UI title</b><span class="badge">V 2</span></section>
+<section data-screen="web-home" data-state="overlap" data-group="main"><b>UI title</b><span class="badge">V 2</span></section>
+<script id="design-outline" type="application/json">{"groups":[{"id":"main","screens":[{"id":"web-home","states":["default","overlap"]}]}]}</script>
+<script>
+function show(){
+  const state=new URLSearchParams(location.hash.slice(1)).get('state')||'default';
+  document.querySelectorAll('section').forEach(section=>{
+    section.hidden=section.dataset.state!==state;
+    if(section.hidden)return;
+    const range=document.createRange();range.selectNodeContents(section.querySelector('b'));
+    const r=range.getBoundingClientRect(),badge=section.querySelector('.badge');
+    // 两种状态都有 padding 盒相交；只有 overlap 状态让文字本身相交且各自仍有可见采样点。
+    badge.style.left=(r.right+(state==='overlap'?-16:8)-12)+'px';
+    badge.style.top=(r.top+(state==='overlap'?6:0)-12)+'px';
+  });
+}
+addEventListener('hashchange',show);document.fonts.ready.then(show);show();
+</script></html>

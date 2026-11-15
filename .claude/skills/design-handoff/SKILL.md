@@ -29,7 +29,8 @@ package-v1/
     brief-v1.md
     prd-v1.md
     wireframe-v1.html
-    themes-r1.html
+    themes-r1.json
+    theme-sample-v1.html
     theme-v1.json
     prototype-v1.html
     structure-changes-v1.md
@@ -41,7 +42,7 @@ package-v1/
   PROMPT.md
 ```
 
-工作流完整写在 `agent/agent.json` 的 `agent.workflows`，引用的角色、Skill 与资源必须随包提供。`agent/ui/` 是按已确认原型实现的前端代码，按需要包含模块和本地资源。`design/` 收录最终确认的各阶段产物、确认记录及必要的反馈历史依赖；所选主题来自其他轮时收录对应 `themes-r<n>.html`，保证相对引用在包内解析。设计 HTML 仍为可离线单文件，不用截图代替；实际前端按下文 CSP 分离脚本和样式。
+工作流完整写在 `agent/agent.json` 的 `agent.workflows`，引用的角色、Skill 与资源必须随包提供。`agent/ui/` 是按已确认原型实现的前端代码，按需要包含模块和本地资源。`design/` 收录最终确认的各阶段产物、确认记录及必要的反馈历史依赖；所选主题来自其他轮时收录对应 `themes-r<n>.json` 和 `theme-sample-v<n>.html`，保留实际轮次与样页版本，保证相对引用在包内解析。候选 JSON 保留视觉风格、配色与字体的令牌及累计候选历史；样页按 [theme-factory](../theme-factory/SKILL.md) 从定位 hash 的 `theme=` 参数读取 base64url JSON 令牌，通过 CSS 变量即时换肤，首载与 `hashchange` 都可复现已选组合。设计 HTML 仍为可离线单文件，不用截图代替；实际前端按下文 CSP 分离脚本和样式。
 
 **代码包不含宿主机脚本**：只包含代码、配置、设计记录和文档；不得附带让用户在宿主机执行的 shell、安装、迁移或落地脚本，也不能把模型生成的命令藏进 manifest 的钩子或文档让用户执行。浏览器运行的 JS 属于前端代码。落地只能调用脚手架自带的固定命令，不让用户运行模型生成的 shell 脚本。
 

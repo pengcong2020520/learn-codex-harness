@@ -14,7 +14,7 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 | 1 资料卡 / [agent-brief](../agent-brief/SKILL.md) | 用户想法、资料、参考图 | `brief-v1.md` | 定位、核心任务、范围、推断与假设 |
 | 2 PRD / [prd-spec](../prd-spec/SKILL.md) | 已确认资料卡 | `prd-v1.md` | 完整需求、页面、流程、验收与本期不做 |
 | 3 低保真 / [lofi-wireframe](../lofi-wireframe/SKILL.md) | 已确认 PRD | `wireframe-v1.html` | 分组、页面结构、按钮去向与状态覆盖 |
-| 4 主题 / [theme-factory](../theme-factory/SKILL.md) | 已确认线框、参考图或受众信息 | `themes-r1.html`、`theme-v1.json` | 明确选择一套或组合后确认令牌 |
+| 4 主题 / [theme-factory](../theme-factory/SKILL.md) | 已确认线框、参考图或受众信息 | `themes-r1.json`、`theme-sample-v1.html`、`theme-v1.json` | 视觉风格、配色与字体两道三选一都选定后确认令牌 |
 | 5 高保真 / [frontend-design](../frontend-design/SKILL.md) + [prototype-builder](../prototype-builder/SKILL.md) | PRD、已确认线框与主题 | `prototype-v1.html`、`structure-changes-v1.md` | 结构调整先单独确认；完成后确认原型和逐屏对照表 |
 | 6 全流程走查 / [flow-walkthrough](../flow-walkthrough/SKILL.md) | 已确认原型、PRD、上一轮反馈 | `walkthrough-plan-v1.json`、`walkthrough-v1.html`、`walkthrough-r1.json` | 先确认计划再执行；逐屏反馈处理后确认走查结论 |
 | 7 代码与落地包 / [design-handoff](../design-handoff/SKILL.md) | 各阶段已确认且相互匹配的最终版本 | `package-v1/`：manifest、完整 Agent（含 ui/）、design/、DEPLOY.md、PROMPT.md | 代码与原型对应、检查与确认记录真实、缺口明确、落地步骤和部署手册可核对 |
@@ -32,7 +32,8 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 | `brief-v1.md` | 资料卡正文与结构化 JSON |
 | `prd-v1.md` | 完整 PRD |
 | `wireframe-v1.html` | 低保真线框 |
-| `themes-r1.html` | 第 1 轮三套主题及历史候选记录 |
+| `themes-r1.json` | 第 1 轮视觉风格与配色字体各三套令牌、累计候选历史 |
+| `theme-sample-v1.html` | 从定位 hash 的 `theme=` 参数读取令牌、即时换肤的单文件样页 |
 | `theme-v1.json` | 用户选定的主题令牌 |
 | `prototype-v1.html` | 高保真交互原型及逐屏对照 |
 | `structure-changes-v1.md` | 结构调整提案与确认依据，无调整也写明 |
@@ -68,7 +69,7 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 }
 ```
 
-`operation` 只用 `continue`、`modify`、`end`；后两者的 `confirmedAt` 为 null，事件另外记录 `recordedAt`。每份记录保留既有事件原文并追加本次意见。资料卡与 PRD 共用 `clarificationRounds`，合计最多约 3 轮，不分别各问 3 轮。阶段验收确认不计入澄清轮数。
+`operation` 只用 `continue`、`modify`、`end`；后两者的 `confirmedAt` 为 null，事件另外记录 `recordedAt`。每份记录保留既有事件原文并追加本次意见。资料卡与 PRD 共用 `clarificationRounds`，合计最多 3 轮，不分别各问 3 轮。阶段验收确认不计入澄清轮数。
 
 ### 屏幕定位与大纲
 
@@ -84,8 +85,8 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 - `groups:[{ id, title, order, screens:[{ id, title, position, actions:[{ label, to }], states:[…] }] }]` 是固定结构。`order`、`position` 为从 1 开始的整数；`states` 是状态名字符串数组。`to` 是指向已有屏幕和状态的定位 hash，不使用随意的自然语言目的地。
 - `data-screen` 在同一产物大纲内唯一；一个屏幕的不同状态共用 id，`(id,state)` 在 HTML 中唯一，`data-group` 对应分组 id。id 在版本间稳定；双端用 `web-`、`app-` 前缀区分。新增结构须经用户确认。
 - 固定状态词表：default、first-use、permission、loading、empty、error、recovery。只覆盖 PRD 涉及的状态；其他状态可以自定义，但须列入大纲。每个状态都有可直接展示的示例数据，不能无限停在加载态。
-- 无定位 hash 时按组和顺序平铺所有屏幕与状态，顶部展示流程总览。有 `#screen=<id>&state=<状态>` 时仅显示目标屏及状态，隐藏总览与其他屏；初次加载和 `hashchange` 都生效。未知定位显示中文错误与返回总览入口，不默默跳回默认页。参数按 URL 规则编码和解码。
-- 主题对比中同一线框重复三次，为样页 id 增加候选前缀（如 `a-task-list`），候选元数据用 `sourceScreenId` 记录原线框 id；正式原型恢复并保留线框 id。不能让三套样页共用同一 `(id,state)`。
+- 打开即是产品的一屏，无定位 hash 时显示流程入口，不显示顶部总览。`#screen=<id>&state=<状态>` 仅显示目标屏及状态；初次加载和 `hashchange` 都生效。未知定位显示中文错误与返回入口，不默默跳回默认页。参数按 URL 规则编码和解码。默认收起的评审切换器承载分组、名称、位置、操作去向与悬停提示；平铺查看全部作为可选模式，只有此模式允许整页滚动。
+- 主题样页保留源线框 id 与状态，同一套 section 用 CSS 变量换肤，不复制三份屏幕；候选元数据用 `sourceScreenId` 记录源线框。每个 `(id,state)` 仍唯一。
 - 工作室读取 `design-outline` 生成左侧目录；目录、实际 section、按钮 `to` 必须互相对应。把 JSON 内的 `<` 转义为 `\u003c`，防止内容提前结束 script。
 
 ### 单文件与嵌入安全
@@ -98,3 +99,12 @@ description: 用户要设计 Agent 的 Web 或 App 页面、启动或继续分�
 
 - **工作室运行时（K3）**：只用已授权工具在用户工作区创建产物，通过工作室页面嵌入预览、保存反馈。复杂原型使用预装模板与离线构建链，不执行联网安装。工作室生成代码包，不修改服务端代码，不部署、不扩张权限。包内包含完整 Agent 与按原型实现的前端、部署手册和本地编码助手提示词，不含宿主机脚本。宿主保存、预览或模板能力缺失时明确说明缺口，保留产物并停止依赖该能力的步骤，不能声称已经保存。
 - **用户本地 Codex / Claude Code**：在授权工作区写产物，开发侧可以按官方方式用 npm 安装构建工具，但不能越过仓库依赖约束。临时源码和构建中间件在 `outputs/` 外的隔离目录；最终单文件才写入新版本。单独打开走查 HTML 时自动存浏览器本地存储，支持导出后放回用户工作区。本机按 K4 固定命令（暂定 `docker compose run --rm land` 或 app/ 下的 `npm run design:land`）落地，再验证和部署。K2 / K4 未提供时不能伪称接入或落地成功。K5 将提供 `build-from-design`；未提供时仍可按包内 PROMPT.md 直接核对、落地、完成需要开发项，并用 flow-walkthrough 的真实产品模式走查。
+
+## 聊天、意见与阶段页面
+
+- 聊天采用一问一答，只给摘要并指向预览，不堆长文。执行中有默认收起、可展开的“思考中”，展示当前步骤与执行进度摘要；不要求披露模型内部推理。确认和修改通过快捷回复，也可直接用自然语言说。
+- 意见要立刻生效：运行中用 `steer` 追加意见，等待确认时用 `revise` 重做当前步。前端只有一个“发意见”入口，由服务端根据状态选择，不能把意见只留在聊天记录里。
+- 资料卡、澄清、走查计划、走查四个页面不显示聊天；表单与页面操作直接提交。其他阶段保留聊天，预览区和聊天区尽量占满可用空间，不添加说明条、操作条或标注框。
+- 澄清最多 3 轮，以表单形式出现，每轮最多 5 题，每题带选项和推荐项；累计轮数写入确认记录，不另起一套计数。
+- 预览不使用标签条，用醒目的左侧目录按分组、屏和状态导航。Web 遵守一屏原则，1440×900、1280×720 不出现整页滚动，长内容在区域内滚动。侧栏用 `<`、`>` 轻量收起和展开。
+- 低保真、主题样页、高保真在展示前必须通过 [layout-qa](../layout-qa/SKILL.md)。生成不等于通过；布局错误最多自动修 2 轮，仍有错误则如实列出，不标成已通过。

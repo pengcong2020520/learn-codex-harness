@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const names = ["agent-design-flow", "agent-brief", "prd-spec", "lofi-wireframe", "theme-factory", "frontend-design", "prototype-builder", "flow-walkthrough", "design-handoff"];
+const names = ["agent-design-flow", "agent-brief", "prd-spec", "lofi-wireframe", "theme-factory", "frontend-design", "prototype-builder", "flow-walkthrough", "design-handoff", "layout-qa"];
 const claudeRoot = path.join(root, '.claude/skills');
 const codexRoot = path.join(root, '.agents/skills');
 const read = name => fs.readFileSync(path.join(claudeRoot, name, 'SKILL.md'), 'utf8');
@@ -104,11 +104,11 @@ const artifacts = {
   'agent-brief': ['brief-v1.md'],
   'prd-spec': ['brief-v1.md', 'prd-v1.md'],
   'lofi-wireframe': ['prd-v1.md', 'wireframe-v1.html'],
-  'theme-factory': ['wireframe-v1.html', 'themes-r1.html', 'theme-v1.json'],
+  'theme-factory': ['wireframe-v1.html', 'themes-r1.json', 'theme-sample-v1.html', 'theme-v1.json'],
   'frontend-design': ['prd-v1.md', 'wireframe-v1.html', 'theme-v1.json', 'prototype-v1.html', 'structure-changes-v1.md'],
   'prototype-builder': ['prototype-v1.html'],
   'flow-walkthrough': ['prototype-v1.html', 'walkthrough-plan-v1.json', 'walkthrough-r1.json', 'walkthrough-v1.html'],
-  'design-handoff': ['brief-v1.md', 'prd-v1.md', 'wireframe-v1.html', 'theme-v1.json', 'prototype-v1.html', 'walkthrough-plan-v1.json', 'walkthrough-r1.json', 'package-v1/'],
+  'design-handoff': ['brief-v1.md', 'prd-v1.md', 'wireframe-v1.html', 'themes-r1.json', 'theme-sample-v1.html', 'theme-v1.json', 'prototype-v1.html', 'walkthrough-plan-v1.json', 'walkthrough-r1.json', 'package-v1/'],
 };
 test('各阶段文件名与总流程产物约定一致', () => {
   const flow = read('agent-design-flow');
@@ -191,4 +191,25 @@ test('落地前端接口表的方法和路径对应现有 HTTP 路由', () => {
   }
   assert.ok(handoff.includes('GET /preview/<签名值>'));
   assert.ok(routes.includes("request.method === 'GET' && pathname.startsWith('/preview/')"));
+});
+
+// 固定评审形成的跨阶段契约；用户原文仍由上面的逐条断言保护。
+const reviewContracts = {
+  'agent-design-flow': ['一问一答', '只给摘要', '思考中', '快捷回复', '自然语言', '`steer`', '`revise`', '资料卡、澄清、走查计划、走查', '不显示聊天', '最多 3 轮', '表单', '每轮最多 5 题', '每题带选项和推荐项', '低保真、主题样页、高保真', 'layout-qa', 'themes-r1.json', 'theme-sample-v1.html'],
+  'lofi-wireframe': ['打开即是产品的一屏', '一屏原则', '预览不使用标签条', '醒目的左侧目录', '默认收起的评审切换器', '悬停提示', '平铺查看作为可选模式', '&auto=1', '约 2 秒', '目录或直接 hash', 'layout-qa'],
+  'frontend-design': ['一屏原则', '预览区和聊天区尽量占满', '不放说明条、操作条或标注框', '`<`、`>`', 'layout-qa'],
+  'theme-factory': ['两道三选一', '视觉风格', '配色与字体', '完全不同', '各自带“换一换”', '新选项不与已展示过的重复', '进入本阶段前，在聊天里询问', '多张和拖拽上传', 'themes-r<n>.json', 'theme-sample-v<n>.html', '`theme=`', 'base64url', 'JSON 令牌', 'CSS 变量', 'hashchange', '即时换肤', '两道题都选定后', '只有一道题选定时不能写', 'theme-v<n>.json', 'layout-qa'],
+  'flow-walkthrough': ['计划页和走查页均不显示聊天', '左侧目录按分组和屏导航', '实时预览缩略图', '可以放大', '页面名称、当前状态、复现方式', '三个标记和反馈框', '每组末尾有流程反馈', '页面底部', '导出 Markdown', '导出 JSON', '按反馈改版', '走查通过', '勾选、增删后再确认'],
+  'prototype-builder': ['主题令牌通过 CSS 变量注入', '所有 `(screen,state)` 都能用 hash 定位', 'layout-qa'],
+  'layout-qa': ['任何线框、主题样页、高保真原型', '先通过布局校验才能给用户看', '`check_design`', 'K3a-2', 'node app/scripts/layout-check.mjs', '最多自动修 2 轮', '不能声称已通过', '长文本截断', '定宽容器溢出', '绝对定位重叠', '区域内滚动', 'CHROME_PATH', '返回 1', '返回 2'],
+};
+for (const [name, terms] of Object.entries(reviewContracts)) {
+  test(`设计 Skill ${name} 保留评审约定`, () => {
+    for (const term of terms) assert.ok(read(name).includes(term), `${name} 缺 ${term}`);
+  });
+}
+test('设计 Skill 不保留冲突的默认平铺与三套并排产物约定', () => {
+  for (const name of ['agent-design-flow', 'lofi-wireframe', 'theme-factory', 'design-handoff']) {
+    for (const term of ['themes-r1.html', 'themes-r<n>.html', '无定位 hash 时按组和顺序平铺', '无定位时三套并排', '每屏统一标注']) assert.ok(!read(name).includes(term), `${name} 仍含冲突约定 ${term}`);
+  }
 });
