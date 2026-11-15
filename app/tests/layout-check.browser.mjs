@@ -10,7 +10,7 @@ import { checkDesign, findChrome } from '../scripts/layout-check.mjs';
 const chrome = findChrome();
 const options = { timeout: 90000, skip: !chrome && '未找到 Chrome；安装 Chrome 或设置 CHROME_PATH 后运行 npm run test:web。' };
 const fixture = name => fileURLToPath(new URL(`./fixtures/layout/${name}.html`, import.meta.url));
-for (const [name, code] of [['clean', null], ['scroll', 'page-scroll'], ['overlap', 'text-overlap'], ['clipped', 'text-clipped'], ['occlusion', null], ['scaled-preview', null]]) {
+for (const [name, code] of [['clean', null], ['scroll', 'page-scroll'], ['overlap', 'text-overlap'], ['stacked', 'text-overlap'], ['clipped', 'text-clipped'], ['occlusion', null], ['scaled-preview', null]]) {
   test(`布局浏览器夹具：${name}`, options, async () => {
     const report = await checkDesign(fixture(name));
     assert.equal(report.checks.length, 2);
@@ -19,6 +19,17 @@ for (const [name, code] of [['clean', null], ['scroll', 'page-scroll'], ['overla
     for (const i of report.issues) assert.ok(i.element && i.reason && 'screen' in i && 'state' in i && 'viewport' in i);
   });
 }
+
+test('布局浏览器：白底标签遮住下层文字，上层文字仍检查重叠', options, async t => {
+  const html = fs.readFileSync(fixture('stacked'), 'utf8').replace('</style>', '.over{background:#fff;pointer-events:none}</style>');
+  const covered = await checkDesign(temporary(t, html));
+  assert.equal(covered.checks.length, 2);
+  assert.deepEqual(covered.issues, [], JSON.stringify(covered));
+  const overlapping = html.replace('</section>', '<p class="front">文字完全重合</p></section>');
+  const report = await checkDesign(temporary(t, overlapping));
+  assert.equal(report.errors, 2, JSON.stringify(report));
+  assert.ok(report.issues.every(i => i.code === 'text-overlap' && i.element.includes('p.over') && i.element.includes('p.front') && !i.element.includes('p.under')), JSON.stringify(report));
+});
 
 test('布局浏览器夹具：标题与角标 padding 相交不报错，只有字形相交才报错', options, async () => {
   const report = await checkDesign(fixture('padded-badge'));

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
-import { checkOverlap, checkClipping, checkFontSize, checkLayout, checkOutline, parseViewports, viewportsForScreen, describeElement } from '../scripts/layout-check.mjs';
+import { collectLayout, checkOverlap, checkClipping, checkFontSize, checkLayout, checkOutline, parseViewports, viewportsForScreen, describeElement } from '../scripts/layout-check.mjs';
 
 const box = (id, left = 0, top = 0, width = 10, height = 10) => {
   const rect = { left, top, right: left + width, bottom: top + height };
@@ -26,6 +27,68 @@ test('文字重叠只报告大于 4 平方像素的可见非祖孙字形', () =>
   assert.equal(checkOverlap([a, { ...b, textRects: [{ left: 10, top: 8, right: 12, bottom: 10 }] }]).length, 0);
   assert.equal(checkOverlap([a, { ...b, textRects: [] }]).length, 0);
   assert.equal(checkOverlap([a, { ...b, occluded: true }]).length, 0);
+});
+
+// 只提供确定的几何与命中栈；真实浏览器的排版和命中行为由 stacked 等夹具验证。
+function sampledLayout(overlayStyle = {}, tag = 'SPAN', hits = (under, over, body) => [over, under, body]) {
+  const rect = { left: 20, top: 20, right: 120, bottom: 40, width: 100, height: 20 };
+  const element = (tagName, parentElement, computed = {}) => ({
+    tagName, parentElement, classList: [], children: [], childNodes: [], textContent: '',
+    computed: { backgroundColor: 'rgba(0, 0, 0, 0)', backgroundImage: 'none', opacity: '1', visibility: 'visible', pointerEvents: 'auto', fontSize: '14px', overflowX: 'visible', overflowY: 'visible', ...computed },
+    offsetWidth: 100, offsetHeight: 20, clientLeft: 0, clientTop: 0, clientWidth: 100, clientHeight: 20, scrollWidth: 100, scrollHeight: 20,
+    getBoundingClientRect: () => rect,
+    checkVisibility() { return this.computed.opacity !== '0' && this.computed.visibility !== 'hidden' && (!this.parentElement || this.parentElement.checkVisibility()); },
+    contains(other) { for (let p = other; p; p = p.parentElement) if (p === this) return true; return false; },
+  });
+  const body = element('BODY', null, { backgroundColor: 'rgb(255, 255, 255)' });
+  const under = element('SPAN', body), over = element(tag, body, overlayStyle);
+  for (const e of tag === 'SPAN' ? [under, over] : [under]) {
+    e.textContent = '文字完全重合';
+    e.childNodes = [{ nodeType: 3, textContent: e.textContent }];
+  }
+  const document = {
+    body, documentElement: body,
+    querySelectorAll: selector => selector === '*' ? [body, under, over] : [],
+    createRange: () => ({ selectNodeContents() {}, getClientRects: () => [rect] }),
+    elementsFromPoint: (x, y) => hits(under, over, body, x, y).filter(e => e.computed.visibility !== 'hidden'),
+    elementFromPoint(x, y) { return this.elementsFromPoint(x, y)[0] || null; },
+  };
+  return runInNewContext(`(${collectLayout.toString()})()`, {
+    document, getComputedStyle: e => e.computed, innerWidth: 800, innerHeight: 600,
+    Node: { TEXT_NODE: 3 }, HTMLInputElement: class {}, HTMLTextAreaElement: class {},
+  });
+}
+
+test('遮挡采样：透明背景的完全重合文字保持可见并报告重叠', () => {
+  for (const backgroundColor of ['rgba(0, 0, 0, 0)', 'rgb(0 0 0 / 0)', 'color(srgb 0 0 0 / 0)']) {
+    const snapshot = sampledLayout({ backgroundColor });
+    assert.equal(snapshot.elements[1].occluded, false, backgroundColor);
+    assert.equal(checkOverlap(snapshot.elements).length, 1, backgroundColor);
+  }
+});
+
+test('遮挡采样：有色背景、背景图片和自身绘制元素遮住下层，上层照常检查', () => {
+  const styles = [{ backgroundColor: 'rgb(255, 255, 255)' }, { backgroundColor: 'rgba(255, 255, 255, 0.5)' }, { backgroundColor: 'color(srgb 1 1 1 / 50%)' }, { backgroundImage: 'linear-gradient(white, white)' }];
+  const cases = [...styles.map(style => [style, 'SPAN']), ...['IMG', 'VIDEO', 'CANVAS', 'IFRAME', 'svg', 'OBJECT', 'EMBED', 'INPUT', 'TEXTAREA', 'SELECT'].map(tag => [{}, tag])];
+  for (const [style, tag] of cases) {
+    const snapshot = sampledLayout(style, tag);
+    assert.equal(snapshot.elements[1].occluded, true, JSON.stringify([style, tag]));
+    assert.equal(snapshot.elements[2].occluded, false);
+    assert.equal(checkOverlap(snapshot.elements).length, 0);
+  }
+});
+
+test('遮挡采样：不可见元素与祖先背景不遮挡，任一点可见即保留文字', () => {
+  for (const style of [{ opacity: '0' }, { visibility: 'hidden' }]) {
+    assert.equal(sampledLayout({ backgroundColor: 'rgb(255, 255, 255)', ...style }).elements[1].occluded, false);
+  }
+  assert.equal(sampledLayout({}, 'SPAN', (under, over, body) => [body, over, under]).elements[1].occluded, false);
+  assert.equal(sampledLayout({ backgroundColor: 'rgb(255, 255, 255)' }, 'SPAN', (under, over, body, x) => x < 30 ? [under, body] : [over, under, body]).elements[1].occluded, false);
+});
+
+test('遮挡采样：命中自身后代视为可见，未命中自身时沿用保守判定', () => {
+  assert.equal(sampledLayout({}, 'SPAN', (under, over, body) => { over.parentElement = under; return [over, under, body]; }).elements[1].occluded, false);
+  assert.equal(sampledLayout({}, 'SPAN', (under, over, body) => [over, body]).elements[1].occluded, true);
 });
 
 test('截断用变换后的文字矩形复核滚动尺寸，按轴容忍 1px', () => {
