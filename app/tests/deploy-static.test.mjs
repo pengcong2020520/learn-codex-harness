@@ -66,6 +66,48 @@ test('static: E2E 直接 Compose 再启动并以同一账号登录，之后保�
   assert.match(source, /docker compose stop\ndocker compose up -d --wait\nprintf '%s\\n' "\$password" \| node scripts\/e2e-check.mjs --login-only\nSETUP_ADMIN_PASSWORD="\$password" npm run cluster:enable -- --yes/);
 });
 
+test('static: E2E 清理读取全部 profile，避免只关闭 studio', () => {
+  const cleanup = read('scripts/e2e-compose.sh').match(/^cleanup\(\) \{\n([\s\S]*?)^\}/m)?.[1];
+  assert.ok(cleanup);
+  assert.match(cleanup, /docker compose config --profiles/);
+  assert.match(cleanup, /compose_args=\(compose\)/);
+  assert.match(cleanup, /while IFS= read -r profile/);
+  assert.match(cleanup, /compose_args\+=\(--profile "\$profile"\)/);
+  assert.match(cleanup, /docker "\$\{compose_args\[@\]\}" down -v --remove-orphans >\/dev\/null 2>&1 \|\| true/);
+  assert.doesNotMatch(cleanup, /--profile studio down/);
+});
+
+test('E2E 清理覆盖全部 profile，空列表或读取失败时回退，并保留原退出码', () => {
+  const cleanup = read('scripts/e2e-compose.sh').match(/^cleanup\(\) \{\n[\s\S]*?^\}/m)?.[0];
+  assert.ok(cleanup);
+  for (const mode of ['profiles', 'empty', 'failed']) for (const status of [0, 7]) {
+    // 只运行提取的清理函数；替身不接触 Docker 和真实 .env，down 失败也不能改写验收退出码。
+    const result = spawnSync('bash', ['-c', `
+set -euo pipefail
+exec 3>&1
+docker() {
+  if [ "$*" = 'compose config --profiles' ]; then
+    case '${mode}' in
+      profiles) printf 'cluster\\nstudio\\nremote-access\\n' ;;
+      empty) return 0 ;;
+      failed) printf 'cluster\\n'; return 1 ;;
+    esac
+  else
+    printf '<%s>' "$@" >&3
+    return 1
+  fi
+}
+rm() { :; }
+${cleanup}
+trap cleanup EXIT
+exit "$1"
+`, 'cleanup-test', String(status)], { encoding: 'utf8' });
+    assert.equal(result.status, status, `${mode}：保留原退出码`);
+    const profiles = mode === 'profiles' ? '<--profile><cluster><--profile><studio><--profile><remote-access>' : '';
+    assert.equal(result.stdout, `<compose>${profiles}<down><-v><--remove-orphans>`, mode);
+  }
+});
+
 test('static: 默认服务含初始化链与可选集群、三节点独立卷、仅 Caddy 回环入口、固定内存与健康语义', () => {
   assert.deepEqual([...compose.split('services:\n')[1].split('\nnetworks:')[0].split('\nvolumes:')[0].matchAll(/^  ([a-z-]+):(?: &node)?$/gm)].map(m => m[1]), ['design-check', 'setup', 'check', 'prepare', 'migrate', 'postgres', 'redis', 'gateway', 'etcd-init', 'node-a', 'node-b', 'node-c', 'etcd', 'caddy', 'edge', 'remote-access', 'remote-node-link']);
   assert.match(compose, /mem_limit: 128m/); assert.match(compose, /mem_limit: 64m/);

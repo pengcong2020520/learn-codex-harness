@@ -10,7 +10,16 @@ export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-codex-agent-e2e}
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then echo "端到端验收失败；请核对上方步骤，不输出未经脱敏的容器日志。" >&2; fi
-  docker compose --profile studio down -v --remove-orphans >/dev/null 2>&1 || true
+  # 命令行 --profile 会覆盖 COMPOSE_PROFILES，只写 studio 会漏掉扩容后的 cluster 服务。
+  # 数组保留 compose 子命令，profile 为空或 config 失败时仍能退回普通 down。
+  local profiles profile
+  local -a compose_args=(compose)
+  if profiles=$(docker compose config --profiles 2>/dev/null); then
+    while IFS= read -r profile; do
+      if [ -n "$profile" ]; then compose_args+=(--profile "$profile"); fi
+    done <<< "$profiles"
+  fi
+  docker "${compose_args[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f .env
   exit "$status"
 }
