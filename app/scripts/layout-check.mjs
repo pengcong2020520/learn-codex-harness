@@ -218,7 +218,7 @@ export function findChrome(env = process.env) {
   return candidates.find(file => { try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; } });
 }
 const timeoutMs = 10000;
-async function startChrome(chromePath, chromeArgs = []) {
+export async function startChrome(chromePath, chromeArgs = []) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-check-'));
   const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', ...chromeArgs, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let ws;

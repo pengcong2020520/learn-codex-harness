@@ -20,11 +20,11 @@
   "files": [
     {
       "path": "DEPLOY.md",
-      "sha256": "bfd0aabb574c4c6f6d8a30df27a3e5802039ec6b288fb82b1b5dc86cee51b380"
+      "sha256": "4f88c3970e314ce30396eb591bac0a6f6f7ddf083485e336c0f154957654dc95"
     },
     {
       "path": "PROMPT.md",
-      "sha256": "4731d1a351a79a5141b98e0da7c529ca21b5c00e89882e2ec79641bf00328a88"
+      "sha256": "c3c67446ef8a93a0763fcebdb85f58d47ff9ce86b98bde8a4be841016b5e2bce"
     },
     {
       "path": "agent/agent.json",

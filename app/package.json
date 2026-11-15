@@ -64,7 +64,7 @@
     "eval:role": "node scripts/eval-role.mjs",
     "eval:role:score": "node scripts/eval-role-score.mjs",
     "test:protocol:research": "node scripts/test-research-protocol.mjs",
-    "test:web": "node --test tests/web.browser.mjs tests/layout-check.browser.mjs tests/studio-ui.browser.mjs",
+    "test:web": "node --test tests/web.browser.mjs tests/layout-check.browser.mjs tests/studio-ui.browser.mjs tests/walkthrough.browser.mjs",
     "setup": "node scripts/setup.mjs",
     "agent:new": "node scripts/agent-new.mjs",
     "agent:check": "node scripts/agent-check.mjs",
@@ -76,7 +76,8 @@
     "down": "node scripts/ctl.mjs down",
     "logs": "node scripts/ctl.mjs logs",
     "status": "node scripts/ctl.mjs status",
-    "design:land": "bash deploy/land.sh"
+    "design:land": "bash deploy/land.sh",
+    "design:walkthrough": "bash deploy/walkthrough.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

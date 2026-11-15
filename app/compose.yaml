@@ -28,7 +28,7 @@ services:
   design-check:
     <<: *runtime
     profiles: [studio]
-    build:
+    build: &browser-build
       context: .
       dockerfile: server/design-check/Dockerfile
       args:
@@ -53,6 +53,29 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  walkthrough:
+    profiles: [tools]
+    restart: "no"
+    build: *browser-build
+    image: codex-agent-design-check:current
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    mem_limit: 512m
+    tmpfs: ["/tmp:mode=1777"]
+    volumes:
+      - type: bind
+        source: ${WALKTHROUGH_DIR:-./design}
+        target: /review
+        bind:
+          create_host_path: false
+    environment:
+      HOME: /tmp
+      WALKTHROUGH_CONTAINER: "1"
+      WALKTHROUGH_BASE_URL: http://127.0.0.1:${AGENT_PORT:-4317}
+    entrypoint: ["node", "scripts/walkthrough.mjs"]
+    command: []
   land:
     profiles: [land]
     restart: "no"

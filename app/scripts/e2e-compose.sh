@@ -56,4 +56,5 @@ const product = await fetch(base + '/app/');
 assert.equal(product.status, 200);
 assert.match(await product.text(), /事项整理助手/);
 NODE
+WALKTHROUGH_INPUT_PASSWORD="$password" node scripts/walkthrough-e2e.mjs
 echo "端到端验收通过：默认工作室、网页流程、三节点扩容、私有包落地与产品切换。"

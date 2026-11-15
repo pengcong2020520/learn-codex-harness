@@ -28,15 +28,15 @@ description: 用户要在开发完成后、部署之前巡查本机真实产品�
 
 计划写 walkthrough-plan-v<n>.json：schemaVersion=1、projectId、mode="product"、round、source（实际版本标识及序号）、prd、previousRound、confirmation（status、confirmedAt、confirmedBy）、groups。每组有 id/title/order/screens；每屏有 id/title/position/states/actions/reproduce，reproduce 按状态记录有序操作步骤。向用户完整展示，等明确确认后才能操作产品、截图或生成走查页。计划变动新建版本重新确认，确认时新建含真实确认人和时间的快照，不覆写提案；确认计划不授权真实外部消息、付费等行为。
 
-截图与诊断脚本、固定走查页模板由 K5 提供，在那之前用本机可用的浏览器手段，并如实说明工具、执行范围和未验证项，不虚构已有脚本。实际运行产品，页面加载到可操作状态后检查 DOM，选择真实控件按步骤复现，截图并采集控制台错误、失败请求（方法、脱敏路径、状态码）、明显慢请求和布局问题。不得记录密钥、口令、Cookie、认证头或个人数据。只用示例账号和数据；额外外部写入需另获授权。
+用脚手架的 deploy/walkthrough.sh 运行 Chromium 采集和固定走查页模板。实际运行产品，页面加载到可操作状态后检查 DOM，选择真实控件按步骤复现，截图并采集控制台错误、失败请求（方法、脱敏路径、状态码）、明显慢请求和布局问题。不得记录密钥、口令、Cookie、认证头或个人数据。只用示例账号和数据；额外外部写入需另获授权。
 
 无法复现的页面或状态标“无法复现”并说明原因，不能拿设计图或编造画面代替真实截图。产品启动或登录失败时先报告、修复到能运行，不把局部结果称为完整巡查。执行结束关闭本轮创建的浏览器资源，不关用户已有页面。
 
 ## 走查页、反馈与保存
 
-生成可离线打开的 walkthrough-v<n>.html，截图和必要资源内嵌，只用系统字体。左侧按流程分组列目录；主体每组按操作顺序排列屏幕卡片，左边真实截图（可放大），右边名称、状态、复现方式、诊断、反馈框与“可以 / 待改 / 阻塞”。每组末尾另有流程反馈。没有聊天区，不用标签条；一屏布局，卡片区域局部滚动。截图上不叠加任何标签或按钮，说明与“放大”放在截图下方。底部显示本轮计数与保存状态，提供导出 Markdown、导出 JSON，以及“确认本轮巡查通过”（只在没有阻塞和待改时可用，记录确认时间，确认人由用户填写）；不放“按反馈修复”，修复由编码助手按导出的反馈完成。
+生成可离线打开的 r<n>/index.html，截图和必要资源内嵌，只用系统字体。左侧按流程分组列目录；主体每组按操作顺序排列屏幕卡片，左边真实截图（可放大），右边名称、状态、复现方式、诊断、反馈框与“可以 / 待改 / 阻塞”。每组末尾另有流程反馈。没有聊天区，不用标签条；一屏布局，卡片区域局部滚动。截图上不叠加任何标签或按钮，说明与“放大”放在截图下方。底部显示本轮计数与保存状态，提供导出 Markdown、导出 JSON，以及“汇总与验收”入口；在汇总中由用户填写验收人，逐屏通过或明确填写排出本期的理由，再点击“确认本轮巡查通过”记录确认时间；不放“按反馈修复”，修复由编码助手按导出的反馈完成。
 
-每次输入和标记变化自动保存到 localStorage，键包含 projectId、轮次和实际产品版本。成功后才显示“已保存”；禁用或容量不足时提示未保存并保留导出能力。缓存不等于文件存档；导出 JSON 保存为 walkthrough-r<n>-v<k>.json，本轮完成保存 walkthrough-r<n>.json，均只新增。导入数据仅解析字段并以 textContent 展示，不执行用户内容。
+每次输入和标记变化自动保存到 localStorage，键包含 projectId、轮次和实际产品版本。成功后才显示“已保存”；禁用或容量不足时提示未保存并保留导出能力。缓存不等于文件存档；导出 JSON 保存为 walkthrough-r<n>-v<k>.json，初始采集记录保存在 r<n>/walkthrough-r<n>.json，确认通过后导出含 complete 的新版本，均只新增。导入数据仅解析字段并以 textContent 展示，不执行用户内容。
 
 JSON 必须包含 schemaVersion=1、projectId、mode="product"、round、saveVersion、status（in-progress/complete）、已确认 plan、source、previousRound、createdAt、savedAt、reviewer、groups、unmatchedPrevious、conclusion。时间为真实 ISO 8601 或 null，路径相对本机设计目录，不放本机绝对路径。
 
@@ -54,9 +54,21 @@ changeStatus 使用 modified、unchanged、unknown、new；changeEvidence 记录
 
 逐项复现上一轮待改 / 阻塞项，由用户作本轮判断；所有未解决项修复并回归或由用户明确排出本期范围后，才确认巡查通过。然后运行 npm run production:check，通过后按部署手册和用户授权部署。巡查通过、生产检查通过和部署成功分别记录，不能互相替代。
 
+## 在本机采集
+
+把经确认的计划保存为 `app/design/<产品 id>/walkthrough/plan-v1.json`。每个状态在已有 reproduce 原话之外还要填写 capture：steps 以同源 open 开始，随后可 click、wait 或 fill，ready 是只有抵达目标状态才会出现的可见元素。无法安全复现时在该状态填 unavailableReason。选择器来自实际运行的 DOM。测试口令用 fromEnv 引用本次进程的 WALKTHROUGH_INPUT_ 变量。巡查容器仅连接本机产品的 Caddy。
+
+```bash
+cd app
+bash deploy/walkthrough.sh design/<产品 id>/walkthrough/plan-v1.json
+bash deploy/walkthrough.sh design/<产品 id>/walkthrough/plan-v2.json <上轮导出的反馈.json>
+```
+
+打开同目录 r1/index.html，可放大原始 PNG、反馈、刷新恢复和导出。退出码 0 表示全部状态采集成功，2 表示已生成走查页但有未复现状态，1 表示计划或运行失败。每轮目录只新建一次。下一轮填写整数 previousRound、递增 round，保留稳定页面与状态 id。
+
 ## 计划和反馈 JSON 示例
 
-以下仅展示字段结构，示例确认信息不能代替用户实际确认。初版为 walkthrough-plan-v1.json、walkthrough-v1.html、walkthrough-r1.json，后续按数字版本递增。
+以下仅展示字段结构，示例确认信息不能代替用户实际确认。初版为 walkthrough-plan-v1.json、r1/index.html、walkthrough-r1.json，后续按数字版本递增。
 
 ```json
 {
@@ -89,6 +101,12 @@ changeStatus 使用 modified、unchanged、unknown、new；changeEvidence 记录
             "default"
           ],
           "actions": [],
+          "capture": {
+            "default": {
+              "steps": [{"open": "/app/"}, {"wait": "#items"}],
+              "ready": "#items"
+            }
+          },
           "reproduce": {
             "default": [
               "登录示例账号",
