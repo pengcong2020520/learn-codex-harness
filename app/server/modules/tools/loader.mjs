@@ -93,6 +93,7 @@ export async function createToolService(root, { source = readToolSources(root), 
   }
   for (const name of agent?.definition.agent.tools.allow || []) if (!entries.has(name)) throw new Error(`Agent 允许的必需工具未注册：${name}`);
   const available = name => {
+    if (['check_design', 'check_agent_package'].includes(name)) return Boolean((agent || policy)?.allowsTool(name));
     const purpose = { generate_image: 'image', generate_video: 'video', media_status: 'video' }[name];
     return !purpose || Boolean(media?.available(purpose));
   };
@@ -136,7 +137,7 @@ export async function createToolService(root, { source = readToolSources(root), 
         return { success: true, contentItems: [{ type: "inputText", text: JSON.stringify(data ?? null) }] };
       } catch (error) {
         const message = error.code === "ENOENT" ? "文件或目录不存在。" : error.code === "ENOTDIR" ? "指定路径不是目录。"
-          : error.code === "EACCES" ? "没有访问该文件的权限。" : signal?.aborted ? "工具调用已取消。"
+          : error.code === "EACCES" ? "没有访问该文件的权限。" : signal?.aborted ? (tool === 'check_design' && signal.reason?.name === 'TimeoutError' ? '检查超时' : "工具调用已取消。")
           : /^E[A-Z]+$/.test(error.code || "") ? `工具操作失败（${error.code}）。` : error.message;
         return { success: false, contentItems: [{ type: "inputText", text: JSON.stringify({ error: message, ...(error.code ? { code: error.code } : {}) }) }] };
       }

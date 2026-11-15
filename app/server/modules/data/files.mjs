@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { uploadInfo } from "../../../shared/uploads.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 import { Parser } from "htmlparser2";
+import { userFileOperation } from '../runtimes/user-files.mjs';
 
 
 const MAX_BYTES = 256 * 1024;
@@ -118,11 +119,11 @@ export function createFileTools(
 
   function resolve(
     relative = "",
-    { createParents = false, file = false, binary = false, preview = false, upload = false, draft = false } = {},
+    { createParents = false, file = false, binary = false, preview = false, upload = false, draft = false, report = false } = {},
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(draft ? /\.(json|md)$/ : upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+    if (file && (parts.length < 2 || !(draft ? /\.(json|md)$/ : report ? /\.json$/ : upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
       throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
@@ -201,6 +202,29 @@ export function createFileTools(
       const file = resolve(relative, { file: true, draft: true });
       if (uid !== undefined && fs.lstatSync(file).uid !== uid) throw new AppError("草稿必须属于当前用户。", 403);
       return this.read_file({ path: relative, max_chars: MAX_BYTES });
+    },
+    // 仅供设计工具调用，不登记为模型可直接调用的文件工具。
+    design_path({ path: relative, package: packageDirectory = false }) {
+      assertCurrent();
+      relative = normalize(relative);
+      if (!(packageDirectory ? /^outputs\/design\/[^/]+\/package-v[1-9]\d*$/.test(relative) : /^(inputs|outputs)\/.+\.html$/i.test(relative))) throw new Error('请使用 inputs/ 或 outputs/ 下的 HTML，代码包必须位于 outputs/design/<项目>/package-v<n>/。');
+      if (!readable(relative)) throw new Error('未授权读取这个资料范围。');
+      const owner = uid ?? fs.statSync(base).uid;
+      // 0700 子目录只能由属主辅助进程检查；它会逐段拒绝链接并核对文件 uid。
+      const isolated = process.getuid?.() === 0 && owner !== process.getuid();
+      const file = isolated ? path.join(base, relative) : resolve(relative, { file: !packageDirectory });
+      if (!isolated && packageDirectory && !fs.lstatSync(file).isDirectory()) throw new Error('代码包必须是真实目录。');
+      return { file, uid: owner };
+    },
+    write_design_report({ path: relative, report }) {
+      assertCurrent();
+      relative = normalize(relative);
+      if (!/^outputs\/design\/[^/]+\/qa\/[^/]+\.json$/.test(relative)) throw new Error('报告必须写入 outputs/design/<项目>/qa/。');
+      if (!writable(relative)) throw new Error('未授权保存布局校验报告。');
+      if (process.getuid?.() === 0 && uid !== undefined && uid !== process.getuid()) return userFileOperation(uid, 'write-design-report', { workspace: base, path: relative, report });
+      const file = resolve(relative, { file: true, report: true, createParents: true });
+      persist(file, JSON.stringify(report, null, 2) + '\n');
+      return { path: relative };
     },
     write_upload({ path: relative, content }) {
       assertCurrent();

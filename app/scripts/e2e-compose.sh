@@ -10,7 +10,16 @@ export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-codex-agent-e2e}
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then echo "端到端验收失败；请核对上方步骤，不输出未经脱敏的容器日志。" >&2; fi
-  docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+  # 命令行 --profile 会覆盖 COMPOSE_PROFILES，只写 studio 会漏掉扩容后的 cluster 服务。
+  # 数组保留 compose 子命令，profile 为空或 config 失败时仍能退回普通 down。
+  local profiles profile
+  local -a compose_args=(compose)
+  if profiles=$(docker compose config --profiles 2>/dev/null); then
+    while IFS= read -r profile; do
+      if [ -n "$profile" ]; then compose_args+=(--profile "$profile"); fi
+    done <<< "$profiles"
+  fi
+  docker "${compose_args[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -f .env
   exit "$status"
 }
@@ -23,6 +32,12 @@ SETUP_ADMIN_PASSWORD="$password" CODEX_MODEL=deepseek/deepseek-flash DEEPSEEK_AP
 
 printf '%s\n' "$password" | node scripts/e2e-check.mjs
 E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
+# 只在独立验收项目启用工作室，不改 setup 生成的默认配置。
+docker compose --profile studio up -d --build --wait design-check
+docker compose exec -T node-a node scripts/design-check-e2e.mjs
+docker compose exec -T node-a node --test tests/design-check-uid.integration.mjs
+docker compose exec -T design-check node server/design-check/network-check.mjs
+docker compose exec -T design-check node server/design-check/lifecycle-check.mjs
 npm run -s test:deploy:integration
 # 只经 Compose 再起服务，核对同一账号仍能登录；扩容步骤保持独立。
 docker compose stop

@@ -92,6 +92,8 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     if (config.sharding) attachKnowledge({ accounts, knowledge, resources, permissionHub, gate }, config.sharding);
     if (knowledge) agent.knowledgeModes = knowledge.modes;
     const files = resources ? { get workspace() { return localFiles.workspace; },
+      design_path(args) { gate.check('read', { path: args.path }); return localFiles.design_path(args); },
+      write_design_report(args) { gate.check('create', { path: args.path }); return localFiles.write_design_report(args); },
       ...Object.fromEntries(['list_files','read_file','write_file','read_preview','write_upload','read_upload','write_draft','read_draft'].map(name => [name, async args => {
         if (name.endsWith('_draft')) args = { ...args, path: `inputs/drafts/${args.name}` };
         const action = name === 'write_draft' ? 'draft' : name === 'read_draft' ? 'read' : name === 'write_upload' ? 'upload' : name === 'list_files' ? 'list' : ['read_file', 'read_preview', 'read_upload'].includes(name) ? 'read' : 'create';

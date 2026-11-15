@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "module": "server/modules/tools/design.mjs",
+  "tools": [
+    {
+      "name": "check_design", "label": "校验设计布局", "readOnly": false,
+      "description": "检查获准读取的 inputs/ 或 outputs/ 下的单文件 HTML（最多 2 MiB）。返回错误数、警告数及最多 30 条问题，完整报告另存 outputs/design/<项目>/qa/。服务不可用或超时时不能声称已通过校验；修改页面后再明确发起新检查。",
+      "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 500 } }, "required": ["path"], "additionalProperties": false }
+    },
+    {
+      "name": "check_agent_package", "label": "校验 Agent 代码包", "readOnly": true,
+      "description": "静态检查 outputs/design/<项目>/package-v<n>/ 的 Agent 错误级规则、manifest 文件清单与 SHA-256、前端资源及宿主机脚本；返回问题与中文修改建议。不会执行代码包，也不代表已完成部署或业务验收。",
+      "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 500 } }, "required": ["path"], "additionalProperties": false }
+    }
+  ]
+}

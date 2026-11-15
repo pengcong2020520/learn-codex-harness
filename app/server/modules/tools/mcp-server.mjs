@@ -25,7 +25,7 @@ export async function createMcpToolServer({ token, redact }) {
       state.activeCalls++;
       try {
         const result = await registry.call({ tool: params.name, arguments: params.arguments || {} },
-          { signal: AbortSignal.any([extra.signal, controller.signal, AbortSignal.timeout(30000)]) });
+          { signal: AbortSignal.any([extra.signal, controller.signal, AbortSignal.timeout(params.name === 'check_design' ? 60000 : 30000)]) });
         return { isError: !result.success, content: result.contentItems.map(item => ({ type: "text", text: redact(item.text) })) };
       } finally { state.activeCalls--; }
     });

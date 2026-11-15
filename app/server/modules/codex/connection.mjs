@@ -163,7 +163,7 @@ export class CodexConnection extends EventEmitter {
       call = { threadId: params.threadId, turnId: params.turnId, signature, controller, done: false };
       // 请求回包仍按 JSON-RPC id 关联；执行按 callId 去重，不阻塞通知和其他 RPC 响应。
       const timeout = new AbortController();
-      const timer = setTimeout(() => timeout.abort(new Error("工具调用超时。")), this.toolTimeoutMs);
+      const timer = setTimeout(() => timeout.abort(new Error(params.tool === "check_design" ? "检查超时" : "工具调用超时。")), params.tool === "check_design" ? 60000 : this.toolTimeoutMs);
       timer.unref();
       const signal = AbortSignal.any([controller.signal, timeout.signal]);
       let onAbort;

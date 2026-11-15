@@ -132,14 +132,25 @@ export function collectLayout() {
     }
     return result;
   };
+  const paintedTags = new Set(['img', 'video', 'canvas', 'iframe', 'svg', 'object', 'embed', 'input', 'textarea', 'select']);
   const occluded = (r, owner) => {
     const left = Math.max(0, r.left), top = Math.max(0, r.top), right = Math.min(innerWidth, r.right), bottom = Math.min(innerHeight, r.bottom);
     // 视口外没有命中测试结果，不能据此认定遮挡并掩盖真实越界。
     if (right <= left || bottom <= top) return false;
     const dx = Math.min(2, (right - left) / 2), dy = Math.min(2, (bottom - top) / 2);
     return ![[(left + right) / 2, (top + bottom) / 2], [left + dx, top + dy], [right - dx, top + dy], [left + dx, bottom - dy], [right - dx, bottom - dy]].some(([x, y]) => {
-      const hit = document.elementFromPoint(x, y);
-      return hit === owner || (hit && owner.contains(hit));
+      for (const hit of document.elementsFromPoint(x, y)) {
+        if (hit === owner || owner.contains(hit)) return true;
+        if (hit.contains(owner)) continue;
+        const s = geometry.get(hit)?.style;
+        if (!s) continue;
+        // 透明元素也会命中，但下层字仍可见；只有自身绘制的内容才算遮挡，祖先背景不挡子文字。
+        const color = s.backgroundColor;
+        const alpha = color.includes('/') ? color.split('/').at(-1) : color.startsWith('rgba(') ? color.split(',').at(-1) : color === 'transparent' ? '0' : '1';
+        if (parseFloat(alpha) > 0 || s.backgroundImage !== 'none' || paintedTags.has(hit.tagName.toLowerCase())) return false;
+      }
+      // 未命中自身或后代时，沿用原有保守判定。
+      return false;
     });
   };
   const own = new Map(), descendants = new Map();
@@ -207,9 +218,9 @@ export function findChrome(env = process.env) {
   return candidates.find(file => { try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; } });
 }
 const timeoutMs = 10000;
-async function startChrome(chromePath) {
+async function startChrome(chromePath, chromeArgs = []) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-check-'));
-  const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', ...chromeArgs, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let ws;
   const exited = new Promise(resolve => { proc.once('exit', resolve); proc.once('error', resolve); });
   const close = async () => {
@@ -259,10 +270,10 @@ async function startChrome(chromePath) {
   } catch (error) { await close(); throw error; }
 }
 
-export async function checkDesign(file, { viewports = defaultViewports, chromePath = findChrome() } = {}) {
+export async function checkDesign(file, { viewports = defaultViewports, chromePath = findChrome(), chromeArgs = [] } = {}) {
   if (!chromePath) throw Error('找不到 Chrome。请安装 Google Chrome 或 Chromium，或用 CHROME_PATH 指定可执行文件。');
   try { if (!fs.statSync(file).isFile()) throw Error(); } catch { throw Error('HTML 文件不可读取，请检查文件路径。'); }
-  const browser = await startChrome(chromePath);
+  const browser = await startChrome(chromePath, chromeArgs);
   const report = { schemaVersion: 1, file: path.basename(file), status: 'completed', checks: [], issues: [], errors: 0, warnings: 0 };
   let context = { screen: null, state: null, viewport: null }, eventIssues = [], requestIds = new Set(), interceptionError;
   const allowed = url => /^(file|data|blob):/i.test(url);
