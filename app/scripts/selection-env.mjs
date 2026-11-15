@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import { parseEnv } from 'node:util';
 import { randomUUID } from 'node:crypto';
 
-export function updateSelection(file, key, value, mode = 0o600) {
+export function updateSelection(file, key, value, mode = 0o600, fileAccess = operation => operation()) {
   if (!['AGENT_DEFINITION', 'COMPOSE_PROFILES'].includes(key)) throw new Error('仅允许更新 Agent 与服务组合。');
   const temporary = `${file}.${randomUUID()}.tmp`;
   let fd;
   try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    fd = fileAccess(() => fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK));
     const stat = fs.fstatSync(fd);
     if (!stat.isFile() || stat.nlink !== 1) throw new Error();
     const before = fs.readFileSync(fd), text = before.toString('utf8');
@@ -37,9 +37,10 @@ export function updateSelection(file, key, value, mode = 0o600) {
     const out = fs.openSync(temporary, 'wx', 0o600);
     try {
       const owner = fs.fstatSync(out);
-      if (owner.uid !== stat.uid || owner.gid !== stat.gid) fs.fchownSync(out, stat.uid, stat.gid);
+      fs.writeFileSync(out, after);
       fs.fchmodSync(out, mode);
-      fs.writeFileSync(out, after); fs.fsyncSync(out);
+      if (owner.uid !== stat.uid || owner.gid !== stat.gid) fileAccess(() => fs.fchownSync(out, stat.uid, stat.gid));
+      fs.fsyncSync(out);
     } finally { fs.closeSync(out); }
     const current = fs.lstatSync(file);
     if (current.dev !== stat.dev || current.ino !== stat.ino || current.mtimeMs !== stat.mtimeMs || current.ctimeMs !== stat.ctimeMs) throw new Error();

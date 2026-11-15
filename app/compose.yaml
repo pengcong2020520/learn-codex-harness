@@ -60,7 +60,7 @@ services:
     image: codex-agent:current
     user: "0:0"
     cap_drop: [ALL]
-    cap_add: [DAC_READ_SEARCH, SETUID, SETGID]
+    cap_add: [DAC_READ_SEARCH, SETUID, SETGID, CHOWN]
     security_opt: ["no-new-privileges:true"]
     network_mode: none
     volumes: [".:/project"]

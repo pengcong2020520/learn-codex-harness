@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { parseEnv } from 'node:util';
 import { checkAgentPackage } from '../server/modules/design/package.mjs';
 import { readAsUser, userFileOperation } from '../server/modules/runtimes/user-files.mjs';
 import { assertRealPath } from '../server/modules/runtimes/directories.mjs';
@@ -84,7 +83,14 @@ export async function land(root, requested) {
   }
   // 私有文件已经由包属主读取；项目文件始终以检出目录属主的身份安装。
   const owner = fs.statSync(root);
-  if (process.getuid() === 0 && owner.uid !== 0) { process.setgroups([]); process.setgid(owner.gid); process.setuid(owner.uid); }
+  const differentOwner = process.getuid() === 0 && owner.uid !== 0;
+  if (differentOwner) { process.setgroups([]); process.setegid(owner.gid); process.seteuid(owner.uid); }
+  // root 安装时 .env 可能属于 root，而检出目录属于普通用户。只在打开配置或恢复属主时切回维护身份。
+  const configAccess = action => {
+    if (!differentOwner) return action();
+    process.seteuid(0);
+    try { return action(); } finally { process.seteuid(owner.uid); }
+  };
   const state = path.dirname(receipt);
   fs.mkdirSync(state, { recursive: true, mode: 0o700 });
   assertRealPath(state);
@@ -128,10 +134,12 @@ export async function land(root, requested) {
     if (errors.length) throw Error('已安装的 Agent 检查失败，请核对 ' + selected);
     for (const [name, mode] of [['.env', 0o600], ['.env.example', 0o644]]) {
       const file = path.join(root, name);
-      const profiles = parseEnv(fs.readFileSync(file, 'utf8')).COMPOSE_PROFILES || '';
-      if (profiles.split(',').some(p => p.trim() === '*')) throw Error('请将 COMPOSE_PROFILES 的 * 展开为所需服务后继续。');
-      updateSelection(file, 'AGENT_DEFINITION', selected, mode);
-      updateSelection(file, 'COMPOSE_PROFILES', value => value.split(',').map(p => p.trim()).filter(p => p && p !== 'studio').join(','), mode);
+      updateSelection(file, 'AGENT_DEFINITION', selected, mode, configAccess);
+      updateSelection(file, 'COMPOSE_PROFILES', value => {
+        const profiles = value.split(',').map(p => p.trim()).filter(Boolean);
+        if (profiles.includes('*')) throw Error('请展开 COMPOSE_PROFILES 后再落地。');
+        return profiles.filter(p => p !== 'studio').join(',');
+      }, mode, configAccess);
     }
     atomicJson(path.join(root, 'config/runtime/project.json'), { agentDefinition: selected });
     const studio = path.join(root, 'agents/studio');

@@ -169,7 +169,7 @@ test('常驻服务无 DAC_*；初始化、备份和文件恢复的一次性命�
       assert.match(body, /restart: "no"/);
       assert.match(body, /network_mode: none/);
       assert.match(body, /cap_drop: \[ALL\]/);
-      assert.match(body, /cap_add: \[DAC_READ_SEARCH, SETUID, SETGID\]/);
+      assert.match(body, /cap_add: \[DAC_READ_SEARCH, SETUID, SETGID, CHOWN\]/);
       assert.doesNotMatch(body, /DAC_OVERRIDE|docker\.sock/);
     } else if (['prepare', 'migrate'].includes(name)) assert.match(body, /restart: "no"/);
     else assert.doesNotMatch(body, /DAC_(?:OVERRIDE|READ_SEARCH)/, name);
