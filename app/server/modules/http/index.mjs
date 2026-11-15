@@ -30,7 +30,7 @@ async function readBody(request) {
 }
 
 // HTTP 是客户端的入口；业务逻辑全部交给 sessions / messages 模块。
-export function createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, permissionHub, usage = sessions.usage, readiness, log = console.error }) {
+export function createHttpService({ config, uiAgent = config.agent, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, permissionHub, usage = sessions.usage, readiness, log = console.error }) {
   const limits = new RequestLimits(config.deployment);
   const ready = readiness || createReadiness({ config, data, messages, tools });
   const version = revision(config.root);
@@ -50,7 +50,8 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
     try {
       const pathname = new URL(request.url, "http://127.0.0.1").pathname;
       assertAllowedOrigin(request.headers, config);
-      if (agentUiRoute(request, response, config.agent)) return;
+      // 公开入口属于部署包，不能读取需要用户运行时上下文的 Agent 代理。
+      if (agentUiRoute(request, response, uiAgent)) return;
       if (request.method === 'GET' && pathname === '/health') return json(200, { status: 'alive', version });
       if (request.method === 'GET' && pathname === '/ready') {
         const result = await ready();

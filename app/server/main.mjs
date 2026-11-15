@@ -171,7 +171,7 @@ export async function startAgentServer({ config = loadServerConfig(), cli, log =
     safeLog("缓存维护已启用：启动时及每小时检查；保留最近 5 次运行和 7 天内记录，不清理使用中的目录。");
 
     // 4. HTTP 按登录令牌验证用户；服务发现只发布地址。
-    const http = createHttpService({ config, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage, permissionHub, log: safeLog });
+    const http = createHttpService({ config, uiAgent: baseAgent, accounts, sessions, messages, hub, redact, tools, memory, data, resources, gate, knowledge, files, usage, permissionHub, log: safeLog });
     lifecycle.defer(() => http.close());
     const url = externalHttp ? `http://${config.host}:${config.port}` : await http.listen();
     if (!externalHttp) publishConnection(config.root, { url }, lifecycle);

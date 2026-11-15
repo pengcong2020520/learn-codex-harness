@@ -11,6 +11,11 @@ import { createShardedHandler } from '../server/modules/sharding/http.mjs';
 import { tempRoot } from './helpers.mjs';
 import { loginNext } from '../web/modules/login.mjs';
 import { CONTRACTS, digest } from '../server/modules/agents/contracts.mjs';
+import { startAgentServer } from '../server/main.mjs';
+import { ShardedService } from '../server/modules/sharding/service.mjs';
+import { ToolManager, readToolSources } from '../server/modules/tools/index.mjs';
+import { loadServerConfig } from '../server/modules/config/index.mjs';
+import { fixture, installToolFixture, testDataFactory } from './helpers.mjs';
 
 const example = new URL('../examples/custom-ui/', import.meta.url);
 function setup(t) {
@@ -27,6 +32,7 @@ function setup(t) {
 }
 async function request(http, url, method = 'GET') {
   const response = new EventEmitter();
+  response.setHeader = (name, value) => { (response.headers ||= {})[name.toLowerCase()] = value; };
   response.writeHead = (status, headers) => { response.status = status; response.headers = headers; response.headersSent = true; };
   response.end = body => { response.body = body?.toString() || ''; };
   await http.handle({ url, method, headers: {}, socket: { remoteAddress: 'peer' } }, response);
@@ -142,4 +148,47 @@ test('Agent UI 路由：根路径、未声明 404、分片匿名请求留在当�
 test('登录 next：只接受 /app/ 下同源路径，拒绝规范化越界与伪装 URL', () => {
   for (const value of ['/app/', '/app/index.html', '/app/nested/page.html?q=1#detail']) assert.equal(loginNext(value), value);
   for (const value of [null, '', '/app', '/ui/', '//example.com/app/', 'https://example.com/app/', '/app/../ui/', '/app/%2e%2e/ui/', '/app/%252e%252e/ui/', '/app/\\example.com', '/app/%5cfoo', '/app/%2f../ui/', '/app/\nfoo', ' /app/', '/app/%00', '/app/%ff']) assert.equal(loginNext(value), null, String(value));
+});
+
+test('Agent UI 分片入口：真实启动装配的隔离代理不阻断匿名部署 UI', async t => {
+  // 离线保留真实工具目录装配，仅省去与静态路由无关的 MCP 端口监听。
+  t.mock.method(ToolManager.prototype, 'open', async function () {
+    this.registry = await this.build(readToolSources(this.config.root));
+    this.status = 'ready';
+    return this;
+  });
+  for (const customUi of [false, true]) {
+    const root = installToolFixture(tempRoot(t));
+    if (customUi) fs.cpSync(example, path.join(root, 'examples/custom-ui'), { recursive: true });
+    const config = loadServerConfig(root, fixture);
+    if (customUi) config.agentFile = path.join(root, 'examples/custom-ui/agent.json');
+    const coordination = Object.assign(new EventEmitter(), { nodeId: 'node-a', generation: 1, checkLease: () => true });
+    const runtime = { prepared: true, nodeId: 'node-a', cache: {} };
+    const service = new ShardedService(coordination, async () => {
+      const app = await startAgentServer({ config, externalHttp: true, dataFactory: testDataFactory, log: () => {} });
+      // macOS 也走 Compose 的隔离代理分支，不创建用户进程或切换真实 uid。
+      app.rpc.isolated = true;
+      return app;
+    }, runtime, () => {});
+    t.after(() => service.stop());
+    await service.activate(null, service.activationId);
+    assert.equal(service.isReady(), true);
+    const { app } = service;
+    assert.equal(app.config.agent, app.runtimes.agent);
+    assert.throws(() => app.config.agent.definition, { code: 'RUNTIME_BUSY', status: 503 });
+    const authenticate = t.mock.method(app.accounts, 'authenticate');
+    const shard = { handle: createShardedHandler(coordination, service, runtime, {}) };
+    for (const handler of [shard, app.http]) {
+      const entry = await request(handler, '/');
+      assert.equal(entry.status, 302, entry.body);
+      assert.equal(entry.headers.location, customUi ? '/app/' : '/ui/');
+      assert.equal((await request(handler, '/app/')).status, customUi ? 200 : 404);
+      assert.equal((await request(handler, '/app/app.js')).status, customUi ? 200 : 404);
+      assert.equal((await request(handler, '/app/../health')).status, 404);
+    }
+    assert.equal(authenticate.mock.callCount(), 0);
+    assert.equal(app.runtimes.pool.entries.size, 0);
+    assert.equal((await request(shard, '/sessions')).status, 401);
+    await service.stop();
+  }
 });
