@@ -25,6 +25,33 @@ x-gateway-env: &gateway-env
   ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
   HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
 services:
+  design-check:
+    <<: *runtime
+    profiles: [studio]
+    build:
+      context: .
+      dockerfile: server/design-check/Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+    image: codex-agent-design-check:current
+    user: "1000:1000"
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    mem_limit: 512m
+    tmpfs: ["/tmp:uid=1000,gid=1000,mode=0700"]
+    networks: [design-check]
+    environment:
+      DESIGN_CHECK_LISTEN_HOST: 0.0.0.0
+      AGENT_NODE_KEY_A_HASH: ${AGENT_NODE_KEY_A_HASH:-}
+      AGENT_NODE_KEY_B_HASH: ${AGENT_NODE_KEY_B_HASH:-}
+      AGENT_NODE_KEY_C_HASH: ${AGENT_NODE_KEY_C_HASH:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   setup:
     profiles: [setup]
     image: node:24.19.0-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
@@ -206,6 +233,7 @@ services:
       etcd: { condition: service_started }
   node-a: &node
     <<: *runtime
+    networks: [default, design-check]
     build: *agent-build
     image: codex-agent:current
     user: "0:1000"
@@ -233,6 +261,7 @@ services:
       AGENT_SHARD_STRATEGY: ${AGENT_SHARD_STRATEGY:-slots}
       AGENT_RUNTIME_LIMIT: ${AGENT_RUNTIME_LIMIT:-4}
       AGENT_NODE_ADDRESS: ${AGENT_NODE_ADDRESS_A:-http://node-a:4340}
+      DESIGN_CHECK_URL: http://design-check:8091
       AGENT_NODE_ID: node-a
       ETCD_ENDPOINT: http://etcd:2379
       ETCD_USERNAME: node-a
@@ -402,6 +431,8 @@ services:
       RELAY_BIND: ${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}
       RELAYS: '[[4341,"127.0.0.1",14341]]'
 networks:
+  design-check:
+    internal: true
   default:
     ipam:
       config:

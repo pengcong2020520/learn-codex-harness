@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { AppError } from '../../../shared/errors.mjs';
@@ -7,16 +6,8 @@ import { boundedMs } from '../data/database.mjs';
 export const requestTimeout = (env = process.env) => boundedMs(env, 'AGENT_REQUEST_TIMEOUT_MS', 30000, 10000, 300000);
 export const staleRoute = () => new AppError('路由表过期，请刷新。', 409, 'STALE_ROUTE');
 export const unavailable = reason => new AppError(reason, 503, 'SHARD_UNAVAILABLE');
-export const nodeKeyHash = key => createHash('sha256').update(key).digest('hex');
-export const nodeHeaders = runtime => ({ 'x-node-id': runtime.nodeId, 'x-node-key': runtime.key });
-export function authenticateNode(headers, keyHashes, nodes = Object.keys(keyHashes || {})) {
-  const nodeId = headers['x-node-id'], key = headers['x-node-key'];
-  const expected = keyHashes?.[nodeId];
-  if (!nodes.includes(nodeId) || typeof key !== 'string' || key.length < 24 ||
-      !/^[a-f0-9]{64}$/.test(expected || '') || !timingSafeEqual(Buffer.from(nodeKeyHash(key)), Buffer.from(expected)))
-    throw new AppError('节点认证失败。', 403, 'NODE_AUTH');
-  return nodeId;
-}
+export { nodeKeyHash, nodeHeaders, authenticateNode } from './node-auth.mjs';
+import { nodeHeaders } from './node-auth.mjs';
 export function targetOf(route, members) {
   const member = [...members.values()].find(m => m.nodeId === route.primary);
   if (!member) throw unavailable(route.primary ? `分片 ${route.shardId} 的主节点 ${route.primary} 不在线；等待可提升副本或恢复主节点。` : `分片 ${route.shardId} 尚无主节点。`);

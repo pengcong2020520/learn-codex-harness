@@ -11,6 +11,17 @@ try {
     fs.writeFileSync(1, data); fs.writeFileSync(3, JSON.stringify(metadata));
   } else {
     switch (task.operation) {
+      case 'write-design-report': {
+        const { createFileTools } = await import('../data/files.mjs');
+        const { assertRealPath } = await import('./directories.mjs');
+        assertRealPath(task.workspace);
+        const files = createFileTools(task.workspace, { workspaceDir: task.workspace, outputs: { directory: 'outputs' }, uid: process.getuid() });
+        value = files.write_design_report({ path: task.path, report: task.report }); break;
+      }
+      case 'check-agent-package': {
+        const { checkAgentPackage } = await import('../design/package.mjs');
+        value = checkAgentPackage(task.directory); break;
+      }
       case 'knowledge-create': {
         const { prepareKnowledgeDirectories } = await import('../knowledge/directories.mjs');
         value = prepareKnowledgeDirectories(task.workspace, task.bindings, { exclusive: task.exclusive !== false }); break;

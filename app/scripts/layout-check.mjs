@@ -207,9 +207,9 @@ export function findChrome(env = process.env) {
   return candidates.find(file => { try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; } });
 }
 const timeoutMs = 10000;
-async function startChrome(chromePath) {
+async function startChrome(chromePath, chromeArgs = []) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-check-'));
-  const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const proc = spawn(chromePath, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-gpu', ...chromeArgs, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let ws;
   const exited = new Promise(resolve => { proc.once('exit', resolve); proc.once('error', resolve); });
   const close = async () => {
@@ -259,10 +259,10 @@ async function startChrome(chromePath) {
   } catch (error) { await close(); throw error; }
 }
 
-export async function checkDesign(file, { viewports = defaultViewports, chromePath = findChrome() } = {}) {
+export async function checkDesign(file, { viewports = defaultViewports, chromePath = findChrome(), chromeArgs = [] } = {}) {
   if (!chromePath) throw Error('找不到 Chrome。请安装 Google Chrome 或 Chromium，或用 CHROME_PATH 指定可执行文件。');
   try { if (!fs.statSync(file).isFile()) throw Error(); } catch { throw Error('HTML 文件不可读取，请检查文件路径。'); }
-  const browser = await startChrome(chromePath);
+  const browser = await startChrome(chromePath, chromeArgs);
   const report = { schemaVersion: 1, file: path.basename(file), status: 'completed', checks: [], issues: [], errors: 0, warnings: 0 };
   let context = { screen: null, state: null, viewport: null }, eventIssues = [], requestIds = new Set(), interceptionError;
   const allowed = url => /^(file|data|blob):/i.test(url);

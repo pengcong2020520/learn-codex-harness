@@ -40,7 +40,7 @@ export class ToolManager {
   }
   connection(registry) {
     return { url: `${this.server.url}/${registry.version}`, bearer_token_env_var: "PROJECT_MCP_TOKEN",
-      required: true, enabled: true, startup_timeout_sec: 15, tool_timeout_sec: 30, default_tools_approval_mode: "approve" };
+      required: true, enabled: true, startup_timeout_sec: 15, tool_timeout_sec: registry.specs.some(tool => tool.name === 'check_design') ? 60 : 30, default_tools_approval_mode: "approve" };
   }
   attach({ rpc, isBusy = () => false, hub, owners = () => [] }) {
     Object.assign(this, { rpc, hub, owners });

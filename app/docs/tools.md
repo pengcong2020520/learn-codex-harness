@@ -17,3 +17,7 @@
 错误标明 `source_versions 第 N 项`，从 1 开始，并区分路径不存在、尚未登记、没有读权限、resourceId 不存在、versionId 不属于该资源和版本过期。前两类 ID 错误提示可能抄错号码，只有确实属于该资源的旧版本才提示“资料已有更新，请重新读取”。参数 schema 拒绝非法项时也标明项号。
 
 来源声明不代表自动事实核查，也不会自动捕获未声明的引用。持久化与失效传播见[数据层说明](data-layer.md)。
+
+工作室可声明 `check_design` 和 `check_agent_package`，分别校验 HTML 布局及 Agent 代码包；参数、报告路径和运行边界见[设计校验说明](design-check.md)。
+
+代码包前端只认 `agent/ui/`，并须在 `agent/agent.json` 声明 `agent.ui`（例如 `{ "entry": "ui/index.html", "title": "页面标题" }`）。包根 `ui/` 下的文件报错 `ui-location`；有 `agent/ui/` 文件但未声明 `agent.ui` 时，报错 `ui-undeclared`，因为这些前端不会被 `/app/` 提供。
