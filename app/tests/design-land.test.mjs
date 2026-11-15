@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
-import { discover, land } from '../scripts/design-land.mjs';
+import { discover, land, verifyLanding } from '../scripts/design-land.mjs';
 import { selectAgentFile } from '../server/modules/agents/selection.mjs';
 
 const app = new URL('../', import.meta.url);
@@ -59,4 +59,12 @@ test('配置冲突中断后按同一清单继续，保留已安装目录', async
   fs.writeFileSync(file, 'AGENT_DEFINITION=agents/studio/agent.json\n');
   assert.ok((await land(root)).done);
   assert.equal(fs.statSync(agent).ino, ino);
+});
+
+test('落地完成须核对就绪、Caddy 跳转以及真实产品入口内容', async t => {
+  const { root } = fixture(t), result = await land(root), env = { AGENT_DEFINITION: result.selected };
+  const bytes = fs.readFileSync(path.join(root, 'agents/task-helper/ui/index.html'));
+  const serve = body => async url => url.endsWith('/ready') ? new Response('{}') : url.endsWith('/app/') ? new Response(body) : new Response(null, { status: 302, headers: { location: '/app/' } });
+  await verifyLanding(root, env, serve(bytes));
+  await assert.rejects(verifyLanding(root, env, serve('旧页面')), /入口不一致/);
 });

@@ -46,6 +46,7 @@ docker compose up -d --wait
 printf '%s\n' "$password" | node scripts/e2e-check.mjs --login-only
 SETUP_ADMIN_PASSWORD="$password" npm run cluster:enable -- --yes
 docker compose exec -T -e LAND_E2E_FIXTURE=1 node-a node scripts/land-e2e.mjs
+export COMPOSE_FILE=compose.yaml:tests/fixtures/studio/land-chat.compose.yaml
 bash deploy/land.sh
 node --input-type=module <<'NODE'
 import assert from 'node:assert/strict';
@@ -56,5 +57,6 @@ const product = await fetch(base + '/app/');
 assert.equal(product.status, 200);
 assert.match(await product.text(), /事项整理助手/);
 NODE
+E2E_WEB_PASSWORD="$password" node --test tests/land-chat.browser.mjs
 WALKTHROUGH_INPUT_PASSWORD="$password" node scripts/walkthrough-e2e.mjs
 echo "端到端验收通过：默认工作室、网页流程、三节点扩容、私有包落地与产品切换。"

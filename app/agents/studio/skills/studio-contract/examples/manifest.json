@@ -40,7 +40,7 @@
     },
     {
       "path": "agent/ui/index.html",
-      "sha256": "0886f184854237e9a7d3ff574a37d43bd4bcd9263f52005ed88f97e6c580d9ed"
+      "sha256": "69c0ede6c270c24ea5dd6930bd4a10f9ff428f47ea5876069db70b242498cffb"
     },
     {
       "path": "agent/ui/styles.css",

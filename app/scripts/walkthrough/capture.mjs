@@ -28,7 +28,11 @@ async function visible(browser, selector, origin) {
       if (location.origin !== ${JSON.stringify(origin)}) return false;
       const e = document.querySelector(${JSON.stringify(selector)});
       return !!e && !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility === 'visible';
-    })()`);
+    })()`).catch(error => {
+      // 跨页跳转会销毁执行上下文，只重新观察元素，不再次触发点击或提交。
+      if (error.protocolCode === -32000) return false;
+      throw error;
+    });
     if (ok) return;
     await delay(100);
   }

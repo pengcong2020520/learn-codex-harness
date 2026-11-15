@@ -7,7 +7,8 @@ import { assertRealPath } from '../server/modules/runtimes/directories.mjs';
 import { resourcePath } from '../server/modules/data/paths.mjs';
 import { checkAgent } from './agent-check.mjs';
 import { updateSelection } from './selection-env.mjs';
-import { isMain } from './quickstart-lib.mjs';
+import { isMain, waitReady } from './quickstart-lib.mjs';
+import { selectAgentFile } from '../server/modules/agents/selection.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const json = value => JSON.stringify(value, null, 2) + '\n';
@@ -149,11 +150,30 @@ export async function land(root, requested) {
   } finally { fs.rmdirSync(lock); }
 }
 
+// 检查真实入口返回的字节，避免只凭容器存活就宣告产品已经切换。
+export async function verifyLanding(root, env, fetchImpl = fetch) {
+  const file = selectAgentFile(root);
+  if (selectAgentFile(root, env.AGENT_DEFINITION) !== file) throw Error('节点的 Agent 选择与已安装的项目不一致。');
+  const { agent } = JSON.parse(fs.readFileSync(file));
+  if (!agent.ui || agent.id === 'studio') throw Error('当前节点尚未装配产品前端。');
+  const baseUrl = 'http://caddy';
+  await waitReady(env, { baseUrl, fetchImpl });
+  const options = { redirect: 'manual', signal: AbortSignal.timeout(8000) };
+  const entry = await fetchImpl(baseUrl + '/', options);
+  if (entry.status !== 302 || entry.headers.get('location') !== '/app/') throw Error('Caddy 首页没有指向产品。');
+  const response = await fetchImpl(baseUrl + '/app/', options);
+  if (response.status !== 200 || !Buffer.from(await response.arrayBuffer()).equals(fs.readFileSync(path.join(path.dirname(file), agent.ui.entry)))) throw Error('产品首页与安装包入口不一致，请核对构建和节点配置。');
+}
+
 if (isMain(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.length && (args.length !== 2 || args[0] !== '--package')) throw Error('用法：land [--package app 下的包目录]');
-    const result = await land(process.env.LAND_PROJECT_ROOT || process.cwd(), args[1]);
-    console.log('代码包已落地：' + result.selected + '。设计记录：design/' + result.productId + '/。');
+    if (args.length === 1 && args[0] === '--verify-live') {
+      await verifyLanding(process.cwd(), process.env);
+    } else {
+      if (args.length && (args.length !== 2 || args[0] !== '--package')) throw Error('用法：land [--package app 下的包目录]');
+      const result = await land(process.env.LAND_PROJECT_ROOT || process.cwd(), args[1]);
+      console.log('代码包已落地：' + result.selected + '。设计记录：design/' + result.productId + '/。');
+    }
   } catch (error) { console.error('落地停止：' + error.message); process.exitCode = 1; }
 }

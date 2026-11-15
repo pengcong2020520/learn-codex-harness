@@ -113,11 +113,11 @@ export async function checkPort(port = 4317) {
     server.listen(port, '127.0.0.1', () => server.close(resolve));
   });
 }
-export async function waitReady(env, { fetchImpl = fetch, now = Date.now, wait = sleep, log = console.log } = {}) {
+export async function waitReady(env, { fetchImpl = fetch, now = Date.now, wait = sleep, log = console.log, baseUrl = entryUrl(env) } = {}) {
   const deadline = now() + 120_000;
   while (now() < deadline) {
     try {
-      const response = await fetchImpl(`${entryUrl(env)}/ready`, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+      const response = await fetchImpl(`${baseUrl}/ready`, { signal: AbortSignal.timeout(8000), redirect: 'error' });
       if (response.status === 200) return;
     } catch { /* 只轮询只读状态，不重发任何修改操作。 */ }
     log('等待服务就绪……');

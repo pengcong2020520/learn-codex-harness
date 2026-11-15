@@ -255,7 +255,7 @@ export async function startChrome(chromePath, chromeArgs = []) {
       const msg = JSON.parse(data);
       if (pending.has(msg.id)) {
         const { resolve, reject, timer } = pending.get(msg.id); pending.delete(msg.id); clearTimeout(timer);
-        msg.error ? reject(Error('Chrome 调试命令失败，请核对 Chrome 版本与页面状态。')) : resolve(msg.result);
+        msg.error ? reject(Object.assign(Error('Chrome 调试命令失败，请核对 Chrome 版本与页面状态。'), { protocolCode: msg.error.code })) : resolve(msg.result);
       } else for (const listener of listeners) listener(msg);
     });
     const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
