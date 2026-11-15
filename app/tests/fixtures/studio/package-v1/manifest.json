@@ -11,7 +11,7 @@
     "confirmedBy": null
   },
   "scaffold": {
-    "minimumVersion": "2a561f0；K4 尚未提供，落地依赖未满足",
+    "minimumVersion": "包含 deploy/land.sh 及 K2 静态前端的脚手架",
     "requiredCapabilities": [
       "K2",
       "K4"
@@ -20,11 +20,11 @@
   "files": [
     {
       "path": "DEPLOY.md",
-      "sha256": "3d685fe37210bebcf8b2006350045a561a9da5d1a85e6ec9b1bf87a3b915c71b"
+      "sha256": "bfd0aabb574c4c6f6d8a30df27a3e5802039ec6b288fb82b1b5dc86cee51b380"
     },
     {
       "path": "PROMPT.md",
-      "sha256": "8597c5e04585a00a578ace7c754d69dd438ee2b4a9cc553b4196397738698140"
+      "sha256": "4731d1a351a79a5141b98e0da7c529ca21b5c00e89882e2ec79641bf00328a88"
     },
     {
       "path": "agent/agent.json",

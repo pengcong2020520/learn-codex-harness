@@ -32,8 +32,7 @@ SETUP_ADMIN_PASSWORD="$password" CODEX_MODEL=deepseek/deepseek-flash DEEPSEEK_AP
 
 printf '%s\n' "$password" | node scripts/e2e-check.mjs
 E2E_WEB_PASSWORD="$password" node --test tests/web-e2e.browser.mjs
-# 只在独立验收项目启用工作室，不改 setup 生成的默认配置。
-docker compose --profile studio up -d --build --wait design-check
+# 新安装的工作室自带隔离校验服务。
 docker compose exec -T node-a node scripts/design-check-e2e.mjs
 docker compose exec -T node-a node --test tests/design-check-uid.integration.mjs
 # node-a 权限与 uid 验收容器一致，在此运行让 CI 覆盖真实 uid。
@@ -46,4 +45,15 @@ docker compose stop
 docker compose up -d --wait
 printf '%s\n' "$password" | node scripts/e2e-check.mjs --login-only
 SETUP_ADMIN_PASSWORD="$password" npm run cluster:enable -- --yes
-echo "端到端验收通过：单节点上手、网页流程、三节点扩容与副本追平。"
+docker compose exec -T -e LAND_E2E_FIXTURE=1 node-a node scripts/land-e2e.mjs
+bash deploy/land.sh
+node --input-type=module <<'NODE'
+import assert from 'node:assert/strict';
+const base = 'http://127.0.0.1:' + (process.env.AGENT_PORT || 4317);
+const entry = await fetch(base + '/', { redirect: 'manual' });
+assert.equal(entry.headers.get('location'), '/app/');
+const product = await fetch(base + '/app/');
+assert.equal(product.status, 200);
+assert.match(await product.text(), /事项整理助手/);
+NODE
+echo "端到端验收通过：默认工作室、网页流程、三节点扩容、私有包落地与产品切换。"

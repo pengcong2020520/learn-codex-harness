@@ -12,7 +12,7 @@ export function newAgent(name, { root = PROJECT_ROOT, log = console.log } = {}) 
   if (typeof name !== 'string' || !/^[a-z0-9-]{2,32}$/.test(name)) throw new Error('Agent 名称只允许 2–32 位小写字母、数字和连字符。');
   const directory = path.join(root, 'agents', name);
   if (fs.existsSync(directory)) throw new Error('Agent 目录已存在，请换一个名称。');
-  const original = JSON.parse(fs.readFileSync(path.join(root, 'agents/writing/agent.json'), 'utf8'));
+  const original = JSON.parse(fs.readFileSync(path.join(root, 'examples/writing-assistant/agent.json'), 'utf8'));
   const workflow = { id: 'solve-task', label: '完成任务', skill: 'task-guide', steps: [
     { id: 'clarify', goal: '明确目标与验收要求，向用户确认执行计划', confirm: true },
     { id: 'deliver', goal: '按已确认的要求完成任务，把需要保存的结果写入 outputs/', writes: ['outputs'], checks: ['file-exists', 'format'] },

@@ -24,7 +24,7 @@ const password = 'temporary-test-password';
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'app-quickstart-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  for (const directory of ['agents', 'config']) fs.cpSync(new URL(`../${directory}`, import.meta.url), path.join(root, directory), { recursive: true });
+  for (const directory of ['agents', 'examples', 'config']) fs.cpSync(new URL(`../${directory}`, import.meta.url), path.join(root, directory), { recursive: true });
   for (const file of ['.env.example', 'package.json', 'compose.yaml']) fs.copyFileSync(new URL(`../${file}`, import.meta.url), path.join(root, file));
   const calls = [], logs = [], answers = [];
   const context = { root, env: { SETUP_ADMIN_PASSWORD: password, FORCE_COLOR: '1', DEEPSEEK_API_KEY: 'test-provider-key', PATH: process.env.PATH },
@@ -334,7 +334,7 @@ test('agent:new 名称、通用模板、显示名称与引用校验；重复目�
   const f = fixture(t);
   for (const name of ['x', '../bad', 'Upper', 'a_b', 'x'.repeat(33), 'two words']) assert.throws(() => newAgent(name, f), /名称/);
   for (const name of ['my-agent', '12', '--']) {
-    const definition = newAgent(name, f), file = path.join(f.root, 'agents', name, 'agent.json');
+    const definition = newAgent(name, f), file = path.join(f.root, name === 'writing' ? 'examples/writing-assistant' : 'agents/' + name, 'agent.json');
     const agent = new AgentDefinition(f.root, file);
     assert.equal(definition.agent.id, name); assert.equal(agent.definition.agent.name, '通用助手');
     assert.ok(agent.skills.length); assert.ok(agent.workflows.list().some(item => item.id === 'solve-task'));
@@ -344,7 +344,7 @@ test('agent:new 名称、通用模板、显示名称与引用校验；重复目�
     assert.throws(() => newAgent(name, f), /已存在/);
     assert.ok(before.equals(fs.readFileSync(file)));
   }
-  assert.doesNotThrow(() => new AgentDefinition(f.root, path.join(f.root, 'agents/writing/agent.json')));
+  assert.doesNotThrow(() => new AgentDefinition(f.root, path.join(f.root, 'examples/writing-assistant/agent.json')));
 });
 test('cluster:enable 新凭据校验通过、旧凭据不变、profiles 合并、只增不减', async t => {
   const f = await configured(t), before = readEnv(f.root); before.COMPOSE_PROFILES = 'remote-access,cluster,remote-access';
@@ -540,7 +540,7 @@ test('workbench 返回可选显示名称，旧 Agent 仍回退到 id，认证门
   const { fixedAccounts, httpFixture, request } = await import('./accounts-fixture.mjs');
   const f = fixture(t); newAgent('display-agent', f);
   for (const name of ['display-agent', 'writing']) {
-    const agent = new AgentDefinition(f.root, path.join(f.root, 'agents', name, 'agent.json'));
+    const agent = new AgentDefinition(f.root, path.join(f.root, name === 'writing' ? 'examples/writing-assistant' : 'agents/' + name, 'agent.json'));
     const http = httpFixture(fixedAccounts(), { config: { launch: {}, deployment: {}, agent } });
     assert.equal((await request(http, '/workbench')).statusCode, 401);
     const response = await request(http, '/workbench', { token: 'unit-token' });
@@ -587,7 +587,7 @@ test('cluster:enable 经 admin 检查后写配置、构建、按新拓扑启动�
   assert.deepEqual(events, ['admin', 'docker', 'ready', 'replicas']);
   assert.equal(readEnv(f.root).AGENT_CLUSTER_NODES, 'node-a,node-b');
   validateClusterSecrets(readEnv(f.root), ['node-a', 'node-b']);
-  assert.deepEqual(f.calls.at(-1).args, ['compose', '--profile', 'cluster', 'up', '-d', '--build', '--wait', 'node-a', 'node-b', 'caddy']);
+  assert.deepEqual(f.calls.at(-1).args, ['compose', '--profile', 'cluster', 'up', '-d', '--build', '--wait', 'node-a', 'node-b', 'caddy', 'design-check']);
   for (const call of f.calls) assert.equal(JSON.stringify([call.args, call.options.env]).includes(password), false);
 });
 test('cluster:enable 修改后外部操作失败立即停止，保留现场供人工核对', async t => {
@@ -761,13 +761,13 @@ for (const profiles of ['', 'remote-access', 'cluster,https,cluster']) test(`set
   await setup(['--non-interactive', '--no-start'], f);
   const values = readEnv(f.root);
   assert.equal(values.AGENT_DOMAIN, 'agent.example.com');
-  assert.equal(values.COMPOSE_PROFILES, [...new Set([...profiles.split(',').filter(Boolean), 'https'])].join(','));
+  assert.equal(values.COMPOSE_PROFILES, [...new Set(['studio', ...profiles.split(',').filter(Boolean), 'https'])].join(','));
   assert.match(f.logs.join('\n'), /A 记录.*80.*443.*首次访问/);
 });
-test('setup 不填域名不写 AGENT_DOMAIN 与空 COMPOSE_PROFILES', async t => {
+test('setup 不填域名时仅启用工作室 profile', async t => {
   const f = await configured(t), values = readEnv(f.root);
   assert.equal(Object.hasOwn(values, 'AGENT_DOMAIN'), false);
-  assert.equal(Object.hasOwn(values, 'COMPOSE_PROFILES'), false);
+  assert.equal(values.COMPOSE_PROFILES, 'studio');
 });
 test('集群显式启动列表包含已启用的 HTTPS 入口', () => {
   assert.deepEqual(composeUp({ AGENT_CLUSTER_NODES: 'node-a,node-b', COMPOSE_PROFILES: 'cluster,https' }).slice(-4), ['node-a', 'node-b', 'caddy', 'edge']);

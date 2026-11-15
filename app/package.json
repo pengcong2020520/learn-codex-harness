@@ -75,7 +75,8 @@
     "up": "node scripts/ctl.mjs up",
     "down": "node scripts/ctl.mjs down",
     "logs": "node scripts/ctl.mjs logs",
-    "status": "node scripts/ctl.mjs status"
+    "status": "node scripts/ctl.mjs status",
+    "design:land": "bash deploy/land.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -52,7 +52,7 @@ package-v1/
 
 ## manifest.json
 
-清单记录包格式版本、产品 id、Agent id、文件路径与 SHA-256、各设计产物的版本和确认记录、目标脚手架最低版本及落地所需信息。下面是字段结构示例，`files` 和 `artifacts` 仅展示一项；实际包必须完整列出，不能照抄占位值。K4 尚未提供清单解析器，字段最终按 K4 约定核对；本节不宣称解析器已经支持这些字段。
+清单记录包格式版本、产品 id、Agent id、文件路径与 SHA-256、各设计产物的版本和确认记录、目标脚手架最低版本及落地所需信息。下面是字段结构示例，`files` 和 `artifacts` 仅展示一项；实际包必须完整列出，不能照抄占位值。固定落地命令使用工作室的 manifest 契约，逐文件核对 SHA-256。
 
 ```json
 {
@@ -97,7 +97,7 @@ package-v1/
 
 ## 完整 Agent 与前端
 
-对照 `app/server/modules/agents/schema.mjs`、`app/agents/writing/agent.json`、`app/scripts/agent-check.mjs` 生成完整 Agent 配置，不只交配置草稿或页面计划：
+对照 `app/server/modules/agents/schema.mjs`、`app/examples/writing-assistant/agent.json`、`app/scripts/agent-check.mjs` 生成完整 Agent 配置，不只交配置草稿或页面计划：
 
 - `agent.instructions` 指向随包提供的 `role.md`；`agent.skills`、`bindings.skills` 与实际 Skill 路径一致。
 - description、starters 从资料卡和 PRD 推导；目标 schema 支持后写入相应字段。不支持时记录目标版本依赖与检查失败，不能擅改 schema，也不能删掉已确认的设计要求来宣称通过。
@@ -133,7 +133,7 @@ Agent 自带前端的接入方式**按 K2 约定**。K2 合并之前不猜测 UI
 
 手册必须按以下顺序写，并区分已经验证和仍待验证：
 
-1. **本机落地**：定位工作区中的 `outputs/design/<项目 id>/package-v<n>/`，核对清单与目标版本。在脚手架 `app/` 目录使用 K4 提供的固定命令，暂定 `docker compose run --rm land`，或 `npm run design:land`。包的选择 / 传参方式以 K4 实际命令帮助为准，不编造选项。K4 未提供时说明命令尚不可用，只停下落地步骤，不生成替代脚本。
+1. **本机落地**：在脚手架 app/ 运行 `bash deploy/land.sh`（等价于 `npm run design:land`）。默认选择唯一项目的最新包，多个项目或指定旧版用 `--package <相对 app 的包目录>`。包装命令先以 `docker compose run --rm land` 校验安装，再关闭设计服务并重建产品。
 2. **落地命令的职责**：校验代码包 → 放入 `app/agents/<id>/` → 用 `ui/` 替换默认前端（按 K2 约定）→ 保存设计记录到 `app/design/<产品 id>/` → 删除工作室 → 运行 agent:check → 重建并切换。全部由脚手架固定命令在本机完成，工作室不执行这些修改。中途失败要停下，说明失败步骤与人工核对方法，不自动重试；K4 负责已完成步骤的安全重入。
 3. **开发、检查与本机验证**：先按确认原型开发前端，按 PRD 开发后端，补齐需要开发清单；执行目标仓库已有检查、测试与构建命令，未定义的命令不能编造。启动本机真实产品，在 app/ 执行 `npm run agent:check -- agents/<id>/agent.json`；确认真实登录、会话、消息、SSE、确认 / 修改 / 结束、产物、预览与上传流程符合 PRD，页面与已确认原型逐屏对照。确认工作室已删除、设计记录保留、新 Agent 页面已切换。静态检查通过不代表真实流程已通过，逐条列未执行项目。
 4. **本机巡查与生产检查**：读取 flow-walkthrough，先列计划等用户确认，再截图、采集脱敏诊断并生成走查页，等待用户反馈。反馈逐条归类为前端、后端或整体，修复后发起下一轮回归，保留原话与已修改证据。巡查通过后在 app/ 执行 `npm run production:check`，通过后才能部署。K5 截图与诊断脚本、模板未提供时使用本机可用浏览器手段并说明。
@@ -148,7 +148,7 @@ Agent 自带前端的接入方式**按 K2 约定**。K2 合并之前不猜测 UI
 
 > 先读 AGENTS.md 和代码包 manifest.json、DEPLOY.md、design/ 中已确认的资料卡、PRD、线框、主题、原型及质量报告。核对完整清单、最终字节 SHA-256、确认记录和目标脚手架能力，记录包的实际位置与版本。按以下顺序完成：
 >
-> 1. 落地：在本机 app/ 核对 K4 的命令帮助，选择此包并运行脚手架自带的 docker compose run --rm land 或 npm run design:land；命令未提供就停止依赖它的动作并报告，不编造参数、替代脚本或成功结果。失败或结果不明先核对，不自动重试，不执行包内宿主机脚本。
+> 1. 落地：在本机 app/ 运行 bash deploy/land.sh --package <此包相对 app 的目录>，核对输出与产品入口。失败或结果不明先核对，不自动重试，不执行包内宿主机脚本。
 > 2. 按设计开发：前端逐屏按已确认原型，后端按 PRD 的 FR、实体、权限与验收场景实现；逐项完成下方需要开发清单。复用现有认证、归属与门禁，结构变更先提案等待确认。
 > 3. 检查与构建：执行 npm run agent:check -- agents/<id>/agent.json 及目标仓库已有测试、构建命令，记录退出码、结果与未运行项，不能把静态通过写成业务通过。
 > 4. 本机运行：按仓库现有启动方式运行真实产品，用示例账号、示例数据验证核心流程，逐屏对照 PRD 和原型。启动或登录失败先修复，不伪造截图。

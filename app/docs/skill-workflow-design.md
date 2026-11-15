@@ -38,7 +38,7 @@
 | 运行状态区 | `.data/`（含 `CODEX_HOME`）、`.runs/` | 只有服务 | 服务自身 |
 
 ```
-agents/writing/                      workspace/（bindings.workspaceDir）
+examples/writing-assistant/                      workspace/（bindings.workspaceDir）
 ├── agent.json                       ├── inputs/      只读资料
 ├── role.md                          ├── research/    过程文件
 └── skills/                          ├── drafts/

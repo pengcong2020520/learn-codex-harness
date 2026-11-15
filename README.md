@@ -14,7 +14,7 @@ npm ci
 npm run setup
 ```
 
-按提示配置模型与管理员账号，打开 <http://127.0.0.1:4317/>。自定义 Agent 与服务器部署见 [脚手架说明](app/README.md)。
+按提示配置模型与管理员账号，打开 <http://127.0.0.1:4317/>。管理员首次打开的是 Agent 设计工作室。确认高保真并生成代码包后，在 app/ 运行 `bash deploy/land.sh` 切换到自己的产品。开发与部署见 [脚手架说明](app/README.md)。
 
 ## Agent = 模型 + Harness
 

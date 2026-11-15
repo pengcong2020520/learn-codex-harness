@@ -95,10 +95,11 @@ export async function setup(argv = process.argv.slice(2), { root = PROJECT_ROOT,
       }
       const template = parseEnv(fs.readFileSync(path.join(root, '.env.example'), 'utf8'));
       values = generateDeployEnv(updates, template, path.resolve(root));
-      if (domain) {
-        values.AGENT_DOMAIN = domain;
-        values.COMPOSE_PROFILES = [...new Set([...`${values.COMPOSE_PROFILES || ''},${env.COMPOSE_PROFILES || ''}`.split(',').map(value => value.trim()).filter(Boolean), 'https'])].join(',');
-      } else if (!values.COMPOSE_PROFILES) delete values.COMPOSE_PROFILES;
+      if (domain) values.AGENT_DOMAIN = domain;
+      const profiles = new Set([values.COMPOSE_PROFILES, env.COMPOSE_PROFILES].flatMap(list => (list || '').split(',').map(p => p.trim()).filter(Boolean)));
+      if (domain) profiles.add('https');
+      if (profiles.size) values.COMPOSE_PROFILES = [...profiles].join(',');
+      else delete values.COMPOSE_PROFILES;
       values.AGENT_ADMIN_BOOTSTRAP = encodeBootstrap({ username, hash: await hashPassword(password) });
       values.AGENT_ALLOWED_ORIGINS = `http://127.0.0.1:4317,http://localhost:4317${domain ? `,https://${domain}` : ''}`;
       if (options.interactive) log(`${summary}；域名 ${domain || '无'}；管理员 ${username}`);

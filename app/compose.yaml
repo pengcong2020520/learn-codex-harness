@@ -53,6 +53,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  land:
+    profiles: [land]
+    restart: "no"
+    build: *agent-build
+    image: codex-agent:current
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH, SETUID, SETGID, CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    volumes: [".:/project"]
+    environment:
+      LAND_PROJECT_ROOT: /project
+    entrypoint: ["node", "scripts/design-land.mjs"]
+    command: []
   setup:
     profiles: [setup]
     image: node:24.19.0-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
@@ -147,7 +162,7 @@ services:
       AGENT_NODE_A_DB_PASSWORD: ${AGENT_NODE_A_DB_PASSWORD:-}
       AGENT_NODE_B_DB_PASSWORD: ${AGENT_NODE_B_DB_PASSWORD:-}
       AGENT_NODE_C_DB_PASSWORD: ${AGENT_NODE_C_DB_PASSWORD:-}
-      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
+      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/studio/agent.json}
     volumes:
       - type: bind
         source: ./.env
@@ -276,7 +291,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
       CODEX_MODEL_CATALOG_ENABLED: "true"
       CODEX_MODEL: ${CODEX_MODEL:-kimi/kimi-k2.7-code}
-      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/writing/agent.json}
+      AGENT_DEFINITION: ${AGENT_DEFINITION:-agents/studio/agent.json}
       AGENT_WEB_SEARCH: ${AGENT_WEB_SEARCH:-auto}
       AGENT_MAX_CONCURRENT_TURNS: ${AGENT_MAX_CONCURRENT_TURNS:-2}
       AGENT_MAX_QUEUED: ${AGENT_MAX_QUEUED:-200}

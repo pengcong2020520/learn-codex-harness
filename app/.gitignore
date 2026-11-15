@@ -16,3 +16,6 @@ nodes/
 .remote-identity.json
 
 .cli/
+
+/.land/
+/design/*/walkthrough/

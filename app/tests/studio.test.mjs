@@ -98,8 +98,8 @@ for (const name of skills) test(`工作室运行时 ${name} 除追加节外与�
       for (const term of ['check_design', 'inputs/drafts/', 'build_prototype', '简单方式', '脚本与模板归档不随运行时副本携带', '运行时不执行脚本']) assert.ok(appended.includes(term));
       assert.equal((appended.match(/^## 在工作室运行时$/gm) || []).length, 1);
       if (name === 'design-handoff') {
-        assert.ok(appended.includes('只引用 K4 的 docker compose run --rm land'));
-        assert.ok(appended.includes('K4 未提供时说明并停下依赖步骤'));
+        assert.ok(appended.includes('bash deploy/land.sh --package'));
+        assert.ok(appended.includes('由宿主 Compose 重建并切换'));
         assert.doesNotMatch(appended, /npm run design:land/);
       }
     }

@@ -13,7 +13,7 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-use-uid-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.chownSync(root, 10001, 10001); fs.chmodSync(root, 0o755);
-  for (const dir of ['agents', 'config']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
+  for (const dir of ['agents', 'examples', 'config']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
   const file = path.join(root, '.env');
   fs.writeFileSync(file, 'PRIVATE=fixture-private-content\nAGENT_DEFINITION=old-selection\n', { mode: 0o600 });
   fs.chownSync(file, 10001, 10001);
@@ -26,7 +26,7 @@ test('agent:use Linux 特权进程原子替换后保留文件 uid/gid 与 0600',
   const after = fs.statSync(file);
   assert.equal(after.uid, 10001); assert.equal(after.gid, 10001);
   assert.equal(after.mode & 0o777, 0o600); assert.notEqual(after.ino, before.ino);
-  assert.equal(fs.readFileSync(file, 'utf8'), "PRIVATE=fixture-private-content\nAGENT_DEFINITION='agents/writing/agent.json'\n");
+  assert.equal(fs.readFileSync(file, 'utf8'), "PRIVATE=fixture-private-content\nAGENT_DEFINITION='examples/writing-assistant/agent.json'\n");
 });
 
 test('agent:use Linux 同 uid 可切换，其他 uid 被拒绝且不改变配置', t => {

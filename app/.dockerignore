@@ -17,3 +17,6 @@ nodes/
 
 **/node_modules
 server/design-check/template/runtime.min.js
+
+/.land/
+/design/*/walkthrough/

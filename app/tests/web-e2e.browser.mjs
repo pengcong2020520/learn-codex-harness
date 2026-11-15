@@ -15,7 +15,8 @@ test('Docker 网页端到端：Caddy 跳转、管理员登录、发送、失败�
   assert.equal(ui.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(ui.headers.get('referrer-policy'), 'no-referrer');
   const page = await browser(t);
-  await page.open(url + '/');
+  assert.equal((await fetch(url + '/', { redirect: 'manual' })).headers.get('location'), '/app/');
+  await page.open(url + '/ui/');
   assert.equal(await page.run('return location.pathname'), '/ui/');
   await page.run(`document.querySelector('#username').value='admin';document.querySelector('#password').value=${JSON.stringify(password)};document.querySelector('#login-form').requestSubmit();`);
   assert.equal(await page.run(`${helpers} return await until(() => !$('#chat-view').hidden && $('#agent-name').textContent !== 'Agent', 15000);`), true);
