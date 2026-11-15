@@ -40,6 +40,9 @@ test('设计产物：真实 uid 读取 0700/0600 HTML 和包，报告属主正�
   assert.equal(create.status, 0, create.stderr?.toString());
   const tools = createDesignTools({ files: fileService, env: { AGENT_NODE_ID: 'node-a', AGENT_NODE_KEY: 'fixture-node-key-not-real' }, fetcher: async () => new Response(JSON.stringify({ status: 'completed', errors: 0, warnings: 0, issues: [] })) });
   await runOwner(owner, async () => {
+    const listing = await fileService.list_files({ path: 'outputs/design' });
+    assert.deepEqual(listing.entries.map(entry => entry.name), ['demo']);
+    assert.equal(fs.statSync(path.join(users[0].workspaceDir, 'outputs/design')).mode & 0o777, 0o700);
     const result = await tools.check_design({ path: 'outputs/design/demo/page.html' });
     const report = path.join(users[0].workspaceDir, result.reportPath);
     const saved = await readAsUser(10001, report, { maxBytes: 4096, metadata: true });

@@ -136,11 +136,12 @@ async function enter() {
   const showArtifacts = matchMedia('(min-width:1101px)').matches;
   $('chat-view').classList.toggle('artifacts-open', showArtifacts); $('toggle-artifacts').setAttribute('aria-expanded', String(showArtifacts));
   $('message').disabled = true; $('send').disabled = true;
-  await Promise.all([listSessions(), artifacts.refresh(), (async () => {
+  await Promise.all([listSessions(), (async () => {
     const [workbench, models] = await Promise.all([api.request('/workbench'), api.request('/models')]);
     if (generation !== epoch) return;
     $('agent-name').textContent = workbench.agent?.name || workbench.agent?.id || 'Agent';
     $('model').textContent = models.defaults?.chat || '';
+    await artifacts.configure(workbench.capabilities?.artifactRoots ?? ['outputs', 'inputs']);
   })()]);
 }
 $('login-form').onsubmit = event => { event.preventDefault(); void action($('login-form').querySelector('button'), async () => {
