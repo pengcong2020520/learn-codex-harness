@@ -27,7 +27,7 @@ test("正式服务角色由 Agent 装配，模型目录复用同一份指令", t
   const environment = { ...catalogConfig };
   const config = configured(root, environment);
   assert.equal(config.launch.catalog.models[0].model_messages.instructions_template, config.agent.instructions);
-  assert.ok(config.agent.instructions.startsWith(AGENT_INSTRUCTIONS));
+  assert.ok(config.agent.instructions.startsWith(readFileSync(path.join(root, "agents/writing/role.md"), "utf8").trim()));
   assert.match(config.agent.instructions, /保存分类规则：[\s\S]*outputs\/notes\//);
   assert.deepEqual(environment, catalogConfig);
   assert.equal(existsSync(path.join(root, ".data", "role.json")), false);

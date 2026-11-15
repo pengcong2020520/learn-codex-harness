@@ -42,6 +42,7 @@ export function prepareRoot(agentDir, scenario, files = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "eval-role-")));
   for (const dir of ["config", "server", "shared"]) fs.cpSync(path.join(app, dir), path.join(root, dir), { recursive: true });
   for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(root, file), content);
+  fs.writeFileSync(path.join(root, 'config/runtime/project.json'), JSON.stringify({ agentDefinition: 'agents/writing/agent.json' }));
   fs.cpSync(agentDir, path.join(root, "agents/writing"), { recursive: true });
   fs.symlinkSync(path.join(app, "node_modules"), path.join(root, "node_modules"), "dir");
   const definition = JSON.parse(fs.readFileSync(path.join(root, "agents/writing/agent.json"), "utf8"));

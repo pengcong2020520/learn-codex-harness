@@ -30,6 +30,8 @@ export function installToolFixture(root, { knowledge = false, article = false } 
   cpSync(path.join(project, "client"), path.join(root, "client"), { recursive: true });
   cpSync(path.join(project, "shared"), path.join(root, "shared"), { recursive: true });
   cpSync(path.join(project, "agents"), path.join(root, "agents"), { recursive: true });
+  cpSync(path.join(project, "examples/writing-assistant"), path.join(root, "agents/writing"), { recursive: true });
+  writeFileSync(path.join(root, "config/runtime/project.json"), JSON.stringify({ agentDefinition: "agents/writing/agent.json" }));
   if (!knowledge) {
     remove(path.join(root, 'config/tools/knowledge.json'), { force: true });
     const file = path.join(root, 'agents/writing/agent.json');

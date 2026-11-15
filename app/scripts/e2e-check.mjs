@@ -30,10 +30,10 @@ const ready = await (await fetch(`${url}/ready`)).json();
 assert.equal(ready.replication, 'off', '单节点 /ready 应显示复制关闭');
 assert.equal(ready.degraded, undefined, '单节点不应因没有副本而降级');
 
-// 默认 Agent 没有自带前端；经真实 Caddy 验证节点选择入口，通用页面仍可用。
+// 新安装经 Caddy 进入工作室，通用页面继续承担登录。
 const entry = await expectStatus(await fetch(`${url}/`, { redirect: 'manual' }), 302, '默认 Agent 根入口');
-assert.equal(entry.headers.get('location'), '/ui/');
-await expectStatus(await fetch(`${url}/app/`), 404, '未声明自带前端');
+assert.equal(entry.headers.get('location'), '/app/');
+await expectStatus(await fetch(`${url}/app/`), 200, '工作室自带前端');
 const web = await expectStatus(await fetch(`${url}/ui/`), 200, '通用页面');
 assert.match(await web.text(), /id="login-form"/);
 assert.equal(web.headers.get('x-content-type-options'), 'nosniff');

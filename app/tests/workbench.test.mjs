@@ -18,8 +18,9 @@ import { createModelRouter } from '../server/modules/gateway/router.mjs';
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workbench-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  for (const dir of ['agents', 'config']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
-  const file = path.join(root, 'agents/writing/agent.json');
+  for (const dir of ['agents', 'config', 'examples']) fs.cpSync(new URL(`../${dir}`, import.meta.url), path.join(root, dir), { recursive: true });
+  fs.writeFileSync(path.join(root, 'config/runtime/project.json'), JSON.stringify({ agentDefinition: 'examples/writing-assistant/agent.json' }));
+  const file = path.join(root, 'examples/writing-assistant/agent.json');
   const definition = JSON.parse(fs.readFileSync(file));
   const write = () => fs.writeFileSync(file, JSON.stringify(definition));
   return { root, file, definition, write };
@@ -74,7 +75,7 @@ function environment(root) {
     AGENT_PREVIEW_SECRET: 'fixture-preview-secret', DATABASE_URL: 'postgresql://fixture:fixture-db-secret@localhost/fixture',
     REDIS_URL: 'redis://:fixture-redis-secret@localhost/0', AGENT_NODE_KEY: 'fixture-node-secret',
     AGENT_DOMAIN: 'service.example.com', AGENT_ALLOWED_ORIGINS: 'https://service.example.com', COMPOSE_PROFILES: 'cluster,https',
-    AGENT_CLUSTER_NODES: 'node-a,node-b', AGENT_BUDGET_DAILY_TOKENS: '987654', AGENT_DEFINITION: 'agents/writing/agent.json', CONTAINER_APP_DIR: root };
+    AGENT_CLUSTER_NODES: 'node-a,node-b', AGENT_BUDGET_DAILY_TOKENS: '987654', AGENT_DEFINITION: 'examples/writing-assistant/agent.json', CONTAINER_APP_DIR: root };
 }
 async function service(t, options = {}) {
   const f = fixture(t), env = environment(f.root), config = loadServerConfig(f.root, { ...env, ...options.env });

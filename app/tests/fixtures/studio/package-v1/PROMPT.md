@@ -2,7 +2,7 @@
 
 先读 AGENTS.md，再读 outputs/design/task-helper/package-v1/ 的 manifest.json、DEPLOY.md 以及 design/ 中已确认的资料卡、PRD、线框、主题和 prototype-v2.html。核对 SHA-256、输入依赖、版本与确认。本包为测试夹具，开发与部署尚未执行。
 
-1. 落地命令：核对 K4 帮助后使用 docker compose run --rm land 或 npm run design:land；未提供则停止依赖步骤，不编造参数，不执行包内宿主机脚本；失败或结果不明先核对，不自动重试。
+1. 落地命令：在 app/ 执行 bash deploy/land.sh --package <包相对 app 的目录>。失败或结果不明先核对，不自动重试，不执行包内宿主机脚本。
 2. 按设计开发：前端按 prototype-v2.html 全部四屏十状态；后端按 prd-v1.md 的 FR、实体、归属和验收实现。结构改变先提案确认。
 3. 检查与构建：运行 npm run agent:check -- agents/task-helper/agent.json，及目标仓库已有测试、构建命令，记录退出码和未运行项。
 4. 本机运行：使用仓库现有启动方式和示例账号实际验证完整流程，不发送外部消息，不做付费操作。

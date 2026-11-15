@@ -33,7 +33,7 @@ function fileFixture(t, options = {}) {
 function packageFixture(t) {
   const { files, root } = fileFixture(t), directory = path.join(files.workspace, 'outputs/design/sample/package-v1');
   fs.mkdirSync(path.join(directory, 'agent'), { recursive: true });
-  const definition = JSON.parse(fs.readFileSync(path.join(appRoot, 'agents/writing/agent.json')));
+  const definition = JSON.parse(fs.readFileSync(path.join(appRoot, 'examples/writing-assistant/agent.json')));
   definition.agent.skills = []; definition.agent.workflows = []; definition.agent.dataBindings = [];
   definition.agent.tools.allow = ['read_file']; delete definition.agent.knowledge;
   definition.agent.ui = { entry: 'ui/index.html', title: '测试页面' };

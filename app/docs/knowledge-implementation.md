@@ -118,7 +118,7 @@ npm run knowledge:init
 - 创建工作区与知识库目录结构。
 - 不导入样例事实，不自动写 Wiki；只建目录。
 
-knowledge Skill 位于 Agent 包 `agents/writing/skills/knowledge/SKILL.md`，用户运行环境启动时同步到该用户的 `CODEX_HOME/skills/knowledge/`。默认 Agent 可选绑定它，缺失时服务启动会输出警告。
+knowledge Skill 位于 Agent 包 `examples/writing-assistant/skills/knowledge/SKILL.md`，用户运行环境启动时同步到该用户的 `CODEX_HOME/skills/knowledge/`。默认 Agent 可选绑定它，缺失时服务启动会输出警告。
 
 ## knowledge CLI 命令
 

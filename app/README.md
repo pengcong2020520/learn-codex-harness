@@ -9,6 +9,18 @@
 - 模型经网关统一接入，按配置选择模型与管理用量。
 - 需要副本与故障接管时打开集群。
 
+## 从设计工作室到自己的产品
+
+首次启动后，用管理员账号打开本机首页，填写资料卡，依次确认 PRD、低保真、主题和高保真。工作室生成代码包后，复制交付页里的指令给本地编码助手。在这个检出的 `app/` 目录执行：
+
+```bash
+bash deploy/land.sh
+```
+
+默认选择唯一设计项目的最新包。指定项目或旧版时追加 `--package <包相对 app 的目录>`。命令校验清单、设计确认引用和文件摘要，将 Agent 装进 `agents/<id>/`，把设计与交付指令存入 `design/<产品 id>/`，切换配置并重建容器。完成后重新打开首页即可进入产品。安装记录在 `.land/receipt.json`；中断时按提示核对记录和容器状态，人工重新执行同一条命令可以继续。已有同名 Agent 或设计目录会保留。
+
+原写作助手在 [examples/writing-assistant](examples/writing-assistant/agent.json)。显式配置过该助手的项目继续沿用原选择。
+
 ## 运行环境
 
 需要 **Docker 与 Docker Compose v2**，并启动 Docker。使用 npm 路径及进阶命令时另需 **Node.js ≥ 24**。
@@ -86,7 +98,7 @@ npm run agent:new -- my-agent
 
 ### agent.json 字段
 
-`agent` 声明能力与边界，`bindings` 把声明绑定到实际资源。可对照 [写作助手示例](agents/writing/agent.json) 和 [配置校验规则](server/modules/agents/schema.mjs)。
+`agent` 声明能力与边界，`bindings` 把声明绑定到实际资源。可对照 [写作助手示例](examples/writing-assistant/agent.json) 和 [配置校验规则](server/modules/agents/schema.mjs)。
 
 | 字段 | 写什么、如何使用 |
 | --- | --- |
@@ -243,7 +255,7 @@ npm run cluster -- status
 | --- | --- | --- |
 | `AGENT_PORT` | `4317` | 调整宿主回环入口端口；同步 origin 和 CLI 的 `AGENT_SERVER_URL` |
 | `AGENT_ALLOWED_ORIGINS` | 本机 `127.0.0.1`、`localhost` 的 `4317` origin；填写域名时追加 HTTPS origin | 网页使用域名或不同端口 |
-| `AGENT_DEFINITION` | `agents/writing/agent.json` | 切换自己的 Agent 包 |
+| `AGENT_DEFINITION` | `agents/studio/agent.json` | 切换自己的 Agent 包 |
 | `CODEX_MODEL` | `deepseek/deepseek-flash` | 选用模型目录中用途含 `chat` 的模型；优先用 `npm run setup -- --reconfigure-model` |
 | `CODEX_MODEL_CATALOG_ENABLED` | `true` | 使用网关模型目录时保持开启 |
 | 对应服务商 Key，如 `DEEPSEEK_API_KEY`、`KIMI_API_KEY` | 未填写者为空 | 开通或轮换服务商访问；可用 Key 名见 [config/models.json](config/models.json)，只在配置中保存 |

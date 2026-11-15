@@ -15,7 +15,7 @@ test("评估运行器：独立临时项目里跑一个场景，记录 token、�
   const work = tempRoot(t), out = path.join(work, "out");
   // 内存数据层没有权限门禁与知识库服务，测试用的 Agent 包去掉知识库相关配置。
   const agentDir = path.join(work, "agent");
-  fs.cpSync(path.join(app, "agents/writing"), agentDir, { recursive: true });
+  fs.cpSync(path.join(app, "examples/writing-assistant"), agentDir, { recursive: true });
   const definition = JSON.parse(fs.readFileSync(path.join(agentDir, "agent.json"), "utf8"));
   definition.agent.tools.allow = definition.agent.tools.allow.filter(name => !name.startsWith("kb_"));
   definition.agent.skills = definition.agent.skills.filter(skill => skill.id !== "knowledge");
@@ -65,7 +65,7 @@ test("评估运行器：独立临时项目里跑一个场景，记录 token、�
 test("评估运行器 --capture：透传代理不改变结果，并记录每次请求的组成", { timeout: 90000 }, async t => {
   const work = tempRoot(t), out = path.join(work, "out");
   const agentDir = path.join(work, "agent");
-  fs.cpSync(path.join(app, "agents/writing"), agentDir, { recursive: true });
+  fs.cpSync(path.join(app, "examples/writing-assistant"), agentDir, { recursive: true });
   const definition = JSON.parse(fs.readFileSync(path.join(agentDir, "agent.json"), "utf8"));
   definition.agent.tools.allow = ["list_files", "read_file", "write_file"];
   definition.agent.skills = []; definition.agent.workflows = []; definition.bindings.skills = {};

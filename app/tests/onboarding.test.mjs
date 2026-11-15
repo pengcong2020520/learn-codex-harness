@@ -35,7 +35,7 @@ test('agent:check 接受 json/js/css，未知格式提示完整中文可选值',
 
 test('agent:check 示例和骨架通过，占位角色与缺资料仅建议', t => {
   const { root } = fixture(t);
-  for (const file of ['agents/writing/agent.json', 'examples/writing/agent/agent.json', 'examples/customer-support/agent/agent.json', sample]) {
+  for (const file of ['examples/writing-assistant/agent.json', 'examples/writing/agent/agent.json', 'examples/customer-support/agent/agent.json', sample]) {
     assert.deepEqual(errors(checkAgent(file, { root })), []);
   }
   const rows = checkAgent(sample, { root });

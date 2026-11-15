@@ -2,7 +2,7 @@
 
 当前脚手架是多用户内核，在线执行器（`npm run eval:role`）尚未适配，运行时会给出说明并退出；场景读取与离线评分（`eval:role:score`）仍可用。
 
-改动角色提示词（`agents/writing/role.md`）或 Skill 时，用这套固定场景比较新旧两版：质量不能下降，token 要下降。
+改动角色提示词（`examples/writing-assistant/role.md`）或 Skill 时，用这套固定场景比较新旧两版：质量不能下降，token 要下降。
 
 ## 场景
 
@@ -21,7 +21,7 @@
 
 ```bash
 # 两个版本交替运行，每个场景各 5 次；--capture 额外记录每次请求的组成
-npm run eval:role -- --variant current=agents/writing --variant slim=<候选 Agent 包目录> --repeat 5 --capture
+npm run eval:role -- --variant current=examples/writing-assistant --variant slim=<候选 Agent 包目录> --repeat 5 --capture
 
 # 硬性检查 + token 统计 + 盲评（默认用 deepseek-v4-pro，交换先后各评一次），生成 report.md
 npm run eval:role:score -- --dir .runs/eval-role/<时间> --baseline current --candidate slim
