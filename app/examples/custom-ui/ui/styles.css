@@ -1,0 +1,16 @@
+:root { font-family: system-ui, sans-serif; color: #1f2328; background: #f7f7f8; }
+body { margin: 0 auto; max-width: 1100px; padding: 24px; }
+header { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+h1 { font-size: 24px; margin-right: auto; }
+main { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+nav { display: grid; gap: 8px; margin-top: 16px; }
+button, textarea { font: inherit; padding: 10px; border: 1px solid #c5c8ce; border-radius: 6px; }
+button { cursor: pointer; background: #fff; overflow-wrap: anywhere; }
+button:disabled { cursor: default; opacity: .6; }
+button[aria-current="true"] { border-color: #3b5bdb; }
+form { display: grid; gap: 8px; margin-top: 24px; }
+textarea { min-height: 80px; resize: vertical; }
+article { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; background: white; border-radius: 6px; margin: 12px 0; }
+article.user { background: #eef2ff; }
+#notice { min-height: 1.5em; color: #8a5a00; }
+@media (max-width: 640px) { main { grid-template-columns: 1fr; } body { padding: 16px; } }

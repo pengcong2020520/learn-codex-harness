@@ -210,7 +210,8 @@ export function createShardedHandler(coordination, service, runtime, control) {
     const json = (status, value) => { response.writeHead(status, { 'content-type':'application/json', 'cache-control':'no-store', 'x-content-type-options':'nosniff', ...(value.error?.code ? { 'x-cluster-error': value.error.code } : {}) }); response.end(JSON.stringify(value)); };
     try {
       assertAllowedOrigin(request.headers, service.app?.config || runtime.config);
-      const pathname = new URL(request.url, 'http://localhost').pathname;
+      // /app/ 的点段不能被折叠成 /health 等公开接口；由静态文件路由统一拒绝。
+      const pathname = request.url.startsWith('/app/') ? request.url.split(/[?#]/, 1)[0] : new URL(request.url, 'http://localhost').pathname;
       if (pathname === '/health') return json(200, { status: 'alive' });
       if (!service.isReady()) {
         // Placement precedes service creation. Expose only the startup reason here;
@@ -223,6 +224,8 @@ export function createShardedHandler(coordination, service, runtime, control) {
         throw unavailable('节点未就绪或成员租约失效。');
       }
       if (pathname === '/ready') return service.app.http.handle(request, response);
+      // 静态包与入口没有用户归属，所有节点都可提供；保留原始路径给节点检查越界。
+      if (request.url.split(/[?#]/, 1)[0] === '/' || request.url.startsWith('/app/')) return service.app.http.handle(request, response);
       if (pathname === '/internal/content') {
         const caller = authenticateNode(request.headers, runtime.keyHashes, runtime.nodes);
         if (request.method !== 'PUT') throw new AppError('需要 PUT。', 405);

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>自定义 Agent</title>
+  <link rel="stylesheet" href="/app/styles.css">
+  <script type="module" src="/app/app.js"></script>
+</head>
+<body>
+  <header><h1>自定义 Agent</h1><span id="user">正在检查登录…</span><a href="/ui/">通用工作台</a></header>
+  <p id="notice" role="status"></p>
+  <main>
+    <aside><button id="new-session" disabled>新建会话</button><nav id="sessions" aria-label="会话列表"></nav></aside>
+    <section aria-label="对话">
+      <div id="messages" aria-live="polite"></div>
+      <form id="message-form">
+        <label for="message">消息</label><textarea id="message" required maxlength="20000" disabled></textarea>
+        <button id="send" disabled>发送</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

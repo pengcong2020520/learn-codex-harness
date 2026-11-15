@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.2",
+  "agent": {
+    "id": "custom-ui",
+    "name": "自定义 Agent",
+    "version": "1.0.0",
+    "description": "演示自带页面、登录回跳与流式会话。",
+    "instructions": "role.md",
+    "ui": { "entry": "ui/index.html", "title": "自定义 Agent" },
+    "skills": [],
+    "tools": { "allow": [] },
+    "dataBindings": [],
+    "executionRef": "restricted-local",
+    "memory": { "use": false, "contribute": false },
+    "outputs": { "directory": "outputs", "formats": ["md", "txt"], "writeMode": "create-only", "requiredChecks": ["file-exists", "format"] }
+  },
+  "bindings": {
+    "workspaceDir": "../../workspace",
+    "sources": {},
+    "skills": {},
+    "executions": {
+      "restricted-local": { "sandbox": "read-only", "approvalPolicy": "never", "nativeShell": false, "nativeFileWrite": false }
+    }
+  }
+}

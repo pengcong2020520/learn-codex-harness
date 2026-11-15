@@ -1,6 +1,7 @@
 import { uploadInfo } from './modules/uploads.mjs';
 import { artifactPanel } from './modules/artifacts.mjs';
 import { createApi } from './modules/api.mjs';
+import { loginNext } from './modules/login.mjs';
 import { emptyState, reduceEvent, messagesView, hasLoss, lossMessage, pauseReason } from './modules/view-model.mjs';
 
 const $ = id => document.getElementById(id);
@@ -128,6 +129,8 @@ async function enter() {
   const generation = epoch;
   const { user } = await api.request('/auth/me');
   if (generation !== epoch) return;
+  const next = loginNext(new URLSearchParams(location.search).get('next'));
+  if (next) { location.replace(next); return; }
   $('username-display').textContent = user.username;
   $('login-view').hidden = true; $('chat-view').hidden = false;
   const showArtifacts = matchMedia('(min-width:1101px)').matches;

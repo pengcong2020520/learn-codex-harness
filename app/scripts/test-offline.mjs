@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
-const ports = new Set(['http-cli.test.mjs', 'gateway-check.test.mjs', 'media-http.test.mjs', 'tool-loading.test.mjs']);
+const ports = new Set(['http-cli.test.mjs', 'gateway-check.test.mjs', 'media-http.test.mjs', 'tool-loading.test.mjs', 'agent-ui-http.test.mjs']);
 const onlyPorts = process.argv.includes('--ports');
 const files = fs.readdirSync(new URL('../tests/', import.meta.url)).filter(name => name.endsWith('.test.mjs') && ports.has(name) === onlyPorts && name !== 'streaming.test.mjs').map(name => `tests/${name}`);
 if (onlyPorts) files.push('tests/sharding-http.integration.mjs', 'tests/eval-role-score-http.integration.mjs');

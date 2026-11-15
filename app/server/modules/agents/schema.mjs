@@ -1,4 +1,5 @@
 import Ajv from "ajv";
+import { UI_ENTRY_PATTERN } from './ui.mjs';
 import { CHECKS, GRANT_TYPES } from "../workflows/index.mjs";
 
 const text = { type: "string", minLength: 1, maxLength: 500 };
@@ -29,6 +30,7 @@ const schema = object({
     id: { type: "string", pattern: "^(?:[a-zA-Z][a-zA-Z0-9_-]{0,63}|[a-z0-9-]{2,32})$" }, name: text, version: text, instructions: text,
     description: { type: "string", minLength: 1, maxLength: 200 },
     starters: { type: "array", maxItems: 6, items: { type: "string", minLength: 1, maxLength: 100 } },
+    ui: object({ entry: { type: "string", minLength: 1, maxLength: 500, pattern: UI_ENTRY_PATTERN }, title: text }),
     skills: array(object({ id: text, required: { type: "boolean" }, scope: { ...choices(["system"]), default: "system" } }, ["id", "required"])),
     tools: object({ allow: array({ type: "string", pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,47}$" }) }),
     dataBindings: array(object({ sourceRef: text, actions: array(choices(["read", "create"])), methods: array(choices(["files"])), required: { type: "boolean" } })),
