@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "projectId": "task-helper",
+  "round": 1,
+  "final": false,
+  "questions": [
+    {
+      "id": "q1",
+      "text": "保存清单前是否由你确认？推荐先确认，避免把整理草稿当成最终事项。",
+      "options": [
+        {
+          "label": "我确认后保存",
+          "recommended": true
+        },
+        {
+          "label": "直接保存",
+          "recommended": false
+        }
+      ],
+      "allowFree": true
+    }
+  ]
+}

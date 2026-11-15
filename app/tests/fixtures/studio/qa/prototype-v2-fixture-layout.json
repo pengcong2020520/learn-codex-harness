@@ -1,0 +1,169 @@
+{
+  "status": "completed",
+  "errors": 0,
+  "warnings": 0,
+  "issues": [],
+  "checks": [
+    {
+      "screen": "web-list",
+      "state": "default",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "default",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "empty",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "first-use",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-list",
+      "state": "permission",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-create",
+      "state": "default",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-create",
+      "state": "error",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-review",
+      "state": "default",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-review",
+      "state": "loading",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-result",
+      "state": "default",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "screen": "web-result",
+      "state": "recovery",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    }
+  ],
+  "file": "outputs/design/task-helper/prototype-v2.html"
+}

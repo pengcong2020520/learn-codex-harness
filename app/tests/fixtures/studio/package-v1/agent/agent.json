@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1.2",
+  "agent": {
+    "id": "task-helper",
+    "name": "事项整理助手",
+    "version": "1.0.0",
+    "description": "整理本人每日事项，确认后交给开发的持久化能力保存。",
+    "instructions": "role.md",
+    "ui": {
+      "entry": "ui/index.html",
+      "title": "事项整理助手"
+    },
+    "skills": [],
+    "tools": {
+      "allow": [
+        "list_files",
+        "read_file",
+        "write_file"
+      ]
+    },
+    "dataBindings": [],
+    "executionRef": "restricted-local",
+    "memory": {
+      "use": false,
+      "contribute": false
+    },
+    "outputs": {
+      "directory": "outputs",
+      "formats": [
+        "md"
+      ],
+      "writeMode": "create-only",
+      "requiredChecks": [
+        "file-exists",
+        "format"
+      ]
+    },
+    "workflows": [
+      {
+        "id": "organize",
+        "label": "整理事项",
+        "steps": [
+          {
+            "id": "draft",
+            "goal": "整理用户输入的事项，保存 outputs/ 新版本并等待确认",
+            "writes": [
+              "outputs"
+            ],
+            "confirm": true
+          },
+          {
+            "id": "save",
+            "goal": "按用户确认的清单保存 Markdown 产物，不声称业务数据库已保存",
+            "writes": [
+              "outputs"
+            ],
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "bindings": {
+    "workspaceDir": "workspace",
+    "skills": {},
+    "sources": {},
+    "executions": {
+      "restricted-local": {
+        "sandbox": "read-only",
+        "approvalPolicy": "never",
+        "nativeShell": false,
+        "nativeFileWrite": false
+      }
+    }
+  }
+}

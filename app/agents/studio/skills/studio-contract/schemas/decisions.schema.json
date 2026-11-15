@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/decisions.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "clarificationRounds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "currentStage": {
+      "type": "string",
+      "enum": [
+        "brief",
+        "clarify",
+        "prd",
+        "lofi",
+        "theme",
+        "hifi",
+        "package"
+      ]
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "clarify",
+              "prd",
+              "lofi",
+              "theme",
+              "hifi",
+              "package"
+            ]
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "modify",
+              "end"
+            ]
+          },
+          "artifact": {
+            "type": "string",
+            "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!.*(?:^|/)\\.\\.?/)(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+            },
+            "uniqueItems": true
+          },
+          "confirmedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+          },
+          "confirmedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "recordedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+          },
+          "feedback": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "operation",
+          "artifact",
+          "inputs",
+          "confirmedAt",
+          "confirmedBy",
+          "feedback"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operation": {
+                  "enum": [
+                    "modify",
+                    "end"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "required": [
+                "recordedAt"
+              ],
+              "properties": {
+                "recordedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+                },
+                "confirmedAt": {
+                  "type": "null"
+                },
+                "confirmedBy": {
+                  "type": "null"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "clarificationRounds",
+    "currentStage",
+    "events"
+  ],
+  "additionalProperties": false
+}

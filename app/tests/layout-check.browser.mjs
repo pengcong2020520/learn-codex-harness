@@ -101,3 +101,15 @@ test('布局浏览器 CLI：成功为 0、布局错误为 1，JSON 与中文摘�
     assert.ok(stdout.includes(`${report.errors} 个错误，${report.warnings} 个警告`));
   }
 });
+
+for (const name of ['wireframe-v1', 'prototype-v1', 'prototype-v2', 'theme-sample-v1', 'theme-sample-v2', 'theme-sample-v3']) {
+  test(`工作室设计夹具 ${name}：四屏十状态在两种桌面视口布局通过`, options, async () => {
+    const file = fileURLToPath(new URL(`./fixtures/studio/${name}.html`, import.meta.url));
+    const report = await checkDesign(file);
+    assert.equal(report.status, 'completed');
+    assert.equal(report.checks.length, 20);
+    assert.equal(report.errors, 0, JSON.stringify(report));
+    assert.equal(report.warnings, 0, JSON.stringify(report));
+    assert.equal(new Set(report.checks.map(check => `${check.screen}/${check.state}`)).size, 10);
+  });
+}

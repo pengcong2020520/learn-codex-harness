@@ -1,0 +1,13 @@
+{
+  "--layout-density": "0.85",
+  "--radius-sm": "4px",
+  "--radius-md": "10px",
+  "--space-xs": "4px",
+  "--space-sm": "8px",
+  "--space-md": "12px",
+  "--space-lg": "24px",
+  "--space-xl": "32px",
+  "--control-height": "32px",
+  "--control-border-width": "1px",
+  "--shadow-raised": "none"
+}

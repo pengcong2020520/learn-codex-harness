@@ -1,0 +1,246 @@
+{
+  "schemaVersion": "1.2",
+  "agent": {
+    "id": "studio",
+    "name": "Agent 设计工作室",
+    "description": "引导管理员澄清需求、编写 PRD、确认线框与主题、完善交互原型，生成可核查的 Agent 代码包及本机开发、巡查和部署指引。",
+    "version": "1.0.0",
+    "instructions": "role.md",
+    "ui": {
+      "entry": "ui/index.html",
+      "title": "Agent 设计工作室"
+    },
+    "skills": [
+      {
+        "id": "agent-design-flow",
+        "required": true
+      },
+      {
+        "id": "agent-brief",
+        "required": true
+      },
+      {
+        "id": "prd-spec",
+        "required": true
+      },
+      {
+        "id": "lofi-wireframe",
+        "required": true
+      },
+      {
+        "id": "theme-factory",
+        "required": true
+      },
+      {
+        "id": "frontend-design",
+        "required": true
+      },
+      {
+        "id": "prototype-builder",
+        "required": true
+      },
+      {
+        "id": "design-handoff",
+        "required": true
+      },
+      {
+        "id": "layout-qa",
+        "required": true
+      },
+      {
+        "id": "studio-contract",
+        "required": true
+      }
+    ],
+    "tools": {
+      "allow": [
+        "list_files",
+        "read_file",
+        "write_file",
+        "skill_read",
+        "check_design",
+        "check_agent_package"
+      ]
+    },
+    "dataBindings": [
+      {
+        "sourceRef": "inputs",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      },
+      {
+        "sourceRef": "outputs",
+        "actions": [
+          "read"
+        ],
+        "methods": [
+          "files"
+        ],
+        "required": true
+      }
+    ],
+    "executionRef": "restricted-local",
+    "memory": {
+      "use": false,
+      "contribute": false
+    },
+    "outputs": {
+      "directory": "outputs",
+      "formats": [
+        "md",
+        "json",
+        "html",
+        "js",
+        "css"
+      ],
+      "writeMode": "create-only",
+      "requiredChecks": [
+        "file-exists",
+        "format"
+      ]
+    },
+    "workflows": [
+      {
+        "id": "design",
+        "label": "设计 Agent",
+        "skill": "agent-design-flow",
+        "interactive": true,
+        "access": "admin",
+        "single": true,
+        "steps": [
+          {
+            "id": "clarify",
+            "goal": "目标：把前端资料卡整理成范围清楚、可用于 PRD 的资料卡，必要时以表单澄清，不重复索要已填信息。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read agent-brief。收到契约约定的澄清触发文字后读取 inputs/drafts/clarify.json，核对 round 与当前问题轮次、answers 的问题 id；答案以草稿为准，revise 文字只是触发，可附用户补充。草稿缺失、轮次或 id 无效时停止说明，不能将推荐选项当用户答案。先读取已有 clarify-r<n>.json 与 decisions 的 clarificationRounds，续接累计轮次不重置。初次生成 round=1；收到本轮 revise 答案生成下一轮；第 3 轮必须 final=true，不再生成第 4 轮。信息已经完整可首轮直接 final=true、questions=[]。未完结轮每轮最多 5 个影响范围、页面、权限或验收的问题，每题稳定 id、明确 text、2–4 个不同选项，恰好一个 recommended=true，text 写推荐理由，allowFree=true；不要在聊天再贴问卷。\n按 studio-contract 写 clarify-r<n>.json。final=true 表示停止出题，不等于用户确认所有假设；此时 questions=[]，把已知内容按 agent-brief 的全部字段整理为 brief-v<n>.md（正文及同内容结构化 JSON），逐项标用户依据或已获认可的推断。三轮后非关键空缺仅在用户已有授权范围内写有依据的假设；关键权限、范围冲突仍未解决则保留阻塞说明与原话，不伪造完整资料卡，不继续追问第四轮或擅自进入 PRD。\n新建 decisions-v<n>.json 保存累计轮数、来源与本次修改；只能记录实际发生的确认，不能提前填写未来确认。自查 JSON 与 schema、题数、推荐项、轮次和 final 约束，确认资料卡没有遗漏已回答内容。本步结束停在确认点；只回一两句摘要，说明本轮是否需要补充及具体文件，详情由表单或资料卡预览展示。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": true,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          },
+          {
+            "id": "prd",
+            "goal": "目标：将已确认资料卡转成可直接驱动页面与开发的完整 PRD。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read prd-spec、agent-brief；读取 clarify 最终轮、已确认 brief-v<n>.md 及本轮 feedback 的修改建议，核对上一步确认的是哪份资料卡。资料卡未确认、存在关键阻塞或输入相互矛盾时停止并说明；澄清轮数与 clarify 共用，上限 3，不能在本步重新问 3 轮。用户明确“以后再说”的内容写本期不做或有依据的假设，不能变成已承诺功能。\n写 prd-v<n>.md，注明 Skill 的 spec-kit 来源及许可证，完整包含：产品概述、用户场景、按优先级的用户故事和 Given/When/Then 验收、页面清单与流程、边界情况、编号 FR、关键实体、非功能需求、可度量成功标准、已认可假设、本期不做。逐页明确稳定 screen id、端、分组、位置、入口退出、字段分组、按钮位置、动作与目标屏/状态；主流程、人工确认、权限拒绝、空数据、加载、失败和恢复按产品实际覆盖，不适用项说明原因。写清数据来源、用户隔离、外部动作的授权和失败处理，不编造接口已存在。\n对照资料卡逐字段核对归属，对照用户故事、FR、页面/状态和成功标准双向核对。最终 PRD 不留占位、[NEEDS CLARIFICATION] 或含糊二选一；无法定稿则保存阻塞记录，不能冒充完整 PRD。新建 decisions-v<n>.json，保留上游确认与用户意见原文，不擅自增加功能或修改已确认范围。\n结束停在确认点，只回一两句摘要，说明 PRD 版本、主要改动与预览位置；不在聊天贴 PRD 全文，用户确认具体版本后才进入线框。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": true,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          },
+          {
+            "id": "lofi",
+            "goal": "目标：首版即完整覆盖 PRD 的严谨低保真流程线框，并提供实际布局检查与逐屏逐状态自审证据。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read lofi-wireframe、prototype-builder、layout-qa。读取已确认 prd-v<n>.md、brief 及本轮 feedback 的意见；修订时读上一确认线框与本次修改上下文。先按 PRD 页面表建立分组、屏、状态和 actions[].to 映射，再写 wireframe-v<n>.html，不以少数示意页代替全流程，不增加 PRD 没有的功能。\n黑白灰、基础框线、图片占位和真实核心文案，只表达信息层级、字段与按钮位置。单文件离线可打开，内嵌 CSS/JS/示例数据，只用系统字体。每个 section 有 data-screen/data-state/data-group，design-outline 与实际屏及操作目标双向一致；稳定 id，首载和 hashchange 支持 #screen=<id>&state=<状态>，未知定位报中文错误。打开即产品一屏，默认收起的评审切换器列位置、操作去向，平铺为可选模式。Web 1440×900、1280×720 无整页滚动，App 390×844，长内容局部滚动，全部文字至少 12px，无重叠截断；加载态可直接定位并提供示例恢复动作。\nwrite_file 成功后必须 check_design({path:实际线框路径})；仅 status=completed 且 errors=0 才算工具通过，读取 reportPath 的完整报告，警告也记录。再对照 PRD 逐屏逐状态自审：屏齐全、字段与状态覆盖、每个动作目标存在、入口退出、分支恢复、共享数据一致、键盘可用、一屏与字号，不能只审默认页。将 artifact、prd、inputs、designReports 及 items[{screen,state,check,conclusion,evidence}] 写 qa/lofi-review-v<n>.json，每条给具体定位、文案或操作链证据，不用空泛“已检查”。\n任一工具错误或自审问题先自动修，最多修 2 轮；每轮新线框、新检查、新自审记录，不删状态、隐藏内容或缩字号消除问题。两轮仍失败则保留剩余项、标未通过，停在确认点；工具不可用标未验证，不自动重试、不借自审替代工具。PRD 缺口单独记录并返回澄清、确认上游后再补齐。只回一两句摘要，指出版本、真实结论与预览/报告位置，不贴自审全文。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": true,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          },
+          {
+            "id": "theme",
+            "goal": "目标：基于已确认线框生成风格与配色字体两道三选一，记录历史、生成可换肤样页并检查，等待用户选择。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read theme-factory、layout-qa；读取已确认 PRD、wireframe-v<n>.html、lofi 自审和检查结果，以及可选 inputs/drafts/theme.json 中已有的有效选择（字段和触发约定以 studio-contract 为准）。读历史 themes-r<n>.json 的 shown 与 shownHistory，不能重复候选、只改名字或循环预设。收到 revise 的“换一换：风格”或“换一换：主题”时，只换对应的一题，保留另一题候选和当前选择。前端已经询问参考图时不重复询问；无参考图照常出三选一。有图通过附件看图，看不到图则如实说明并按文字/无图继续，不假装看过。\n按 studio-contract 写 themes-r<n>.json：styles 恰好 3 套（密度、圆角、留白、控件形态），themes 恰好 3 套（颜色、系统字体），每项 id/name/traits/tokens，固定 CSS 变量词表，shown 累计全部展示 id，shownHistory 保留历史候选及原令牌；比较规范化令牌和视觉方向去重。保持已确认页面结构，从线框取 2–3 屏核心页面及状态（不足两屏则全选并说明）。\ntheme-sample-v<n>.html 单文件离线，沿用源 screen/state/group 与大纲，同一组 section 换肤，不复制三份屏。首载及 hashchange 从 #screen=…&state=…&theme=<base64url(JSON{style,theme})> 解码 UTF-8，校验对象及固定令牌白名单，只用 style.setProperty 设置 :root；拒绝 url()、外部资源、未知键及错误类型，错误显示中文提示，不执行任意 HTML/CSS。\ncheck_design 只接受 path，不能传 hash 或虚构参数：三套主题各与当前选中风格（未选时与对应风格）组合，分别新建默认令牌已落入 :root 的 theme-sample-v<n>.html 并逐一 check_design；每份仍支持完整换肤。将三次实际 reportPath 与 styleId/themeId/artifact 写入候选 samples；不是检查一个默认样页后声称三套都通过。仅 status=completed、errors=0 才通过，字号至少 12px，保留警告；有确定问题最多修 2 轮，仍失败或工具不可用就停在确认点如实报告。\n本步只保存候选、样页与检查结果，然后停在确认点。结束只回一两句，说明候选版本、检查结论与样页位置，等待用户在前端选择并确认，不贴长令牌。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": true,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          },
+          {
+            "id": "hifi",
+            "goal": "目标：把已确认线框与主题实现成完整可交互高保真原型，承担开发前的逐屏把关。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read frontend-design、prototype-builder、layout-qa、theme-factory。首先读取 inputs/drafts/theme.json，核对 styleId、themeId 及来源轮次都存在于最新 themes-r<n>.json，或其 shownHistory 记录的对应轮次；草稿缺失或无效就停下说明，不能自己选。前端在用户点击“确认，生成高保真”后先写草稿，再 continue 进入本步；以该实际操作为确认依据。所选组合已有通过的样页检查报告就直接引用；没有就先新建默认令牌为该组合的 theme-sample-v<n>.html 并 check_design，读取 reportPath 完整报告，仅 status=completed 且 errors=0 才继续，不能借其他组合的报告冒充。有确定问题按既有规则最多修 2 轮，每轮新样页重新检查；仍失败或工具不可用就停在确认点，如实报告未通过或未验证，不写主题文件、不做原型，工具不可用不自动重试。检查通过后只写一份 theme-v<n>.json，保存两个候选 id、来源轮次、完整令牌、已确认线框、样页、实际完整 designReport 和真实确认记录，designReport 永不为 null；然后再做原型。修订时核对既存选择与确认记录，匹配则复用，变化则重新核对确认依据并新建版本。随后读取已确认 PRD、线框、质量报告及本轮 feedback；结构决定按 studio-contract 约定读取 inputs/drafts/structure-changes.json，核对提案 id 和逐项决定，缺失或无效不能视为同意。\n保持屏幕 id、状态、分组、大纲、字段分组、按钮位置与去向不变；仅在已选令牌内优化字体、间距、控件、状态和微交互。先形成简短设计计划，再逐屏实现。结构改动写 structure-changes-v<n>.json 的 items[{id,change,reason,affects:[screen]}]，附相关 PRD 条目与标识映射说明；没有改动也写 items=[]。逐项等待用户同意后才更新 PRD/线框与输入记录并应用，不把普通“继续”解释为同意全部未展示提案。\n写 prototype-v<n>.html，CSS/JS/示例数据全内嵌、系统字体、无外部接口或 CDN。首载和 hashchange 的 screen/state 定位、未知定位恢复、design-outline 和 section 与线框一致；每状态可独立复现，入口操作共享同一份任务数据，修改在确认与结果中一致。K3c 离线模板未提供前只用简单方式，并说明复杂构建限制；若简单方式不能满足真实交互要求就记录缺口，不用孤立静态页冒充。默认收起的评审切换器包含全部屏/状态的线框→原型对照及结构依据。\n每个首版与新版本写入后必须 check_design，读取完整 reportPath，status=completed、errors=0 才可通过。按 frontend-design 清单对照 PRD 页面表逐屏逐状态核查：页面字段完整、主流程和分支、每个跳转的存在性、加载空态错误恢复、权限边界、数据一致性、已选主题、键盘焦点、对比度和减少动态效果、一屏原则、至少 12px 字号、无重叠截断。写 qa/hifi-review-v<n>.json，记录 artifact/prd/inputs/designReports，每项 screen/state/check/conclusion/evidence，结论以实际证据为准，不能将未验证写为通过。\n问题先自动修再查，最多修 2 轮，每轮新版本重新检查；仍失败保留剩余问题停在确认点，不引导生成包。工具不可用则未验证并停止依赖它的交付，不自动重试。更新 decisions 保留反馈与确认依据。聊天里只报一两句结论、修改摘要和预览/报告位置；用户确认原型后进入 package，不创建 plan 或原型走查阶段。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": true,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          },
+          {
+            "id": "package",
+            "goal": "目标：从相互匹配的确认版本生成完整 Agent 代码包、真实校验报告、部署手册和本地编码助手指令。\n按 role.md 的通用做法读取输入与记录版本。\n必须 skill_read design-handoff；读取已确认 brief、PRD、线框、主题、原型、structure-changes、decisions、qa/lofi-review 与 qa/hifi-review 及其实际布局报告及本轮 feedback 的交付意见。存在未通过检查、未确认结构或上游失配时停止并如实说明，不绕过质量门槛。工作室不做原型走查，不要求不存在的 walkthrough 记录。\n新建 package-v<n>/，完整包含 agent/agent.json、role.md、所需 skills 与资源、agent/ui/index.html 及分离的 JS/CSS、design/ 已确认原文件及其依赖、manifest.json、DEPLOY.md、PROMPT.md。前端只能放 agent/ui/，agent/agent.json 明确声明 ui:{entry:\"ui/index.html\",title:产品名称}，避免 ui-location/ui-undeclared。Agent 配置遵循当前 schema 1.2、权限最小化、只读原生沙箱和必要工具；包的检查所需资料绑定使用包内工作区，部署后的绑定由固定落地命令处理，不让检查访问包外。\n实际前端按 K2 使用同源 /ui/modules/ 与现有认证、会话、消息、SSE、上传、签名预览接口，遵守 CSP，无内联脚本/样式、外链资源或模拟成功；PRD 所需但脚手架未提供的能力逐条记入“需要开发”清单，列屏、输入输出、权限与验收。设计 HTML 保留离线单文件，实际前端与设计资料分离。只收录目标产品业务所需的纯文本 Skill，不把工作室的设计脚本或归档复制进交付包。包不含宿主机脚本、安装/迁移钩子、密钥或任意执行命令。\nmanifest 按 studio-contract/design-handoff 写包版本、实际文件清单、设计版本/输入/确认、最低目标能力与固定 landing 信息；files 包含除 manifest 自身外全部文件且唯一。每个 sha256 取 write_file 返回 artifact.revision 或 read_file 返回 revision，对最终字节核实，禁止猜哈希。记录 K4 尚未提供等依赖，不编造最低可落地版本。\n当前 check_agent_package 会在包根读取 config/models.json；必须 skill_read 读取 studio-contract 的 resources/models.json 受信静态检查快照，原样写到包内 config/models.json 并列入清单。该文件只用于静态检查，不含密钥，不让落地命令覆盖部署模型配置；目标能力有差异时记录待核对。全部文件写完后调用 check_agent_package({path:实际包目录})，必须 ok=true 且 errors=0；失败按 issues 新建修订包再检查，结果不明不自动重试。将实际 path 与结果写项目 qa/package-check.json；已有则 qa/package-check-v<n>.json，只新增，不覆盖。若包内需附报告，按 handoff 的先查候选、保存其报告至新包、重算清单、再查新包顺序，避免清单自引用。静态通过不代表开发完成、巡查通过或已部署。\nDEPLOY.md 与 PROMPT.md 按顺序完整写：①核对包和 K4 固定落地命令 docker compose run --rm land，未提供就说明并停下依赖步骤，不编造参数；②前端按确认原型、后端按 PRD 开发；③运行 agent:check 与仓库已有检查、测试和构建；④本机启动真实产品；⑤使用本机 flow-walkthrough，先列分组/页面/状态/复现计划等用户确认，再操作截图与诊断生成走查页，等待反馈；⑥将反馈归类为前端/后端/整体，结合诊断修复；⑦下一轮回归保留原话和有证据的已修改标记，再等用户判断；⑧巡查通过后 production:check；⑨按现有部署手册及用户授权部署。K5 工具未提供时用本机可用浏览器手段并说明，不虚构脚本。给出实际包位置、设计版本、检查结果、需要开发项（无也明确写无）、未验证项和 Skill 路径。\n结束只回一两句摘要，说明包版本、真实检查结论和 PROMPT.md/DEPLOY.md 位置；末步不新增工作流确认点，也不把完成等同于用户确认包、落地或部署授权。",
+            "writes": [
+              "outputs/design"
+            ],
+            "confirm": false,
+            "checks": [
+              "file-exists",
+              "format"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "bindings": {
+    "workspaceDir": "../../workspace",
+    "skills": {
+      "agent-design-flow": {
+        "path": "skills/agent-design-flow/SKILL.md"
+      },
+      "agent-brief": {
+        "path": "skills/agent-brief/SKILL.md"
+      },
+      "prd-spec": {
+        "path": "skills/prd-spec/SKILL.md"
+      },
+      "lofi-wireframe": {
+        "path": "skills/lofi-wireframe/SKILL.md"
+      },
+      "theme-factory": {
+        "path": "skills/theme-factory/SKILL.md"
+      },
+      "frontend-design": {
+        "path": "skills/frontend-design/SKILL.md"
+      },
+      "prototype-builder": {
+        "path": "skills/prototype-builder/SKILL.md"
+      },
+      "design-handoff": {
+        "path": "skills/design-handoff/SKILL.md"
+      },
+      "layout-qa": {
+        "path": "skills/layout-qa/SKILL.md"
+      },
+      "studio-contract": {
+        "path": "skills/studio-contract/SKILL.md"
+      }
+    },
+    "sources": {
+      "inputs": {
+        "type": "files",
+        "root": "inputs",
+        "readOnly": true
+      },
+      "outputs": {
+        "type": "files",
+        "root": "outputs"
+      }
+    },
+    "executions": {
+      "restricted-local": {
+        "sandbox": "read-only",
+        "approvalPolicy": "never",
+        "nativeShell": false,
+        "nativeFileWrite": false
+      }
+    }
+  }
+}

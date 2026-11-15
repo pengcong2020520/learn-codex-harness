@@ -15,7 +15,7 @@ const workflowParams = object({
 }, ["type", "additionalProperties", "properties"]);
 // 步骤只在权限要变或需要人拍板的地方切：writes 收窄本步可新建文件的位置，confirm 表示本步完成后等用户确认。
 // model 可选：本步用哪个对话模型，写场景名（如 fast、strong，见 config/models.json 的 scenes）或具体模型（服务商/模型名）。
-const step = object({ id: slug, goal: text, writes: array(text), confirm: { type: "boolean" }, checks: array(choices(CHECKS)), model: { type: "string", minLength: 1, maxLength: 200 },
+const step = object({ id: slug, goal: { ...text, maxLength: 4000 }, writes: array(text), confirm: { type: "boolean" }, checks: array(choices(CHECKS)), model: { type: "string", minLength: 1, maxLength: 200 },
   needs: object({ image: { type: "boolean" }, contextTokens: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER } }, []),
   effort: choices(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]) }, ["id", "goal"]);
 const workflow = object({
@@ -23,7 +23,7 @@ const workflow = object({
   interactive: { type: "boolean" }, single: { type: "boolean" }, access: choices(["admin"]),
   grants: array(object({ type: choices(GRANT_TYPES), kbId: { anyOf: [slug, object({ param: text })] } })),
   checks: array(choices(CHECKS)),
-  steps: { type: "array", items: step, minItems: 2, maxItems: 5 }
+  steps: { type: "array", items: step, minItems: 2, maxItems: 6 }
 }, ["id"]);
 const schema = object({
   schemaVersion: { enum: ["1.0", "1.1", "1.2"] },

@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/theme-tokens.schema.json",
+  "type": "object",
+  "properties": {
+    "--bg": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--surface": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--surface-2": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--border": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--text": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--muted": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--accent": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--accent-hover": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--accent-soft": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--on-accent": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--success": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--warning": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--warning-soft": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--danger": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--focus": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--disabled": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "--font-body": {
+      "type": "string",
+      "enum": [
+        "system-ui, sans-serif",
+        "ui-serif, Georgia, serif"
+      ]
+    },
+    "--font-heading": {
+      "type": "string",
+      "enum": [
+        "system-ui, sans-serif",
+        "ui-serif, Georgia, serif"
+      ]
+    },
+    "--font-mono": {
+      "type": "string",
+      "enum": [
+        "ui-monospace, monospace"
+      ]
+    },
+    "--font-size-caption": {
+      "type": "string",
+      "enum": [
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px"
+      ]
+    },
+    "--font-size-body": {
+      "type": "string",
+      "enum": [
+        "13px",
+        "14px",
+        "15px",
+        "16px",
+        "17px",
+        "18px",
+        "19px",
+        "20px"
+      ]
+    },
+    "--font-size-h1": {
+      "type": "string",
+      "enum": [
+        "24px",
+        "25px",
+        "26px",
+        "27px",
+        "28px",
+        "29px",
+        "30px",
+        "31px",
+        "32px",
+        "33px",
+        "34px",
+        "35px",
+        "36px",
+        "37px",
+        "38px",
+        "39px",
+        "40px"
+      ]
+    },
+    "--font-size-h2": {
+      "type": "string",
+      "enum": [
+        "20px",
+        "21px",
+        "22px",
+        "23px",
+        "24px",
+        "25px",
+        "26px",
+        "27px",
+        "28px",
+        "29px",
+        "30px",
+        "31px",
+        "32px"
+      ]
+    },
+    "--font-size-h3": {
+      "type": "string",
+      "enum": [
+        "16px",
+        "17px",
+        "18px",
+        "19px",
+        "20px",
+        "21px",
+        "22px",
+        "23px",
+        "24px"
+      ]
+    },
+    "--font-weight-body": {
+      "type": "string",
+      "enum": [
+        "400",
+        "500"
+      ]
+    },
+    "--font-weight-heading": {
+      "type": "string",
+      "enum": [
+        "500",
+        "600",
+        "700"
+      ]
+    },
+    "--line-height-body": {
+      "type": "string",
+      "enum": [
+        "1.4",
+        "1.5",
+        "1.6"
+      ]
+    },
+    "--line-height-heading": {
+      "type": "string",
+      "enum": [
+        "1.2",
+        "1.3",
+        "1.4"
+      ]
+    }
+  },
+  "required": [
+    "--bg",
+    "--surface",
+    "--surface-2",
+    "--border",
+    "--text",
+    "--muted",
+    "--accent",
+    "--accent-hover",
+    "--accent-soft",
+    "--on-accent",
+    "--success",
+    "--warning",
+    "--warning-soft",
+    "--danger",
+    "--focus",
+    "--disabled",
+    "--font-body",
+    "--font-heading",
+    "--font-mono",
+    "--font-size-caption",
+    "--font-size-body",
+    "--font-size-h1",
+    "--font-size-h2",
+    "--font-size-h3",
+    "--font-weight-body",
+    "--font-weight-heading",
+    "--line-height-body",
+    "--line-height-heading"
+  ],
+  "additionalProperties": false
+}

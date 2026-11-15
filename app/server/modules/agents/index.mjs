@@ -18,20 +18,25 @@ export { digest } from "./contracts.mjs";
 const inside = (root, file) => file === root || file.startsWith(root + path.sep);
 const freeze = value => { if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
 
-// Skill 目录只同步文本：SKILL.md 与 references/ 下的 .md/.txt。不跟随链接；需要执行能力的部分应写成工具。
+// 受信 Agent 包只同步约定目录下的文本资源；脚本与二进制不进入运行时，Hub 上传白名单独立维护。
 export function skillFiles(directory) {
   const files = [];
+  const directories = new Set(["references", "themes", "schemas", "examples", "resources"]);
+  const allowed = name => name === "SKILL.md" || /^(?:NOTICE\.md|LICENSE(?:-[a-zA-Z0-9-]+)?\.txt)$/.test(name)
+    || /^references\/.+\.(md|txt)$/.test(name) || /^themes\/.+\.md$/.test(name)
+    || /^(schemas|examples|resources)\/.+\.json$/.test(name);
   const walk = relative => {
     for (const entry of fs.readdirSync(path.join(directory, relative), { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
       // 按码点排序：Skill 指纹不能随系统语言环境变化。
       if (entry.name.startsWith(".")) continue;
       const name = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isSymbolicLink()) throw new Error(`Skill 不能包含符号链接：${name}`);
-      if (entry.isDirectory() && (name === "references" || relative.startsWith("references"))) { walk(name); continue; }
-      if (!entry.isFile() || !(name === "SKILL.md" || (relative.startsWith("references") && /\.(md|txt)$/.test(entry.name))))
-        throw new Error(`Skill 只能包含 SKILL.md 与 references/ 下的 .md/.txt：${name}`);
-      const size = fs.lstatSync(path.join(directory, name)).size;
-      if (size > 128 * 1024) throw new Error(`Skill 文件超过 128 KiB：${name}`);
+      if (entry.isDirectory() && directories.has(name.split("/")[0])) { walk(name); continue; }
+      if (!entry.isFile() || !allowed(name))
+        throw new Error(`Skill 只能包含 SKILL.md、根目录 NOTICE.md/LICENSE*.txt、references/ 下的 .md/.txt、themes/ 下的 .md，以及 schemas/examples/resources 下的 .json：${name}`);
+      const info = fs.lstatSync(path.join(directory, name));
+      if (info.nlink !== 1) throw new Error(`Skill 不能包含硬链接：${name}`);
+      if (info.size > 128 * 1024) throw new Error(`Skill 文件超过 128 KiB：${name}`);
       files.push(name);
     }
   };
@@ -226,7 +231,7 @@ export class AgentDefinition {
       (recorded.get(hash)?.hash === hash && compatibleRecordedV2(recorded.get(hash), this.descriptor));
     if (!compatible(previous) || (jobHash && !compatible(jobHash))) throw new AppError("会话/排队消息的策略与当前不兼容；旧指纹可先运行 sessions:upgrade 检查迁移，权限变化应新建会话；原历史未修改。", 409, "AGENT_INCOMPATIBLE");
   }
-  // skill_read 的实现：只读已核验启用的 Skill；文件限于打包时的白名单（SKILL.md 与 references/ 下的文本）。
+  // skill_read 的实现：只读已核验启用的 Skill；文件限于打包时核验的文本白名单。
   readSkill(name, file = "SKILL.md") {
     this.assertCurrent();
     const skill = (this.availableSkills || []).find(item => item.name === name);

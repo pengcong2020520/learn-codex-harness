@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/style-tokens.schema.json",
+  "type": "object",
+  "properties": {
+    "--layout-density": {
+      "type": "string",
+      "enum": [
+        "0.85",
+        "1",
+        "1.15"
+      ]
+    },
+    "--radius-sm": {
+      "type": "string",
+      "enum": [
+        "0px",
+        "1px",
+        "2px",
+        "3px",
+        "4px",
+        "5px",
+        "6px",
+        "7px",
+        "8px",
+        "9px",
+        "10px",
+        "11px",
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px"
+      ]
+    },
+    "--radius-md": {
+      "type": "string",
+      "enum": [
+        "0px",
+        "1px",
+        "2px",
+        "3px",
+        "4px",
+        "5px",
+        "6px",
+        "7px",
+        "8px",
+        "9px",
+        "10px",
+        "11px",
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px",
+        "17px",
+        "18px",
+        "19px",
+        "20px",
+        "21px",
+        "22px",
+        "23px",
+        "24px"
+      ]
+    },
+    "--space-xs": {
+      "type": "string",
+      "enum": [
+        "4px",
+        "5px",
+        "6px",
+        "7px",
+        "8px"
+      ]
+    },
+    "--space-sm": {
+      "type": "string",
+      "enum": [
+        "8px",
+        "9px",
+        "10px",
+        "11px",
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px"
+      ]
+    },
+    "--space-md": {
+      "type": "string",
+      "enum": [
+        "12px",
+        "13px",
+        "14px",
+        "15px",
+        "16px",
+        "17px",
+        "18px",
+        "19px",
+        "20px",
+        "21px",
+        "22px",
+        "23px",
+        "24px"
+      ]
+    },
+    "--space-lg": {
+      "type": "string",
+      "enum": [
+        "16px",
+        "17px",
+        "18px",
+        "19px",
+        "20px",
+        "21px",
+        "22px",
+        "23px",
+        "24px",
+        "25px",
+        "26px",
+        "27px",
+        "28px",
+        "29px",
+        "30px",
+        "31px",
+        "32px"
+      ]
+    },
+    "--space-xl": {
+      "type": "string",
+      "enum": [
+        "24px",
+        "25px",
+        "26px",
+        "27px",
+        "28px",
+        "29px",
+        "30px",
+        "31px",
+        "32px",
+        "33px",
+        "34px",
+        "35px",
+        "36px",
+        "37px",
+        "38px",
+        "39px",
+        "40px",
+        "41px",
+        "42px",
+        "43px",
+        "44px",
+        "45px",
+        "46px",
+        "47px",
+        "48px"
+      ]
+    },
+    "--control-height": {
+      "type": "string",
+      "enum": [
+        "32px",
+        "33px",
+        "34px",
+        "35px",
+        "36px",
+        "37px",
+        "38px",
+        "39px",
+        "40px",
+        "41px",
+        "42px",
+        "43px",
+        "44px",
+        "45px",
+        "46px",
+        "47px",
+        "48px"
+      ]
+    },
+    "--control-border-width": {
+      "type": "string",
+      "enum": [
+        "1px",
+        "2px"
+      ]
+    },
+    "--shadow-raised": {
+      "type": "string",
+      "enum": [
+        "none",
+        "0 2px 8px #00000014",
+        "0 4px 16px #0000001f"
+      ]
+    }
+  },
+  "required": [
+    "--layout-density",
+    "--radius-sm",
+    "--radius-md",
+    "--space-xs",
+    "--space-sm",
+    "--space-md",
+    "--space-lg",
+    "--space-xl",
+    "--control-height",
+    "--control-border-width",
+    "--shadow-raised"
+  ],
+  "additionalProperties": false
+}

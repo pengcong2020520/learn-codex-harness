@@ -39,7 +39,7 @@ description: 用户要为已确认 Agent 线框选择主题、从参考图提炼
 
 1. 从最新已确认线框选 2–3 屏核心页面与同一组状态，用真实文案和控件。产品不足 2 屏时展示全部并说明原因，不虚构页面。
 2. 两道题放在聊天选择卡片中，每题三个完全不同的候选，各自带“换一换”，也支持自然语言选择。换一换只更新当前题的三个选项，保留另一题的选择；新选项不与已展示过的重复。
-3. 每轮产出 `themes-r1.json`（后续 `themes-r<n>.json`），字段包含 `schemaVersion`、`round`、`wireframe`、`samples`（`sourceScreenId`、`state`）、`styles` 与 `themes`（各三个 `id`、`name`、`rationale`、`tokens`）、`shownHistory`（累计两题所有已展示候选及令牌）。先读历史轮次，比较规范化令牌和视觉方向；不能只改名或预设用完后循环。
+3. 每轮产出 `themes-r1.json`（后续 `themes-r<n>.json`），字段包含 `schemaVersion`、`round`、`wireframe`、`samples`（`sourceScreenId`、`state`）、`styles` 与 `themes`（各三个 `id`、`name`、`traits`、`tokens`）、`shown`（累计已展示 id）与 `shownHistory`（累计两题所有已展示候选及令牌）。先读历史轮次，比较规范化令牌和视觉方向；不能只改名或预设用完后循环。
 4. 同时产出一个可换肤的单文件样页 `theme-sample-v1.html`，后续 `theme-sample-v<n>.html`。左侧目录切换核心样页，不用标签条，不并排复制三套屏幕。点选候选后把当前“风格 × 主题”的合并令牌传给样页，即时换肤；未选定的演示组合不算用户确认。
 5. 样页从定位 hash 的 `theme=` 参数读取 base64url 编码的 JSON 令牌，与 `screen`、`state` 并存；首载和 `hashchange` 都处理。解码 UTF-8 JSON 后校验字段和类型，只把白名单令牌映射为 CSS 变量，用 `style.setProperty` 更新，不拼 HTML 或整段样式，不接受 `url()` 或外部资源。错误令牌显示中文提示，不悄悄当作已选主题。
 6. 两道题都选定后，核对组合效果与对比度，请用户确认，再写 `theme-v1.json`（后续 `theme-v<n>.json`），保存风格和主题的两个候选 id、来源轮次与确认记录。只有一道题选定时不能写最终主题文件。

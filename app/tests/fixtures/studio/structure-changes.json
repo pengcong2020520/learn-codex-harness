@@ -1,0 +1,9 @@
+{
+  "items": [
+    {
+      "id": "move-confirm",
+      "decision": "reject",
+      "feedback": "保留现有确认按钮位置。"
+    }
+  ]
+}

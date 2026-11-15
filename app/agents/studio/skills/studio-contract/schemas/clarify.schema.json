@@ -1,0 +1,424 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/studio/clarify.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,47}$"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "final": {
+      "type": "boolean"
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "recommended": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "label",
+                "recommended"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 2,
+            "maxItems": 4,
+            "anyOf": [
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 3,
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 4,
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 4,
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 4,
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "items": [
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": false
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "recommended": {
+                        "const": true
+                      }
+                    },
+                    "type": "object"
+                  }
+                ],
+                "minItems": 4,
+                "maxItems": 4,
+                "type": "array"
+              }
+            ]
+          },
+          "allowFree": {
+            "const": true
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "options",
+          "allowFree"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "round",
+    "final",
+    "questions"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "round": {
+            "const": 3
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "final": {
+            "const": true
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "final": {
+            "const": true
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "else": {
+        "properties": {
+          "questions": {
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    }
+  ]
+}

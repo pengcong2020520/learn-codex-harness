@@ -1,11 +1,11 @@
 ---
 name: flow-walkthrough
-description: 用户要按真实用户顺序走查已确认原型、收集反馈或复核上一轮修改时使用；不用于跳过计划直接截图、擅自实现修改或部署产品。
+description: 用户要在开发完成后、部署之前巡查本机真实产品、收集页面反馈或回归上一轮修复时使用；不用于原型评审、跳过计划直接截图或擅自部署。
 ---
 
-先读 [总流程与产物约定](../agent-design-flow/SKILL.md)。所有路径相对于用户自己的工作区；只新建版本，不覆盖历史文件。使用最新且已获用户确认的输入版本；较新的未确认版本不能替代确认记录。当前阶段经用户明确选择「继续」后才进入下一阶段；「修改」重做当前步，「结束」保存进度并停止。
+# 本机真实产品巡查
 
-# 全流程走查
+先读 [总流程与产物约定](../agent-design-flow/SKILL.md)。本 Skill 仅由用户本机的编码助手执行，输入为已确认 PRD、设计大纲、已实现功能与实际运行版本，不属于工作室运行时。记录放 app/design/<项目 id>/walkthrough/，默认不提交 Git；版本只新增，不覆盖。
 
 ## 用户提示词原文
 
@@ -22,38 +22,78 @@ description: 用户要按真实用户顺序走查已确认原型、收集反馈�
 7. 在新一轮走查页中保留上一轮的反馈原话，并给改动过的页面加上标记，方便逐条回归验证。
 先不要开始截图。先列出你准备覆盖的流程分组、页面和状态，等我确认之后再执行。
 
-## 两种方式与先确认计划
+## 执行条件与计划确认
 
-- **原型走查**：K1 的主要方式，不截图。读取已确认原型（初版 `prototype-v1.html`）和 PRD。走查页每一屏用 iframe 按定位约定嵌入原型的实时状态，保留交互。原文中的“实际运行产品、截图”在此方式替换为运行原型和嵌入预览，其余 7 条全部执行。
-- **真实产品走查**：仅用户本地开发侧执行，实际运行产品并截图。参考 [官方 webapp-testing 的 Playwright 做法](https://github.com/anthropics/skills/tree/main/skills/webapp-testing)：先检查服务与运行方式，页面加载后等待可用状态（适用时等待 networkidle），检查已渲染 DOM 确定选择器，按真实操作复现状态、截图，结束后关闭浏览器。K5 会完善执行 Skill；K1 不提供或声称已具备真实产品自动走查能力。运行中的工作室不得启动真实产品开发或改服务端。
+确认核心流程已开发完成、本机服务可启动、示例账号可登录。先读取 PRD、设计大纲及已有测试结果，按真实顺序列流程分组、页面、状态、复现步骤、输入数据和预期结果，覆盖 PRD 涉及的权限、空态、加载、接口失败、模型超时、重新连接与恢复。
 
-两种方式都先列分组、页面、状态和复现方式，写 `walkthrough-plan-v1.json`（后续 `walkthrough-plan-v<n>.json`），把范围完整展示给用户。保留“先不要开始……等我确认之后再执行”的门禁；用户未确认计划前，不生成走查页、不截图、不执行产品操作。用户修改范围时生成计划新版本重新确认。计划确认不等于允许发送真实消息、付费或其他外部写入。
+计划写 walkthrough-plan-v<n>.json：schemaVersion=1、projectId、mode="product"、round、source（实际版本标识及序号）、prd、previousRound、confirmation（status、confirmedAt、confirmedBy）、groups。每组有 id/title/order/screens；每屏有 id/title/position/states/actions/reproduce，reproduce 按状态记录有序操作步骤。向用户完整展示，等明确确认后才能操作产品、截图或生成走查页。计划变动新建版本重新确认，确认时新建含真实确认人和时间的快照，不覆写提案；确认计划不授权真实外部消息、付费等行为。
 
-## JSON 契约（供 K3 前端读取）
+截图与诊断脚本、固定走查页模板由 K5 提供，在那之前用本机可用的浏览器手段，并如实说明工具、执行范围和未验证项，不虚构已有脚本。实际运行产品，页面加载到可操作状态后检查 DOM，选择真实控件按步骤复现，截图并采集控制台错误、失败请求（方法、脱敏路径、状态码）、明显慢请求和布局问题。不得记录密钥、口令、Cookie、认证头或个人数据。只用示例账号和数据；额外外部写入需另获授权。
 
-计划使用以下完整结构。每个组列所有目标屏，`states` 用字符串数组与大纲一致；`reproduce` 的每个 key 对应一个状态，值是按顺序执行的中文步骤数组；`actions[].to` 与设计大纲相同。
+无法复现的页面或状态标“无法复现”并说明原因，不能拿设计图或编造画面代替真实截图。产品启动或登录失败时先报告、修复到能运行，不把局部结果称为完整巡查。执行结束关闭本轮创建的浏览器资源，不关用户已有页面。
+
+## 走查页、反馈与保存
+
+生成可离线打开的 walkthrough-v<n>.html，截图和必要资源内嵌，只用系统字体。左侧按流程分组列目录；主体每组按操作顺序排列屏幕卡片，左边真实截图（可放大），右边名称、状态、复现方式、诊断、反馈框与“可以 / 待改 / 阻塞”。每组末尾另有流程反馈。没有聊天区，不用标签条；一屏布局，卡片区域局部滚动。截图上不叠加任何标签或按钮，说明与“放大”放在截图下方。底部显示本轮计数与保存状态，提供导出 Markdown、导出 JSON，以及“确认本轮巡查通过”（只在没有阻塞和待改时可用，记录确认时间，确认人由用户填写）；不放“按反馈修复”，修复由编码助手按导出的反馈完成。
+
+每次输入和标记变化自动保存到 localStorage，键包含 projectId、轮次和实际产品版本。成功后才显示“已保存”；禁用或容量不足时提示未保存并保留导出能力。缓存不等于文件存档；导出 JSON 保存为 walkthrough-r<n>-v<k>.json，本轮完成保存 walkthrough-r<n>.json，均只新增。导入数据仅解析字段并以 textContent 展示，不执行用户内容。
+
+JSON 必须包含 schemaVersion=1、projectId、mode="product"、round、saveVersion、status（in-progress/complete）、已确认 plan、source、previousRound、createdAt、savedAt、reviewer、groups、unmatchedPrevious、conclusion。时间为真实 ISO 8601 或 null，路径相对本机设计目录，不放本机绝对路径。
+
+每组保存 id/title/order、feedback（text/updatedAt）、previousFeedback、screens。每屏保存稳定 id/title/position/actions，每个状态保存 state、reproduce、screenshot（实际截图 data URL，无法复现时 null）、diagnostics、unavailableReason、changeStatus、changeEvidence、feedback（text/mark/updatedAt）、previousFeedback。mark 只能是 null、可以、待改、阻塞；空文字有效，标记独立保存。历史反馈项保留 round/text/mark/updatedAt，组级 mark 为 null。反馈原话包含原换行，不改写成 AI 摘要。
+
+Markdown 与 JSON 都导出版本、分组、页面、状态、复现、诊断、当前标记和原话、历轮原话、变更证据及结论，方便交给编码助手。导出前校验结构、项目和状态，文件名不含路径穿越。用户未明确确认不得把 status 改为 complete，conclusion 的确认人和时间不能代填。
+
+## 分类修复与下一轮回归
+
+用户提供反馈后逐条分类：前端（视觉、交互和页面状态）、后端（接口、权限、数据与任务执行）、整体（跨页面和跨服务流程）。结合诊断定位原因，记录反馈原话、分类、改动文件与验证，不能凭截图直接认定后端原因；结构或范围变动先请用户决定。修复真实产品后再进入下一轮，不能擅自把待改或阻塞改成可以。
+
+新一轮先列计划、等确认，按稳定 groupId、screenId、state 关联历史，完整保留上一轮和更早的原话。删除或重命名而无法关联的项留在 unmatchedPrevious（groupId/screenId/state/previousFeedback），显示给用户，不能吞掉反馈。
+
+changeStatus 使用 modified、unchanged、unknown、new；changeEvidence 记录实际代码改动清单条目及版本，或同条件渲染后可比的 DOM/CSS 摘要。只有可靠证据才显示“已修改”；没有证据标“待核对”，不能根据反馈文字变化判断改动。公共样式、脚本、接口变化也要纳入证据；只有截图像素差异不足以证明已修复。
+
+逐项复现上一轮待改 / 阻塞项，由用户作本轮判断；所有未解决项修复并回归或由用户明确排出本期范围后，才确认巡查通过。然后运行 npm run production:check，通过后按部署手册和用户授权部署。巡查通过、生产检查通过和部署成功分别记录，不能互相替代。
+
+## 计划和反馈 JSON 示例
+
+以下仅展示字段结构，示例确认信息不能代替用户实际确认。初版为 walkthrough-plan-v1.json、walkthrough-v1.html、walkthrough-r1.json，后续按数字版本递增。
 
 ```json
 {
   "schemaVersion": 1,
   "projectId": "sample-agent",
-  "mode": "prototype",
+  "mode": "product",
   "round": 1,
-  "source": {"artifact":"prototype-v1.html","version":1},
+  "source": {
+    "artifact": "product-build-v1.json",
+    "version": 1
+  },
   "prd": "prd-v1.md",
   "previousRound": null,
-  "confirmation": {"status":"proposed","confirmedAt":null,"confirmedBy":null},
+  "confirmation": {
+    "status": "confirmed",
+    "confirmedAt": "2026-11-14T12:00:00Z",
+    "confirmedBy": "示例用户"
+  },
   "groups": [
     {
-      "id":"main-flow","title":"完成任务","order":1,
-      "screens":[
+      "id": "main-flow",
+      "title": "整理事项",
+      "order": 1,
+      "screens": [
         {
-          "id":"task-list","title":"任务列表","position":1,
-          "actions":[{"label":"查看空列表","to":"#screen=task-list&state=empty"}],
-          "states":["default","empty"],
-          "reproduce":{
-            "default":["打开原型，定位任务列表的 default 状态"],
-            "empty":["打开原型，定位任务列表的 empty 状态"]
+          "id": "web-list",
+          "title": "事项列表",
+          "position": 1,
+          "states": [
+            "default"
+          ],
+          "actions": [],
+          "reproduce": {
+            "default": [
+              "登录示例账号",
+              "打开事项列表"
+            ]
           }
         }
       ]
@@ -62,53 +102,57 @@ description: 用户要按真实用户顺序走查已确认原型、收集反馈�
 }
 ```
 
-计划一经确认不能覆写：生成下一号计划，`confirmation.status` 改为 `confirmed` 并记录真实时间和确认人，结构保持与用户确认的计划完全相同；若范围变化则重新确认。以下反馈示例的 `plan` 演示引用一个已确认的 v1，实际使用真实已确认文件名。
-
-走查轮次与每次自动保存使用同一结构，文件初版为 `walkthrough-r1.json`；进行中的自动保存为 `walkthrough-r1-v1.json`，随后保存版本递增：
-
 ```json
 {
   "schemaVersion": 1,
   "projectId": "sample-agent",
-  "mode": "prototype",
+  "mode": "product",
   "round": 1,
   "saveVersion": 1,
   "status": "in-progress",
   "plan": "walkthrough-plan-v1.json",
-  "source": {"artifact":"prototype-v1.html","version":1},
+  "source": {
+    "artifact": "product-build-v1.json",
+    "version": 1
+  },
   "previousRound": null,
   "createdAt": "2026-11-14T12:00:00Z",
   "savedAt": "2026-11-14T12:00:00Z",
-  "reviewer": "项目用户",
+  "reviewer": "示例用户",
   "groups": [
     {
-      "id":"main-flow","title":"完成任务","order":1,
-      "feedback":{"text":"","updatedAt":null},
-      "previousFeedback":[],
-      "screens":[
+      "id": "main-flow",
+      "title": "整理事项",
+      "order": 1,
+      "feedback": {
+        "text": "",
+        "updatedAt": null
+      },
+      "previousFeedback": [],
+      "screens": [
         {
-          "id":"task-list","title":"任务列表","position":1,
-          "actions":[{"label":"查看空列表","to":"#screen=task-list&state=empty"}],
-          "states":[
+          "id": "web-list",
+          "title": "事项列表",
+          "position": 1,
+          "actions": [],
+          "states": [
             {
-              "state":"default",
-              "reproduce":["打开原型，定位任务列表的 default 状态"],
-              "preview":{"kind":"iframe","artifact":"prototype-v1.html","hash":"#screen=task-list&state=default","screenshot":null},
-              "htmlHash":null,
-              "changeStatus":"unknown",
-              "changeEvidence":null,
-              "feedback":{"text":"","mark":null,"updatedAt":null},
-              "previousFeedback":[]
-            },
-            {
-              "state":"empty",
-              "reproduce":["打开原型，定位任务列表的 empty 状态"],
-              "preview":{"kind":"iframe","artifact":"prototype-v1.html","hash":"#screen=task-list&state=empty","screenshot":null},
-              "htmlHash":null,
-              "changeStatus":"unknown",
-              "changeEvidence":null,
-              "feedback":{"text":"","mark":null,"updatedAt":null},
-              "previousFeedback":[]
+              "state": "default",
+              "reproduce": [
+                "登录示例账号",
+                "打开事项列表"
+              ],
+              "screenshot": null,
+              "diagnostics": [],
+              "unavailableReason": "此处仅演示结构，执行后须填实际截图或不能复现的原因。",
+              "changeStatus": "unknown",
+              "changeEvidence": null,
+              "feedback": {
+                "text": "",
+                "mark": null,
+                "updatedAt": null
+              },
+              "previousFeedback": []
             }
           ]
         }
@@ -116,44 +160,10 @@ description: 用户要按真实用户顺序走查已确认原型、收集反馈�
     }
   ],
   "unmatchedPrevious": [],
-  "conclusion": {"text":"","confirmedAt":null,"confirmedBy":null}
+  "conclusion": {
+    "text": "",
+    "confirmedAt": null,
+    "confirmedBy": null
+  }
 }
 ```
-
-字段规则：
-
-- `schemaVersion` 固定 1；`mode` 为 `prototype` 或 `product`；`round`、`saveVersion`、`source.version` 是正整数；`status` 为 `in-progress` 或 `complete`。路径相对项目目录，不含用户本机绝对路径；时间为 ISO 8601 或 null，不能冒填。
-- `confirmation.status` 为 `proposed` 或 `confirmed`；反馈的 `plan` 必须指向已确认计划。`previousRound` 为上一轮完成 JSON 的相对路径，首轮 null。`source` 在 product 模式表示开发侧提供的版本标识文件及序号。
-- `feedback.mark` 只能是 null、`可以`、`待改`、`阻塞`。`text` 保存反馈原话（包含换行），空文本也是有效值，标记独立保存；每组末尾的流程反馈也必须保存。
-- `previousFeedback` 为 `{ "round":1, "text":"反馈原话", "mark":"待改", "updatedAt":"ISO 时间或 null" }` 的数组；组反馈条目的 mark 为 null。按时间保留历史，不覆盖为本轮编辑值。`unmatchedPrevious` 为 `{ "groupId":"旧分组", "screenId":"旧屏或 null", "state":"旧状态或 null", "previousFeedback":[] }` 数组，用于保留被删除或重命名后无法匹配的旧反馈，不能丢弃原话。
-- 原型 `preview.kind` 为 `iframe`，`artifact` 和 `hash` 定位原型，`screenshot` 为 null；产品模式 kind 为 `screenshot`，screenshot 为内嵌图片 data URL，artifact 和 hash 可为 null。原型运行时不请求截图。
-- `htmlHash` 为 `sha256:<64 位十六进制>` 或 null；`changeStatus` 为 `modified`、`unchanged`、`unknown`、`new`。`changeEvidence` 为 null，或 `{ "method":"html-sha256", "previousHash":"sha256:…", "currentHash":"sha256:…" }`，或 `{ "method":"change-list", "artifact":"开发侧改动清单文件", "entry":"对应条目原文" }`。新屏为 new；没有可比证据为 unknown，不当作已修改或未修改。
-- `conclusion` 是用户对本轮结果的明确确认；只有实际确认才写时间和确认人并设 status 为 complete。待改 / 阻塞项须逐条解决、回归或经用户明确排出本期范围，不能由模型自动结项。
-
-## 走查页、自动保存与导出
-
-经计划确认后生成 `walkthrough-v1.html`，后续版本递增。按组从上到下展示每个屏幕状态，标注名称、状态、复现步骤，附反馈输入框与「可以」「待改」「阻塞」。每组末尾附流程反馈框。左侧目录展示分组与屏幕，操作顺序与 PRD 一致。
-
-HTML 必须是可离线打开的单文件，只用系统字体栈。每屏使用 `<section data-screen="<id>" data-state="<状态>" data-group="<分组>">`；支持 `#screen=<id>&state=<状态>` 只显示对应屏，且监听地址变化。内嵌 `design-outline`（`application/json`），结构与总流程一致。固定状态词表为 default、first-use、permission、loading、empty、error、recovery；自定义状态列入大纲。工作室中嵌入预览，不截图。
-
-走查页本身的大纲覆盖计划中的每屏每状态，section 包住相应 iframe 和反馈表单。原型全文内嵌在单个走查 HTML 中，以 data URL 加定位 hash 创建 iframe；iframe 使用 sandbox，不加 allow-same-origin。不能外链 `prototype-v<n>.html` 后声称单文件可离线。反馈控件留在走查页或可信宿主，父页面无需读取不可信 iframe 的 DOM。
-
-- **工作室运行时**：反馈通过 K3 提供的可信宿主保存能力自动写入用户工作区 `walkthrough-r<n>-v<k>.json`，每次成功保存新建一份，完成时写一次 `walkthrough-r<n>.json`。不让原型 iframe 自行传路径、用户身份或取得文件写权限。宿主确认保存成功才显示“已保存”；失败显示原因并允许导出，结果不明先核对，不自动重复写。K1 不定义或虚构已存在的保存 API。
-- **单独打开 HTML**：浏览器本地存储自动保存，键包含项目 id、轮次、原型版本，避免不同项目互相覆盖。若存储被禁用或容量不足，提示未保存并保留可导出内容。回到工作室时导入导出的 JSON，再追加到用户工作区；不能把浏览器缓存当工作区存档。
-- **两种方式都支持导出 Markdown 和 JSON**：JSON 保留上述完整结构；Markdown 按组、屏、状态输出版本、复现方式、当前标记和原话、上一轮原话及修改证据，可直接交给 AI 修改。导出控件在可信宿主或独立走查页，不能让原型 iframe 发起不受控下载。导入只用解析后的数据及 textContent，不执行导入内容。
-
-## 新一轮回归
-
-导入上一轮 JSON，先校验 schemaVersion、projectId、字段类型和标记枚举，按稳定的组 id、屏 id、状态匹配，原样显示全部历史反馈；重命名或删除项移到 unmatchedPrevious 并显示，不能吞掉。
-
-判断页面是否改动过：对两轮同一 `(screenId,state)` 的原型 HTML 片段用相同序列化方式算 SHA-256（不含走查反馈、保存时间），比较哈希；动态原型需在同一示例数据装载后由构建侧提供片段或摘要，不能比较空 React 根节点。公共 CSS、脚本或主题变化也会影响页面；遇到片段无法覆盖的变化读取开发侧完整改动清单，或标 unknown 待核对。不要用反馈文字变化判断页面改动。
-
-有可靠改动证据的页面显示“已修改”，并注明证据；未变更、全新、未知分别显示，状态变化也明确指出。对上轮待改 / 阻塞项逐条复现，保持原话并让用户作本轮判断。提出修改只能生成新原型和走查版本，不能直接覆写历史；涉及结构变化回到 frontend-design 的确认门禁。
-
-## 计划与走查页面形态
-
-计划页和走查页均不显示聊天。左侧目录按分组和屏导航，不用标签条；页面遵守一屏原则，卡片列表在区域内从上往下滚动。走查计划页列出分组、页面、状态和复现方式，允许勾选、增删后再确认；修改范围仍生成新版本计划。
-
-每张屏幕卡片左边是实时预览缩略图，可以放大；右边依次是页面名称、当前状态、复现方式、「可以」「待改」「阻塞」三个标记和反馈框。每组末尾有流程反馈。页面底部放“导出 Markdown”“导出 JSON”“按反馈改版”“走查通过”，这些操作不依赖聊天；“按反馈改版”在等待确认时用 `revise` 进入下一轮。保留原文要求的本地自动保存、上一轮反馈原话与已修改标记。真实产品模式仍使用实际截图，不用虚构预览替代。
-
-走查中改版的原型展示前也必须通过 [layout-qa](../layout-qa/SKILL.md)，未通过时保留问题，不标为走查通过。
