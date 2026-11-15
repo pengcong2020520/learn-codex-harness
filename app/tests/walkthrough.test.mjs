@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compareResources, createReview, localBase, validatePlan } from '../scripts/walkthrough/model.mjs';
+import { route } from '../scripts/walkthrough/capture.mjs';
 import { reviewHtml } from '../scripts/walkthrough.mjs';
 
 export function samplePlan() {
@@ -39,4 +40,9 @@ test('离线走查页将原话作为文本，保留替换字符且不加载外�
   const raw = html.match(/<script type="application\/json" id="record">([\s\S]*?)<\/script>/)[1];
   assert.equal(JSON.parse(raw).conclusion.text, record.conclusion.text);
   assert.doesNotMatch(html, /<script src=|<link href=|innerHTML\s*=/);
+});
+
+test('诊断使用确认过的业务路径模板并遮蔽动态段和查询参数', () => {
+  assert.equal(route('http://localhost/api/tickets/private-value?token=fixture', ['/api/tickets/:id']), '/api/tickets/:id');
+  assert.equal(route('http://localhost/app/private-value'), '/app/:参数');
 });

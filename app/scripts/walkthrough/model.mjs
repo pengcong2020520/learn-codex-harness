@@ -17,6 +17,7 @@ export function validatePlan(plan, previous) {
   requireValue(plan.confirmation?.status === 'confirmed' && text(plan.confirmation.confirmedBy) && Number.isFinite(Date.parse(plan.confirmation.confirmedAt)), '巡查计划需要先确认，请记录确认人和时间。');
   requireValue(plan.round === 1 ? plan.previousRound === null && !previous :
     previous?.schemaVersion === 1 && previous.mode === 'product' && previous.projectId === plan.projectId && previous.round === plan.round - 1 && plan.previousRound === previous.round && list(previous.groups), '请提供同一产品上一轮导出的反馈 JSON，并核对 previousRound。');
+  if (plan.diagnosticRoutes !== undefined) requireValue(Array.isArray(plan.diagnosticRoutes) && plan.diagnosticRoutes.every(route => typeof route === 'string' && /^\/(?:[a-z][a-z0-9._-]*|:id)(?:\/(?:[a-z][a-z0-9._-]*|:id))*$/.test(route)), '诊断路径模板仅填写固定的接口路径，动态段使用 :id。');
   requireValue(list(plan.groups), '巡查计划缺少流程分组。');
   unique(plan.groups, g => g.id, '流程分组 id 重复。');
   for (const group of plan.groups) {

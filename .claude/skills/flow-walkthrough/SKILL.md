@@ -56,7 +56,7 @@ changeStatus 使用 modified、unchanged、unknown、new；changeEvidence 记录
 
 ## 在本机采集
 
-把经确认的计划保存为 `app/design/<产品 id>/walkthrough/plan-v1.json`。每个状态在已有 reproduce 原话之外还要填写 capture：steps 以同源 open 开始，随后可 click、wait 或 fill，ready 是只有抵达目标状态才会出现的可见元素。无法安全复现时在该状态填 unavailableReason。选择器来自实际运行的 DOM。测试口令用 fromEnv 引用本次进程的 WALKTHROUGH_INPUT_ 变量。巡查容器仅连接本机产品的 Caddy。
+把经确认的计划保存为 `app/design/<产品 id>/walkthrough/plan-v1.json`。每个状态在已有 reproduce 原话之外还要填写 capture：steps 以同源 open 开始，随后可 click、wait 或 fill，ready 是只有抵达目标状态才会出现的可见元素。无法安全复现时在该状态填 unavailableReason。选择器来自实际运行的 DOM。测试口令用 fromEnv 引用本次进程的 WALKTHROUGH_INPUT_ 变量。巡查容器仅连接本机产品的 Caddy。计划可用 diagnosticRoutes 列出公开的接口路径模板，如 /api/tickets/:id；动态段、查询参数和未知路径段在报告中隐去。
 
 ```bash
 cd app

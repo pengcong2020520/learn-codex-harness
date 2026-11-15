@@ -6,9 +6,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { checkLayout, collectLayout, findChrome, startChrome } from '../layout-check.mjs';
 import { compareResources } from './model.mjs';
 
-const publicSegments = new Set('app ui auth login me logout api sessions state workbench tasks message messages items preview files drafts modules styles.css app.js app.mjs index.html'.split(' '));
-function route(url) {
-  return new URL(url).pathname.split('/').map(s => !s || publicSegments.has(s) ? s : ':参数').join('/');
+const publicSegments = new Set('app ui auth login me logout api sessions state workbench tasks message messages items preview files drafts modules styles.css app.js app.mjs index.html favicon.ico icon.png'.split(' '));
+export function route(url, routes = []) {
+  const parts = new URL(url).pathname.split('/');
+  for (const template of routes) {
+    const segments = template.split('/');
+    if (segments.length === parts.length && segments.every((segment, i) => segment === parts[i] || (segment === ':id' && parts[i]))) return template;
+  }
+  return parts.map(s => !s || publicSegments.has(s) ? s : ':参数').join('/');
 }
 const assetKey = url => route(url) + '#' + createHash('sha256').update(new URL(url).pathname).digest('hex').slice(0, 16);
 
@@ -60,7 +65,7 @@ async function perform(browser, steps, ready, origin, env) {
   await visible(browser, ready, origin);
   await evaluate(browser, '(async()=>{await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))})()');
 }
-function monitor(browser, origin) {
+function monitor(browser, origin, routes) {
   let current;
   const activeRequests = new Map(), documents = new Map();
   const listener = ({ method, params: p, sessionId }) => {
@@ -72,11 +77,17 @@ function monitor(browser, origin) {
     }
     if (!current) return;
     if (method === 'Runtime.exceptionThrown' || (method === 'Runtime.consoleAPICalled' && p.type === 'error') || (method === 'Log.entryAdded' && p.entry.level === 'error')) {
-      current.diagnostics.push({ type: 'console', reason: '浏览器记录了错误。', source: method });
+      const detail = p.exceptionDetails || p.entry || p;
+      const frame = detail.stackTrace?.callFrames?.[0] || detail;
+      const location = {};
+      if (frame.url && /^https?:/.test(frame.url)) location.path = route(frame.url, routes);
+      if (Number.isInteger(frame.lineNumber)) location.line = frame.lineNumber + 1;
+      const kind = detail.exception?.className;
+      current.diagnostics.push({ type: 'console', reason: ['TypeError','RangeError','ReferenceError','SyntaxError'].includes(kind) ? kind : '浏览器记录了错误。', source: method, ...location });
     }
     if (method === 'Network.requestWillBeSent') {
       const url = new URL(p.request.url);
-      if (url.origin === origin) activeRequests.set(p.requestId, { method: p.request.method, path: route(url), key: assetKey(url), loader: p.loaderId, start: p.timestamp, state: current });
+      if (url.origin === origin) activeRequests.set(p.requestId, { method: p.request.method, path: route(url, routes), key: assetKey(url), loader: p.loaderId, start: p.timestamp, state: current });
     }
     const req = activeRequests.get(p.requestId);
     if (!req) return;
@@ -114,7 +125,7 @@ export async function capture(plan, review, output, origin, env = process.env) {
   }
   const browser = await startChrome(chrome, args);
   try {
-    const { observe, resources } = monitor(browser, origin);
+    const { observe, resources } = monitor(browser, origin, plan.diagnosticRoutes || []);
     for (const domain of ['Page', 'Runtime', 'Log', 'Network']) await browser.send(domain + '.enable');
     await browser.send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
     const viewport = plan.viewport || { width: 1440, height: 900 };

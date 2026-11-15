@@ -53,7 +53,7 @@
   }
   function diagnostic(d) {
     if (d.type === 'layout') return '布局 · ' + d.code + ' · ' + d.reason;
-    if (d.type === 'console') return '控制台 · ' + d.source;
+    if (d.type === 'console') return ['控制台', d.reason, d.path && (d.path + (d.line ? ' 第 ' + d.line + ' 行' : '')), d.source].filter(Boolean).join(' · ');
     return [d.method, d.path, d.status, d.durationMs && d.durationMs + ' ms', d.reason].filter(Boolean).join(' ');
   }
   function card(g, s, st) {
