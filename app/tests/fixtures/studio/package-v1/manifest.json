@@ -68,11 +68,11 @@
     },
     {
       "path": "design/prototype-v1.html",
-      "sha256": "ea50ea8ab4c4ead35b1f9c14615aabc51e701be6384f2d2f89293da143bff11c"
+      "sha256": "947c831465d0ed83f58e91014f4f2fab52104a62dac61a875109f76ecc97c9fd"
     },
     {
       "path": "design/prototype-v2.html",
-      "sha256": "3a338be4e18ffc83d40da0ef4f57aeec92b1233617531e31d9d8dbe91880be40"
+      "sha256": "44d58e883365e7354d7d42037dd157f71b4e326cd6ca96f2a8242dd2d0fc4125"
     },
     {
       "path": "design/qa/hifi-review-v1.json",
@@ -116,15 +116,15 @@
     },
     {
       "path": "design/theme-sample-v1.html",
-      "sha256": "ea50ea8ab4c4ead35b1f9c14615aabc51e701be6384f2d2f89293da143bff11c"
+      "sha256": "e4e99722e8083aad711db188a3b614ca3c18762ff6807f72c0fc08e75d194d0a"
     },
     {
       "path": "design/theme-sample-v2.html",
-      "sha256": "ae5073f7c89b12d6097ac6e3466a88c1986d9427001da1ecc17b63d08675ce82"
+      "sha256": "b2c4ffeba9965b836e45fd5c980d95bf206fd41291e24edddfac7035d30518c9"
     },
     {
       "path": "design/theme-sample-v3.html",
-      "sha256": "79e9e3b92a49fccbc2bcf0d03d6f8b962d508f093d728d9a21333521ea8aa8e1"
+      "sha256": "9bca90090dcc1badb321d66d7091e32b54752f297641ec6e409e530683147b70"
     },
     {
       "path": "design/theme-v1.json",
@@ -136,7 +136,7 @@
     },
     {
       "path": "design/wireframe-v1.html",
-      "sha256": "b3d4440104f73dc3cba31522e4a2948fe8820bdeb9b9ef5136eb0e52bb005210"
+      "sha256": "df3b392782b41f0df4d539cc33ca5e3490187d6e21d77092c9a6c4f7225e3bb2"
     }
   ],
   "artifacts": [

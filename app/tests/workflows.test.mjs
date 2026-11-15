@@ -679,3 +679,84 @@ test('single 接管：显式管理员授权、运行中拒绝、并发仅一次�
     await r.submit('released', { workflow: 'design' });
   });
 });
+
+
+test('权限门草稿：仅 user 可写、sources 越界拒绝，模型 create 不可写草稿', async () => {
+  const agent = { assertCurrent() {}, outputs: { directory: 'outputs' },
+    sources: [{ locator: 'inputs', actions: ['read', 'create'] }], definition: { agent: { id: 'a' }, bindings: {} } };
+  const gate = new PermissionGate({ scope: { ownerId: 'owner' }, agent });
+  await gate.run(gate.user(), async () => {
+    gate.check('draft', { path: 'inputs/drafts/brief.json' });
+    for (const path of ['outside/brief.json', 'inputs/../secret.json', '/inputs/brief.json'])
+      assert.throws(() => gate.check('draft', { path }), { status: 403 });
+    assert.throws(() => gate.check('create', { path: 'inputs/drafts/brief.json' }), { status: 403 });
+  });
+  gate.start({ id: 'task', threadId: 't' }); gate.started('t', 'turn');
+  await gate.run(gate.forTurn('t', 'turn'), async () => {
+    for (const action of ['draft', 'create']) assert.throws(() => gate.check(action, { path: 'inputs/drafts/brief.json' }), { status: 403 });
+  });
+  gate.close();
+});
+
+test('按工作流接管：权限、混用字段、并发标记、运行态与并发唯一成功', async t => {
+  const owner = '11111111-1111-4111-8111-111111111111', actor = '22222222-2222-4222-8222-222222222222';
+  const r = await runIdentity({ userId: owner, role: 'admin' }, () => messageRig(t, [
+    { id: 'design', single: true, access: 'admin' }, { id: 'public', single: true }, { id: 'plain', access: 'admin' },
+  ]));
+  r.store.users = [{ id: owner, role: 'admin', username: 'owner' }, { id: actor, role: 'admin', username: 'operator' }];
+  r.store.pause(r.session.id);
+  await runIdentity({ userId: owner, role: 'admin' }, () => r.submit('held', { workflow: 'design' }));
+  const job = r.store.state.jobs[0], body = { workflow: 'design', startedAt: job.createdAt, takeover: true };
+  await runIdentity({ userId: actor, role: 'user' }, () => assert.rejects(r.messages.cancel(body), { status: 403 }));
+  await runIdentity({ userId: actor, role: 'admin' }, async () => {
+    for (const change of [{ threadId: 'x' }, { taskId: 'x' }, { startedAt: undefined }, { startedAt: '1' }, { takeover: false }, { workflow: undefined }])
+      await assert.rejects(r.messages.cancel({ ...body, ...change }), { status: 400 });
+    for (const workflow of ['public', 'plain', 'missing']) await assert.rejects(r.messages.cancel({ ...body, workflow }), { status: 404 });
+    await assert.rejects(r.messages.cancel({ ...body, startedAt: body.startedAt - 1 }), { status: 409, message: '占用已变化，请刷新后核对' });
+    for (const status of ['starting', 'running', 'steering']) {
+      job.status = status; await assert.rejects(r.messages.cancel(body), { status: 409 });
+    }
+    job.status = 'failed';
+    const results = await Promise.allSettled([r.messages.cancel(body), r.messages.cancel(body)]);
+    assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+    assert.equal(results.find(result => result.status === 'rejected').reason.status, 404);
+    assert.deepEqual(results.find(result => result.status === 'fulfilled').value, { status: 'cancelled' });
+    assert.equal(r.store.audit.length, 1);
+  });
+});
+
+for (const status of ['failed', 'interrupted', 'needs-review', 'unconfirmed']) test(`手动重新生成：${status} 清理旧轮次、解除暂停并派发，产物只新建`, async t => {
+  const r = await messageRig(t, [article]);
+  r.store.pause(r.session.id); await r.submit('retry', { workflow: 'article' });
+  r.store.patch('retry', { status, error: '失败原因', checks: [{ passed: false }], turnId: 'old-turn', reviseCount: 2 });
+  const queued = await r.messages.retry({ threadId: r.session.id, taskId: 'retry', text: '简化导航' });
+  assert.equal(queued.status, 'queued'); assert.equal(queued.step, 0); assert.equal(queued.reviseCount, 3);
+  assert.equal(r.store.paused(r.session.id), false);
+  const job = r.store.get('retry'); assert.equal(job.error, null); assert.equal(job.checks, null); assert.equal(job.turnId, null);
+  const input = await r.started(1);
+  assert.match(input.map(item => item.text).join('\n'), /简化导航.*新文件名/s);
+});
+
+test('手动重新生成：拒绝其他状态、普通对话、上限、非属主、工作流越权和非法字段', async t => {
+  const owner = '11111111-1111-4111-8111-111111111111';
+  const r = await runIdentity({ userId: owner, role: 'admin' }, () => messageRig(t, [{ id: 'design', access: 'admin' }]));
+  const body = { threadId: r.session.id, taskId: 'retry' };
+  await runIdentity({ userId: owner, role: 'admin' }, async () => {
+    r.store.pause(r.session.id); await r.submit('retry', { workflow: 'design' });
+    for (const status of ['queued', 'starting', 'running', 'steering', 'waiting', 'proposed', 'completed', 'cancelled', 'replica_missing', 'dispatching', 'submitted']) {
+      r.store.patch('retry', { status }); await assert.rejects(r.messages.retry(body), { status: 409 });
+    }
+    r.store.patch('retry', { status: 'failed', reviseCount: 10 });
+    await assert.rejects(r.messages.retry(body), { status: 409, message: '本步已重做 10 次，请确认继续或结束任务' });
+    r.store.patch('retry', { reviseCount: 0 });
+    for (const extra of [{ text: 'x'.repeat(2001) }, { text: {} }, { ownerId: owner }, { taskId: '' }]) await assert.rejects(r.messages.retry({ ...body, ...extra }), { status: 400 });
+    r.store.get('retry').workflow = 'chat'; await assert.rejects(r.messages.retry(body), { status: 409 });
+    r.store.get('retry').workflow = 'design';
+  });
+  await runIdentity({ userId: '22222222-2222-4222-8222-222222222222', role: 'admin' }, () => assert.rejects(r.messages.retry(body), { status: 404 }));
+  await runIdentity({ userId: owner, role: 'user' }, () => assert.rejects(r.messages.retry(body), { status: 403 }));
+  await runIdentity({ userId: owner, role: 'admin' }, async () => {
+    r.messages.wake = async () => {};
+    await r.messages.retry(body); assert.equal(r.store.get('retry').note, null);
+  });
+});

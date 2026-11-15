@@ -102,3 +102,10 @@ test('草稿 HTTP：认证、来源、正文类型、大小与跨用户隔离沿
     await http.handle(req, response); assert.equal(response.statusCode, status);
   }
 });
+
+
+test('草稿：目录存在时读取缺失草稿也返回明确的 404', t => {
+  const { files, write } = fixture(t);
+  write('present.json', '{}');
+  assert.throws(() => files.read_draft({ name: 'missing.json' }), { status: 404, message: '草稿不存在。' });
+});

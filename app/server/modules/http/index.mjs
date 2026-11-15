@@ -219,6 +219,7 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
       if (route === "POST /tasks/confirm") return json(200, await messages.confirm(await readBody(request)));
       if (route === "POST /tasks/feedback") return json(200, await messages.feedback(await readBody(request)));
       if (route === "POST /tasks/revise") return json(200, await messages.revise(await readBody(request)));
+      if (route === "POST /tasks/retry") return json(200, await messages.retry(await readBody(request)));
       if (route === "POST /tasks/cancel") return json(200, await messages.cancel(await readBody(request)));
       if (route === "POST /queue/continue") {
         const body = await readBody(request);
@@ -289,7 +290,10 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
       if (request.method === 'GET' && request.url.startsWith('/preview/') && ![410, 429, 403].includes(error.status)) error = previewMissing();
       if ((!error.status || error.status >= 500) && !error.databaseDiagnostic) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
       if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
-      if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR", ...(error.code === "WORKFLOW_OCCUPIED" && error.occupant ? { occupant: error.occupant } : {}) } });
+      // 仅放行契约指定的固定 404 文案，不暴露其他资源的存在性或内部错误。
+      const publicMissing = (request.method === 'GET' && request.url.split('?')[0] === '/workspace/drafts' && error.message === '草稿不存在。')
+        || (request.method === 'POST' && request.url === '/tasks/cancel' && ['任务不存在或不允许接管结束', '任务不存在或不允许接管结束。'].includes(error.message));
+      if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 && !publicMissing ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR", ...(error.code === "WORKFLOW_OCCUPIED" && error.occupant ? { occupant: error.occupant } : {}) } });
       else response.end();
     }
   };

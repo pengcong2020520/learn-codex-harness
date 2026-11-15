@@ -193,7 +193,10 @@ test('接管路由：按数据库任务属主跨节点转发，保持管理员�
     const query = node.app.data.pool.query;
     node.app.data = { scope: { instanceId: 'fixture-instance' }, pool: { query: async (sql, args) => {
       if (sql.startsWith('SELECT c.owner_id FROM agent_data.tasks')) {
-        assert.deepEqual(args, ['fixture-instance', user, 'thread', 'held', ['design']]);
+        if (args.length === 4) {
+          assert.deepEqual(args, ['fixture-instance', user, 'design', ['design']]);
+          assert.match(sql, /c.owner_id<>\$2/); assert.match(sql, /t.status NOT IN/);
+        } else assert.deepEqual(args, ['fixture-instance', user, 'thread', 'held', ['design']]);
         assert.match(sql, /t.single_workflow/); assert.match(sql, /u.role='admin'/);
         return { rows: [{ owner_id: owner }] };
       }
@@ -211,7 +214,10 @@ test('接管路由：按数据库任务属主跨节点转发，保持管理员�
   const result = await api(2, '/tasks/cancel', body);
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { nodeId: 'node-b', shardUser: owner, authorization: 'Bearer admin' });
-  for (const [input, token] of [[{ ...body, takeover: false }, 'admin'], [body, 'user']]) {
+  const workflow = await api(2, '/tasks/cancel', { workflow: 'design', startedAt: 123, takeover: true });
+  assert.equal(workflow.status, 200);
+  assert.deepEqual(workflow.body, { nodeId: 'node-b', shardUser: owner, authorization: 'Bearer admin' });
+  for (const [input, token] of [[{ ...body, takeover: false }, 'admin'], [body, 'user'], [{ workflow: 'design', startedAt: 123, takeover: true }, 'user']]) {
     const normal = await api(2, '/tasks/cancel', input, token);
     assert.equal(normal.status, 200); assert.equal(normal.body.nodeId, 'node-a'); assert.equal(normal.body.shardUser, user);
   }

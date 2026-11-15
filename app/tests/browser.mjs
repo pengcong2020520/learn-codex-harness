@@ -54,7 +54,8 @@ export async function browser(t){
   await page('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
  };
  const clickAt=async(x,y)=>{await page('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});await page('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});};
- return {clickAt,open,run,errors,networkErrors,reports,shot,viewport,beforeLoad,clickNavigate,key,hover};
+ const colorScheme=value=>page('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value}]});
+ return {clickAt,open,run,errors,networkErrors,reports,shot,viewport,beforeLoad,clickNavigate,key,hover,colorScheme};
 }
 export const helpers=`const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const until=async(fn,ms=3000)=>{const end=Date.now()+ms;while(Date.now()<end){if(fn())return true;await sleep(30);}return false;};`;

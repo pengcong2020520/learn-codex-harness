@@ -143,6 +143,10 @@ POST /messages { threadId, text, workflow, params, attachments? }
 | `queued` | 在数据库事务中追加待处理意见和附件，领取这一步后合并到输入，返回 `{ mode: "queued" }` |
 | 其他状态 | 返回 409，提示先核对任务记录，再确认或新建任务 |
 
+`POST /tasks/retry` 接受 `{ threadId, taskId, text? }`，仅属主在工作流访问门禁内手动调用，普通对话 `chat` 返回 409。允许 `failed`、`interrupted`、`needs-review`、`unconfirmed`；其他状态（包括 `replica_missing`、`completed`、`cancelled`）均返回 409。可选意见最多 2000 字符，与 revise 共用每步 10 次的 `reviseCount`；达到上限提示“本步已重做 10 次，请确认继续或结束任务”。成功时保持当前步骤，重排为 `queued`，保存意见（未填为 null），计数加一，清空 error、checks、turnId，解除会话暂停并发布、唤醒派发。
+
+`unconfirmed` 表示结果待核对。用户核对后点击“重新生成”就是人工决定；服务端与前端都不自动重试。新一轮只新建版本，不覆盖已有产物。界面在生成和失败时保留本阶段上一版，验收未过显示失败检查摘要。
+
 `single` 任务只有 `completed` 或 `cancelled` 释放占用；提议、失败、待核对也保留占用，不能自动抢占或重发。冲突返回 409，`error.occupant` 只包含 `username` 和 `startedAt`（任务受理时间，毫秒时间戳）。异常任务经人工核对后，可通过结束接口释放占用。
 
 `POST /tasks/cancel` 接受 `{ threadId, taskId, takeover? }`，身份与角色由服务端认证确定。属主结束沿用工作流访问门禁；结束成功后状态为 `cancelled`。
@@ -154,7 +158,7 @@ POST /messages { threadId, text, workflow, params, attachments? }
 | `starting`、`running`、`steering` | 拒绝 | 返回 409，提示等这一步完成或失败后再操作 |
 | 其他状态 | 拒绝，维持原规则 | 拒绝 |
 
-接管请求必须携带 `takeover: true`，并使用待结束任务的 `threadId`、`taskId`；省略或为 false 时仍按属主权限处理。服务端在同一数据库事务中锁定任务、核对状态、结束任务、写入审计和通知，并发接管只有一个成功。接管响应仅为 `{ status: "cancelled" }`，不返回他人任务正文。审计复用只追加的 `permission_events`：`actor_id` 为操作管理员，`created_at` 为时间，`resource_id` 为任务 ID，`before_state` 仅含属主 `owner_id`；不记录正文、意见、附件或参数。原属主的任务事件和后续快照中显示“已被管理员 X 结束”，X 为服务端读取的用户名。分片部署按任务属主路由，认证身份仍为发起管理员。
+接管请求必须携带 `takeover: true`。可以使用待结束任务的 `threadId`、`taskId`，也可以使用 `{ workflow, startedAt, takeover: true }`。两种形式不能混用，缺少字段返回 400。`startedAt` 直接取 `/workbench.workflowActivity[].occupant.startedAt`；管理员按当前 Agent 中 `single` 且 `access: "admin"` 的工作流定位他人管理员的未完成、未取消占用，不满足条件返回 404“任务不存在或不允许接管结束”。锁内比较任务 `created_at` 与 `startedAt`，不一致返回 409“占用已变化，请刷新后核对”。没有占用时返回 404，包括另一个接管已先完成的情况。任务 ID 形式省略 takeover 或为 false 时仍按属主权限处理。服务端在同一数据库事务中锁定任务、核对状态、结束任务、写入审计和通知，并发接管只有一个成功。接管响应仅为 `{ status: "cancelled" }`，不返回他人任务正文。审计复用只追加的 `permission_events`：`actor_id` 为操作管理员，`created_at` 为时间，`resource_id` 为任务 ID，`before_state` 仅含属主 `owner_id`；不记录正文、意见、附件或参数。原属主的任务事件和后续快照中显示“已被管理员 X 结束”，X 为服务端读取的用户名。分片部署按任务属主路由，认证身份仍为发起管理员。
 
 当前 Agent 包含可见的 interactive 或 single 工作流时，`GET /workbench` 增加 `workflowActivity` 数组：每项包含 `workflow`、当前用户的 `taskIds`、他人占用摘要 `occupant`；无他人占用时为 null，不暴露他人的任务 ID 或正文。
 

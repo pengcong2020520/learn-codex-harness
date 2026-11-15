@@ -18,7 +18,7 @@ test('网页静态入口：Caddy /ui、302 跳转、安全响应头、只读挂�
 });
 test('网页 HTML：无内联脚本、样式或事件属性，入口模块直接加载', () => {
   const files = fs.readdirSync(new URL('../web/', import.meta.url), { recursive: true }).filter(file => file.endsWith('.html')).map(file => `web/${file}`);
-  files.push('examples/custom-ui/ui/index.html');
+  files.push('examples/custom-ui/ui/index.html', 'agents/studio/ui/index.html');
   assert.ok(files.includes('web/index.html'));
   for (const file of files) {
     const visit = element => {

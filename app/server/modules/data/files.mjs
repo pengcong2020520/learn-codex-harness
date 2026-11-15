@@ -203,9 +203,14 @@ export function createFileTools(
     read_draft({ name }) {
       assertCurrent();
       const relative = draftPath(name);
-      const file = resolve(relative, { file: true, draft: true });
-      if (uid !== undefined && fs.lstatSync(file).uid !== uid) throw new AppError("草稿必须属于当前用户。", 403);
-      return this.read_file({ path: relative, max_chars: MAX_BYTES });
+      try {
+        const file = resolve(relative, { file: true, draft: true });
+        if (uid !== undefined && fs.lstatSync(file).uid !== uid) throw new AppError("草稿必须属于当前用户。", 403);
+        return this.read_file({ path: relative, max_chars: MAX_BYTES });
+      } catch (error) {
+        if (error.code === 'ENOENT') throw new AppError("草稿不存在。", 404);
+        throw error;
+      }
     },
     // 仅供设计工具调用，不登记为模型可直接调用的文件工具。
     design_path({ path: relative, package: packageDirectory = false }) {

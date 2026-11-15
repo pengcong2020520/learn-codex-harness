@@ -46,7 +46,7 @@ schemaVersion=1，projectId 对应项目，round 为 1–3，final 是布尔值�
 {"schemaVersion":1,"projectId":"task-helper","round":1,"final":true,"questions":[]}
 ```
 
-收到“提交第 n 轮澄清答案”的 revise 触发后，读取 clarify.json 核对当前轮次与问题 id，以草稿答案产生下一轮，不能重新编号以规避 3 轮。final 只表示停止出题；范围/权限分歧必须记录，不能因为到上限而虚构认可。brief 与 PRD 共用 decisions.clarificationRounds，不另起计数。
+收到“提交第 n 轮澄清答案”的 revise 触发后，读取 clarify.json 核对当前轮次与问题 id，以草稿答案产生下一轮，不能重新编号以规避 3 轮。final 只表示停止出题；范围/权限分歧必须记录，不能因为到上限而虚构认可。brief 与 PRD 共用 decisions.clarificationRounds，不另起计数。revise 附带“信息已足够，停止补充提问”（或同义的提前结束文字）时，下一份 clarify 直接写 final=true，questions 为空；未决事项记入 decisions。
 
 ## 风格、主题与换肤
 
@@ -89,5 +89,7 @@ manifest 与 design-handoff 一致。files 唯一路径、无绝对路径、点�
 前端只在 agent/ui/，必须在 agent/agent.json 声明 ui.entry=ui/index.html 和 title，JS/CSS 分离。调用 check_agent_package 后保存实际包路径、ok、errors、issues、status、reason；completed 时 errors 必须等于 issues 数且 ok 等价于 errors=0，工具未运行则 status=unverified、ok=false、reason 说明，不以 errors=0 谎报通过。报告默认放项目 qa/package-check.json；已有则编号新文件。包内如收录 QA，存已检查候选的实际结果并生成新包清单，最终另查新包，防止报告与 manifest 循环哈希。不得把上一包报告当成新包通过证据。
 
 ## 在工作室运行时
+
+产物自带的页面目录或说明只在单独打开时显示；被嵌入时（`window.top !== window.self`）隐藏，导航由工作室左侧目录提供。
 
 用 skill_read 读取本目录 schema 和 examples；采用前端 inputs/drafts/ 草稿，按以上规则核对。用 check_design 代替本机脚本。prototype-builder 复杂方式等 K3c 离线模板，此前只用简单方式并说明限制；开发侧的脚本与模板归档不随运行时副本携带，运行时不执行脚本；工作室没有 shell 或宿主机执行权限。所有路径受服务端授权约束，schema 不能扩张权限。结束只回一两句摘要与产物位置。

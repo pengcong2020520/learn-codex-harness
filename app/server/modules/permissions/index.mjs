@@ -91,7 +91,7 @@ export class PermissionGate {
   }
   check(action, target = {}) {
     const context = this.current();
-    if (!['read','create','list','update','index','tool.call','upload'].includes(action)) denied();
+    if (!['read','create','list','update','index','tool.call','upload','draft'].includes(action)) denied();
     if (action === 'upload') {
       if (context.kind !== 'user') denied();
       try { uploadInfo(target.path); } catch { denied(); }

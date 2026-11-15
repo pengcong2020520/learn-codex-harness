@@ -60,7 +60,7 @@ test('工作室 Agent 静态检查只有资料未部署类建议，六步完整�
     for (const term of ['skill_read', '一两句']) assert.ok(step.goal.includes(term), `${step.id}: ${term}`);
     for (const term of ['inputs/drafts/project.json', 'inputs/drafts/brief.json', 'list_files', 'read_file', 'write_file', 'decisions-v<n>.json', 'steer', 'revise']) assert.ok(role.includes(term), term);
   }
-  assert.equal(fs.readFileSync(path.join(studio, 'ui/index.html'), 'utf8').includes('工作室前端在 K3b-2 实现'), true);
+  assert.match(fs.readFileSync(path.join(studio, 'ui/index.html'), 'utf8'), /type="module" src="\/app\/app.mjs"/);
 });
 
 test('完整 goal 独立支持 4000 字符与六步边界，其他短文本仍限 500', () => {

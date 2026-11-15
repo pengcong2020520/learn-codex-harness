@@ -1,2 +1,18 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>Agent 设计工作室</title></head><body><p>工作室前端在 K3b-2 实现</p></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent 设计工作室</title>
+  <link rel="stylesheet" href="/app/styles.css">
+  <script type="module" src="/app/app.mjs"></script>
+</head>
+<body>
+  <div id="studio" class="app" aria-busy="true">
+    <header class="top"><strong>Agent 设计工作室</strong><button id="history" type="button" hidden>版本历史</button></header>
+    <div id="main" class="main"><main class="center"><div class="center-message">正在读取工作室……</div></main></div>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <noscript>请启用 JavaScript 后使用工作室。</noscript>
+</body>
+</html>
