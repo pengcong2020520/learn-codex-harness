@@ -19,10 +19,12 @@ function fixture(t) {
 test('草稿：覆盖原子替换、并发串行、JSON/Markdown 可通过现有工具读取且 Agent 不可写', async t => {
   const f = fixture(t);
   f.write('brief.json', '{"version":0}');
-  const inode = fs.statSync(path.join(f.workspaceDir, 'inputs/drafts/brief.json')).ino;
-  await Promise.all(Array.from({ length: 30 }, (_, i) => Promise.resolve().then(() => f.write('brief.json', JSON.stringify({ version: i + 1 })))));
+  await Promise.all(Array.from({ length: 30 }, (_, i) => Promise.resolve().then(() => {
+    const inode = fs.statSync(path.join(f.workspaceDir, 'inputs/drafts/brief.json')).ino;
+    f.write('brief.json', JSON.stringify({ version: i + 1 }));
+    assert.notEqual(fs.statSync(path.join(f.workspaceDir, 'inputs/drafts/brief.json')).ino, inode);
+  })));
   assert.equal(f.files.read_draft({ name: 'brief.json' }).content, '{"version":30}');
-  assert.notEqual(fs.statSync(path.join(f.workspaceDir, 'inputs/drafts/brief.json')).ino, inode);
   assert.equal(f.files.read_file({ path: 'inputs/drafts/brief.json' }).content, '{"version":30}');
   assert.deepEqual(fs.readdirSync(path.join(f.workspaceDir, 'inputs/drafts')), ['brief.json']);
   f.write('notes.md', '# 意见');
