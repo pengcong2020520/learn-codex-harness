@@ -84,8 +84,12 @@ test("CLI 经真实 HTTP/SSE 接收多个流式片段，连续两轮的回复不
   await until(() => output.includes("Agent：mock reply turn-2\n"));
   child.stdin.end("/exit\n");
   assert.equal(await exited, 0, output);
-  // 每轮开始时显示这一轮用的模型和选择来源。
-  assert.match(output, /模型：unit-model（默认路由）\nturn id: turn-1\nAgent：mock reply turn-1\n模型：unit-model（默认路由）\nturn id: turn-2\nAgent：mock reply turn-2\n/);
+  // 工具状态可在完整行之间通知；模型、Turn 与整行回复仍须逐轮有序。
+  const lines = output.split("\n").filter(line => line === "模型：unit-model（默认路由）" || line.startsWith("turn id: ") || line.startsWith("Agent："));
+  assert.deepEqual(lines, [
+    "模型：unit-model（默认路由）", "turn id: turn-1", "Agent：mock reply turn-1",
+    "模型：unit-model（默认路由）", "turn id: turn-2", "Agent：mock reply turn-2",
+  ]);
   assert.equal(output.split("Agent：").length - 1, 2);
   assert.equal(output.match(/Thread id: \S+/g).length, 1);
   assert.doesNotMatch(output, /Agent \[|轮次 |消息已接收/);

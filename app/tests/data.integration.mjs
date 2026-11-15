@@ -731,27 +731,30 @@ test("真实 PG：修改当前步持久化、重启保留计数、十次上限�
   await r.jobs.create({ ...job("revise"), workflow: "article" });
   await r.repo.bind("thread-2", "v1", r.root);
   const service = (store, repository) => Object.assign(Object.create(MessageService.prototype), {
-    store, locks: new Map(), sessions: { ensure: id => repository.conversation(id) },
+    config: {}, store, locks: new Map(), sessions: { ensure: id => repository.conversation(id) },
     resolve: () => ({ steps: [{ id: "outline" }, { id: "final" }] }),
     publish: async () => {}, wake: async () => {},
   });
   let messages = service(r.jobs, r.repo);
   const args = { threadId: "thread-1", taskId: "revise", text: "调整层级" };
-  await assert.rejects(messages.revise(args), { status: 409 });
+  const asOwner = operation => runOwner(r.scope.ownerId, operation);
+  await assert.rejects(asOwner(() => messages.revise(args)), { status: 409 });
   await r.jobs.patch("revise", { status: "waiting" });
-  await assert.rejects(messages.revise({ ...args, threadId: "thread-2" }), { status: 404 });
+  await assert.rejects(asOwner(() => messages.revise({ ...args, threadId: "thread-2" })), { status: 404 });
   const foreignScope = { ...r.scope, ownerId: randomUUID() };
+  // 固定属主仓储仍能读到任务时，服务层也必须拒绝非属主身份。
+  await assert.rejects(runOwner(foreignScope.ownerId, () => messages.revise(args)), { status: 404 });
   const foreignRepo = new Repository(r.pool, foreignScope), foreignJobs = new PostgresJobs(r.pool, foreignScope);
   await foreignRepo.initialize(); await foreignRepo.bind("foreign-thread", "v1", r.root);
   const foreign = service(foreignJobs, foreignRepo);
-  await assert.rejects(foreign.revise(args), { status: 404 });
-  await assert.rejects(foreign.revise({ ...args, threadId: "foreign-thread" }), { status: 404 });
+  await assert.rejects(runOwner(foreignScope.ownerId, () => foreign.revise(args)), { status: 404 });
+  await assert.rejects(runOwner(foreignScope.ownerId, () => foreign.revise({ ...args, threadId: "foreign-thread" })), { status: 404 });
   r.jobs.maxQueued = 0;
-  await assert.rejects(messages.revise(args), { status: 429 });
+  await assert.rejects(asOwner(() => messages.revise(args)), { status: 429 });
   assert.equal((await r.jobs.get("revise")).reviseCount, 0, "排队失败时计数与意见不提交");
   r.jobs.maxQueued = 200;
   for (let n = 1; n <= 10; n++) {
-    const row = await messages.revise(args);
+    const row = await asOwner(() => messages.revise(args));
     assert.deepEqual([row.status, row.step, row.reviseCount, row.note], ["queued", 0, n, "调整层级"]);
     assert.ok((await r.jobs.deliveries()).some(row => row.thread_id === "thread-1"), "重做与 outbox 同事务唤醒");
     const restarted = new PostgresJobs(r.pool, r.scope);
@@ -761,8 +764,8 @@ test("真实 PG：修改当前步持久化、重启保留计数、十次上限�
     assert.equal((await restarted.get("revise")).status, "waiting");
     messages = service(restarted, r.repo);
   }
-  await assert.rejects(messages.revise(args), { status: 409, message: "本步已重做 10 次，请确认继续或结束任务" });
-  const row = await messages.confirm({ threadId: "thread-1", taskId: "revise", text: "继续" });
+  await assert.rejects(asOwner(() => messages.revise(args)), { status: 409, message: "本步已重做 10 次，请确认继续或结束任务" });
+  const row = await asOwner(() => messages.confirm({ threadId: "thread-1", taskId: "revise", text: "继续" }));
   assert.deepEqual([row.step, row.reviseCount, row.note], [1, 0, "继续"]);
   await assert.rejects(r.jobs.patch("revise", { reviseCount: 11 }));
 });
@@ -780,4 +783,111 @@ test('真实 PG：附件迁移、落库、重新连接和任务恢复均保留�
   assert.deepEqual((await restored.get('without-attachments')).attachments, []);
   const foreign = new PostgresJobs(pool, { ...r.scope, ownerId: randomUUID() });
   assert.equal(await foreign.get('attachments'), undefined);
+});
+
+test('真实 PG：single 两个连接并发跨用户提交仅一个成功，只有完成或结束释放', async t => {
+  const r = await setup(t), otherPool = await openDatabase(databaseUrl);
+  t.after(() => otherPool.end());
+  const scope = { ...r.scope, ownerId: randomUUID() }, repo = new Repository(otherPool, scope);
+  await repo.initialize(); await repo.bind('thread-2', 'v1', r.root);
+  await r.repo.query("UPDATE agent_data.users SET username=$3,role='admin' WHERE instance_id=$1 AND id=$2", ['designer-a']);
+  await repo.query("UPDATE agent_data.users SET username=$3,role='admin' WHERE instance_id=$1 AND id=$2", ['designer-b']);
+  const second = new PostgresJobs(otherPool, scope);
+  const results = await Promise.allSettled([
+    r.jobs.create({ ...job('single-a'), workflow: 'design', single: true }),
+    second.create({ ...job('single-b'), threadId: 'thread-2', workflow: 'design', single: true }),
+  ]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  const error = results.find(result => result.status === 'rejected').reason;
+  assert.equal(error.status, 409); assert.equal(error.code, 'WORKFLOW_OCCUPIED');
+  assert.deepEqual(Object.keys(error.occupant).sort(), ['startedAt', 'username']);
+  const firstWon = results[0].status === 'fulfilled', winner = firstWon ? r.jobs : second, loser = firstWon ? second : r.jobs;
+  const id = firstWon ? 'single-a' : 'single-b';
+  assert.equal(error.occupant.username, firstWon ? 'designer-a' : 'designer-b');
+  assert.ok(Number.isFinite(error.occupant.startedAt));
+  assert.equal((await loser.workflowOccupancy('design')).taskId, null);
+  assert.equal((await winner.workflowOccupancy('design')).taskId, id);
+  const next = { ...job('single-next'), threadId: firstWon ? 'thread-2' : 'thread-1', workflow: 'design', single: true };
+  for (const status of ['running', 'waiting', 'failed', 'unconfirmed', 'needs-review']) {
+    await winner.patch(id, { status });
+    await assert.rejects(loser.create(next), { status: 409 });
+  }
+  await winner.patch(id, { status: 'cancelled' }); await loser.create(next);
+  await loser.patch(next.id, { status: 'completed' });
+  await winner.create({ ...job('single-after'), threadId: firstWon ? 'thread-1' : 'thread-2', workflow: 'design', single: true });
+});
+
+test('真实 PG：反馈原子追加、重做上限、领取后拒绝；草稿跨用户隔离', async t => {
+  const r = await setup(t);
+  await r.jobs.create(job('feedback'));
+  assert.deepEqual(await Promise.all([r.jobs.feedback('feedback', '一', []), r.jobs.feedback('feedback', '二', [])]), ['queued', 'queued']);
+  assert.equal((await r.jobs.get('feedback')).feedback.length, 2);
+  await r.jobs.patch('feedback', { status: 'starting' }, ['queued']);
+  await assert.rejects(r.jobs.feedback('feedback', '迟到', []), { status: 409 });
+  await r.jobs.patch('feedback', { status: 'waiting', reviseCount: 10 });
+  await assert.rejects(r.jobs.feedback('feedback', '超限', []), { status: 409 });
+  const foreign = { ...r.scope, ownerId: randomUUID() }, repo = new Repository(r.pool, foreign);
+  await repo.initialize();
+  await assert.rejects(new PostgresJobs(r.pool, foreign).feedback('feedback', '越权', []), { status: 404 });
+  const files = createUserFileTools(r.root, { workspaceDir: path.join(r.root, 'workspace'), sources: r.sources, outputs: r.outputs });
+  await runOwner(r.scope.ownerId, () => files.write_draft({ name: 'brief.json', content: Buffer.from('{"value":"a"}') }));
+  await runOwner(foreign.ownerId, () => {
+    assert.throws(() => files.read_draft({ name: 'brief.json' }), { status: 404 });
+    files.write_draft({ name: 'brief.json', content: Buffer.from('{"value":"b"}') });
+    assert.equal(files.read_draft({ name: 'brief.json' }).content, '{"value":"b"}');
+  });
+  await runOwner(r.scope.ownerId, () => assert.equal(files.read_draft({ name: 'brief.json' }).content, '{"value":"a"}'));
+});
+
+
+test('真实 PG：管理员并发接管仅一次成功，审计通知与锁释放同事务', async t => {
+  const r = await setup(t), otherPool = await openDatabase(databaseUrl);
+  t.after(() => otherPool.end());
+  const actors = [];
+  for (const [index, pool] of [r.pool, otherPool].entries()) {
+    const scope = { ...r.scope, ownerId: randomUUID() }, repo = new Repository(pool, scope);
+    await repo.initialize(); await repo.bind(`admin-thread-${index}`, 'v1', r.root);
+    await repo.query("UPDATE agent_data.users SET username=$3,role='admin' WHERE instance_id=$1 AND id=$2", [`operator-${index}`]);
+    actors.push(new PostgresJobs(pool, scope));
+  }
+  await r.repo.query("UPDATE agent_data.users SET username='owner',role='admin' WHERE instance_id=$1 AND id=$2");
+  await r.jobs.create({ ...job('held'), workflow: 'design', single: true, text: '不得写入审计的正文' });
+  for (const status of ['starting', 'running', 'steering']) {
+    await r.jobs.patch('held', { status });
+    await assert.rejects(actors[0].cancelTakeover('thread-1', 'held', ['design']), { status: 409 });
+  }
+  await r.jobs.patch('held', { status: 'unconfirmed' });
+  await r.repo.query("UPDATE agent_data.users SET disabled_at=now() WHERE instance_id=$1 AND id=$2");
+  assert.equal(await actors[0].takeoverOwner('thread-1', 'held', ['design']), r.scope.ownerId);
+  assert.equal(await actors[0].takeoverOwner('thread-1', 'held', []), undefined);
+  await assert.rejects(actors[0].cancelTakeover('wrong', 'held', ['design']), { status: 404 });
+  await assert.rejects(actors[0].cancelTakeover('thread-1', 'held', []), { status: 404 });
+  await actors[0].query("UPDATE agent_data.users SET role='user' WHERE instance_id=$1 AND id=$2");
+  await assert.rejects(actors[0].cancelTakeover('thread-1', 'held', ['design']), { status: 403 });
+  await actors[0].query("UPDATE agent_data.users SET role='admin' WHERE instance_id=$1 AND id=$2");
+  // 审计写入失败必须回滚状态和通知，不能留下没有审计的解锁。
+  const query = actors[0].query.bind(actors[0]);
+  actors[0].query = (sql, ...args) => {
+    if (sql.startsWith('INSERT INTO agent_data.permission_events')) throw new Error('模拟审计不可写');
+    return query(sql, ...args);
+  };
+  await assert.rejects(actors[0].cancelTakeover('thread-1', 'held', ['design']), /模拟审计不可写/);
+  actors[0].query = query;
+  assert.equal((await r.jobs.get('held')).status, 'unconfirmed');
+  assert.ok(await r.jobs.workflowOccupancy('design'));
+  const results = await Promise.allSettled(actors.map(store => store.cancelTakeover('thread-1', 'held', ['design'])));
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(results.find(result => result.status === 'rejected').reason.status, 409);
+  const winner = results.findIndex(result => result.status === 'fulfilled');
+  const cancelled = await r.jobs.get('held');
+  assert.equal(cancelled.status, 'cancelled'); assert.equal(cancelled.error, `已被管理员 operator-${winner} 结束`);
+  assert.equal(await r.jobs.workflowOccupancy('design'), null);
+  const audit = (await r.pool.query("SELECT * FROM agent_data.permission_events WHERE instance_id=$1 AND action='task:cancel-takeover'", [r.scope.instanceId])).rows;
+  assert.equal(audit.length, 1); assert.equal(audit[0].actor_id, actors[winner].ownerId);
+  assert.equal(audit[0].resource_type, 'task'); assert.equal(audit[0].resource_id, 'held');
+  assert.deepEqual(audit[0].before_state, { owner_id: r.scope.ownerId });
+  assert.equal(audit[0].after_state, null); assert.equal(audit[0].detail, null);
+  assert.ok(audit[0].created_at instanceof Date); assert.ok(!JSON.stringify(audit).includes('不得写入审计的正文'));
+  assert.equal((await r.pool.query("SELECT * FROM agent_data.notifications WHERE instance_id=$1 AND task_id='held' AND status='cancelled'", [r.scope.instanceId])).rowCount, 1);
+  await actors[winner].create({ ...job('released'), threadId: `admin-thread-${winner}`, workflow: 'design', single: true });
 });

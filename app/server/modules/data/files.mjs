@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { uploadInfo } from "../../../shared/uploads.mjs";
 import { AppError } from "../../../shared/errors.mjs";
 import { Parser } from "htmlparser2";
@@ -64,7 +64,7 @@ export function createFileTools(
           (!relative || source.locator.startsWith(relative + "/")),
       ));
   const writable = (relative) =>
-    !sources?.some(source => source.readOnly && covers(source.locator, relative)) && (sources &&
+    !covers("inputs/drafts", relative) && !sources?.some(source => source.readOnly && covers(source.locator, relative)) && (sources &&
     sources.some(
       (source) =>
         source.actions.includes("create") && covers(source.locator, relative),
@@ -118,11 +118,11 @@ export function createFileTools(
 
   function resolve(
     relative = "",
-    { createParents = false, file = false, binary = false, preview = false, upload = false } = {},
+    { createParents = false, file = false, binary = false, preview = false, upload = false, draft = false } = {},
   ) {
     relative = normalize(relative, !file);
     const parts = relative ? relative.split("/") : [];
-    if (file && (parts.length < 2 || !(upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
+    if (file && (parts.length < 2 || !(draft ? /\.(json|md)$/ : upload ? /\.(md|txt|png|jpeg|jpg|webp)$/i : preview ? /\.(html|png|jpeg|jpg|webp)$/i : binary ? /\.(png|jpeg|webp|mp4)$/i : /\.(md|txt|html)$/i).test(relative)))
       throw new Error(binary ? "当前只支持 png / jpeg / webp / mp4 文件。" : "当前只支持 .md、.txt 和 .html 文件。");
     let current = base;
     for (const [index, part] of ["", ...parts].entries()) {
@@ -162,8 +162,46 @@ export function createFileTools(
       throw new Error("产物检查失败。");
   }
 
+  function draftPath(name) {
+    if (typeof name !== "string" || !/^[a-z0-9-]{1,64}\.(json|md)$/.test(name))
+      throw new AppError("草稿名称须为 1–64 位小写字母、数字或连字符，并带 .json 或 .md 扩展名。", 400);
+    const relative = `inputs/drafts/${name}`;
+    if (!readable(relative)) throw new AppError("未授权访问这个资料范围。", 403);
+    return relative;
+  }
+
   return {
     workspace: base,
+    write_draft({ name, content }) {
+      assertCurrent();
+      const relative = draftPath(name);
+      if (!Buffer.isBuffer(content)) throw new AppError("草稿正文必须是原始字节。", 400);
+      if (content.length > MAX_BYTES) throw new AppError("草稿不能超过 256 KiB。", 413);
+      let text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(content); }
+      catch { throw new AppError("草稿必须是合法 UTF-8。", 400); }
+      if (name.endsWith(".json")) {
+        try { JSON.parse(text); } catch { throw new AppError("草稿 JSON 格式不正确。", 400); }
+      }
+      // 所有检查和 rename 同步完成；同一用户的分片路由保证写入在属主节点串行执行。
+      const file = resolve(relative, { file: true, draft: true, createParents: true });
+      const dir = path.dirname(file);
+      if (!fs.existsSync(file) && fs.readdirSync(dir).filter(entry => /^[a-z0-9-]{1,64}\.(json|md)$/.test(entry)).length >= 200)
+        throw new AppError("每个用户最多保存 200 个草稿，请覆盖已有草稿。", 409);
+      if (fs.existsSync(file) && uid !== undefined && fs.lstatSync(file).uid !== uid)
+        throw new AppError("草稿必须属于当前用户。", 403);
+      const temp = path.join(dir, `.draft-${randomUUID()}`);
+      try { persist(temp, content); fs.renameSync(temp, file); }
+      finally { if (fs.existsSync(temp)) fs.unlinkSync(temp); }
+      return { path: relative, size: content.length };
+    },
+    read_draft({ name }) {
+      assertCurrent();
+      const relative = draftPath(name);
+      const file = resolve(relative, { file: true, draft: true });
+      if (uid !== undefined && fs.lstatSync(file).uid !== uid) throw new AppError("草稿必须属于当前用户。", 403);
+      return this.read_file({ path: relative, max_chars: MAX_BYTES });
+    },
     write_upload({ path: relative, content }) {
       assertCurrent();
       validateUpload(relative, content);
@@ -199,7 +237,7 @@ export function createFileTools(
       if (binary && (!outputs || !covers(outputs.directory, relative) || !outputs.formats.includes(path.extname(relative).slice(1).toLowerCase())))
         throw new Error("媒体只能写入 outputs 目录且格式必须声明。");
       return resolve(relative, {
-        binary, file: true,
+        draft: action !== "create" && relative.startsWith("inputs/drafts/"), binary, file: true,
         createParents: action === "create",
       });
     },
@@ -243,7 +281,7 @@ export function createFileTools(
         throw new Error(
           "未授权读取这个资料范围；产物写入权限不自动包含读取权限。",
         );
-      const file = resolve(relative, { file: true });
+      const file = resolve(relative, { file: true, draft: relative.startsWith("inputs/drafts/") });
       const fd = fs.openSync(
         file,
         fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW,

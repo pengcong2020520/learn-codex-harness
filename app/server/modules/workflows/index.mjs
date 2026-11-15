@@ -58,7 +58,8 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
     workflows.set(entry.id, { ...workflow, validate: workflow.params ? ajv.compile(workflow.params) : null });
   }
   return freeze({
-    list: () => [...workflows.values()].map(({ id, label, params, checks, steps }) => ({ id, label, params: params || null, checks: checks || [],
+    list: () => [...workflows.values()].map(({ id, label, params, checks, steps, interactive, single, access }) => ({ id, label,
+      ...(interactive !== undefined ? { interactive } : {}), ...(single !== undefined ? { single } : {}), ...(access ? { access } : {}), params: params || null, checks: checks || [],
       steps: steps ? steps.map(({ id: step, goal, confirm, checks, model, needs, effort }) => ({ id: step, goal, confirm: confirm === true, checks: checks || [], model: model || null, ...(needs ? { needs } : {}), ...(effort ? { effort } : {}) })) : null })),
     resolve(id = "chat", params = null, allowsKnowledge = () => false) {
       const workflow = workflows.get(id);
@@ -69,7 +70,8 @@ export function defineWorkflows(agent, { writable = [] } = {}) {
       } else if (params && Object.keys(params).length) throw new AppError(`Workflow ${id} 不接受参数。`, 400);
       const grants = (workflow.grants || []).map(grant => ({ type: grant.type, kbId: typeof grant.kbId === "object" ? params[grant.kbId.param] : grant.kbId }));
       for (const grant of grants) if (!updatable.has(grant.kbId) && !allowsKnowledge(grant.kbId)) throw new AppError(`Agent 没有更新知识库 ${grant.kbId} 的权限。`, 403, "FORBIDDEN");
-      return freeze({ id, label: workflow.label, skill: workflow.skill || null, params: workflow.validate ? { ...params } : null, grants, checks: [...(workflow.checks || [])],
+      return freeze({ id, ...(workflow.interactive !== undefined ? { interactive: workflow.interactive } : {}),
+        ...(workflow.single !== undefined ? { single: workflow.single } : {}), ...(workflow.access ? { access: workflow.access } : {}), label: workflow.label, skill: workflow.skill || null, params: workflow.validate ? { ...params } : null, grants, checks: [...(workflow.checks || [])],
         steps: workflow.steps ? workflow.steps.map(step => ({ id: step.id, goal: step.goal, writes: step.writes ? [...step.writes] : null, confirm: step.confirm === true, checks: [...(step.checks || [])], model: step.model || null, ...(step.needs ? { needs: { ...step.needs } } : {}), ...(step.effort ? { effort: step.effort } : {}) })) : null });
     }
   });

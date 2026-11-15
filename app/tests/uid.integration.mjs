@@ -132,3 +132,26 @@ test('上传文件：真实用户 uid、共享组和权限与生产写入一致�
   assert.equal((await readAsUser(uid, file, { maxBytes: 256 * 1024 })).toString(), '用户 PRD');
   await assert.rejects(readAsUser(10002, file, { maxBytes: 256 * 1024 }), error => error.code === 'EACCES');
 });
+
+test('草稿：真实 uid 原子覆盖保持属主，其他 uid 无法读取，同名草稿相互隔离', { skip: !linuxUid && '需要可切换 uid/gid 的 Linux 环境' }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'draft-uid-')); fs.chmodSync(root, 0o755);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owners = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  const files = createUserFileTools(root, { workspaceDir: path.join(root, 'workspace'), sources: [{ id: 'inputs', locator: 'inputs', actions: ['read'] }] });
+  for (const [index, owner] of owners.entries()) {
+    const uid = 10001 + index;
+    const paths = prepareDirectories(root, { user_id: owner, uid, codex_home: path.join(root, '.data/users', owner, 'codex') }, { isolated: true });
+    await runOwner(owner, () => {
+      for (const value of [0, index + 1]) files.write_draft({ name: 'brief.json', content: Buffer.from(JSON.stringify({ value })) });
+      assert.equal(files.read_draft({ name: 'brief.json' }).content, JSON.stringify({ value: index + 1 }));
+    });
+    const file = path.join(paths.workspaceDir, 'inputs/drafts/brief.json');
+    assert.equal(fs.statSync(file).uid, uid); assert.equal(fs.statSync(file).mode & 0o777, 0o660);
+    const read = targetUid => {
+      const child = userSpawn(process.execPath, ['-e', "require('node:fs').readFileSync(process.argv[1])", file], { uid: targetUid, gid: targetUid, isolated: true });
+      return spawnSync(child.command, child.args, { ...child.options, cwd: '/tmp', env: { PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
+    };
+    const own = read(uid); assert.equal(own.status, 0, own.stderr);
+    const other = read(uid === 10001 ? 10002 : 10001); assert.notEqual(other.status, 0); assert.match(other.stderr, /EACCES/);
+  }
+});

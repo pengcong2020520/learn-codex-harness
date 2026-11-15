@@ -8,15 +8,50 @@ export class TestJobs {
     this.state = state;
   }
   get(id) {
-    return this.state.jobs.find((j) => j.id === id);
+    return this.state.jobs.find((j) => j.id === id && (!j.userId || !currentIdentity() || j.userId === currentIdentity().userId));
   }
   list(threadId) {
-    return this.state.jobs.filter((j) => !threadId || j.threadId === threadId);
+    return this.state.jobs.filter((j) => (!threadId || j.threadId === threadId) && (!j.userId || !currentIdentity() || j.userId === currentIdentity().userId));
   }
   paused(id) {
     return this.state.paused.includes(id);
   }
+  workflowTasks(workflows) {
+    return this.list(null).filter(job => workflows.includes(job.workflow) && job.mode !== 'append' && !['completed', 'cancelled'].includes(job.status)).map(({ id, workflow }) => ({ id, workflow }));
+  }
+  workflowOccupancy(workflow) {
+    const job = this.state.jobs.find(job => job.single && job.workflow === workflow && !['completed', 'cancelled'].includes(job.status));
+    return job ? { taskId: job.userId === currentIdentity()?.userId ? job.id : null, username: job.username || 'fixture', startedAt: job.createdAt } : null;
+  }
+  async cancelTakeover(threadId, taskId, workflows) {
+    const actor = this.users?.find(user => user.id === currentIdentity()?.userId && user.role === 'admin' && !user.disabled_at);
+    if (!actor) throw new AppError('只有管理员可以接管结束任务。', 403);
+    const job = this.state.jobs.find(job => job.id === taskId && job.threadId === threadId && job.userId !== actor.id
+      && job.single && workflows.includes(job.workflow) && this.users.some(user => user.id === job.userId && user.role === 'admin'));
+    if (!job) throw new AppError('任务不存在或不允许接管结束。', 404);
+    if (['starting', 'running', 'steering'].includes(job.status)) throw new AppError('任务正在运行，请等这一步完成或失败后再操作。', 409);
+    if (!['queued', 'waiting', 'proposed', 'failed', 'needs-review', 'unconfirmed'].includes(job.status)) throw new AppError('当前状态不能接管结束，请刷新后核对任务记录。', 409);
+    job.status = 'cancelled'; job.error = `已被管理员 ${actor.username} 结束`;
+    (this.audit ||= []).push({ actorId: actor.id, ownerId: job.userId, taskId, createdAt: Date.now() });
+    return { id: taskId, threadId, userId: job.userId, status: 'cancelled' };
+  }
+  feedback(id, note, attachments) {
+    const job = this.get(id);
+    if (!job) throw new AppError('任务不存在。', 404);
+    if (!['queued', 'waiting'].includes(job.status)) throw new AppError('任务状态已变化，请刷新后核对意见是否需要重新提交。', 409);
+    const mode = job.status === 'waiting' ? 'revise' : 'queued';
+    if (job.status === 'waiting') {
+      if (job.reviseCount >= 10) throw new AppError('本步已重做 10 次，请确认继续或结束任务', 409);
+      job.note = note; job.reviseCount++;
+    }
+    job.status = 'queued'; job.feedback.push({ text: note, attachments });
+    return mode;
+  }
   create(job) {
+    if (job.single && this.workflowOccupancy(job.workflow)) {
+      const occupied = this.workflowOccupancy(job.workflow);
+      throw Object.assign(new AppError('这个工作流已有进行中的任务，请等当前任务完成或结束后再提交。', 409, 'WORKFLOW_OCCUPIED'), { occupant: { username: occupied.username, startedAt: occupied.startedAt } });
+    }
     if (
       this.list(job.threadId).filter((j) => j.status === "queued").length >= 100
     )
@@ -25,6 +60,7 @@ export class TestJobs {
       ...job,
       step: 0,
       note: null,
+      feedback: [],
       reviseCount: 0,
       turnId: null,
       status: job.status === "proposed" ? "proposed" : "queued",

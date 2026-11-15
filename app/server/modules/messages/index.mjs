@@ -5,7 +5,7 @@ import { userWorkspace } from "../accounts/workspace.mjs";
 import { validateEffort } from "../gateway/router.mjs";
 import { randomUUID } from "node:crypto";
 import { AppError, requireId, requireText } from "../../../shared/errors.mjs";
-import { executing, terminal } from "../data/jobs.mjs";
+import { cancellable, executing, terminal } from "../data/jobs.mjs";
 import { checksPassed, runChecks, stepOf } from "../workflows/index.mjs";
 
 const CHAT = Object.freeze({ id: "chat", label: "普通对话", skill: null, params: null, grants: Object.freeze([]), checks: Object.freeze([]), steps: null });
@@ -111,6 +111,9 @@ export class MessageService {
           );
         return this.publicJob(existing);
       }
+      if (mode === "append") {
+        for (const task of await this.store.list(threadId)) if (task.turnId === targetTurnId) this.checkWorkflowAccess(task.workflow);
+      }
       if (mode === "append" && !this.sessions.getTurn(threadId, targetTurnId))
         throw new AppError("追加目标不属于该会话或尚不可定位。", 409);
       try {
@@ -123,6 +126,7 @@ export class MessageService {
           mode,
           targetTurnId,
           workflow: workflow.id,
+          single: workflow.single === true,
           params: workflow.params,
           model,
           step: 0,
@@ -162,7 +166,72 @@ export class MessageService {
       if (id !== "chat") throw new AppError(`当前 Agent 没有启用这个 Workflow：${id}`, 403, "WORKFLOW_UNAVAILABLE");
       return CHAT;
     }
+    this.checkWorkflowAccess(id);
     return workflows.resolve(id, params, kbId => Boolean(this.permissionHub && effectiveKnowledgeMounts(this.config.agent, this.permissionHub).some(m => m.kbId === kbId && m.actions.includes('update'))));
+  }
+  checkWorkflowAccess(id) {
+    const workflow = this.config.agent?.workflows?.list().find(item => item.id === id);
+    const role = this.permissionHub?.context?.getStore()?.user.role || currentIdentity()?.role;
+    if (workflow?.access === "admin" && role !== "admin") throw new AppError("这个工作流仅管理员可用，请联系管理员。", 403);
+  }
+  async ownedJob(id) {
+    const job = await this.job(id);
+    if (!job || (job.userId && job.userId !== currentIdentity()?.userId)) throw new AppError("任务不存在。", 404);
+    this.checkWorkflowAccess(job.workflow);
+    return job;
+  }
+  async workflowActivity(workflows) {
+    const visible = workflows.filter(item => item.interactive || item.single);
+    const jobs = await this.store.workflowTasks(visible.map(item => item.id));
+    const result = [];
+    for (const workflow of visible) {
+      this.checkWorkflowAccess(workflow.id);
+      const taskIds = jobs.filter(job => job.workflow === workflow.id).map(job => job.id);
+      const occupied = workflow.single ? await this.store.workflowOccupancy(workflow.id) : null;
+      result.push({ workflow: workflow.id, taskIds, occupant: occupied && !occupied.taskId ? { username: occupied.username, startedAt: occupied.startedAt } : null });
+    }
+    return result;
+  }
+  async feedback({ taskId, text, context, attachments = [], ...rest }) {
+    if (Object.keys(rest).length) throw new AppError("意见只接受 taskId、text、context 与 attachments。", 400);
+    if (this.rpc.pool && !this.rpc.current()) return this.rpc.withOwner(currentIdentity().userId, () => this.feedback({ taskId, text, context, attachments }));
+    this.permissionHub?.checkAgent(this.config.agent);
+    if (this.closed || this.stopping || this.failure) throw new AppError("执行服务不可用，请核对任务状态。", 503);
+    requireId(taskId, "任务 ID");
+    let note = requireText(text, "修改意见", 2000);
+    if (context !== undefined) {
+      if (!context || typeof context !== "object" || Array.isArray(context) || Object.keys(context).some(key => !["screen", "state", "label"].includes(key)) || Object.values(context).some(value => typeof value !== "string" || /[\r\n\x00-\x1f]/.test(value)))
+        throw new AppError("context 只接受 screen、state、label 字符串。", 400);
+      const prefix = [context.screen, context.state, context.label].filter(value => value?.trim()).join(" / ");
+      if (Object.values(context).reduce((size, value) => size + [...value].length, 0) > 200 || [...prefix].length > 200) throw new AppError("屏幕上下文不能超过 200 字。", 400);
+      if (prefix) note = `【当前：${prefix}】\n${note}`;
+    }
+    const principal = this.gate?.submission();
+    const original = await this.ownedJob(taskId);
+    await this.sessions.ensure(original.threadId);
+    await this.readAttachments(attachments, principal);
+    return this.serial(original.threadId, async () => {
+      const job = await this.ownedJob(taskId);
+      const workflow = this.resolve({ id: job.workflow || "chat", params: job.params ?? null });
+      if (["waiting", "queued"].includes(job.status)) {
+        const mode = await this.store.feedback(taskId, note, attachments);
+        await this.publish(job.threadId); await this.wake(job.threadId);
+        return { mode };
+      }
+      if (executing.includes(job.status)) {
+        if (!workflow.interactive) throw new AppError("等这一步完成后再提意见。", 409);
+        if (!job.turnId || this.sessions.snapshot(job.threadId).activeTurnId !== job.turnId)
+          throw new AppError("当前步骤正在切换，请刷新任务状态后再提意见。", 409);
+        const append = { id: randomUUID(), threadId: job.threadId, userId: job.userId,
+          text: note, attachments, mode: "append", targetTurnId: job.turnId,
+          workflow: job.workflow, params: job.params, agentHash: job.agentHash, createdAt: Date.now() };
+        await this.store.create(append);
+        await this.steer(await this.job(append.id));
+        return { mode: "steer" };
+      }
+      const reasons = { completed: "任务已完成", cancelled: "任务已结束", failed: "任务失败", interrupted: "任务已中断", unconfirmed: "任务结果待核对", "needs-review": "任务验收待核对", replica_missing: "任务副本缺失", proposed: "任务尚未确认" };
+      throw new AppError(`${reasons[job.status] || "当前任务不能接收意见"}，请先核对任务记录，再确认或新建任务。`, 409);
+    });
   }
   // 一步结束后的去向：验收不通过 → needs-review（不暂停队列、不自动重试）；还有下一步 → 需要确认就 waiting，
   // 否则直接排队进入下一步；最后一步 → completed。
@@ -199,7 +268,7 @@ export class MessageService {
       if ((await this.store.list(threadId)).filter(job => job.status === "proposed").length >= 3)
         throw new AppError("本会话已有 3 个待确认的提议，请先等用户处理。", 429);
       const job = { id: randomUUID(), threadId, userId: context.userId, text: body, mode: "enqueue", targetTurnId: null,
-        workflow: workflow.id, params: workflow.params, step: 0, status: "proposed", reason: why,
+        workflow: workflow.id, single: workflow.single === true, params: workflow.params, step: 0, status: "proposed", reason: why,
         agentHash: this.config.agent?.descriptor?.hash, createdAt: Date.now() };
       await this.store.create(job);
       await this.publish(threadId);
@@ -213,7 +282,7 @@ export class MessageService {
     const note = text == null || text === "" ? null : requireText(text);
     await this.sessions.ensure(threadId);
     return this.serial(threadId, async () => {
-      const job = await this.job(taskId);
+      const job = await this.ownedJob(taskId);
       if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
       if (job.status === "proposed") {
         const workflow = this.resolve({ id: job.workflow, params: job.params ?? null });
@@ -234,7 +303,7 @@ export class MessageService {
     const note = requireText(text, "修改意见", 2000);
     await this.sessions.ensure(threadId);
     return this.serial(threadId, async () => {
-      const job = await this.job(taskId);
+      const job = await this.ownedJob(taskId);
       if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
       if (job.status !== "waiting") throw new AppError("只有等待确认的任务可以按意见重做", 409);
       const reviseCount = job.reviseCount || 0;
@@ -246,16 +315,26 @@ export class MessageService {
       return this.publicJob(await this.job(taskId));
     });
   }
-  // 结束等待确认或尚未开始的任务；正在执行的轮次不受影响。
-  async cancel({ threadId, taskId, ...rest }) {
-    if (Object.keys(rest).length) throw new AppError("结束任务只接受 threadId 与 taskId。", 400);
+  // 异常 single 任务由人明确结束；接管不能绕过正在执行的轮次。
+  async cancel({ threadId, taskId, takeover, ...rest }) {
+    if (Object.keys(rest).length || (takeover !== undefined && typeof takeover !== 'boolean')) throw new AppError("结束任务只接受 threadId、taskId 与布尔值 takeover。", 400);
     requireId(threadId, "会话 ID"); requireId(taskId, "任务 ID");
+    if (takeover === true) {
+      if (currentIdentity()?.role !== 'admin') throw new AppError("只有管理员可以接管结束任务。", 403);
+      this.permissionHub?.checkAgent(this.config.agent);
+      const workflows = this.config.agent?.workflows?.list().filter(item => item.single && item.access === 'admin').map(item => item.id) || [];
+      const job = await this.store.cancelTakeover(threadId, taskId, workflows);
+      await runOwner(job.userId, async () => this.permissionHub
+        ? this.permissionHub.run(await this.permissionHub.snapshot(job.userId, { allowDisabled: true }), () => this.publish(job.threadId))
+        : this.publish(job.threadId));
+      return { status: 'cancelled' };
+    }
     await this.sessions.ensure(threadId);
     return this.serial(threadId, async () => {
-      const job = await this.job(taskId);
+      const job = await this.ownedJob(taskId);
       if (!job || job.threadId !== threadId) throw new AppError("任务不属于该会话。", 404);
-      if (!(await this.store.patch(taskId, { status: "cancelled" }, ["queued", "waiting", "proposed"])))
-        throw new AppError("只有排队中、等待确认或提议中的任务可以结束。", 409);
+      if (!(await this.store.patch(taskId, { status: "cancelled" }, cancellable(job.single))))
+        throw new AppError("只有排队、等待确认、提议或异常待核对的 single 任务可以结束；请先核对任务状态。", 409);
       await this.publish(threadId);
       return this.publicJob(await this.job(taskId));
     });
@@ -379,6 +458,9 @@ export class MessageService {
           if (latest.concurrencyBlocked) return;
           if (!(await this.store.patch(job.id, { status: 'starting', selectedModel: null, modelSource: null }, ['queued']))) return;
         }
+        // 领取后再读取意见，包含 prepareInput 等待期间到达的反馈；starting 不再接受排队意见。
+        const feedback = (await this.job(job.id)).feedback || [];
+        if (feedback.length) prepared = [...prepared, { type: "text", text: feedback.map(item => item.text).join("\n"), text_elements: [] }];
         // 优先级：步骤 > 任务 > 默认；预算只替换场景或默认选择，能力要求继续生效。
         const router = this.config.launch.router;
         let selection = step.model || job.model || null;
@@ -393,6 +475,8 @@ export class MessageService {
         const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
         if (step.index === 0 && job.attachments?.length)
           prepared = attachInput(prepared, await this.readAttachments(job.attachments), chosen?.spec || this.config.registry?.models[model]);
+        for (const item of feedback) if (item.attachments?.length)
+          prepared = attachInput(prepared, await this.readAttachments(item.attachments), chosen?.spec || this.config.registry?.models[model]);
         await this.store.patch(job.id, { selectedModel: model, modelSource });
         await this.publish(threadId);
         this.gate?.start(job, workflow.grants, step.writes);
@@ -497,6 +581,7 @@ export class MessageService {
     await this.store.pause(job.threadId);
   }
   async patchOutcome(job, fields, expected) {
+    if (fields.status && !executing.includes(fields.status)) fields = { ...fields, feedback: [] };
     // 正常完成与提前完成都从这里推进；重做意见不能泄漏到下一步。
     if (fields.step !== undefined && fields.step !== (job.step || 0))
       fields = { ...fields, reviseCount: 0, ...(job.reviseCount > 0 ? { note: null } : {}) };
@@ -573,6 +658,7 @@ export class MessageService {
       throw new AppError("请先重启执行服务，再核对状态。", 503);
     await this.sessions.ensure(threadId);
     return this.serial(threadId, async () => {
+      for (const job of await this.store.list(threadId)) this.checkWorkflowAccess(job.workflow);
       await this.store.pause(threadId, false);
       await this.publish(threadId);
       await this.wake(threadId);
@@ -610,7 +696,7 @@ export class MessageService {
     try { steps = this.resolve({ id: job.workflow || "chat", params: job.params ?? null }).steps; } catch { /* workflow 已不可用时只返回原始记录。 */ }
     return { ...job, text: job.text.slice(0, 1000), ...(steps ? { stepId: steps[job.step || 0]?.id, steps: steps.length } : {}) };
   }
-  async snapshot(threadId) {
+  async snapshot(threadId, { checkAccess = true } = {}) {
     const all = await this.store.list(threadId),
       unfinished = all.filter((j) => !terminal.includes(j.status)),
       queued = unfinished.filter((j) => j.status === "queued");
@@ -620,6 +706,7 @@ export class MessageService {
       ...queued.filter((j) => j.mode !== "append"),
       ...all.filter((j) => terminal.includes(j.status)).slice(-20),
     ];
+    if (checkAccess) for (const job of ordered) this.checkWorkflowAccess(job.workflow);
     return {
       threadId,
       paused: await this.store.paused(threadId),
@@ -628,7 +715,7 @@ export class MessageService {
     };
   }
   async publish(threadId) {
-    this.hub.publish("queue", await this.snapshot(threadId), threadId, currentIdentity()?.userId || this.sessions.sessions.get(threadId)?.ownerId);
+    this.hub.publish("queue", await this.snapshot(threadId, { checkAccess: false }), threadId, currentIdentity()?.userId || this.sessions.sessions.get(threadId)?.ownerId);
   }
   async close() {
     if (this.closed) return;

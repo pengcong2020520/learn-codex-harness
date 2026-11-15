@@ -96,6 +96,8 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
       }
       if (route === 'GET /workbench') {
         const definition = config.agent?.definition?.agent;
+        const workflows = (config.agent?.workflows?.list() || []).filter(item => item.access !== 'admin' || identity.role === 'admin');
+        const workflowActivity = workflows.some(item => item.interactive || item.single) ? await messages.workflowActivity(workflows) : null;
         const visibleKnowledge = knowledge ? await knowledge.list() : [];
         const catalog = config.launch.router?.catalog(), id = catalog?.defaults.chat || config.launch.model;
         const model = catalog?.models.chat.find(model => model.id === id);
@@ -107,7 +109,8 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
           ...(definition.description !== undefined ? { description: definition.description } : {}),
           ...(definition.starters !== undefined ? { starters: definition.starters } : {}),
           skills: permissionHub ? permissionHub.visible().filter(r => r.type === 'skill') : definition.skills, tools: permissionHub ? { allow: tools.snapshot().tools.map(t => t.name) } : definition.tools, memory: definition.memory,
-          outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows: config.agent.workflows.list() } : null,
+          outputs: definition.outputs, knowledge: visibleKnowledge.map(kb => ({ kbId: kb.kbId, mode: kb.desiredMode, actions: kb.actions })), workflows } : null,
+          ...(workflowActivity ? { workflowActivity } : {}),
           defaultModel, viewer: { username: identity.user.username, admin: identity.role === 'admin' },
           queueBackend: messages.backend, capabilities: { workspace: Boolean(files), knowledge: Boolean(knowledge) },
           storage: { business: 'PostgreSQL', wakeup: 'Redis', content: 'workspace + immutable blobs', history: 'Codex native' } });
@@ -125,6 +128,21 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
         try { output = await files.read_preview({ path: previewPath(body.path) }); } catch { throw previewMissing(); }
         return json(200, createPreview(config.previewSecret, identity.userId, body.path, output.content));
       }
+      if (route === 'PUT /workspace/drafts' && files) {
+        const name = url.searchParams.get('name');
+        if (typeof name !== 'string' || !/^[a-z0-9-]{1,64}\.(json|md)$/.test(name)) throw new AppError('草稿名称无效，请使用小写字母、数字或连字符，并带 .json 或 .md 扩展名。', 400);
+        const type = name.endsWith('.json') ? 'application/json' : 'text/markdown';
+        if (request.headers['content-type']?.split(';')[0].trim().toLowerCase() !== type) throw new AppError(`Content-Type 必须为 ${type}。`, 415);
+        gate?.check('draft', { path: `inputs/drafts/${name}` });
+        const chunks = []; let size = 0;
+        for await (const chunk of request) {
+          size += chunk.length;
+          if (size > 256 * 1024) throw new AppError('草稿不能超过 256 KiB。', 413);
+          chunks.push(chunk);
+        }
+        return json(200, await files.write_draft({ name, content: Buffer.concat(chunks) }));
+      }
+      if (route === 'GET /workspace/drafts' && files) return json(200, await files.read_draft({ name: url.searchParams.get('name') }));
       if (route === 'PUT /workspace/files' && files) {
         const locator = url.searchParams.get('path');
         let info;
@@ -194,6 +212,7 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
       }
       if (route === "POST /messages") return json(202, await messages.submit(await readBody(request)));
       if (route === "POST /tasks/confirm") return json(200, await messages.confirm(await readBody(request)));
+      if (route === "POST /tasks/feedback") return json(200, await messages.feedback(await readBody(request)));
       if (route === "POST /tasks/revise") return json(200, await messages.revise(await readBody(request)));
       if (route === "POST /tasks/cancel") return json(200, await messages.cancel(await readBody(request)));
       if (route === "POST /queue/continue") {
@@ -265,7 +284,7 @@ export function createHttpService({ config, uiAgent = config.agent, accounts, se
       if (request.method === 'GET' && request.url.startsWith('/preview/') && ![410, 429, 403].includes(error.status)) error = previewMissing();
       if ((!error.status || error.status >= 500) && !error.databaseDiagnostic) logFailure(error, { ...config.generation, log }, error, '', 'HTTP');
       if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
-      if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR" } });
+      if (!response.headersSent) json(error.status || 500, { error: { message: error.status === 404 ? "资源不存在。" : error.status ? error.message : "服务暂时不可用。", code: error.code || "SERVER_ERROR", ...(error.code === "WORKFLOW_OCCUPIED" && error.occupant ? { occupant: error.occupant } : {}) } });
       else response.end();
     }
   };

@@ -100,7 +100,7 @@ npm run agent:new -- my-agent
 | `agent.memory` | `use`、`contribute` 控制使用和贡献原生记忆，还受服务端总开关限制；生成值均为 `false` |
 | `agent.outputs` | 产物 `directory`、允许的 `formats`、`writeMode`（仅 `create-only`）、`requiredChecks`（文件存在、格式） |
 | `agent.knowledge[]` | 可选知识库挂载：`kbId`、`mode`（`wiki` / `rag`）、`actions`（`read` / `update` / `index`），必须含 `read` |
-| `agent.workflows[]` | 可选工作流：`id`、标签、Skill、参数、授权、验收及步骤；步骤可收窄写入范围、要求确认、选择模型 |
+| `agent.workflows[]` | 可选工作流：`id`、标签、Skill、参数、授权、验收及步骤；`interactive` 允许运行中提意见，`access: "admin"` 限管理员，`single` 限同一部署单任务占用；字段与接口见 [Workflow 设计](docs/skill-workflow-design.md) |
 | `bindings.workspaceDir` | 相对 `agent.json` 的工作区根目录，生成值为 `../../workspace`；多用户运行时再划分各自目录 |
 | `bindings.sources` | 以资料源名为键，填写 `type: files`、工作区内的 `root`，可选 `readOnly`、`revision`；只读源不能授予 `create` |
 | `bindings.skills` | 以 Skill id 为键，填写包内 `SKILL.md` 的相对 `path`；声明 `requires` 的脚本、写文件或资产依赖当前不支持 |
