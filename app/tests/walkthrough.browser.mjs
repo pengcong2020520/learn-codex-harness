@@ -14,7 +14,7 @@ test('真实 Chromium 采集画面、脱敏失败请求、慢请求及不可达�
   const server = http.createServer((req, res) => {
     if (req.url === '/api/items?private=fixture-private') { res.writeHead(503); res.end(); return; }
     if (req.url === '/slow') { setTimeout(() => res.end('ok'), 2050); return; }
-    res.setHeader('content-type', 'text/html'); res.end('<title>产品测试</title><h1>事项清单</h1><button>查询</button><script>document.querySelector("button").onclick=async()=>{console.error("fixture-private");await fetch("/api/items?private=fixture-private");await fetch("/slow");document.body.dataset.ready="yes"}</script>');
+    res.setHeader('content-type', 'text/html'); res.end('<title>产品测试</title><label style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">供读屏使用的标题</label><h1>事项清单</h1><button>查询</button><script>document.querySelector("button").onclick=async()=>{console.error("fixture-private");await fetch("/api/items?private=fixture-private");await fetch("/slow");document.body.dataset.ready="yes"}</script>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
@@ -29,6 +29,7 @@ test('真实 Chromium 采集画面、脱敏失败请求、慢请求及不可达�
   assert.match(screen.screenshot, /^data:image\/png;base64,iVBOR/); assert.ok(fs.existsSync(path.join(target, screen.screenshotPath)));
   assert.equal(paid.screenshot, null); assert.match(paid.unavailableReason, /付费/);
   for (const type of ['http', 'slow', 'console']) assert.ok(screen.diagnostics.some(d => d.type === type), type);
+  assert.ok(!screen.diagnostics.some(d => d.code === 'text-clipped' && d.element === 'label'));
   assert.doesNotMatch(JSON.stringify(screen.diagnostics), /fixture-private|private=/);
   const portable = path.join(root, 'portable.html'); fs.copyFileSync(path.join(target, 'index.html'), portable);
   const page = await browser(t), url = pathToFileURL(portable).href;

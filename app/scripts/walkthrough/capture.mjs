@@ -148,7 +148,14 @@ export async function capture(plan, review, output, origin, env = process.env) {
           await perform(browser, scene.steps, scene.ready, origin, env);
           loader = (await browser.send('Page.getFrameTree')).frameTree.frame.loaderId;
           const snapshot = await evaluate(browser, `(${collectLayout.toString()})()`);
-          for (const { code, severity, reason } of checkLayout(snapshot)) state.diagnostics.push({ type: 'layout', code, severity, reason });
+          // 几何检查只需要知道元素是否有文字。排除正文后保留可定位控件的标签与常规类名。
+          for (const el of snapshot.elements) {
+            el.text = el.text?.trim() ? '文' : '';
+            el.classes = el.classes.filter(name => /^[a-z][a-z-]{0,31}$/.test(name));
+          }
+          for (const { code, severity, reason, element } of checkLayout(snapshot)) {
+            state.diagnostics.push({ type: 'layout', code, severity, reason, element: element.replaceAll('「文」', '').replaceAll('「」', '') });
+          }
           const file = path.join('shots', [g.order, s.position, g.id, s.id, state.state].join('_') + '.png');
           const { data } = await browser.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
           fs.writeFileSync(path.join(output, file), Buffer.from(data, 'base64'), { flag: 'wx' });
