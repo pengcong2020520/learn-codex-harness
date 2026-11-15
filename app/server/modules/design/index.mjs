@@ -47,6 +47,20 @@ export function createDesignTools({ files, env = process.env, fetcher = fetch })
       await files.write_design_report({ path: reportPath, report: { ...report, file: relative } });
       return { ...summary, reportPath };
     },
+    async build_prototype({ path: relative, html, jsx }, { signal } = {}) {
+      if (!/^outputs\/design\/[a-z][a-z0-9-]{0,47}\/prototype-v[1-9]\d*\.html$/.test(relative)) throw new Error('复杂原型须写到本项目的 prototype-v<n>.html。');
+      if (!env.AGENT_NODE_ID || !env.AGENT_NODE_KEY) throw new Error('请启动工作室的设计校验服务后再编译。');
+      const response = await fetcher(new URL('/compile', env.DESIGN_CHECK_URL || 'http://design-check:8091'), {
+        method: 'POST', headers: { ...nodeHeaders({ nodeId: env.AGENT_NODE_ID, key: env.AGENT_NODE_KEY }), 'content-type': 'application/json' },
+        body: JSON.stringify({ html, jsx }), redirect: 'error',
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+      });
+      if (!response.ok) throw new Error('原型编译失败，请核对 JSX、模板标记、文件大小及设计服务。');
+      const result = await response.json();
+      if (typeof result?.html !== 'string' || Buffer.byteLength(result.html) > 256 * 1024) throw new Error('编译结果不符合单文件大小或格式要求。');
+      signal?.throwIfAborted();
+      return files.write_file({ path: relative, content: result.html });
+    },
     async check_agent_package({ path: relative }, { signal } = {}) {
       signal?.throwIfAborted();
       const { file, uid } = files.design_path({ path: relative.replace(/\/$/, ''), package: true });

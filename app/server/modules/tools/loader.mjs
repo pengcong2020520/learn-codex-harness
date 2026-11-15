@@ -93,7 +93,7 @@ export async function createToolService(root, { source = readToolSources(root), 
   }
   for (const name of agent?.definition.agent.tools.allow || []) if (!entries.has(name)) throw new Error(`Agent 允许的必需工具未注册：${name}`);
   const available = name => {
-    if (['check_design', 'check_agent_package'].includes(name)) return Boolean((agent || policy)?.allowsTool(name));
+    if (['check_design', 'check_agent_package', 'build_prototype'].includes(name)) return Boolean((agent || policy)?.allowsTool(name));
     const purpose = { generate_image: 'image', generate_video: 'video', media_status: 'video' }[name];
     return !purpose || Boolean(media?.available(purpose));
   };

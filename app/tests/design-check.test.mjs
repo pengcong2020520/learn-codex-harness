@@ -403,5 +403,6 @@ test('studio 服务固定资源和内部网络，Chromium 不接收明文节点�
   assert.doesNotMatch(service, /ports:|volumes:|cap_add:|AGENT_NODE_KEY:/);
   assert.match(compose, /networks:\n  design-check:\n    internal: true/);
   const image = fs.readFileSync(path.join(appRoot, 'server/design-check/Dockerfile'), 'utf8');
-  assert.match(image, /APT_MIRROR/); assert.match(image, /apt-get install.*chromium/); assert.doesNotMatch(image, /npm (?:ci|install)/);
+  assert.match(image, /APT_MIRROR/); assert.match(image, /apt-get install.*chromium/); assert.match(image, /AS prototype[\s\S]*npm ci --prefix server\/design-check\/template/);
+  assert.doesNotMatch(image.split(' AS browser')[1], /npm (?:ci|install)/);
 });

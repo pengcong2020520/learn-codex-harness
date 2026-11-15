@@ -44,7 +44,7 @@ export async function waitForGroupExit(pgid, { timeoutMs = 5000, intervalMs = 50
 }
 
 // worker close 后仍等待进程组退出；清理超时按失败结束，再释放串行槽。
-export async function runCheck({ html, viewports }, signal, { fork: forkWorker = fork, kill: killProcess = process.kill } = {}) {
+export async function runCheck({ html, viewports, jsx }, signal, { fork: forkWorker = fork, kill: killProcess = process.kill } = {}) {
   signal.throwIfAborted();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'design-check-'));
   const file = path.join(directory, 'page.html');
@@ -73,7 +73,7 @@ export async function runCheck({ html, viewports }, signal, { fork: forkWorker =
       });
       signal.addEventListener('abort', abort, { once: true });
       if (signal.aborted) abort();
-      else child.send({ file, viewports });
+      else child.send({ file, viewports, jsx });
     });
   } catch (error) {
     failed = true;
@@ -118,7 +118,7 @@ export function createCheckHandler({ keyHashes, check = createCheckQueue() }) {
     try {
       if (request.method === 'GET' && request.url === '/health') { send(200, { ok: true }); return; }
       authenticateNode(request.headers, keyHashes);
-      if (request.method !== 'POST' || request.url !== '/check') throw new AppError('接口不存在。', 404);
+      if (request.method !== 'POST' || !['/check', '/compile'].includes(request.url)) throw new AppError('接口不存在。', 404);
       if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) throw new AppError('请求必须使用 application/json。', 415);
       // JSON 的 Unicode 转义最多占六倍字节；HTML 解码后另按 2 MiB 检查。
       const chunks = []; let size = 0;
@@ -129,7 +129,12 @@ export function createCheckHandler({ keyHashes, check = createCheckQueue() }) {
       }
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new AppError('请求不是有效 JSON。'); }
-      send(200, await check(validateCheck(body), controller.signal));
+      if (request.url === '/compile') {
+        if (typeof body?.html !== 'string' || body.html.split('<!--studio-app-->').length !== 2 ||
+            typeof body.jsx !== 'string' || !body.jsx.trim() || Buffer.byteLength(body.jsx + body.html) > 256 * 1024 ||
+            Object.keys(body).some(key => !['html', 'jsx'].includes(key))) throw new AppError('请提交 HTML 外壳、唯一的 studio-app 注释和 JSX，合计不超过 256 KiB。');
+        send(200, await check({ html: body.html, jsx: body.jsx }, controller.signal));
+      } else send(200, await check(validateCheck(body), controller.signal));
     } catch (error) { send(error.status || 503, { error: error.status ? error.message : '布局校验服务不可用' }); }
     finally { response.off('close', disconnect); }
   };
