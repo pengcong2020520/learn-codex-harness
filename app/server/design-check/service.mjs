@@ -32,21 +32,32 @@ export function chromiumEnv(directory) {
   };
 }
 
-// 整个进程组退出后才释放串行槽，避免超时的 Chromium 继续占用内存。
-export async function runCheck({ html, viewports }, signal) {
+export async function waitForGroupExit(pgid, { timeoutMs = 5000, intervalMs = 50, kill = process.kill } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try { kill(-pgid, 0); }
+    catch (error) { if (error.code === 'ESRCH') return; throw error; }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new AppError('检查进程未能及时退出，已停止本次检查。', 503);
+    await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remaining)));
+  }
+}
+
+// worker close 后仍等待进程组退出；清理超时按失败结束，再释放串行槽。
+export async function runCheck({ html, viewports }, signal, { fork: forkWorker = fork, kill: killProcess = process.kill } = {}) {
   signal.throwIfAborted();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'design-check-'));
   const file = path.join(directory, 'page.html');
   fs.writeFileSync(file, html, { mode: 0o600 });
-  let child;
+  let child, failed = false;
   const kill = () => {
     if (!child?.pid) return;
-    try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    try { killProcess(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
   };
   try {
     return await new Promise((resolve, reject) => {
       let result, failure;
-      child = fork(new URL('./worker.mjs', import.meta.url), [], {
+      child = forkWorker(new URL('./worker.mjs', import.meta.url), [], {
         detached: true, cwd: directory, execArgv: [],
         env: chromiumEnv(directory),
         stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
@@ -64,7 +75,19 @@ export async function runCheck({ html, viewports }, signal) {
       if (signal.aborted) abort();
       else child.send({ file, viewports });
     });
-  } finally { kill(); fs.rmSync(directory, { recursive: true, force: true }); }
+  } catch (error) {
+    failed = true;
+    throw error;
+  } finally {
+    try {
+      kill();
+      if (child?.pid) await waitForGroupExit(child.pid, { kill: killProcess });
+    } catch (error) {
+      if (!failed) throw error;
+      // 不记录 worker 错误或页面内容，避免清理异常掩盖检查的原始失败原因。
+      console.error('布局检查进程组清理失败，已保留本次检查的原始失败原因。');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  }
 }
 
 export function createCheckQueue({ run = runCheck, timeoutMs = CHECK_TIMEOUT_MS } = {}) {

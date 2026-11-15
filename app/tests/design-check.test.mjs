@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { createFileTools } from '../server/modules/data/files.mjs';
 import { createDesignTools, summarizeDesign } from '../server/modules/design/index.mjs';
 import { checkAgentPackage } from '../server/modules/design/package.mjs';
-import { chromiumEnv, createCheckHandler, createCheckQueue, validateCheck, HTML_LIMIT } from '../server/design-check/service.mjs';
+import { chromiumEnv, createCheckHandler, createCheckQueue, runCheck, waitForGroupExit, validateCheck, HTML_LIMIT } from '../server/design-check/service.mjs';
+import { AppError } from '../shared/errors.mjs';
 import { nodeKeyHash, nodeHeaders } from '../server/modules/sharding/node-auth.mjs';
 import { createToolService } from '../server/modules/tools/loader.mjs';
 import { AgentDefinition } from '../server/modules/agents/index.mjs';
@@ -132,6 +133,146 @@ test('Chromium 环境仅含白名单变量，HOME 与 XDG 位于临时目录且 
     assert.equal(stat.isDirectory(), true);
     assert.equal(stat.mode & 0o777, 0o700);
   }
+});
+
+const groupMissing = () => Object.assign(new Error('进程组已退出'), { code: 'ESRCH' });
+const nextTurn = () => new Promise(resolve => setImmediate(resolve));
+
+test('进程组立即返回 ESRCH 时无需等待', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const calls = [];
+  await waitForGroupExit(123, { kill: (...args) => { calls.push(args); throw groupMissing(); } });
+  assert.deepEqual(calls, [[-123, 0]]);
+  assert.equal(Date.now(), 0);
+});
+
+test('进程组前 N 次存在时逐个等待 N 个间隔再返回', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const times = [];
+  let settled = false;
+  const work = waitForGroupExit(123, { intervalMs: 50, kill: (pid, signal) => {
+    assert.equal(pid, -123); assert.equal(signal, 0);
+    times.push(Date.now());
+    if (times.length === 4) throw groupMissing();
+    return true;
+  } }).then(() => { settled = true; });
+  for (let i = 0; i < 3; i++) {
+    t.mock.timers.tick(49); await nextTurn();
+    assert.equal(times.length, i + 1); assert.equal(settled, false);
+    t.mock.timers.tick(1); await nextTurn();
+  }
+  await work;
+  assert.deepEqual(times, [0, 50, 100, 150]);
+});
+
+test('进程组始终存在时等待超时后抛出 503', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  let settled = false;
+  const work = assert.rejects(waitForGroupExit(123, { timeoutMs: 100, intervalMs: 50, kill: () => true }), error => {
+    assert.ok(error instanceof AppError); assert.equal(error.status, 503);
+    assert.equal(error.message, '检查进程未能及时退出，已停止本次检查。');
+    settled = true; return true;
+  });
+  t.mock.timers.tick(50); await nextTurn();
+  t.mock.timers.tick(49); await nextTurn(); assert.equal(settled, false);
+  t.mock.timers.tick(1); await work;
+});
+
+test('进程组探测的非 ESRCH 错误原样抛出', async () => {
+  const failure = Object.assign(new Error('无权探测进程组'), { code: 'EPERM' });
+  await assert.rejects(waitForGroupExit(123, { kill: () => { throw failure; } }), error => error === failure);
+});
+
+function workerFixture() {
+  const child = new EventEmitter(), calls = [];
+  let directory, exited = false;
+  Object.assign(child, { pid: 123, send() {} });
+  return {
+    child, calls,
+    get directory() { return directory; },
+    exitGroup() { exited = true; },
+    dependencies: {
+      fork: (_file, _args, options) => { directory = options.cwd; return child; },
+      kill: (pid, signal) => {
+        calls.push([pid, signal]);
+        if (exited) throw groupMissing();
+        return true;
+      },
+    },
+  };
+}
+
+function closeWorker(fixture, controller, outcome) {
+  const failure = outcome === '超时' ? new AppError('检查超时', 504) : new AppError('调用已取消。', 499);
+  if (outcome === '成功') fixture.child.emit('message', { report: cleanReport() });
+  else if (outcome === '失败') fixture.child.emit('message', { error: '布局检查无法完成。' });
+  else controller.abort(failure);
+  fixture.child.emit('close', outcome === '成功' || outcome === '失败' ? 0 : null, controller.signal.aborted ? 'SIGKILL' : null);
+  return failure;
+}
+
+for (const outcome of ['成功', '失败', '超时', '取消']) test(`runCheck ${outcome}在 worker close 后仍等待进程组退出再清理`, async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const fixture = workerFixture(), controller = new AbortController();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  let settled = false;
+  const work = runCheck({ html: '<html>示例</html>' }, controller.signal, fixture.dependencies)
+    .then(report => ({ report }), error => ({ error })).then(value => { settled = true; return value; });
+  const failure = closeWorker(fixture, controller, outcome);
+  await nextTurn();
+  assert.equal(settled, false);
+  assert.equal(fs.existsSync(path.join(fixture.directory, 'page.html')), true);
+  assert.deepEqual(fixture.calls.slice(-2), [[-123, 'SIGKILL'], [-123, 0]]);
+  fixture.exitGroup(); t.mock.timers.tick(50);
+  const value = await work;
+  if (outcome === '成功') assert.deepEqual(value.report, cleanReport());
+  else if (outcome === '失败') assert.equal(value.error.message, '布局检查无法完成。');
+  else assert.equal(value.error, failure);
+  assert.equal(fs.existsSync(fixture.directory), false);
+});
+
+for (const outcome of ['成功', '失败', '超时', '取消']) test(`runCheck ${outcome}遇到进程组退出超时的结果与日志`, async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const fixture = workerFixture(), controller = new AbortController(), logs = [];
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+  t.mock.method(console, 'error', (...args) => logs.push(args));
+  const work = runCheck({ html: '<html>不应出现在日志中的页面内容</html>' }, controller.signal, fixture.dependencies)
+    .then(report => ({ report }), error => ({ error }));
+  const failure = closeWorker(fixture, controller, outcome);
+  await nextTurn();
+  t.mock.timers.tick(5000);
+  const value = await work;
+  if (outcome === '成功') {
+    assert.equal(value.error.status, 503);
+    assert.equal(value.error.message, '检查进程未能及时退出，已停止本次检查。');
+    assert.deepEqual(logs, []);
+  } else {
+    if (outcome === '失败') assert.equal(value.error.message, '布局检查无法完成。');
+    else assert.equal(value.error, failure);
+    assert.deepEqual(logs, [['布局检查进程组清理失败，已保留本次检查的原始失败原因。']]);
+  }
+  assert.equal(fs.existsSync(fixture.directory), false);
+});
+
+test('检查队列在 worker close 后等旧进程组退出才启动下一项', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const fixtures = [workerFixture(), workerFixture()], started = [];
+  t.after(() => { for (const fixture of fixtures) if (fixture.directory) fs.rmSync(fixture.directory, { recursive: true, force: true }); });
+  const check = createCheckQueue({ run: (input, signal) => {
+    const fixture = fixtures[started.length]; started.push(input);
+    return runCheck(input, signal, fixture.dependencies);
+  } });
+  const a = check({ html: '<html>第一项</html>' }), b = check({ html: '<html>第二项</html>' });
+  await nextTurn();
+  closeWorker(fixtures[0], new AbortController(), '成功');
+  await nextTurn();
+  assert.equal(started.length, 1);
+  fixtures[0].exitGroup(); t.mock.timers.tick(50);
+  await a; await nextTurn();
+  assert.equal(started.length, 2);
+  assert.equal(fs.existsSync(fixtures[0].directory), false);
+  fixtures[1].exitGroup(); closeWorker(fixtures[1], new AbortController(), '成功');
+  assert.deepEqual(await b, cleanReport());
 });
 
 test('检查接口按解码后的 UTF-8 字节限制 2 MiB，并严格验证视口', () => {
