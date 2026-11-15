@@ -102,6 +102,8 @@ export class PermissionGate {
     if (target.kbId) return this.mount(target.kbId, action);
     if (typeof target.path === 'string') {
       const locator = target.path;
+      if (action === 'draft' && context.kind !== 'user') denied();
+      if (action === 'create' && covers('inputs/drafts', locator)) denied();
       if (locator.split('/').includes('..') || locator.includes('\\') || locator.startsWith('/')) denied();
       for (const [kbId, binding] of Object.entries(this.bindings())) {
         if (covers(binding.wikiRoot, locator)) denied();
@@ -111,7 +113,7 @@ export class PermissionGate {
         }
       }
       if (action === 'create' && context.kind === 'task' && context.writes && !context.writes.some(root => covers(root, locator))) denied();
-      const permission = ['list', 'upload'].includes(action) ? 'read' : action;
+      const permission = ['list', 'upload', 'draft'].includes(action) ? 'read' : action;
       const found = this.agent.sources.some(s => s.actions.includes(permission) &&
         (covers(s.locator, locator) || (action === 'list' && (!locator || covers(locator, s.locator)))));
       if (!found && !(action === 'create' && covers(this.agent.outputs.directory, locator))) denied();

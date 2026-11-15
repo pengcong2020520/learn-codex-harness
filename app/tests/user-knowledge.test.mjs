@@ -122,9 +122,9 @@ test('维护验收：完成通知和提前结束绑定均按任务 owner 恢复 
     store.patch(id, { status: entry === 'bind' ? 'starting' : 'running', turnId: turn.id });
     sessions.getTurn = () => turn;
     const finish = () => entry === 'bind' ? messages.bind(id, turn.id) : messages.completed(id, turn);
-    // 完成通知没有 Hub 上下文；提前完成时即使调用者是其他用户，也必须使用任务 owner。
+    // 仓储读取必须在任务 owner 身份下；提前完成时故意保留其他用户的 Hub 快照，验收仍须恢复 owner 权限。
     if (entry === 'completed') await finish();
-    else await f.as('carol', finish);
+    else await f.as('carol', () => runOwner('bob', finish));
     assert.equal(store.get(id).status, effective ? 'completed' : 'needs-review', id);
     assert.deepEqual(store.get(id).checks.map(check => [check.id, check.passed]), [['wiki-effective', effective]], id);
     assert.equal(store.get(id).error, null);

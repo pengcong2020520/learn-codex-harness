@@ -157,3 +157,25 @@ test('Compose 节点通过共享环境声明 HTTPS 信息，不挂载宿主 .env
   for (const key of ['AGENT_DOMAIN', 'COMPOSE_PROFILES']) assert.ok(node.includes(`${key}: ${'${'}${key}:-}`));
   assert.doesNotMatch(node, /source: \.env|"\.\/\.env:/);
 });
+
+test('workbench：按可信角色隐藏管理员工作流，仅显示允许工作流的占用摘要', async t => {
+  const f = await service(t);
+  f.definition.agent.workflows = [{ id: 'design', access: 'admin', interactive: true, single: true }, { id: 'public', interactive: true }];
+  f.write(); f.config.agent = new AgentDefinition(f.root, f.file);
+  const { httpFixture } = await import('./accounts-fixture.mjs');
+  const { accounts } = await accountFixture();
+  const received = [];
+  const http = httpFixture(accounts, { config: f.config, messages: { workflowActivity: async workflows => {
+    received.push(workflows.map(item => item.id));
+    return workflows.filter(item => item.interactive).map(item => ({ workflow: item.id, taskIds: [], occupant: null }));
+  } } });
+  t.after(() => http.close());
+  for (const [username, expected] of [['alice', ['chat', 'design', 'public']], ['bob', ['chat', 'public']]]) {
+    const { token } = await accounts.login({ username, password: 'fixture-password' }, 'fixture');
+    const response = await request(http, '/workbench?admin=true', { token, headers: { 'x-role': 'admin' } });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body.agent.workflows.map(item => item.id), expected);
+    assert.deepEqual(received.at(-1), expected);
+    assert.equal(response.body.workflowActivity.length, expected.length - 1);
+  }
+});

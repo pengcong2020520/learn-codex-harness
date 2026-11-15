@@ -9,7 +9,7 @@ import { Readable, Transform } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
-import { runOwner } from '../accounts/context.mjs';
+import { runIdentity, runOwner } from '../accounts/context.mjs';
 import { withShardUser } from './fence.mjs';
 import { authorizeMove } from './operations.mjs';
 import { transferLimit, assertTransferSpace, limitTransfer } from './transfer.mjs';
@@ -33,6 +33,16 @@ const parse = async req => { try { return JSON.parse((await bufferBody(req)).toS
 const nodeAddress = (runtime, id) => targetOf({ primary: id }, runtime.coordination.members);
 async function ownerForRequest(app, request, identity, body) {
   const url = new URL(request.url, 'http://localhost');
+  if (request.method === 'POST' && url.pathname === '/tasks/cancel' && identity.role === 'admin' && body?.length) {
+    let value;
+    try { value = JSON.parse(body); } catch {}
+    if (value?.takeover === true && typeof value.taskId === 'string' && typeof value.threadId === 'string') {
+      const workflows = app.config.agent?.workflows?.list().filter(item => item.single && item.access === 'admin').map(item => item.id) || [];
+      // 只路由到数据库认定的属主；目标节点仍须验证请求身份、工作流和任务状态。
+      const owner = await runIdentity(identity, () => app.data.jobs.takeoverOwner(value.threadId, value.taskId, workflows));
+      if (owner) return owner;
+    }
+  }
   const match = url.pathname.match(/^\/hub\/(knowledge|skills)\/([^/]+)/);
   let type, id;
   if (match) { type = match[1] === 'knowledge' ? 'knowledge_bases' : 'hub_skills'; id = decodeURIComponent(match[2]); }
@@ -277,6 +287,10 @@ export function createShardedHandler(coordination, service, runtime, control) {
         request[rateChecked] = true;
         try { bodyLimit = uploadInfo(new URL(request.url, 'http://localhost').searchParams.get('path')).limit; }
         catch (error) { throw new AppError(error.message, 400); }
+      }
+      if (request.method === 'PUT' && pathname === '/workspace/drafts') {
+        service.app.http.limits.request(identity.userId, request.socket?.remoteAddress || 'unknown');
+        request[rateChecked] = true; bodyLimit = 256 * 1024;
       }
       const body = ['GET','HEAD'].includes(request.method) ? undefined : await bufferBody(request, bodyLimit);
       const owner = await ownerForRequest(service.app, request, identity, body);

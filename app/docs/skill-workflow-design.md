@@ -101,6 +101,9 @@ Agent 定义通过 `agent.workflows` 数组声明工作流。只写 `id` 的条�
 
 | 字段 | 含义 |
 |------|------|
+| `interactive` | 可选布尔值，默认 false；为 true 时运行中的步骤接受反馈并发送 `turn/steer` |
+| `access` | 可选，仅接受 `"admin"`；任务接口由服务端核对管理员身份，普通用户的工作台隐藏该工作流 |
+| `single` | 可选布尔值，默认 false；同一部署按 workflow id 只允许一个未完成、未结束的任务，由 PostgreSQL 部分唯一索引约束 |
 | `skill` | 本 workflow 注入的 Skill，必须已在 `agent.skills` 中声明 |
 | `params` | 参数的 JSON Schema；消息提交时校验 |
 | `grants` | 基础权限之外、仅本任务有效的授权，类型来自 5.3 的授权表，不能超出 Agent 已有能力 |
@@ -129,6 +132,33 @@ POST /messages { threadId, text, workflow, params, attachments? }
 非 `chat` 的 Workflow 任务不接受追加消息（`mode: "append"`），提交会返回 403。等待确认的当前步需要修改时，使用 `POST /tasks/revise`、CLI `/revise <意见>` 或网页“修改”，沿用本步权限重做。
 
 `attachments` 是最多 4 个 `inputs/uploads/` 路径的数组，提交时验证当前用户的文件，派发时重新读取。Workflow 第一步携带附件：文本只注入路径提示，正文由模型按需读取；图片作为 Codex `image` 输入发送，并校验所选模型的 `inputs`。后续步骤沿用会话历史。附件路径保存在任务的 `attachments` 字段（`023-task-attachments.sql`）；`npm run up` 会执行迁移。
+
+`POST /tasks/feedback` 接受 `{ taskId, text, context?, attachments? }`，仅任务属主可操作。`text` 为非空意见，最多 2000 字符；`context` 只接受 `screen`、`state`、`label` 字符串，按此顺序用 ` / ` 拼接，合计最多 200 字，作为 `【当前：…】` 前缀。附件沿用上述路径、数量、大小与模型能力规则。
+
+| 当前状态 | 处理与返回 |
+|---|---|
+| 正在运行且 `interactive: true` | 沿用当前 Turn 权限和模型追加意见，返回 `{ mode: "steer" }`；正在切换且无法定位活动 Turn 时返回 409 |
+| 正在运行且非 interactive | 返回 409，提示等这一步完成后再提意见 |
+| `waiting` | 重做当前步，计入每步 10 次上限，返回 `{ mode: "revise" }` |
+| `queued` | 在数据库事务中追加待处理意见和附件，领取这一步后合并到输入，返回 `{ mode: "queued" }` |
+| 其他状态 | 返回 409，提示先核对任务记录，再确认或新建任务 |
+
+`single` 任务只有 `completed` 或 `cancelled` 释放占用；提议、失败、待核对也保留占用，不能自动抢占或重发。冲突返回 409，`error.occupant` 只包含 `username` 和 `startedAt`（任务受理时间，毫秒时间戳）。异常任务经人工核对后，可通过结束接口释放占用。
+
+`POST /tasks/cancel` 接受 `{ threadId, taskId, takeover? }`，身份与角色由服务端认证确定。属主结束沿用工作流访问门禁；结束成功后状态为 `cancelled`。
+
+| 当前状态 | 属主结束 | 其他管理员显式接管 |
+|---|---|---|
+| `queued`、`waiting`、`proposed` | 允许 | 仅 single 且 `access: "admin"`、属主为管理员时允许 |
+| `failed`、`needs-review`、`unconfirmed` | 仅 single 任务允许 | 同上 |
+| `starting`、`running`、`steering` | 拒绝 | 返回 409，提示等这一步完成或失败后再操作 |
+| 其他状态 | 拒绝，维持原规则 | 拒绝 |
+
+接管请求必须携带 `takeover: true`，并使用待结束任务的 `threadId`、`taskId`；省略或为 false 时仍按属主权限处理。服务端在同一数据库事务中锁定任务、核对状态、结束任务、写入审计和通知，并发接管只有一个成功。接管响应仅为 `{ status: "cancelled" }`，不返回他人任务正文。审计复用只追加的 `permission_events`：`actor_id` 为操作管理员，`created_at` 为时间，`resource_id` 为任务 ID，`before_state` 仅含属主 `owner_id`；不记录正文、意见、附件或参数。原属主的任务事件和后续快照中显示“已被管理员 X 结束”，X 为服务端读取的用户名。分片部署按任务属主路由，认证身份仍为发起管理员。
+
+当前 Agent 包含可见的 interactive 或 single 工作流时，`GET /workbench` 增加 `workflowActivity` 数组：每项包含 `workflow`、当前用户的 `taskIds`、他人占用摘要 `occupant`；无他人占用时为 null，不暴露他人的任务 ID 或正文。
+
+资料卡和走查反馈可用 `PUT /workspace/drafts?name=brief.json` 保存，正文为原始 JSON（`application/json`）或 Markdown（`text/markdown`）；`GET /workspace/drafts?name=brief.json` 返回 `path`、`content` 等读取结果。名称主体为 `[a-z0-9-]{1,64}`，扩展名仅 `.json` 或 `.md`，单个不超过 256 KiB，每用户最多 200 个，达到数量上限后仍可覆盖。服务端在用户工作区 `inputs/drafts/` 同步串行检查并原子替换文件，拒绝越界路径、符号链接、硬链接和非法 JSON。Agent 按 inputs 的读取权限使用 `read_file` 读取草稿，不能写入该目录；其他产物仍只能新建。
 
 ### 4.3 授权类型
 
@@ -164,6 +194,7 @@ POST /messages { threadId, text, workflow, params, attachments? }
 - 迁移 `003-workflows.sql`：`tasks` 新增 `workflow`（默认 `chat`）、`params`、`checks`，状态增加 `needs-review`，把已有的 `knowledge` 列转换为 `workflow = 'knowledge-maintain'`。
 - 迁移 `004-workflow-steps.sql`：新增 `step`、`note`（确认时的补充说明），状态增加 `waiting`、`cancelled`。
 - 迁移 `005-task-proposals.sql`：新增 `reason`（提议理由），状态增加 `proposed`。
+- 迁移 `024-feedback-single.sql`：新增 `feedback` 和 `single_workflow`，待处理反馈随任务持久化，部分唯一索引按部署与 workflow id 约束占用。
 - 迁移 `022-workflow-revise.sql`：新增 `revise_count`（任务字段 `reviseCount`），记录本步重做次数，范围为 0–10；继续到下一步时归零。
 - 消息里旧的 `knowledge` 字段兼容一个版本，映射为 `knowledge-maintain`。
 - workflow 属于 Agent 描述符，`CONTRACTS.agent` 为 2。`sessions:upgrade` 识别"知识维护改为 workflow 没有扩大权限"，可以为旧会话登记兼容映射。

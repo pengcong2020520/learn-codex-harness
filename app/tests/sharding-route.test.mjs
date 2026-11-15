@@ -7,6 +7,8 @@ import { ShardControl } from '../server/modules/sharding/control.mjs';
 import { ShardRuntime } from '../server/modules/sharding/runtime.mjs';
 import { createShardedHandler } from '../server/modules/sharding/http.mjs';
 import { defaultSlots, strategies } from '../server/modules/sharding/strategy.mjs';
+import { PostgresJobs } from '../server/modules/data/jobs.mjs';
+import { shardUser } from '../server/modules/sharding/fence.mjs';
 import { requireIdentity, runIdentity } from '../server/modules/accounts/context.mjs';
 import { FakeClient } from './fixtures/coordination-client.mjs';
 import { scriptedCoordination } from './fixtures/sharding-cluster.mjs';
@@ -178,4 +180,39 @@ test('internal pause: migrating runOwner enters boundary, awaits it before closi
     assert.equal((await pending).status, 200); assert.deepEqual(steps, ['close-node-a']);
     assert.equal(requireIdentity().userId, adminId);
   });
+});
+
+
+test('接管路由：按数据库任务属主跨节点转发，保持管理员认证和属主分片门禁', async t => {
+  const { nodes, client, api } = await fixture(t);
+  const owner = '00000000-0000-4000-8000-000000000018';
+  client.set('/codex/overrides/' + owner, '"1"');
+  for (const node of nodes) {
+    await node.cache.refresh();
+    node.app.config = { agent: { workflows: { list: () => [{ id: 'design', single: true, access: 'admin' }] } } };
+    const query = node.app.data.pool.query;
+    node.app.data = { scope: { instanceId: 'fixture-instance' }, pool: { query: async (sql, args) => {
+      if (sql.startsWith('SELECT c.owner_id FROM agent_data.tasks')) {
+        assert.deepEqual(args, ['fixture-instance', user, 'thread', 'held', ['design']]);
+        assert.match(sql, /t.single_workflow/); assert.match(sql, /u.role='admin'/);
+        return { rows: [{ owner_id: owner }] };
+      }
+      if (sql.startsWith('SELECT u.paused') && args[0] === owner) return { rows: [{ paused: false, shard_id: '1', node_id: 'node-b', epoch: 2 }] };
+      return query(sql, args);
+    } } };
+    node.runtime.pool = node.app.data.pool;
+    node.app.data.jobs = new PostgresJobs(node.app.data.pool, { instanceId: 'fixture-instance', ownerId: user });
+    node.app.http.handle = async (req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ nodeId: node.runtime.nodeId, shardUser: shardUser(), authorization: req.headers.authorization }));
+    };
+  }
+  const body = { threadId: 'thread', taskId: 'held', takeover: true };
+  const result = await api(2, '/tasks/cancel', body);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { nodeId: 'node-b', shardUser: owner, authorization: 'Bearer admin' });
+  for (const [input, token] of [[{ ...body, takeover: false }, 'admin'], [body, 'user']]) {
+    const normal = await api(2, '/tasks/cancel', input, token);
+    assert.equal(normal.status, 200); assert.equal(normal.body.nodeId, 'node-a'); assert.equal(normal.body.shardUser, user);
+  }
 });

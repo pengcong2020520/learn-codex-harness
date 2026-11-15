@@ -20,6 +20,7 @@ const step = object({ id: slug, goal: text, writes: array(text), confirm: { type
   effort: choices(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]) }, ["id", "goal"]);
 const workflow = object({
   id: slug, label: text, skill: text, params: workflowParams,
+  interactive: { type: "boolean" }, single: { type: "boolean" }, access: choices(["admin"]),
   grants: array(object({ type: choices(GRANT_TYPES), kbId: { anyOf: [slug, object({ param: text })] } })),
   checks: array(choices(CHECKS)),
   steps: { type: "array", items: step, minItems: 2, maxItems: 5 }

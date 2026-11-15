@@ -1,5 +1,5 @@
 import test from "node:test";
-import { runOwner } from "../server/modules/accounts/context.mjs";
+import { runIdentity, runOwner } from "../server/modules/accounts/context.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -513,4 +513,169 @@ test("重做后自动推进：排队已满保留本步计数与意见，容量�
   assert.equal(r.store.get("auto").reviseCount, 0);
   assert.equal(r.store.get("auto").note, null);
   assert.equal(next[1].text, "用户已确认上一步，请继续。");
+});
+
+
+test("feedback：运行中交互工作流发出 turn/steer，包含屏幕上下文；普通工作流拒绝", async t => {
+  const r = await messageRig(t, [{ id: "design", interactive: true, label: "设计" }, report]);
+  await r.submit("interactive", { workflow: "design" }); await r.started(1);
+  assert.deepEqual(await r.messages.feedback({ taskId: "interactive", text: "加大标题", context: { screen: "首页", state: "空白" } }), { mode: "steer" });
+  const call = r.rpc.calls.find(call => call.method === "turn/steer");
+  assert.ok(call); assert.ok(call.params.input.some(item => item.text?.includes("【当前：首页 / 空白】\n加大标题")));
+  r.rpc.finish(r.session.id); await until(() => r.store.get("interactive").status === "completed");
+  await r.submit("plain", { workflow: "report" }); await r.started(2);
+  await assert.rejects(r.messages.feedback({ taskId: "plain", text: "改" }), error => error.status === 409 && /等这一步完成/.test(error.message));
+});
+
+test("feedback：排队意见合并派发，等待点重做计数、附件和 10 次边界，终态拒绝", async t => {
+  const r = await messageRig(t, [{ id: "design", interactive: true, steps: [{ id: "draft", goal: "草稿", confirm: true }, { id: "final", goal: "定稿" }] }]);
+  r.store.pause(r.session.id);
+  await r.submit("feedback", { workflow: "design" });
+  for (const text of ["第一条", "第二条"]) assert.deepEqual(await r.messages.feedback({ taskId: "feedback", text }), { mode: "queued" });
+  r.store.pause(r.session.id, false); await r.messages.wake(r.session.id);
+  const input = await r.started(1); assert.ok(input.some(item => item.text?.includes("第一条\n第二条")));
+  r.rpc.finish(r.session.id); await until(() => r.store.get("feedback").status === "waiting");
+  assert.deepEqual(r.store.get("feedback").feedback, []);
+  r.store.pause(r.session.id);
+  r.messages.files = { read_upload: async ({ path }) => ({ path, image: false, content: Buffer.from('参考') }) };
+  const attachments = ['inputs/uploads/reference.md'];
+  assert.deepEqual(await r.messages.feedback({ taskId: "feedback", text: "更清楚", attachments }), { mode: "revise" });
+  assert.equal(r.store.get("feedback").reviseCount, 1); assert.equal(r.store.get("feedback").step, 0);
+  r.store.pause(r.session.id, false); await r.messages.wake(r.session.id);
+  assert.ok((await r.started(2)).some(item => item.text?.includes(attachments[0])));
+  r.rpc.finish(r.session.id); await until(() => r.store.get("feedback").status === "waiting");
+  r.store.patch("feedback", { reviseCount: 10 });
+  await assert.rejects(r.messages.feedback({ taskId: "feedback", text: "重做" }), /10 次/);
+  for (const status of ["completed", "cancelled", "failed", "interrupted", "unconfirmed", "needs-review", "replica_missing", "proposed"]) {
+    r.store.patch("feedback", { status });
+    await assert.rejects(r.messages.feedback({ taskId: "feedback", text: "改" }), error => error.status === 409);
+  }
+  await assert.rejects(r.messages.feedback({ taskId: "feedback", text: "改", context: { screen: '字'.repeat(201) } }), { status: 400 });
+  await assert.rejects(r.messages.feedback({ taskId: "feedback", text: "改", context: { role: 'admin' } }), { status: 400 });
+  await assert.rejects(r.messages.feedback({ taskId: "feedback", text: "改", attachments: null }), { status: 400 });
+});
+
+test("管理员工作流：任务门禁不信任请求字段，single 跨会话占用且结束后释放", async t => {
+  const owner = '11111111-1111-4111-8111-111111111111';
+  const r = await runIdentity({ userId: owner, role: 'admin' }, () => messageRig(t, [{ id: "design", access: "admin", single: true, interactive: true }]));
+  await runIdentity({ userId: owner, role: 'user' }, async () => {
+    await assert.rejects(r.submit("denied", { workflow: "design" }), { status: 403 });
+  });
+  r.store.pause(r.session.id);
+  await runIdentity({ userId: owner, role: 'admin' }, async () => {
+    await r.submit("single", { workflow: "design" });
+    await assert.rejects(r.submit("second", { workflow: "design" }), error => error.status === 409 && Object.keys(error.occupant).sort().join(',') === 'startedAt,username');
+    assert.deepEqual((await r.messages.workflowActivity(r.agent.workflows.list()))[0].taskIds, ['single']);
+  });
+  await runIdentity({ userId: owner, role: 'user' }, async () => {
+    for (const method of ['confirm', 'revise', 'cancel']) await assert.rejects(r.messages[method]({ taskId: 'single', threadId: r.session.id, ...(method !== 'cancel' ? { text: '改' } : {}) }), { status: 403 });
+    await assert.rejects(r.messages.feedback({ taskId: 'single', text: '改' }), { status: 403 });
+  });
+  await runIdentity({ userId: '22222222-2222-4222-8222-222222222222', role: 'admin' }, async () => {
+    await assert.rejects(r.messages.feedback({ taskId: 'single', text: '改' }), { status: 404 });
+    const activity = await r.messages.workflowActivity(r.agent.workflows.list());
+    assert.deepEqual(activity[0].taskIds, []); assert.deepEqual(Object.keys(activity[0].occupant).sort(), ['startedAt', 'username']);
+  });
+  await runIdentity({ userId: owner, role: 'admin' }, async () => {
+    r.store.patch('single', { status: 'failed' });
+    await assert.rejects(r.submit('held', { workflow: 'design' }), { status: 409 });
+    await r.messages.cancel({ taskId: 'single', threadId: r.session.id });
+    await r.submit('released', { workflow: 'design' });
+  });
+});
+
+test('workflow 新字段：布尔值与 admin 枚举严格校验，缺省声明保持原行为', t => {
+  const root = installToolFixture(tempRoot(t));
+  const file = path.join(root, 'agents/writing/agent.json'), original = JSON.parse(fs.readFileSync(file));
+  const check = entry => {
+    const definition = structuredClone(original); definition.agent.workflows = [{ id: 'design', label: '设计', ...entry }];
+    fs.writeFileSync(file, JSON.stringify(definition)); return new AgentDefinition(root);
+  };
+  for (const entry of [{}, { interactive: false, single: false }, { interactive: true, single: true, access: 'admin' }]) assert.doesNotThrow(() => check(entry));
+  for (const entry of [{ interactive: 'true' }, { interactive: null }, { single: 1 }, { single: null }, { access: 'user' }, { access: true }])
+    assert.throws(() => check(entry), /Agent 定义无效/);
+});
+
+
+test('single 结束：属主可结束三种异常状态，普通任务和其他终态保持原规则', async t => {
+  const owner = '11111111-1111-4111-8111-111111111111';
+  await runIdentity({ userId: owner, role: 'user' }, async () => {
+    const r = await messageRig(t, [{ id: 'design', single: true }, { id: 'plain', label: '普通任务' }]);
+    r.store.pause(r.session.id);
+    for (const status of ['failed', 'needs-review', 'unconfirmed']) {
+      await r.submit(status, { workflow: 'design' });
+      r.store.patch(status, { status });
+      assert.equal((await r.messages.cancel({ taskId: status, threadId: r.session.id })).status, 'cancelled');
+      assert.equal(r.store.workflowOccupancy('design'), null);
+    }
+    await r.submit('again', { workflow: 'design' });
+    for (const status of ['starting', 'running', 'steering', 'completed', 'cancelled', 'interrupted', 'replica_missing']) {
+      r.store.patch('again', { status });
+      await assert.rejects(r.messages.cancel({ taskId: 'again', threadId: r.session.id }), { status: 409 });
+    }
+    await r.submit('plain', { workflow: 'plain' });
+    for (const status of ['failed', 'needs-review', 'unconfirmed']) {
+      r.store.patch('plain', { status });
+      await assert.rejects(r.messages.cancel({ taskId: 'plain', threadId: r.session.id }), { status: 409 });
+    }
+  });
+});
+
+test('single 接管：显式管理员授权、运行中拒绝、并发仅一次，审计无正文且事件归属原属主', async t => {
+  const owner = '11111111-1111-4111-8111-111111111111', actor = '22222222-2222-4222-8222-222222222222';
+  const r = await runIdentity({ userId: owner, role: 'admin' }, () => messageRig(t, [
+    { id: 'design', single: true, access: 'admin' }, { id: 'public', single: true }, { id: 'plain', access: 'admin' },
+  ]));
+  r.store.users = [{ id: owner, role: 'admin', username: 'owner' }, { id: actor, role: 'admin', username: 'operator' }];
+  r.store.pause(r.session.id);
+  await runIdentity({ userId: owner, role: 'admin' }, () => r.submit('held', { workflow: 'design' }));
+  const body = { threadId: r.session.id, taskId: 'held', takeover: true };
+  await runIdentity({ userId: actor, role: 'user' }, () => assert.rejects(r.messages.cancel(body), { status: 403 }));
+  await runIdentity({ userId: actor, role: 'admin' }, async () => {
+    await assert.rejects(r.messages.cancel({ ...body, takeover: undefined }), { status: 404 });
+    await assert.rejects(r.messages.cancel({ ...body, takeover: 'true' }), { status: 400 });
+    await assert.rejects(r.messages.cancel({ ...body, role: 'admin' }), { status: 400 });
+    await assert.rejects(r.messages.cancel({ ...body, threadId: 'wrong' }), { status: 404 });
+    for (const status of ['starting', 'running', 'steering']) {
+      r.store.state.jobs[0].status = status;
+      await assert.rejects(r.messages.cancel(body), error => error.status === 409 && /等这一步完成或失败/.test(error.message));
+    }
+    for (const workflow of ['public', 'plain']) {
+      r.store.state.jobs[0].workflow = workflow;
+      await assert.rejects(r.messages.cancel(body), { status: 404 });
+    }
+    Object.assign(r.store.state.jobs[0], { workflow: 'design', status: 'failed' });
+    r.store.users[1].role = 'user';
+    await assert.rejects(r.messages.cancel(body), { status: 403 });
+    r.store.users[1].role = 'admin';
+    r.store.users[0].role = 'user';
+    await assert.rejects(r.messages.cancel(body), { status: 404 });
+    r.store.users[0].role = 'admin';
+    r.store.users[0].disabled_at = new Date();
+    r.messages.permissionHub = {
+      checkAgent() {},
+      async snapshot(userId, options) {
+        assert.equal(userId, owner); assert.deepEqual(options, { allowDisabled: true });
+        return { user: { id: owner, role: 'admin' } };
+      },
+      run(snapshot, operation) { return operation(); },
+    };
+    const before = Date.now(), results = await Promise.allSettled([r.messages.cancel(body), r.messages.cancel(body)]);
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(results.find(r => r.status === 'rejected').reason.status, 409);
+    assert.deepEqual(results.find(r => r.status === 'fulfilled').value, { status: 'cancelled' });
+    assert.equal(r.store.audit.length, 1);
+    const audit = r.store.audit[0];
+    assert.deepEqual(Object.keys(audit).sort(), ['actorId', 'createdAt', 'ownerId', 'taskId']);
+    assert.equal(audit.actorId, actor); assert.equal(audit.ownerId, owner); assert.equal(audit.taskId, 'held');
+    assert.ok(audit.createdAt >= before && audit.createdAt <= Date.now());
+    assert.ok(!JSON.stringify(audit).includes('正文'));
+  });
+  r.messages.permissionHub = undefined;
+  const events = r.messages.hub.history.filter(e => e.data.jobs?.some(job => job.error === '已被管理员 operator 结束'));
+  assert.equal(events.length, 1); assert.equal(events[0].ownerId, owner);
+  await runIdentity({ userId: owner, role: 'admin' }, async () => {
+    assert.equal(r.store.get('held').error, '已被管理员 operator 结束');
+    await r.submit('released', { workflow: 'design' });
+  });
 });

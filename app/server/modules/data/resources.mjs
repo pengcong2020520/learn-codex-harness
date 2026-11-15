@@ -270,6 +270,15 @@ export class Resources extends Repository {
     }
     return { ...result, entries };
   }
+  async write_draft(args) {
+    this.gate?.check('draft', { path: `inputs/drafts/${args.name}` });
+    this.source(`inputs/drafts/${args.name}`, 'read');
+    return this.files.write_draft(args);
+  }
+  async read_draft(args) {
+    this.source(`inputs/drafts/${args.name}`, 'read');
+    return this.files.read_draft(args);
+  }
   async write_upload(args) {
     this.gate?.check('upload', { path: args.path });
     this.source(args.path, 'read');
