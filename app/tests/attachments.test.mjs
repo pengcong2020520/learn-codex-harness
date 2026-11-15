@@ -23,6 +23,123 @@ async function setup(t, vision = true) {
   r.config.registry = { models: { 'unit-model': { ...(vision ? { inputs: ['text', 'image'] } : {}) } } };
   return { ...r, files, submit: (id, attachments, fields = {}) => r.messages.submit({ threadId: r.session.id, clientMessageId: id, text: '请设计页面', attachments, ...fields }) };
 }
+
+const imageUnavailable = '这一步带有图片，但没有可用的能看图的模型。请在 config/models.json 为支持图片输入的模型标注 inputs 并启用它，或去掉图片后重试。';
+async function imageRouting(t, environment = {}, vision = true) {
+  const r = await setup(t);
+  const registry = { providers: { sample: { type: 'openai', keyEnv: 'SAMPLE_API_KEY' } }, models: {
+    'sample/text': { purposes: ['chat'], inputs: ['text'], contextWindow: 1000 },
+    'sample/vision': { purposes: ['chat'], inputs: vision ? ['text', 'image'] : ['text'], contextWindow: 1000 },
+  }, routes: { chat: ['sample/text', 'sample/vision'] } };
+  r.config.registry = registry;
+  r.config.launch.router = createModelRouter(registry, { SAMPLE_API_KEY: 'fixture', ...environment });
+  r.config.agent.workflows = defineWorkflows({ skills: [], workflows: [{ id: 'design', steps: [
+    { id: 'first', goal: '设计', confirm: true }, { id: 'second', goal: '交付' },
+  ] }] });
+  return r;
+}
+
+test('图片路由：步骤未声明 needs 时按实际附件选模型，每次派发只读取一次附件', async t => {
+  for (const attachments of [[imagePath, textPath], [textPath], []]) {
+    const r = await imageRouting(t), read = t.mock.method(r.files, 'read_upload');
+    await r.submit('route', attachments, { workflow: 'design' });
+    await until(() => ['running', 'failed'].includes(r.messages.job('route').status));
+    const hasImage = attachments.includes(imagePath), job = r.messages.job('route');
+    assert.equal(job.status, 'running', job.error);
+    assert.equal(job.selectedModel, hasImage ? 'sample/vision' : 'sample/text');
+    assert.equal(job.modelSource, `默认路由${hasImage ? '（含图片，已选能看图的模型）' : ''}`);
+    const params = r.rpc.calls.find(call => call.method === 'turn/start').params;
+    assert.equal(params.model, job.selectedModel);
+    assert.deepEqual(params.input.filter(item => item.type === 'image'), hasImage ? [{ type: 'image', url: TEST_IMAGE }] : []);
+    assert.equal(read.mock.callCount(), attachments.length * 2, '提交校验和本步派发各读取一次');
+    if (hasImage) {
+      r.rpc.finish(r.session.id);
+      await until(() => r.messages.job('route').status === 'waiting');
+      await r.messages.confirm({ threadId: r.session.id, taskId: 'route' });
+      await until(() => r.messages.job('route').status === 'running');
+      assert.equal(r.messages.job('route').selectedModel, 'sample/text', '后续步骤不重发首步图片，也不附加看图要求');
+      assert.equal(read.mock.callCount(), attachments.length * 2);
+    }
+  }
+});
+
+test('图片路由：CODEX_MODEL 纯文本覆盖或无看图候选时明确失败，不发送也不重试', async t => {
+  for (const [environment, vision] of [[{ CODEX_MODEL: 'sample/text' }, true], [{}, false]]) {
+    const r = await imageRouting(t, environment, vision);
+    await r.submit('unavailable', [imagePath], { workflow: 'design' });
+    await until(() => ['running', 'failed'].includes(r.messages.job('unavailable').status));
+    assert.equal(r.messages.job('unavailable').status, 'failed');
+    assert.equal(r.messages.job('unavailable').error, imageUnavailable);
+    await r.messages.continue(r.session.id);
+    assert.equal(r.messages.job('unavailable').status, 'failed');
+    assert.equal(r.messages.runtimeTimers.size, 0);
+    assert.equal(r.rpc.calls.filter(call => call.method === 'turn/start').length, 0);
+  }
+});
+
+test('图片路由：步骤或任务指定纯文本模型时显示完整文案，保留错误码且不发送不重试', async t => {
+  for (const stepModel of ['sample/text', null]) {
+    const r = await imageRouting(t);
+    r.config.agent.workflows = defineWorkflows({ skills: [], workflows: [{ id: 'design', steps: [
+      { id: 'first', goal: '设计', ...(stepModel ? { model: stepModel } : {}) },
+    ] }] });
+    const executionError = t.mock.method(r.messages, 'executionError');
+    await r.submit('specified-text', [imagePath], { workflow: 'design', model: stepModel ? 'sample/vision' : 'sample/text' });
+    await until(() => ['running', 'failed'].includes(r.messages.job('specified-text').status));
+    assert.equal(r.messages.job('specified-text').status, 'failed');
+    assert.equal(r.messages.job('specified-text').error, '这一步指定的模型 sample/text 不支持看图，不能处理图片。请改用能看图的模型，或去掉图片后重试。');
+    assert.equal(executionError.mock.calls[0].arguments[1].code, 'MODEL_UNAVAILABLE');
+    assert.equal(executionError.mock.calls[0].arguments[1].status, 503);
+    await r.messages.continue(r.session.id);
+    assert.equal(r.messages.job('specified-text').status, 'failed');
+    assert.equal(executionError.mock.callCount(), 1);
+    assert.equal(r.messages.runtimeTimers.size, 0);
+    assert.equal(r.messages.budgetTimers.size, 0);
+    assert.equal(r.rpc.calls.filter(call => call.method === 'turn/start').length, 0);
+  }
+});
+
+test('图片路由：后续步骤待合并的 feedback 图片同样参与选模型', async t => {
+  const r = await imageRouting(t);
+  await r.submit('feedback-image', [], { workflow: 'design' });
+  await until(() => r.messages.job('feedback-image').status === 'running');
+  r.rpc.finish(r.session.id);
+  await until(() => r.messages.job('feedback-image').status === 'waiting');
+  await r.messages.store.pause(r.session.id, true);
+  await r.messages.confirm({ threadId: r.session.id, taskId: 'feedback-image' });
+  await r.messages.feedback({ taskId: 'feedback-image', text: '请参考此图', attachments: [imagePath] });
+  const read = t.mock.method(r.files, 'read_upload');
+  await r.messages.continue(r.session.id);
+  await until(() => ['running', 'failed'].includes(r.messages.job('feedback-image').status));
+  const job = r.messages.job('feedback-image');
+  assert.equal(job.status, 'running', job.error);
+  assert.equal(job.step, 1);
+  assert.equal(job.selectedModel, 'sample/vision');
+  assert.equal(job.modelSource, '默认路由（含图片，已选能看图的模型）');
+  const params = r.rpc.calls.filter(call => call.method === 'turn/start').at(-1).params;
+  assert.deepEqual(params.input.filter(item => item.type === 'image'), [{ type: 'image', url: TEST_IMAGE }]);
+  assert.ok(params.input.some(item => item.text?.includes('请参考此图')));
+  assert.equal(read.mock.callCount(), 1);
+});
+
+test('图片路由：图片能力与步骤已有 needs 合并，不修改工作流声明', async t => {
+  const r = await imageRouting(t);
+  const needs = { contextTokens: 2000 };
+  r.config.registry.models['sample/vision'].contextWindow = 3000;
+  r.config.agent.workflows = defineWorkflows({ skills: [], workflows: [{ id: 'design', steps: [{ id: 'first', goal: '设计', needs }] }] });
+  await r.submit('merged', [imagePath], { workflow: 'design' });
+  await until(() => ['running', 'failed'].includes(r.messages.job('merged').status));
+  assert.equal(r.messages.job('merged').status, 'running');
+  assert.deepEqual(r.config.agent.workflows.resolve('design').steps[0].needs, { contextTokens: 2000 });
+  r.rpc.finish(r.session.id);
+  await until(() => r.messages.job('merged').status === 'completed');
+  r.config.registry.models['sample/vision'].contextWindow = 1000;
+  await r.submit('too-small', [imagePath], { workflow: 'design' });
+  await until(() => ['running', 'failed'].includes(r.messages.job('too-small').status));
+  assert.equal(r.messages.job('too-small').status, 'failed');
+  assert.equal(r.messages.job('too-small').error, imageUnavailable);
+  assert.equal(r.rpc.calls.filter(call => call.method === 'turn/start').length, 1);
+});
 test('附件：最多四项、类型、范围、存在性和内容校验；错误定位到具体项', async t => {
   const r = await setup(t);
   for (const attachments of [null, {}, 'x', Array(5).fill(imagePath)]) await assert.rejects(r.submit('bad', attachments), { status: 400 });

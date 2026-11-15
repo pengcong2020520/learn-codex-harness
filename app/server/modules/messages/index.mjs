@@ -461,6 +461,13 @@ export class MessageService {
         // 领取后再读取意见，包含 prepareInput 等待期间到达的反馈；starting 不再接受排队意见。
         const feedback = (await this.job(job.id)).feedback || [];
         if (feedback.length) prepared = [...prepared, { type: "text", text: feedback.map(item => item.text).join("\n"), text_elements: [] }];
+        // 按实际读取结果判断能力，并复用附件内容；后续步骤不重发首步附件。
+        const attachments = [];
+        if (step.index === 0 && job.attachments?.length)
+          attachments.push(await this.readAttachments(job.attachments));
+        for (const item of feedback) if (item.attachments?.length)
+          attachments.push(await this.readAttachments(item.attachments));
+        const hasImage = attachments.some(group => group.some(file => file.image));
         // 优先级：步骤 > 任务 > 默认；预算只替换场景或默认选择，能力要求继续生效。
         const router = this.config.launch.router;
         let selection = step.model || job.model || null;
@@ -470,13 +477,21 @@ export class MessageService {
           modelSource = "预算降级";
         }
         if (selection) modelSource += `：${selection.includes("/") ? "" : "场景 "}${selection}`;
-        const chosen = router?.resolve({ model: selection, needs: step.needs });
+        let chosen;
+        try { chosen = router?.resolve({ model: selection, needs: hasImage ? { ...step.needs, image: true } : step.needs }); }
+        catch (error) {
+          if (hasImage && error.code === "MODEL_UNAVAILABLE") {
+            if (selection?.includes("/") && !(this.config.registry?.models[selection]?.inputs || ["text"]).includes("image"))
+              throw new AppError(`这一步指定的模型 ${selection} 不支持看图，不能处理图片。请改用能看图的模型，或去掉图片后重试。`, error.status, error.code);
+            throw new AppError("这一步带有图片，但没有可用的能看图的模型。请在 config/models.json 为支持图片输入的模型标注 inputs 并启用它，或去掉图片后重试。", error.status, error.code);
+          }
+          throw error;
+        }
         if (chosen) validateEffort(chosen, step.effort);
         const model = chosen?.id || this.config.launch.model || this.sessions.snapshot(threadId).model || "unknown";
-        if (step.index === 0 && job.attachments?.length)
-          prepared = attachInput(prepared, await this.readAttachments(job.attachments), chosen?.spec || this.config.registry?.models[model]);
-        for (const item of feedback) if (item.attachments?.length)
-          prepared = attachInput(prepared, await this.readAttachments(item.attachments), chosen?.spec || this.config.registry?.models[model]);
+        for (const group of attachments)
+          prepared = attachInput(prepared, group, chosen?.spec || this.config.registry?.models[model]);
+        if (chosen && hasImage) modelSource += "（含图片，已选能看图的模型）";
         await this.store.patch(job.id, { selectedModel: model, modelSource });
         await this.publish(threadId);
         this.gate?.start(job, workflow.grants, step.writes);

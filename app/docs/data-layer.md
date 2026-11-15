@@ -161,7 +161,7 @@ queued（未暂停）→ starting/steering（CAS，PG原子）→ running
 
 ### 用户上传文件
 
-认证后的 `PUT /workspace/files?path=inputs/uploads/<文件名>` 将原始字节写入当前用户工作区，只能新建，同名返回 409。上传允许 md/txt（合法 UTF-8，单文件最多 256 KiB）与 png/jpeg/jpg/webp（扩展名、Content-Type 和文件头一致，单文件最多 5 MiB）；不接受 HTML 上传。路径和文件归属由服务端校验，上传权限不扩大模型对只读资料的写权限。消息最多引用 4 个已上传文件；任务只保存路径，图片输入在派发时读取，文本正文由模型按需读取。入口与文件名规则见 [上传 PRD 与参考图](../README.md#上传-prd-与参考图)。
+认证后的 `PUT /workspace/files?path=inputs/uploads/<文件名>` 将原始字节写入当前用户工作区，只能新建，同名返回 409。上传允许 md/txt（合法 UTF-8，单文件最多 256 KiB）与 png/jpeg/jpg/webp（扩展名、Content-Type 和文件头一致，单文件最多 5 MiB）；不接受 HTML 上传。路径和文件归属由服务端校验，上传权限不扩大模型对只读资料的写权限。消息最多引用 4 个已上传文件；任务只保存路径，图片输入在派发时读取，文本正文由模型按需读取。网关模式下带图片的步骤会自动选能看图的模型；没有可用模型时，需在 `config/models.json` 为支持图片输入的模型声明 `inputs: ["text","image"]` 并启用、纳入所用路由，或去掉图片后重试。前端可读取 `/workbench` 的 `imageInput` 判断默认对话路由能否接收参考图。入口与文件名规则见 [上传 PRD 与参考图](../README.md#上传-prd-与参考图)。
 
 ### 写入文件（带来源声明）
 
