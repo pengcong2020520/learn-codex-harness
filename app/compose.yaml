@@ -64,6 +64,7 @@ services:
     read_only: true
     mem_limit: 512m
     tmpfs: ["/tmp:mode=1777"]
+    networks: [walkthrough]
     volumes:
       - type: bind
         source: ${WALKTHROUGH_DIR:-./design}
@@ -405,6 +406,7 @@ services:
       prepare: { condition: service_completed_successfully }
   caddy:
     <<: *runtime
+    networks: [default, walkthrough]
     image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     mem_limit: 64m
     ports: ["127.0.0.1:${AGENT_PORT:-4317}:80"]
@@ -470,6 +472,8 @@ services:
       RELAY_BIND: ${REMOTE_BRIDGE_GATEWAY:-172.29.18.1}
       RELAYS: '[[4341,"127.0.0.1",14341]]'
 networks:
+  walkthrough:
+    internal: true
   design-check:
     internal: true
   default:

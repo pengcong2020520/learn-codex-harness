@@ -401,7 +401,11 @@ test('studio 服务固定资源和内部网络，Chromium 不接收明文节点�
   const service = compose.split('  design-check:\n')[1].split(/\n  [a-z][a-z-]+:\n/)[0];
   for (const expected of ['profiles: [studio]', 'mem_limit: 512m', 'cap_drop: [ALL]', 'read_only: true', 'networks: [design-check]', 'healthcheck:']) assert.ok(service.includes(expected), expected);
   assert.doesNotMatch(service, /ports:|volumes:|cap_add:|AGENT_NODE_KEY:/);
-  assert.match(compose, /networks:\n  design-check:\n    internal: true/);
+  assert.match(compose, /^  design-check:\n    internal: true/m);
+  assert.match(compose, /^  walkthrough:\n    internal: true/m);
+  const walkthrough = compose.split('  walkthrough:\n')[1].split(/\n  [a-z][a-z-]+:\n/)[0];
+  assert.match(walkthrough, /networks: \[walkthrough\]/);
+  assert.doesNotMatch(walkthrough, /docker\.sock|AGENT_NODE_KEY|ports:|cap_add:/);
   const image = fs.readFileSync(path.join(appRoot, 'server/design-check/Dockerfile'), 'utf8');
   assert.match(image, /APT_MIRROR/); assert.match(image, /apt-get install.*chromium/); assert.match(image, /AS prototype[\s\S]*npm ci --prefix server\/design-check\/template/);
   assert.doesNotMatch(image.split(' AS browser')[1], /npm (?:ci|install)/);
