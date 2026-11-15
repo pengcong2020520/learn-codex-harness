@@ -398,7 +398,7 @@ test('动态布局工具获得 60 秒，普通工具仍在 30 秒截止', async 
 
 test('studio 服务固定资源和内部网络，Chromium 不接收明文节点密钥', () => {
   const compose = fs.readFileSync(path.join(appRoot, 'compose.yaml'), 'utf8');
-  const service = compose.split('  design-check:\n')[1].split('  setup:\n')[0];
+  const service = compose.split('  design-check:\n')[1].split(/\n  [a-z][a-z-]+:\n/)[0];
   for (const expected of ['profiles: [studio]', 'mem_limit: 512m', 'cap_drop: [ALL]', 'read_only: true', 'networks: [design-check]', 'healthcheck:']) assert.ok(service.includes(expected), expected);
   assert.doesNotMatch(service, /ports:|volumes:|cap_add:|AGENT_NODE_KEY:/);
   assert.match(compose, /networks:\n  design-check:\n    internal: true/);
