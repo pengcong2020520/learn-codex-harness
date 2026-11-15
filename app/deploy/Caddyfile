@@ -1,5 +1,5 @@
 :80 {
-    redir / /ui/ 302
+    # / 与 /app/* 由下方统一反向代理交给节点，按当前 Agent 选择入口。
     redir /ui /ui/ 302
     handle_path /ui/* {
         root * /srv/ui

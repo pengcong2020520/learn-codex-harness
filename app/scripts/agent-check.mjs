@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AgentDefinition } from '../server/modules/agents/index.mjs';
 import { validateDefinition } from '../server/modules/agents/schema.mjs';
+import { validateUi } from '../server/modules/agents/ui.mjs';
 import { loadRole } from '../server/modules/role/index.mjs';
 import { loadModelRegistry } from '../server/modules/gateway/index.mjs';
 import { createModelRouter, validateEffort } from '../server/modules/gateway/router.mjs';
@@ -53,6 +54,8 @@ export function checkAgent(requested, { root = PROJECT_ROOT } = {}) {
     return rows;
   }
   const { agent, bindings } = definition;
+  try { validateUi(directory, agent.ui, path.resolve(directory, bindings.workspaceDir)); }
+  catch { add('error', 'agent.ui.entry', '前端入口不存在、路径不安全、类型不支持、超过 2 MiB 或与工作区重叠。', '在 Agent 包的 ui/ 内提供独立普通静态文件，移除符号链接和硬链接，并把工作区放在 ui/ 之外。'); }
   if (!agent.description) add('warning', 'agent.description', '缺少 Agent 简介。', '补一句话说明，网页首页会显示');
   else if (agent.description === PLACEHOLDER_DESCRIPTION) add('warning', 'agent.description', '简介仍是占位文字。', '填写这个 Agent 为谁服务、完成什么任务，网页首页会显示。');
   if (agent.starters?.some(text => PLACEHOLDER_STARTERS.includes(text))) add('warning', 'agent.starters', '示例请求仍是占位文字。', '替换成贴合角色与已授权能力的示例请求，网页首页会显示。');

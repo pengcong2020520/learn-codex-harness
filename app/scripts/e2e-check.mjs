@@ -30,6 +30,15 @@ const ready = await (await fetch(`${url}/ready`)).json();
 assert.equal(ready.replication, 'off', '单节点 /ready 应显示复制关闭');
 assert.equal(ready.degraded, undefined, '单节点不应因没有副本而降级');
 
+// 默认 Agent 没有自带前端；经真实 Caddy 验证节点选择入口，通用页面仍可用。
+const entry = await fetch(`${url}/`, { redirect: 'manual' });
+assert.equal(entry.status, 302); assert.equal(entry.headers.get('location'), '/ui/');
+await expectStatus(await fetch(`${url}/app/`), 404, '未声明自带前端');
+const web = await expectStatus(await fetch(`${url}/ui/`), 200, '通用页面');
+assert.match(await web.text(), /id="login-form"/);
+assert.equal(web.headers.get('x-content-type-options'), 'nosniff');
+assert.match(web.headers.get('content-security-policy'), /script-src 'self'/);
+
 const login = await fetch(`${url}/auth/login`, {
   method: 'POST', headers: { 'content-type': 'application/json', origin: new URL(url).origin },
   body: JSON.stringify({ username: 'admin', password }),

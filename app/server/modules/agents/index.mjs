@@ -1,4 +1,5 @@
 import { readAsUser } from '../runtimes/user-files.mjs';
+import { validateUi } from './ui.mjs';
 import fs from "node:fs";
 import { validateEffort } from "../gateway/router.mjs";
 import { readCompatibility } from "./upgrade.mjs";
@@ -69,6 +70,7 @@ export class AgentDefinition {
     }
     this.roleFile = trustedFile(path.resolve(directory, agent.instructions), directory);
     this.workspacePath = path.resolve(directory, bindings.workspaceDir);
+    validateUi(directory, agent.ui, this.workspacePath);
     // 角色与 Skill 是受信配置，不能放在用户和模型可写的工作区里。
     if (inside(this.workspacePath, this.roleFile)) throw new Error("角色文件不能放在工作区里。");
     this.role = loadRole(this.roleFile);

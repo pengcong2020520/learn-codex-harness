@@ -2,6 +2,44 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { browser, chrome, helpers } from './browser.mjs';
 import { webFixture } from './web-fixture.mjs';
+import { until } from './helpers.mjs';
+
+test('Agent UI 真实浏览器：登录回跳、列出会话、发送与流式回复，无 CSP 违规', { timeout: 90000 }, async t => {
+  assert.ok(chrome, '需要 Chrome；可用 CHROME_PATH 指定路径。');
+  const fixture = await webFixture(t, { customUi: true }), page = await browser(t);
+  await page.beforeLoad(`window.cspViolations = []; addEventListener('securitypolicyviolation', event => window.cspViolations.push(event.effectiveDirective));`);
+  await page.open(fixture.url + '/app/');
+  await until(async () => {
+    try { return await page.run(`return location.pathname === '/ui/' && new URLSearchParams(location.search).get('next') === '/app/' && !document.querySelector('#login-view').hidden;`); }
+    catch { return false; }
+  }, 10000);
+  await page.run(`document.querySelector('#username').value='alice';document.querySelector('#password').value='fixture-password';`);
+  await page.clickNavigate('#login-form button');
+  assert.equal(await page.run('return location.pathname'), '/app/');
+  assert.equal(await page.run(`${helpers} return await until(() => $('#user').textContent === 'alice' && !$('#new-session').disabled, 10000);`), true);
+  const customSecurity = await fetch(fixture.url + '/app/'), genericSecurity = await fetch(fixture.url + '/ui/');
+  assert.equal(customSecurity.headers.get('content-security-policy'), genericSecurity.headers.get('content-security-policy'));
+  await page.run(`document.querySelector('#new-session').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#send').disabled && $('#sessions button'), 10000);`), true);
+  await page.run(`document.querySelector('#message').value='自带前端测试'; document.querySelector('#message-form').requestSubmit();`);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.assistant').some(row => row.dataset.status === 'running' && row.textContent.includes('mock')), 10000);`), true);
+  assert.equal(await page.run(`${helpers} return await until(() => $$('.assistant').some(row => row.dataset.status === 'completed' && row.textContent.includes('mock reply turn-1')), 10000);`), true);
+  assert.equal(fixture.requests.filter(r => r.path === '/messages' && r.method === 'POST').length, 1);
+  await page.run(`document.querySelector('#sessions button').click();`);
+  assert.equal(await page.run(`${helpers} return await until(() => !$('#sessions button').disabled && $('#messages').textContent.includes('mock reply turn-1'), 10000);`), true);
+  assert.deepEqual(await page.run('return window.cspViolations'), []);
+  assert.deepEqual(page.reports.filter(report => report.channel === 'log' && report.source === 'security'), []);
+  assert.deepEqual(page.errors, []);
+  // 从自带前端触发 401，必须回到登录页并保留安全的 next。
+  await page.run(`sessionStorage.setItem('agent.web.token', 'invalid-fixture-session');`);
+  await page.open(fixture.url + '/app/');
+  await until(async () => {
+    try { return await page.run(`return location.pathname === '/ui/' && new URLSearchParams(location.search).get('next') === '/app/' && !document.querySelector('#login-view').hidden;`); }
+    catch { return false; }
+  }, 10000);
+  assert.equal(await page.run(`return sessionStorage.getItem('agent.web.token')`), null);
+  assert.deepEqual(page.reports.filter(report => report.channel === 'log' && report.source === 'security'), []);
+});
 
 test('网页真实浏览器：登录、新建、流式回复、终态、重连、搜索、恢复、登出与错误密码', { timeout: 90000 }, async t => {
   assert.ok(chrome, '需要 Chrome；可用 CHROME_PATH 指定路径。');

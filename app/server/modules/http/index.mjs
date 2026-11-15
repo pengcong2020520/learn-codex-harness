@@ -1,4 +1,5 @@
 import { uploadInfo } from "../../../shared/uploads.mjs";
+import { agentUiRoute } from './agent-ui.mjs';
 import { createPreview, verifyPreview, previewPath, previewHash, previewHeaders, previewMissing } from './previews.mjs';
 import { assertAllowedOrigin } from "../config/origins.mjs";
 import { logFailure } from '../data/diagnostics.mjs';
@@ -49,6 +50,7 @@ export function createHttpService({ config, accounts, sessions, messages, hub, r
     try {
       const pathname = new URL(request.url, "http://127.0.0.1").pathname;
       assertAllowedOrigin(request.headers, config);
+      if (agentUiRoute(request, response, config.agent)) return;
       if (request.method === 'GET' && pathname === '/health') return json(200, { status: 'alive', version });
       if (request.method === 'GET' && pathname === '/ready') {
         const result = await ready();
