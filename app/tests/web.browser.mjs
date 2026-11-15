@@ -160,20 +160,29 @@ test('网页产物：脚本可点击运行、不透明来源与 CSP 拦截、图
     const r = document.querySelector('#artifact-preview iframe').getBoundingClientRect();
     const point = { x: r.x + 35, y: r.y + 35 };
     window.previewClicks = [];
-    window.recordPreviewClick = phase => {
+    window.recordPreviewClick = (phase, attempt) => {
       const frame = document.querySelector('#artifact-preview iframe');
       const hit = document.elementFromPoint(point.x, point.y);
       window.previewClicks.push({
-        phase, timestamp: Date.now(), point,
+        phase, attempt, timestamp: Date.now(), point,
         iframeRect: frame?.getBoundingClientRect().toJSON() ?? null,
         hit: hit ? { tagName: hit.tagName, id: hit.id, className: hit.getAttribute('class'), isIframe: hit === frame } : null
       });
     };
-    window.recordPreviewClick('before');
     return point;
   `);
-  await page.clickAt(point.x, point.y);
-  await page.run(`window.recordPreviewClick('after');`);
+  // iframe 内的动画帧不能保证浏览器进程的命中测试数据已更新；这里验证预览脚本能响应用户点击，而非第一次点击的时机。
+  // 以探针的 click 事件确认输入已送达，最多尝试 10 次，仍未确认就报错。
+  let clicked = false;
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    await page.run(`window.recordPreviewClick('before', ${attempt});`);
+    await page.clickAt(point.x, point.y);
+    await page.run(`window.recordPreviewClick('after', ${attempt});`);
+    clicked = await page.run(`${helpers} return await until(() => window.previewEvents.some(event => event.stage === 'click'), 500);`);
+    if (clicked) break;
+  }
+  assert.equal(clicked, true,
+    '预览点击未获确认：' + JSON.stringify(await page.run('return { previewEvents: window.previewEvents, previewClicks: window.previewClicks };')));
   assert.equal(await page.run(`${helpers} return await until(() => window.previewProbe?.violations.includes('connect-src'));`), true,
     '预览探针诊断：' + JSON.stringify(await page.run('return { previewEvents: window.previewEvents, previewClicks: window.previewClicks };')));
   const probe = await page.run('return window.previewProbe');

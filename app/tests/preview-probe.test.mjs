@@ -87,3 +87,19 @@ test('预览探针：CSP 事件先到时仍等待 fetch 的失败结果', async 
   assert.deepEqual(probe.messages[0].previewProbe.violations, ['connect-src']);
   assert.match(probe.messages[0].previewProbe.fetch, /^TypeError:/);
 });
+
+test('预览探针：连续点击两次只请求和发送快照一次，第二次报告 click-repeat', async () => {
+  const probe = fixture();
+  const clicked = probe.button.onclick();
+  const repeated = probe.button.onclick();
+  assert.equal(probe.fetches, 1, '重复点击不能再次发起请求');
+  await repeated;
+  assert.deepEqual(probe.diagnostics.map(message => message.previewEvent.stage), ['click', 'fetch-start', 'click-repeat']);
+  assert.deepEqual(probe.messages, [], '首次点击仍须等待请求与 CSP 事件');
+  probe.rejectFetch();
+  probe.violate('connect-src');
+  await clicked;
+  assert.equal(probe.fetches, 1);
+  assert.equal(probe.messages.length, 1, '结果快照只发送一次');
+  assert.equal(probe.diagnostics.filter(message => message.previewEvent.stage === 'snapshot-sent').length, 1);
+});

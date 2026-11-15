@@ -97,9 +97,10 @@ test("CLI 经真实 HTTP/SSE 接收多个流式片段，连续两轮的回复不
   const exited = new Promise(resolve => child.once("close", resolve));
   cleanup(root, async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await exited; });
   child.stdin.write("first\n");
-  await until(() => output.includes("Agent：mock reply turn-1\n"));
+  // 子进程冷启动在 CI 并行负载下可能较慢，两轮输出都显式等待最多 10 秒。
+  await until(() => output.includes("Agent：mock reply turn-1\n"), 10000);
   child.stdin.write("second\n");
-  await until(() => output.includes("Agent：mock reply turn-2\n"));
+  await until(() => output.includes("Agent：mock reply turn-2\n"), 10000);
   child.stdin.end("/exit\n");
   assert.equal(await exited, 0, output);
   assert.match(output, /turn id: turn-1\nAgent：mock reply turn-1\nturn id: turn-2\nAgent：mock reply turn-2\n/);
