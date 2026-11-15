@@ -7,5 +7,5 @@ export function createTools({ root, files }) {
     const { createDesignTools } = await import(pathToFileURL(path.join(root, 'server/modules/design/index.mjs')).href);
     return createDesignTools({ files })[method](args, context);
   };
-  return { check_design: invoke('check_design'), check_agent_package: invoke('check_agent_package') };
+  return { build_prototype: invoke('build_prototype'), check_design: invoke('check_design'), check_agent_package: invoke('check_agent_package') };
 }

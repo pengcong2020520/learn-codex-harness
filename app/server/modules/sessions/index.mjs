@@ -214,11 +214,11 @@ export class SessionService extends EventEmitter {
       turn.tools[item.id] = { name: item.tool, label: this.tools?.label(item.tool) || item.tool, status: failed ? "failed" : item.status,
         error: error ? this.redact(String(error)).slice(0, 300) : null };
       // 只记录工具真实返回的结果，供 workflow 验收使用；不从模型回复中猜测文件或修订。
-      if (!failed && item.status === "completed" && ["write_file", "kb_submit_revision"].includes(item.tool)) {
+      if (!failed && item.status === "completed" && ["write_file", "build_prototype", "kb_submit_revision"].includes(item.tool)) {
         try {
           const output = JSON.parse(item.result?.content?.find(part => part.type === "text")?.text || item.contentItems?.find(part => part.type === "inputText")?.text || "null");
           const sources = Array.isArray(item.arguments?.source_versions) ? item.arguments.source_versions.length : 0;
-          if (item.tool === "write_file" && output?.created === true && output.artifact) turn.artifacts[item.id] = { ...output.artifact, sources };
+          if (["write_file", "build_prototype"].includes(item.tool) && output?.created === true && output.artifact) turn.artifacts[item.id] = { ...output.artifact, sources };
           if (item.tool === "kb_submit_revision" && output?.effective === true)
             turn.revisions[item.id] = { kbId: output.kbId, slug: output.slug, versionId: output.versionId, effective: true };
         } catch { /* 工具错误不算产物或修订。 */ }

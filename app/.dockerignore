@@ -14,3 +14,6 @@ nodes/
 .remote-identity.json
 
 .cli/
+
+**/node_modules
+server/design-check/template/runtime.min.js

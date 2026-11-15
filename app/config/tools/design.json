@@ -11,6 +11,7 @@
       "name": "check_agent_package", "label": "校验 Agent 代码包", "readOnly": true,
       "description": "静态检查 outputs/design/<项目>/package-v<n>/ 的 Agent 错误级规则、manifest 文件清单与 SHA-256、前端资源及宿主机脚本；返回问题与中文修改建议。不会执行代码包，也不代表已完成部署或业务验收。",
       "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 500 } }, "required": ["path"], "additionalProperties": false }
-    }
+    },
+    {"name": "build_prototype", "label": "离线编译复杂原型", "readOnly": false, "description": "在隔离容器中将 HTML 外壳、React JSX、Tailwind 与预装 shadcn 组件编译成一个离线 HTML，作为新版本保存。外壳包含一个 <!--studio-app--> 和静态 design-outline、section；JSX 使用全局 Studio.React、Studio.createRoot 与 Studio.Button、Studio.Card 等组件，禁止 import。生成后再调用 check_design。", "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "maxLength": 500}, "html": {"type": "string", "maxLength": 262144}, "jsx": {"type": "string", "maxLength": 262144}}, "required": ["path", "html", "jsx"], "additionalProperties": false}}
   ]
 }

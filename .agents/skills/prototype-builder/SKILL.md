@@ -30,7 +30,7 @@ bash <此Skill目录>/scripts/bundle-artifact.sh
 
 初始化后的 `src/` 开发 React/TS，入口保留 `index.html`。官方打包脚本会清理工程内的 `dist` 和 `bundle.html`，所以只在本次专用临时工程执行。成功后核对 `bundle.html` 的离线完整性，将它作为新版本 `prototype-v<n>.html` 保存，不覆盖既有产物。
 
-**工作室运行时（K3）**：使用预装好的模板和依赖，不联网。模板与构建工具可在用户拉取脚手架时安装，或放进 Docker 镜像；这属于 K3c。原样官方脚本带安装动作，不能直接在运行时调用。由 K3c 提供使用预装依赖的离线构建入口；未提供时停止复杂构建并说明缺口，不能降级成不满足共享数据要求的假交互，也不能修改服务端安装依赖。
+**工作室运行时**：复杂原型调用 build_prototype，传 path、html 和 jsx。html 放入大纲、所有静态 section、主题变量和一个 `<!--studio-app-->`。在 jsx 中用 `Studio.createRoot` 挂载，使用 `Studio.React` 的状态、`Studio.Button`、`Studio.Card` 等预装组件及 Tailwind 类；无需 import。保持 hash 定位与独立的示例状态，多个页面共享 React 状态。构建发生在专用容器，生成后调用 check_design。
 
 ## 两种方式共同遵守
 

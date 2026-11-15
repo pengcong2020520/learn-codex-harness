@@ -39,7 +39,7 @@ test('工作室 Agent 静态检查只有资料未部署类建议，六步完整�
   assert.equal(definition.agent.id, 'studio');
   assert.equal(definition.agent.name, 'Agent 设计工作室');
   assert.deepEqual(definition.agent.ui, { entry: 'ui/index.html', title: 'Agent 设计工作室' });
-  assert.deepEqual(definition.agent.tools.allow, ['list_files', 'read_file', 'write_file', 'skill_read', 'check_design', 'check_agent_package']);
+  assert.deepEqual(definition.agent.tools.allow, ['list_files', 'read_file', 'write_file', 'skill_read', 'check_design', 'check_agent_package', 'build_prototype']);
   assert.deepEqual(definition.agent.outputs.formats, ['md', 'json', 'html', 'js', 'css']);
   assert.equal(definition.agent.outputs.writeMode, 'create-only');
   assert.deepEqual(definition.agent.outputs.requiredChecks, ['file-exists', 'format']);
@@ -95,7 +95,7 @@ for (const name of skills) test(`工作室运行时 ${name} 除追加节外与�
       assert.deepEqual(copy.subarray(0, original.length), original, name);
       const appended = copy.subarray(original.length).toString();
       assert.ok(appended.startsWith('\n## 在工作室运行时\n'), name);
-      for (const term of ['check_design', 'inputs/drafts/', 'K3c', '简单方式', '脚本与模板归档不随运行时副本携带', '运行时不执行脚本']) assert.ok(appended.includes(term));
+      for (const term of ['check_design', 'inputs/drafts/', 'build_prototype', '简单方式', '脚本与模板归档不随运行时副本携带', '运行时不执行脚本']) assert.ok(appended.includes(term));
       assert.equal((appended.match(/^## 在工作室运行时$/gm) || []).length, 1);
       if (name === 'design-handoff') {
         assert.ok(appended.includes('只引用 K4 的 docker compose run --rm land'));

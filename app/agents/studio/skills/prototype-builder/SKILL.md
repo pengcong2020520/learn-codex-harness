@@ -30,7 +30,7 @@ bash <此Skill目录>/scripts/bundle-artifact.sh
 
 初始化后的 `src/` 开发 React/TS，入口保留 `index.html`。官方打包脚本会清理工程内的 `dist` 和 `bundle.html`，所以只在本次专用临时工程执行。成功后核对 `bundle.html` 的离线完整性，将它作为新版本 `prototype-v<n>.html` 保存，不覆盖既有产物。
 
-**工作室运行时（K3）**：使用预装好的模板和依赖，不联网。模板与构建工具可在用户拉取脚手架时安装，或放进 Docker 镜像；这属于 K3c。原样官方脚本带安装动作，不能直接在运行时调用。由 K3c 提供使用预装依赖的离线构建入口；未提供时停止复杂构建并说明缺口，不能降级成不满足共享数据要求的假交互，也不能修改服务端安装依赖。
+**工作室运行时**：复杂原型调用 build_prototype，传 path、html 和 jsx。html 放入大纲、所有静态 section、主题变量和一个 `<!--studio-app-->`。在 jsx 中用 `Studio.createRoot` 挂载，使用 `Studio.React` 的状态、`Studio.Button`、`Studio.Card` 等预装组件及 Tailwind 类；无需 import。保持 hash 定位与独立的示例状态，多个页面共享 React 状态。构建发生在专用容器，生成后调用 check_design。
 
 ## 两种方式共同遵守
 
@@ -52,4 +52,4 @@ React 等动态页面也把 `design-outline` 作为静态 `application/json` 脚
 
 ## 在工作室运行时
 
-采用 studio-contract 约定的 inputs/drafts/ 草稿与产物格式，按 role.md 和本步 goal 读取输入、记录版本及反馈。开发侧的脚本与模板归档不随运行时副本携带，运行时不执行脚本；用 check_design 代替本机布局脚本。复杂原型等 K3c 离线模板，此前只用简单方式并说明限制。运行时的主题阶段只生成候选、样页和检查结果，用户在前端确认双选后由 hifi 开头核对草稿并保存 theme 版本，再检查实际组合并制作原型。结构化草稿及固定触发文字以 studio-contract 为唯一来源。写入或工具结果不明先核对，不自动重试；结束只回一两句摘要与产物位置。
+采用 studio-contract 约定的 inputs/drafts/ 草稿与产物格式，按 role.md 和本步 goal 读取输入、记录版本及反馈。开发侧的脚本与模板归档不随运行时副本携带，运行时不执行脚本；用 check_design 代替本机布局脚本。简单方式直接写 HTML；复杂原型使用 build_prototype 离线编译 React JSX、Tailwind 与 shadcn 组件。运行时的主题阶段只生成候选、样页和检查结果，用户在前端确认双选后由 hifi 开头核对草稿并保存 theme 版本，再检查实际组合并制作原型。结构化草稿及固定触发文字以 studio-contract 为唯一来源。写入或工具结果不明先核对，不自动重试；结束只回一两句摘要与产物位置。
