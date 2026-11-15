@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { browser, chrome, helpers } from './browser.mjs';
 import { webFixture } from './web-fixture.mjs';
 import { until } from './helpers.mjs';
+import { previewProbe } from './fixtures/preview-probe.mjs';
 
 test('Agent UI 真实浏览器：登录回跳、列出会话、发送与流式回复，无 CSP 违规', { timeout: 90000 }, async t => {
   assert.ok(chrome, '需要 Chrome；可用 CHROME_PATH 指定路径。');
@@ -125,16 +126,7 @@ test('网页产物：脚本可点击运行、不透明来源与 CSP 拦截、图
   const fixture = await webFixture(t), page = await browser(t), workspace = fixture.app.runtime.workspaceDir;
   const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="icon" href="data:,"></head><body style="margin:0">
     <button style="width:100%;height:80px" id="probe">点击验证</button><script>
-    window.probe = { violations: [] };
-    addEventListener('securitypolicyviolation', event => window.probe.violations.push(event.effectiveDirective));
-    document.querySelector('#probe').onclick = async () => {
-      document.querySelector('#probe').textContent = '脚本已运行';
-      window.probe.text = document.querySelector('#probe').textContent;
-      try { sessionStorage.getItem('agent.web.token'); window.probe.storage = 'unexpected'; } catch (error) { window.probe.storage = error.name + ': ' + error.message; }
-      try { parent.document.body; window.probe.parent = 'unexpected'; } catch (error) { window.probe.parent = error.name + ': ' + error.message; }
-      try { await fetch('/sessions'); window.probe.fetch = 'unexpected'; } catch (error) { window.probe.fetch = error.name + ': ' + error.message; }
-      setTimeout(() => parent.postMessage({ previewProbe: window.probe }, '*'), 100);
-    };
+    (${previewProbe.toString()})();
     </script></body></html>`;
   await mkdir(path.join(workspace, 'outputs/design'), { recursive: true });
   await writeFile(path.join(workspace, 'outputs/design/page.html'), html);
@@ -144,18 +136,46 @@ test('网页产物：脚本可点击运行、不透明来源与 CSP 拦截、图
   await page.run(`document.querySelector('#username').value='alice';document.querySelector('#password').value='fixture-password';document.querySelector('#login-form').requestSubmit();`);
   assert.equal(await page.run(`${helpers} return await until(() => $$('.artifact-file').length === 3, 10000);`), true);
   await page.run(`if (document.querySelector('#toggle-artifacts').getAttribute('aria-expanded') === 'false') document.querySelector('#toggle-artifacts').click();
-    addEventListener('message', event => { if (event.source === document.querySelector('#artifact-preview iframe')?.contentWindow && event.data.previewProbe) window.previewProbe = event.data.previewProbe; });
+    window.previewLoaded = false; window.previewReady = false; window.previewEvents = [];
+    document.querySelector('#artifact-preview').addEventListener('load', event => {
+      if (event.target === document.querySelector('#artifact-preview iframe')) window.previewLoaded = true;
+    }, true);
+    addEventListener('message', event => {
+      if (event.source !== document.querySelector('#artifact-preview iframe')?.contentWindow) return;
+      if (event.data?.previewEvent) window.previewEvents.push(event.data.previewEvent);
+      if (event.data?.previewReady === true) window.previewReady = true;
+      if (event.data?.previewProbe) window.previewProbe = event.data.previewProbe;
+    });
     [...document.querySelectorAll('.artifact-file')].find(el => el.dataset.path.endsWith('page.html')).click();`);
   assert.equal(await page.run(`${helpers} return await until(() => $('#artifact-preview iframe'));`), true);
   const sandbox = await page.run(`return document.querySelector('#artifact-preview iframe').getAttribute('sandbox')`);
   assert.equal(sandbox, 'allow-scripts allow-forms allow-modals');
   const previewUrl = await page.run(`return document.querySelector('#artifact-preview iframe').src`);
   assert.equal(await page.run(`return document.querySelector('#artifact-actions a').href`), previewUrl);
-  // 先等待 iframe 加载，再以真实鼠标事件点击内联脚本绑定的按钮。
-  await page.run(`await new Promise(resolve => { const frame=document.querySelector('#artifact-preview iframe'); frame.onload=resolve; setTimeout(resolve, 1000); });`);
-  const point = await page.run(`const r=document.querySelector('#artifact-preview iframe').getBoundingClientRect();return {x:r.x+35,y:r.y+35};`);
+  // 监听在创建 iframe 前安装，加载与探针就绪缺一不可；超时只会失败，不能代替就绪。
+  assert.equal(await page.run(`${helpers} return await until(() => window.previewLoaded && window.previewReady);`), true, 'iframe 应完成加载并回传探针就绪消息');
+  const point = await page.run(`
+    // 探针就绪后父页面也等一帧，再取坐标并发送真实点击。
+    await new Promise(requestAnimationFrame);
+    const r = document.querySelector('#artifact-preview iframe').getBoundingClientRect();
+    const point = { x: r.x + 35, y: r.y + 35 };
+    window.previewClicks = [];
+    window.recordPreviewClick = phase => {
+      const frame = document.querySelector('#artifact-preview iframe');
+      const hit = document.elementFromPoint(point.x, point.y);
+      window.previewClicks.push({
+        phase, timestamp: Date.now(), point,
+        iframeRect: frame?.getBoundingClientRect().toJSON() ?? null,
+        hit: hit ? { tagName: hit.tagName, id: hit.id, className: hit.getAttribute('class'), isIframe: hit === frame } : null
+      });
+    };
+    window.recordPreviewClick('before');
+    return point;
+  `);
   await page.clickAt(point.x, point.y);
-  assert.equal(await page.run(`${helpers} return await until(() => window.previewProbe?.violations.includes('connect-src'));`), true);
+  await page.run(`window.recordPreviewClick('after');`);
+  assert.equal(await page.run(`${helpers} return await until(() => window.previewProbe?.violations.includes('connect-src'));`), true,
+    '预览探针诊断：' + JSON.stringify(await page.run('return { previewEvents: window.previewEvents, previewClicks: window.previewClicks };')));
   const probe = await page.run('return window.previewProbe');
   assert.equal(probe.text, '脚本已运行');
   assert.match(probe.storage, /SecurityError:.*(sandbox|origin)/i);
