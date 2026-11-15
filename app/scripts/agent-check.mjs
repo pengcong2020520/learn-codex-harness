@@ -49,7 +49,7 @@ export function checkAgent(requested, { root = PROJECT_ROOT } = {}) {
     // 位置来自现有 schema 的诊断，不复制字段规则，也不回显无效字段的值。
     const fields = [...new Set(error.message.match(/\/[A-Za-z0-9_/-]+/g) || ['/'])];
     for (const field of fields) add('error', field, '字段不符合 AgentDefinition 结构规则。', field.includes('/outputs/formats')
-      ? 'outputs.formats 请使用 md、txt、html、png、jpeg、webp、mp4 中的格式。'
+      ? 'outputs.formats 请使用 md、txt、html、json、js、css、png、jpeg、webp、mp4 中的格式。'
       : '对照 README「做你自己的 Agent」及 agents/writing/agent.json 修正此字段的类型、必填项和取值。');
     return rows;
   }

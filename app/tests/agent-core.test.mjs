@@ -248,6 +248,18 @@ test("skill_read：只读已启用 Skill 的白名单文件；未启用、越界
 });
 
 
+test("JSON/JS/CSS 产物：Agent 装配后通过动态文件工具写入并读回", async t => {
+  const { registry } = await assemble(t, v => { v.agent.outputs.formats.push("json", "js", "css"); });
+  for (const [format, content] of [["json", '{"ok":true}'], ["js", 'export const ok = true;'], ["css", 'body { color: red; }']]) {
+    const relative = `outputs/package-v1/file.${format}`;
+    const saved = await registry.call({ tool: "write_file", arguments: { path: relative, content } });
+    assert.equal(saved.success, true);
+    const read = await registry.call({ tool: "read_file", arguments: { path: relative } });
+    assert.equal(read.success, true);
+    assert.equal(JSON.parse(read.contentItems[0].text).content, content);
+  }
+});
+
 test("HTML 产物：Agent schema 接受 html，文本工具可新建和读取，禁止覆盖并限制 256 KiB", async t => {
   const { root, files, agent } = await assemble(t, v => { v.agent.outputs.formats.push("html"); });
   assert.ok(agent.outputs.formats.includes("html"));

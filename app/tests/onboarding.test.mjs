@@ -22,6 +22,17 @@ function fixture(t) {
 const errors = rows => rows.filter(row => row.level === 'error');
 const sample = 'agents/sample/agent.json';
 
+test('agent:check 接受 json/js/css，未知格式提示完整中文可选值', t => {
+  const f = fixture(t);
+  f.edit(v => { v.agent.outputs.formats = ['json', 'js', 'css']; });
+  assert.deepEqual(errors(checkAgent(sample, { root: f.root })), []);
+  for (const format of ['mjs', 'svg', 'woff2', 'pdf']) {
+    f.edit(v => { v.agent.outputs.formats = [format]; });
+    const rows = errors(checkAgent(sample, { root: f.root }));
+    assert.ok(rows.some(row => /outputs\/formats/.test(row.title) && /请使用 md、txt、html、json、js、css、png、jpeg、webp、mp4/.test(row.fix)), JSON.stringify(rows));
+  }
+});
+
 test('agent:check 示例和骨架通过，占位角色与缺资料仅建议', t => {
   const { root } = fixture(t);
   for (const file of ['agents/writing/agent.json', 'examples/writing/agent/agent.json', 'examples/customer-support/agent/agent.json', sample]) {

@@ -2,7 +2,7 @@
 
 `list_files` 浏览获准读取的目录，省略 `path` 返回允许范围的入口；`inputs/`、`./inputs`、`./inputs/` 按 `inputs` 处理，`./` 等同于省略路径。规范化发生在授权和资源状态过滤之前。只移除目录的 `./` 前缀和末尾 `/`，内部空段、`..`、隐藏路径、绝对路径、反斜杠、控制字符仍被拒绝，报错说明具体原因。范围外目录会提示规范路径及可浏览范围。符号链接、硬链接等原有边界保持不变。
 
-`read_file` 读取并登记获准资料，返回 `resourceId`、`versionId`。`write_file` 新建文件，不覆盖；推荐按已读取路径声明来源：
+`read_file` 读取并登记获准资料，返回 `resourceId`、`versionId`。`write_file` 新建文件，不覆盖。普通文本支持 md / txt / html；json / js / css 仅在 `outputs.directory` 内且由 `outputs.formats` 显式声明时可读写，读取仍需对应资料源的 `read` 授权。三种格式均遵守 256 KiB 文本上限，JSON 写入前必须通过 `JSON.parse` 校验，失败返回 400「产物 JSON 格式不正确。」。新增产物格式不扩大预览、上传或草稿的范围。推荐按已读取路径声明来源：
 
 ```json
 {

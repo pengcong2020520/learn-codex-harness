@@ -175,9 +175,11 @@ POST /messages { threadId, text, workflow, params, attachments? }
 | 检查 | 通过条件 |
 |------|---------|
 | `file-exists` | 本步至少产生一个产物，且文件实际存在 |
-| `format` | 产物扩展名属于 `outputs.formats`，包括 `html`；HTML 与 md/txt 一样遵守文本大小上限和只能新建规则，HTML 格式检查要求可解析且包含 `html` 或 `body` 元素 |
+| `format` | 产物扩展名属于 `outputs.formats`（可选 md / txt / html / json / js / css / png / jpeg / webp / mp4）；HTML 格式检查要求可解析且包含 `html` 或 `body` 元素 |
 | `sources-cited` | 产物带非空的 `source_versions` |
 | `wiki-effective` | 本任务内至少一次 `kb_submit_revision` 返回 `effective: true` |
+
+文本产物遵守 256 KiB 上限和只能新建规则。json / js / css 仅在 `outputs.directory` 内、且经 `outputs.formats` 显式声明时允许文件工具读写，读取仍需对应资料源授权；其他资料目录不开放这些新增格式。`write_file` 写 JSON 前始终用 `JSON.parse` 校验，不依赖 `requiredChecks`，非法 JSON 返回 400「产物 JSON 格式不正确。」。预览、上传和草稿规则不受产物格式声明影响。
 
 检查不通过时任务标为 `needs-review` 并推送给客户端，不自动重试，不阻断后续消息。
 
