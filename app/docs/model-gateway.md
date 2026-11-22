@@ -283,7 +283,7 @@ AGENT_GATEWAY_DAILY_TOKENS=1500000
 
 ## 常见问题
 
-- **智谱 GLM**：没有 OpenAI 新接口（`/responses` 返回 404），清单里按 Claude 格式接入（`https://open.bigmodel.cn/api/anthropic`，国际站 Z.ai 用 `https://api.z.ai/api/anthropic`）。
+- **智谱 GLM**：智谱国内站提供 Claude 格式接口（`https://open.bigmodel.cn/api/anthropic`）和 OpenAI 新接口（`https://open.bigmodel.cn/api/v1`，2026-11-21 核对）。本清单的网关按 Claude 格式接入，暂未切换；国际站 Z.ai 的 Claude 格式接口用 `https://api.z.ai/api/anthropic`。
 - **Hugging Face 推理服务**（服务商名 `hf`，密钥变量 `HUGGINGFACE_API_KEY`）：一个令牌调用多家算力商托管的开源模型，模型名写成 `hf/组织/模型`，如 `hf/deepseek-ai/DeepSeek-V4.1-Flash`。
   - 按用量从 HF 账户扣费，免费账户额度很少，用完返回“no remaining credits”。
   - 它有 OpenAI 新接口，网关原样转发。新接口出错时返回码仍是 200、错误写在内容里；Codex 用的流式请求会被网关识别为失败（502），备用切换照常触发。

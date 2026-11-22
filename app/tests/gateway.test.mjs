@@ -99,7 +99,7 @@ test("网关配置：备用模型的服务商没有密钥时不写进备用链�
   assert.throws(() => buildGatewayConfig(registry, { ...gatewayEnv, OLLAMA_BASE_URL: "http://example.com" }), /OLLAMA_BASE_URL 必须是 https/);
   const withClaude = buildGatewayConfig(registry, { ...gatewayEnv, ANTHROPIC_API_KEY: "sk-ant-x" });
   assert.deepEqual(withClaude.providers.anthropic.keys[0].models, ["claude-sonnet-5-5"]);
-  // 智谱没有 OpenAI 新接口，按 Claude 格式接入：自定义服务商、接口类型 anthropic、地址指向它的 Claude 兼容接口。
+  // 清单选用智谱的 Claude 格式接口：自定义服务商、接口类型 anthropic、地址指向它的 Claude 兼容接口。
   const withGlm = buildGatewayConfig(registry, { ...gatewayEnv, ZHIPU_API_KEY: "zhipu-x" });
   assert.deepEqual(withGlm.providers.zhipu, { keys: [{ name: "zhipu", value: "env.ZHIPU_API_KEY", models: ["glm-5.3", "glm-5.3-flash"], weight: 1 }],
     network_config: { base_url: "https://open.bigmodel.cn/api/anthropic" }, custom_provider_config: { base_provider_type: "anthropic" } });
