@@ -1,6 +1,6 @@
 import { userFileOperation } from '../runtimes/user-files.mjs';
 import { installedCodex, verifyRestrictedFeatures } from "./compatibility.mjs";
-import { userEnvironment, userSpawn, signalUserProcess } from "./launch.mjs";
+import { userEnvironment, codexSpawn, signalUserProcess } from "./launch.mjs";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { appendFileSync } from "node:fs";
@@ -40,7 +40,7 @@ export class CodexConnection extends EventEmitter {
       const installed = installedCodex({ env: this.runtime.ownerId ? userEnvironment(this.launch.env, this.runtime.codexHome) : this.launch.env, cwd: this.runtime.workspaceDir, ...(this.runtime.isolated ? { uid: this.runtime.uid, gid: this.runtime.gid } : {}) });
       this.cli = installed.cli; this.executable = installed.executable; this.version = installed.version;
     }
-    const launch = userSpawn(this.executable || process.execPath, this.executable ? this.runtime.args : [this.cli, ...this.runtime.args], this.runtime);
+    const launch = codexSpawn(this.executable || process.execPath, this.executable ? this.runtime.args : [this.cli, ...this.runtime.args], this.runtime);
     this.child = spawn(launch.command, launch.args, {
       ...launch.options,
       cwd: this.runtime.workspaceDir,

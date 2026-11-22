@@ -121,8 +121,9 @@ export function buildRestrictedLaunch(environment, options = {}) {
     CODEX_MODEL_SHELL_TYPE: "disabled", CODEX_MODEL_APPLY_PATCH_TOOL_TYPE: "none" }, "", options);
   // goals：线程目标会让 Codex 绕过任务队列自动连续发起轮次；project_doc_max_bytes=0：workspace
   // 及其上级目录的 AGENTS.md 是用户数据，不能进入模型指令（角色指令走 instructions_template）。
+  // shell_snapshot 会把启动环境（含 CODEX_API_KEY）明文写进 CODEX_HOME。
   launch.args.push("-c", "features.goals=false", "-c", "project_doc_max_bytes=0",
-    "-c", "features.shell_tool=false", "-c", "features.apply_patch_freeform=false",
+    "-c", "features.shell_tool=false", "-c", "features.shell_snapshot=false", "-c", "features.apply_patch_freeform=false",
     "-c", "agents.enabled=false", "-c", "features.view_image=false", "-c", "features.image_generation=false", "-c", "features.multi_agent=false", "-c", "features.apps=false", "-c", "features.hooks=false", "-c", "features.plugins=false");
   return launch;
 }
@@ -208,6 +209,15 @@ export function userSpawn(executable, args, { uid, gid, isolated }) {
   return {
     command: '/bin/sh',
     args: ['-c', 'umask 0007 && exec "$0" "$@"', executable, ...args],
+    options: isolated ? { uid, gid } : {},
+  };
+}
+
+// 仅启动 Codex App Server 时，以目标 uid 清理已遗留的 shell 快照；清理失败仍继续启动。
+export function codexSpawn(executable, args, { uid, gid, isolated }) {
+  return {
+    command: '/bin/sh',
+    args: ['-c', 'umask 0007 || exit 1; rm -rf -- "${CODEX_HOME:?}/shell_snapshots"; exec "$0" "$@"', executable, ...args],
     options: isolated ? { uid, gid } : {},
   };
 }
