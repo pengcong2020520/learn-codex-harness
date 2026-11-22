@@ -8,6 +8,8 @@ export const SUPPORTED_CODEX = Object.freeze(["0.154.0"]);
 export const NATIVE_TOOL_BASELINE = Object.freeze(["request_user_input"]);
 export const RESTRICTED_FEATURES = Object.freeze([
   "shell_tool",
+  // shell_snapshot 会把启动环境（含 CODEX_API_KEY）明文写进 CODEX_HOME。
+  "shell_snapshot",
   "view_image",
   "image_generation",
   "multi_agent",

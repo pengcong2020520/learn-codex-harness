@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { RuntimePool, RUNTIME_LIMIT, IDLE_MS, START_TIMEOUT_MS } from '../server/modules/runtimes/pool.mjs';
 import { RuntimeRouter, assertToolOwner } from '../server/modules/runtimes/router.mjs';
 import { RuntimeStore } from '../server/modules/runtimes/store.mjs';
 import { prepareDirectories, secureTree, isolationMode } from '../server/modules/runtimes/directories.mjs';
-import { userEnvironment, userSpawn, signalUserProcess } from '../server/modules/codex/launch.mjs';
+import { buildRestrictedLaunch, codexSpawn, userEnvironment, userSpawn, signalUserProcess } from '../server/modules/codex/launch.mjs';
+import { RESTRICTED_FEATURES } from '../server/modules/codex/compatibility.mjs';
 import { runOwner, currentIdentity } from '../server/modules/accounts/context.mjs';
 import { MessageService } from '../server/modules/messages/index.mjs';
 import { SessionService } from '../server/modules/sessions/index.mjs';
@@ -149,6 +151,64 @@ test('spawn: umask 包装不插值命令；容器传专属 uid/gid，本机仅�
   assert.deepEqual(userSpawn('/codex', args, { uid: 10001, gid: 10001, isolated: true }), {
     command: '/bin/sh', args: ['-c', 'umask 0007 && exec "$0" "$@"', '/codex', ...args], options: { uid: 10001, gid: 10001 } });
   assert.deepEqual(userSpawn('/codex', args, { isolated: false }).options, {});
+});
+test('Codex 启动：关闭 shell_snapshot 并列入启动核验', () => {
+  const args = buildRestrictedLaunch({}).args;
+  assert.ok(args.some((arg, index) => arg === 'features.shell_snapshot=false' && args[index - 1] === '-c'));
+  assert.ok(RESTRICTED_FEATURES.includes('shell_snapshot'));
+});
+test('Codex 启动：目标执行前清理旧快照并保留原参数', t => {
+  const home = path.join(temporary(t), 'codex');
+  const snapshots = path.join(home, 'shell_snapshots');
+  fs.mkdirSync(snapshots, { recursive: true });
+  fs.writeFileSync(path.join(snapshots, 'legacy.sh'), 'fixture');
+  const args = ['with spaces', '$not-expanded'];
+  const launch = codexSpawn(process.execPath, ['-e', 'process.stdout.write(JSON.stringify({args:process.argv.slice(1),removed:!require("node:fs").existsSync(process.env.CODEX_HOME+"/shell_snapshots")}))', ...args], { isolated: false });
+  const result = spawnSync(launch.command, launch.args, { ...launch.options, env: { CODEX_HOME: home }, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { args, removed: true });
+  assert.equal(fs.existsSync(snapshots), false);
+});
+test('Codex 启动：CODEX_HOME 为空或未设置时不执行目标程序', t => {
+  const marker = path.join(temporary(t), 'executed');
+  const launch = codexSpawn(process.execPath, ['-e', 'require("node:fs").writeFileSync(process.argv[1], "executed")', marker], { isolated: false });
+  for (const env of [{ CODEX_HOME: '' }, {}]) {
+    const result = spawnSync(launch.command, launch.args, { ...launch.options, env, encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.equal(fs.existsSync(marker), false);
+  }
+});
+test('Codex 启动：旧快照软链接只删链接，不触碰链接目标', t => {
+  const root = temporary(t), home = path.join(root, 'codex'), outside = path.join(root, 'outside');
+  fs.mkdirSync(home); fs.mkdirSync(outside);
+  const target = path.join(outside, 'keep');
+  fs.writeFileSync(target, 'fixture');
+  const snapshots = path.join(home, 'shell_snapshots');
+  fs.symlinkSync(outside, snapshots);
+  const launch = codexSpawn(process.execPath, ['-e', 'process.stdout.write("ready")'], { isolated: false });
+  const result = spawnSync(launch.command, launch.args, { ...launch.options, env: { CODEX_HOME: home }, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'ready');
+  assert.equal(fs.existsSync(snapshots), false);
+  assert.equal(fs.readFileSync(target, 'utf8'), 'fixture');
+});
+test('Codex 启动：旧快照删除失败仍执行目标程序', t => {
+  if (process.getuid?.() === 0) { t.skip('root 不受目录权限限制，无法模拟删除失败'); return; }
+  const home = path.join(temporary(t), 'codex'), snapshots = path.join(home, 'shell_snapshots');
+  fs.mkdirSync(snapshots, { recursive: true });
+  const legacy = path.join(snapshots, 'legacy.sh');
+  fs.writeFileSync(legacy, 'fixture');
+  fs.chmodSync(snapshots, 0o555);
+  try {
+    const launch = codexSpawn(process.execPath, ['-e', 'process.stdout.write("ready")'], { isolated: false });
+    const result = spawnSync(launch.command, launch.args, { ...launch.options, env: { CODEX_HOME: home }, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'ready');
+    assert.ok(result.stderr.length > 0);
+    assert.equal(fs.existsSync(legacy), true);
+  } finally {
+    fs.chmodSync(snapshots, 0o755);
+  }
 });
 test('local-mode: 非 root 本机明确警告；容器内非 root 拒绝启动', () => {
   const logs = [];

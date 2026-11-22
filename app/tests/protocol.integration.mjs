@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   installedCodex,
@@ -84,12 +85,13 @@ test(
       if (step++ === 0) return toolCall(spec, { userId: "spoofed" });
       return answer("PROTOCOL_OK");
     });
+    const marker = `fixture-only-${randomBytes(16).toString("hex")}`;
     const config = {
       root,
       memory: { enabled: false, use: false, generate: false },
       launch: restricted({
         PATH: process.env.PATH,
-        CODEX_API_KEY: "fixture-only",
+        CODEX_API_KEY: marker,
         CODEX_BASE_URL: provider.url,
         CODEX_MODEL: "protocol-model",
         CODEX_MODEL_CATALOG_ENABLED: "true",
@@ -98,6 +100,10 @@ test(
       }),
     };
     prepareCodexConfig(config, {});
+    const codexHome = config.launch.env.CODEX_HOME;
+    const snapshots = path.join(codexHome, "shell_snapshots");
+    fs.mkdirSync(snapshots);
+    fs.writeFileSync(path.join(snapshots, "legacy.sh"), marker);
     let rpc,
       completed = [];
     const open = async () => {
@@ -105,7 +111,7 @@ test(
       rpc = new CodexConnection({
         launch: config.launch,
         runtime,
-        redact: createLogRedactor("fixture-only"),
+        redact: createLogRedactor(marker),
         log: () => {},
       });
       rpc.on("notification", (m) => {
@@ -200,5 +206,18 @@ test(
     await until(() => completed.length === 2, 15000);
     assert.equal(completed[1].status, "completed");
     assert.deepEqual(provider.errors, []);
+    await rpc.close();
+    assert.equal(fs.existsSync(snapshots), false, "旧 shell 快照未清理");
+    const pending = [codexHome];
+    while (pending.length) {
+      const directory = pending.pop();
+      for (const name of fs.readdirSync(directory)) {
+        const file = path.join(directory, name);
+        const info = fs.lstatSync(file);
+        if (info.isSymbolicLink()) continue;
+        if (info.isDirectory()) pending.push(file);
+        else if (info.isFile()) assert.equal(fs.readFileSync(file).includes(marker), false, `CODEX_HOME 文件含测试密钥标记：${path.relative(codexHome, file)}`);
+      }
+    }
   },
 );
